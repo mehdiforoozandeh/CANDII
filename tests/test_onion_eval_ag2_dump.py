@@ -162,21 +162,18 @@ def _score(env, out, *, blind=False, **kw):
 
 def recipes(env, out_root: Path, dump_root=None) -> dict:
     """The three runs whose outputs are pinned; with `dump_root`, each also dumps into
-    `dump_root/<recipe>` (the run's config then records train_on_validation)."""
+    `dump_root/<recipe>` (same configs as without it)."""
     out_root = Path(out_root)
 
-    def dump(name, model=True):
-        if dump_root is None:
-            return {}
-        return dict(dump_signal=Path(dump_root) / name,
-                    **({"config": dict(CFG, train_on_validation=False)} if model else {}))
+    def dump(name):
+        return {} if dump_root is None else {"dump_signal": Path(dump_root) / name}
     got = {}
     o = out_root / "val_model_auto"
     _score(env, o, **dump("val_model_auto"))
     got["val_model_auto"] = {"scores": scores_digest(o, env["root"]), "suff": suff_digest(o)}
     o = out_root / "val_pa_pc"
     _score(env, o, baseline="position_average", lambda_source="predicted_control",
-           **dump("val_pa_pc", model=False))
+           **dump("val_pa_pc"))
     got["val_pa_pc"] = {"scores": scores_digest(o, env["root"]), "suff": suff_digest(o)}
     o = out_root / "bm" / "blind"
     _score(env, o, blind=True, **dump("blind_model"))
@@ -228,7 +225,7 @@ def test_option_leaves_outputs_unchanged(dumped):
 # ---------------------------------------------------------------------------------------- contents
 
 F_KEYS = {"method", "kind", "evalset_sha256", "regions_sha256", "split", "regime", "region_bins",
-          "n_regions", "lambda_source", "targets"}
+          "n_regions", "lambda_source", "targets", "lambda_source_mode", "trained_on_roles"}
 
 
 def test_run_dump_interface_f(dumped):
@@ -246,7 +243,9 @@ def test_run_dump_interface_f(dumped):
         assert m["trained_on_roles"] == ["train"]
         assert m["regions_sha256"] == regions_sha256(regions, RB)
         assert m["evalset_sha256"] == hashlib.sha256(env["evalset"].read_bytes()).hexdigest()
-        assert (m["region_bins"], m["n_regions"], m["lambda_source"]) == (RB, 2, "auto")
+        assert (m["region_bins"], m["n_regions"], m["lambda_source_mode"]) == (RB, 2, "auto")
+        assert set(m["lambda_source"]) == set(m["targets"])
+        assert m["trained_on_roles_source"] == "dataset_train_roles"
         assert "signal_pc_reason" in m
         want = {t["target"] for t in ev["imputation_targets"]
                 if t["regime"] == regime and t["split"] == "val"}
@@ -277,18 +276,18 @@ def test_run_dump_interface_f(dumped):
                                                           ctl[i * RB:(i + 1) * RB], cov)[0]
                                      for i in range(2)])
                 np.testing.assert_allclose(arr["native_truth"], fe, rtol=1e-5)
-                assert m["lambda_source_by_target"][mid] == "observed_control"
+                assert m["lambda_source"][mid] == "observed_control"
 
 
 def test_baseline_dump_predicted_control(dumped):
     """A baseline under predicted_control: signal_pc from the training-average control on every
-    ChIP target; none on DNase-seq targets, with the reason in tracks.json."""
+    ChIP target; on DNase-seq targets (no control on either route) signal_pc is signal."""
     env = dumped["env"]
     rows = _rows(env)
     d = dumped["dump"] / "val_pa_pc" / "leave_one_assay_out"
     m = _meta(d)
-    assert (m["kind"], m["method"], m["lambda_source"]) == ("baseline", "position_average",
-                                                            "predicted_control")
+    assert (m["kind"], m["method"], m["lambda_source_mode"]) == ("baseline", "position_average",
+                                                                 "predicted_control")
     assert m["trained_on_roles"] == ["train"]
     chip = [t for t in m["targets"] if rows[t]["assay"] == "H3K4me3"]
     dnase = [t for t in m["targets"] if rows[t]["assay"] == "DNase-seq"]
@@ -296,11 +295,14 @@ def test_baseline_dump_predicted_control(dumped):
     for t in chip:
         pc = np.load(d / f"{t}.signal_pc.npy")
         assert pc.dtype == np.float32 and np.isfinite(pc).all()
-        assert m["lambda_source_by_target_signal_pc"][t] == "training_average_control"
+        assert m["lambda_source_predicted_control"][t] == "training_average_control"
     s0 = env["targets"][("s0", "H3K4me3")]       # observed control: the two lambdas differ
     assert not np.array_equal(np.load(d / f"{s0}.signal.npy"), np.load(d / f"{s0}.signal_pc.npy"))
     for t in dnase:
-        assert not (d / f"{t}.signal_pc.npy").exists() and m["signal_pc_left_out"][t]
+        np.testing.assert_array_equal(np.load(d / f"{t}.signal_pc.npy"), np.load(d / f"{t}.signal.npy"))
+        assert t in m["signal_pc_same_as_signal"]
+        assert m["lambda_source_predicted_control"][t] == m["lambda_source"][t]
+    assert not m["signal_pc_left_out"]
     for t in m["targets"]:
         assert (d / f"{t}.native.npy").is_file() and (d / f"{t}.peakprob.npy").is_file()
 
@@ -319,7 +321,7 @@ def test_blind_dump_outside_a_ledgered_pass_refused(dumped, tmp_path):
     from onion_eval import score as S
     env = dumped["env"]
     sc = S.Scorer(env["evalset_blind"], main="model", model=Reader(),
-                  config=dict(CFG, train_on_validation=False), split="blind", allow_blind=True,
+                  config=dict(CFG), split="blind", allow_blind=True,
                   run_tables_sha256=tables_sha256(env["tables"]), dump_signal=tmp_path / "d", **KW)
     with pytest.raises(S.ScoreRefused, match="ledger"):
         sc.run()
@@ -331,8 +333,8 @@ def test_trained_on_roles_from_the_run_record(dumped, tmp_path):
     env = dumped["env"]
     kw = dict(main="model", model=Reader(), run_tables_sha256=tables_sha256(env["tables"]),
               dump_signal=tmp_path / "d", **KW)
-    with pytest.raises(S.ScoreRefused, match="train_on_validation"):
-        S.Scorer(env["evalset"], config=dict(CFG), **kw)
+    sc = S.Scorer(env["evalset"], config=dict(CFG), **kw)       # the dataset's default
+    assert sc.trained_on_roles == ["train"]
     sc = S.Scorer(env["evalset"], config=dict(CFG, train_on_validation=True, final_model=True),
                   **kw)
     assert sc.trained_on_roles == ["train", "val"]
@@ -445,7 +447,7 @@ def test_external_signal_stamps_uses_target_cell_control(dumped, tmp_path):
     for tj in got:
         m = json.loads(tj.read_text(encoding="utf-8"))
         assert m["uses_target_cell_control"] == "no" and m["kind"] == "external"
-        assert set(m["lambda_source_by_target"].values()) == {"external_entry"}
+        assert set(m["lambda_source"].values()) == {"external_entry"}
     with pytest.raises(ValueError):
         X.stamp_control_record(tmp_path / "d", "maybe")
 
@@ -462,17 +464,50 @@ def test_baseline_retrieval_cli_dumps(dumped, tmp_path):
 
 
 def test_lambda_source_keys(dumped):
-    """Per track, the lambda source of its signal as signal_from_nb reports it; the top-level
-    `lambda_source_predicted_control` only on a predicted_control dump."""
+    """`lambda_source` and `lambda_source_predicted_control` are per-track dicts of the source
+    actually used; the scorer's mode is `lambda_source_mode`."""
     env = dumped["env"]
     rows = _rows(env)
     m = _meta(dumped["dump"] / "val_model_auto" / "leave_one_assay_out")
-    by = m["lambda_source_by_target"]
-    assert set(by) == set(m["targets"]) and "lambda_source_predicted_control" not in m
-    for t, src in by.items():
+    assert set(m["lambda_source"]) == set(m["targets"]) and "lambda_source_predicted_control" not in m
+    for t, src in m["lambda_source"].items():
         if rows[t]["assay"] == "H3K4me3":
             assert src == ("observed_control" if rows[t]["control_measurement_id"]
                            else "predicted_control")
     p = _meta(dumped["dump"] / "val_pa_pc" / "leave_one_assay_out")
-    assert p["lambda_source_predicted_control"] == "predicted_control"
-    assert set(p["lambda_source_by_target"]) == set(p["targets"])
+    assert set(p["lambda_source_predicted_control"]) == set(p["targets"]) == set(p["lambda_source"])
+
+
+# ------------------------------------------------------------------- round trip through ag2_score
+
+def test_round_trip_through_the_ag2_score_loader(dumped, tmp_path):
+    """The merged reader (`ag2_score._resolve`, `_roles`, `_trained`, `lambda_and_control`) on the
+    dumps of a run and a baseline: control label and lambda column per track."""
+    from onion_eval import ag2_score as G
+    env = dumped["env"]
+    t = env["targets"]
+    s0, s1, dn = t[("s0", "H3K4me3")], t[("s1", "H3K4me3")], t[("s3", "DNase-seq")]
+    regime = "leave_one_assay_out"
+    _, run = G._resolve(dumped["dump"] / "val_model_auto", regime)
+    assert G.lambda_and_control(run, s0, "headline") == ("observed_control", "yes")
+    assert G.lambda_and_control(run, s1, "headline") == ("predicted_control", "no")
+    lam, ctl = G.lambda_and_control(run, dn, "headline")
+    assert lam in G.CONTROL_OF_LAMBDA and ctl == "no"
+    assert G._roles(run) == {"train"} and not G._trained("run", G._roles(run), "val", "unseen")
+    _, base = G._resolve(dumped["dump"] / "val_pa_pc", regime)
+    assert G.lambda_and_control(base, s0, "headline") == ("observed_control", "yes")
+    assert G.lambda_and_control(base, s1, "headline") == ("training_average_control", "no")
+    for x in (s0, s1):
+        assert G.lambda_and_control(base, x, "control_free") == ("training_average_control", "no")
+    assert G.lambda_and_control(base, dn, "control_free")[1] == "no"
+    assert G._roles(base) == {"train"}
+    # a final model trained on train + val: its validation tracks leave every comparison set
+    from onion_eval import score as S
+    o = tmp_path / "tv"
+    S.score(env["evalset"], o, model=Reader(), config=dict(CFG, train_on_validation=True,
+                                                            final_model=True),
+            run_tables_sha256=tables_sha256(env["tables"]), dump_signal=tmp_path / "d", **KW)
+    _, tv = G._resolve(tmp_path / "d", regime)
+    assert tv["trained_on_roles"] == ["train", "val"] and G._roles(tv) == {"train", "val"}
+    assert G._trained("run", G._roles(tv), "val", "unseen")
+    assert not G._trained("run", G._roles(tv), "blind", "unseen")

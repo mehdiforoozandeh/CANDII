@@ -601,10 +601,10 @@ class Scorer:
         self._ds_read, self._ds_dna = self.ds.read, self.ds.dna
         if self.region_cache:
             self.ds.read, self.ds.dna = self._cached_read, self._cached_dna
-        self._init_dump(dump_signal, dump_targets, dump_method, config)
+        self._init_dump(dump_signal, dump_targets, dump_method)
 
     # -------------------------------------------------------------- AGd dump hook (interface F)
-    def _init_dump(self, dump_signal, dump_targets, dump_method, config) -> None:
+    def _init_dump(self, dump_signal, dump_targets, dump_method) -> None:
         """Method track files (plan Amendment 5, pinned interface F): with `dump_signal`, every
         scored imputation target of each regime writes its per-bin arrays under
         `<dump_signal>/<regime>/`. Nothing else in the scorer reads them, so scores.json is the same."""
@@ -619,14 +619,9 @@ class Scorer:
         self.trained_on_roles = None
         if self.dump_dir is None:
             return
-        if self.dump_kind == "run":       # the run's own record of its training split
-            cfg = dict(config or {})
-            if "train_on_validation" not in cfg:
-                raise ScoreRefused("--dump-signal: the run's config records no train_on_validation, "
-                                   "so the roles it trained on (tracks.json trained_on_roles) are "
-                                   "unknown")
-            self.trained_on_roles = ["train", "val"] if cfg["train_on_validation"] else ["train"]
-        elif self.dump_kind == "baseline":  # fitted on the scorer's own training tracks
+        if self.dump_kind in ("run", "baseline"):
+            # the roles training read: the dataset built from the run's own config fills the
+            # default (train_on_validation false -> ("train",)); a baseline fits on the same tracks
             self.trained_on_roles = list(self.ds.train_roles)
 
     def _dump_wants_avg_ctl(self, job) -> bool:
@@ -651,7 +646,8 @@ class Scorer:
             return
         m = self._dump_meta.setdefault(regime, {"targets": [], "left_out": {}, "lambda_sources": {},
                                                 "signal_pc_left_out": {}, "native_left_out": {},
-                                                "peakprob_left_out": {}})
+                                                "peakprob_left_out": {},
+                                                "signal_pc_same_as_signal": []})
         if mid in self.flagged:
             m["left_out"][mid] = FLAGGED_REASON
             return
@@ -681,6 +677,10 @@ class Scorer:
                         pc_src = TRAINING_AVERAGE_CONTROL
                     except (ValueError, KeyError) as e:
                         why = f"no signal from the training-average control: {e}"
+                if pc is None and self.sig.route_of(row["assay_class"] or row["assay"]) != "chip":
+                    # DNase-seq / ATAC-seq read no control on either route: signal_pc is signal
+                    pc, pc_src = pred, src["signal"]
+                    m["signal_pc_same_as_signal"].append(mid)
                 if pc is not None:
                     arrays["signal_pc"] = pc
                     src["signal_pc"] = pc_src
@@ -722,26 +722,29 @@ class Scorer:
             meta = {"method": self.dump_method, "kind": self.dump_kind, "evalset_sha256": esha,
                     "regions_sha256": rsha, "split": self.split, "regime": regime,
                     "region_bins": self.rb, "n_regions": len(self.regions),
-                    "lambda_source": self.lambda_source, "targets": m["targets"],
+                    "lambda_source_mode": self.lambda_source, "targets": m["targets"],
                     "space": "signal_arcsinh", "dnase_route": self.dnase_route,
                     "left_out": m["left_out"],
                     "dump_targets_given": self.dump_targets is not None,
                     "evalset": str(self.evalset_path)}
-            # per track, the lambda source of each array as signal_from_nb (or the scorer) reports it
-            for arr in ("signal", "signal_pc", "native"):
-                key = "lambda_source_by_target" + ("" if arr == "signal" else f"_{arr}")
-                by = {t: v[arr] for t, v in m["lambda_sources"].items() if arr in v}
-                if arr == "signal" or by:
-                    meta[key] = by
-            if self.lambda_source == "predicted_control":
-                meta["lambda_source_predicted_control"] = "predicted_control"
+            # per track, the lambda source actually used, as signal_from_nb (or the scorer) reports
+            # it: `lambda_source` for signal.npy, `lambda_source_predicted_control` for signal_pc.npy
+            def by(arr):
+                return {t: v[arr] for t, v in m["lambda_sources"].items() if arr in v}
+            meta["lambda_source"] = by("signal")
+            if self.lambda_source == "predicted_control" and not self.external:
+                meta["lambda_source_predicted_control"] = by("signal_pc")
+            if not self.external:
+                meta["lambda_source_native"] = by("native")
             if self.trained_on_roles is not None:
                 meta["trained_on_roles"] = self.trained_on_roles
+                meta["trained_on_roles_source"] = "dataset_train_roles"
             if not self.external:
                 meta["native_left_out"] = m["native_left_out"]
                 meta["peakprob_left_out"] = m["peakprob_left_out"]
                 if self.lambda_source == "predicted_control":
                     meta["signal_pc_left_out"] = m["signal_pc_left_out"]
+                    meta["signal_pc_same_as_signal"] = m["signal_pc_same_as_signal"]
                 else:
                     meta["signal_pc_reason"] = ("no signal_pc: the scorer ran with --lambda-source "
                                                 f"{self.lambda_source}, not predicted_control")
