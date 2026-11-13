@@ -101,13 +101,40 @@ def test_fold_change_at_mu_equals_nb_mean_by_simulation():
     assert np.max(np.abs(mean / at_mu - 1)) < 0.15     # per bin: 2000 draws, cv of NB(4, ~13) about 0.55
 
 
-def test_normalized_insertions_sum_to_1e8():
+@pytest.mark.parametrize("rl", [36, 50, 101])
+def test_normalized_insertions_sum_to_1e8(rl):
+    # Simulate reads on a small genome and bin them by the onion rule (a read adds 1 to every 25 bp
+    # bin it overlaps). Start offsets mod 25 are balanced, so the mean bins per read is exactly
+    # (rl + 24) / 25 and the track must sum to 1e8 up to float rounding.
     rng = np.random.default_rng(3)
-    mu = rng.gamma(1.5, 2.0, 50_000)
-    rl = 50.0
-    cov = {"depth_reads": float(mu.sum() * 25 / (rl + 24)), "read_length": rl}
-    v = A.normalized_insertions(mu, cov)
+    nbins, n_reads = 20_000, 25 * 2_000
+    genome_bp = nbins * 25
+    base = rng.integers(0, (genome_bp - rl - 25) // 25, size=n_reads) * 25
+    starts = base + np.arange(n_reads) % 25
+    first, last = starts // 25, (starts + rl - 1) // 25
+    counts = np.zeros(nbins + 1)
+    np.add.at(counts, first, 1.0)
+    np.add.at(counts, last + 1, -1.0)
+    counts = np.cumsum(counts)[:nbins]
+    assert counts.sum() == pytest.approx(n_reads * (rl + 24) / 25)
+    v = A.normalized_insertions(counts, {"depth_reads": float(n_reads), "read_length": float(rl)})
     assert abs(v.astype(np.float64).sum() / 1e8 - 1) < 1e-6
+
+
+def test_signal_track_plug_in_equals_score_with_this_modules_lambda():
+    rng = np.random.default_rng(8)
+    mu = rng.gamma(2.0, 4.0, 1500) + 0.1
+    ctl = rng.gamma(2.0, 2.0, 1500) + 0.1
+    lam, d, rl, _ = A._chip_lambda(mu, ctl, CHIP_COV, MACS2_GSIZE_HS)
+    ref = log10_upper_tail(np.floor(S.pileup_from_counts(mu, d, rl)).astype(np.int64), lam)
+    sig, _ = S.signal_track(mu, None, "narrow_histone", ctl, CHIP_COV, mode="plug_in")
+    assert np.allclose(sig, ref.astype(np.float32), rtol=1e-6, atol=1e-6)
+    cov = {"depth_reads": 3e7, "read_length": 50}
+    lam, d, rl, _ = A._no_control_lambda(mu, cov, MACS2_GSIZE_HS)
+    ref = log10_upper_tail(np.floor(S.pileup_from_counts(mu, d, rl)).astype(np.int64), lam)
+    for assay in ("accessibility_atac", "accessibility_dnase"):
+        sig, _ = S.signal_track(mu, None, assay, None, cov, mode="plug_in", dnase_route="macs2_no_control")
+        assert np.allclose(sig, ref.astype(np.float32), rtol=1e-6, atol=1e-6)
 
 
 # ---------------------------------------------------------------- native_from_nb (adapter)
@@ -208,6 +235,24 @@ def test_isotonic_strictly_monotone_noiseless_reaches_pearson_1():
     cal = A.isotonic_recalibrate(pred, truth)       # 2000 bins of 1: exact
     assert pearsonr(cal, truth)[0] > 1 - 1e-12
     assert spearmanr(cal, truth)[0] == pytest.approx(spearmanr(pred, truth)[0], abs=1e-12)
+
+
+def test_isotonic_refuses_non_finite_in_fit():
+    pred = np.arange(10, dtype=float)
+    truth = pred * 2.0
+    for bad in ("pred", "truth"):
+        p, t = pred.copy(), truth.copy()
+        (p if bad == "pred" else t)[4] = np.nan
+        with pytest.raises(ValueError):
+            A.isotonic_recalibrate(p, t, n_bins=5)
+    t = truth.copy()
+    t[4] = np.inf
+    with pytest.raises(ValueError):
+        A.isotonic_recalibrate(pred, t, n_bins=5)
+    valid = np.ones(10, bool)
+    valid[4] = False
+    t[4] = np.nan                                       # masked out of the fit: allowed
+    assert np.all(np.isfinite(A.isotonic_recalibrate(pred, t, n_bins=9, valid=valid)))
 
 
 def test_isotonic_valid_restricts_the_fit():
