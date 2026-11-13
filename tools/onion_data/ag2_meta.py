@@ -97,10 +97,23 @@ def load_api():
         Interval=genome.Interval, create=dna_client.create)
 
 
+class ApiError(Exception):
+    """An API failure, carrying only the call name and the status code or class name."""
+
+
+def api_call(what: str, fn, *args, **kwargs):
+    """Run one API call; on failure raise ApiError with the code name only (decision 14)."""
+    try:
+        return fn(*args, **kwargs)
+    except Exception as exc:  # noqa: BLE001
+        name = error_name(exc)
+    raise ApiError(f"{what} failed: {name}")
+
+
 def make_client(api):
     key = read_key()
     try:
-        return api.create(key)
+        return api_call("create", api.create, key)
     finally:
         del key
 
@@ -214,12 +227,14 @@ def normalize(observed: dict[str, pd.DataFrame], supported: pd.DataFrame,
     cond["has_observed_accessibility"] = cond["condition"].isin(acc).astype(int)
     # Second route to the same fact: the per-condition imputation modes of supported_conditions().
     for col in ("dnase", "atac"):
-        if col in sup:
-            via_modes = set(sup.loc[sup[col].astype(str) == "observed", "condition"].astype(str))
-            via_obs = set(obs.loc[obs["output_type"] == col.upper(), "condition"])
-            if via_modes != via_obs:
-                raise ValueError(f"{col}: observed conditions disagree between "
-                                 "observed_metadata() and supported_conditions()")
+        if col not in sup:
+            raise ValueError(f"supported_conditions() has no {col!r} column; the second-route "
+                             "check of has_observed_accessibility cannot run")
+        via_modes = set(sup.loc[sup[col].astype(str) == "observed", "condition"].astype(str))
+        via_obs = set(obs.loc[obs["output_type"] == col.upper(), "condition"])
+        if via_modes != via_obs:
+            raise ValueError(f"{col}: observed conditions disagree between "
+                             "observed_metadata() and supported_conditions()")
     cond = cond.sort_values("condition", kind="stable").reset_index(drop=True)
     return obs, chan.sort_values(["output_type", "channel_index"]).reset_index(drop=True), cond
 
@@ -303,9 +318,9 @@ def write_tables(out: Path, obs, chan, cond, version: str) -> None:
 
 
 def run_metadata(client, organism, out: Path, channels_tsv: Path, version: str):
-    m = client.observed_metadata(organism)
+    m = api_call("observed_metadata", client.observed_metadata, organism)
     observed = {ot: getattr(m, ATTR[ot]) for ot in OUTPUT_TYPES}
-    supported = client.supported_conditions(organism)
+    supported = api_call("supported_conditions", client.supported_conditions, organism)
     channels = pd.read_csv(channels_tsv, sep="\t", keep_default_na=False)
     obs, chan, cond = normalize(observed, supported, channels)
     write_tables(out, obs, chan, cond, version)
@@ -324,7 +339,7 @@ def run_smoke(client, api, out: Path, condition: str = SMOKE_CONDITION,
     if not 1 <= max_calls <= MAX_SMOKE_CALLS:
         raise SystemExit(f"ag2_meta: --max-calls must be 1..{MAX_SMOKE_CALLS}")
     out.mkdir(parents=True, exist_ok=True)
-    m = client.observed_metadata(api.Organism.HOMO_SAPIENS)
+    m = api_call("observed_metadata", client.observed_metadata, api.Organism.HOMO_SAPIENS)
     shapes_now = {ATTR[ot]: tuple(getattr(m, ATTR[ot]).shape) for ot in OUTPUT_TYPES}
     calls: list[dict] = []
     starts = iter(SMOKE_STARTS)
@@ -473,7 +488,7 @@ def smoke_markdown(f: dict) -> str:
 
 # --------------------------------------------------------------------------- CLI
 
-def main(argv=None) -> int:
+def main(argv=None, api=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("smoke")
@@ -485,7 +500,15 @@ def main(argv=None) -> int:
     m.add_argument("--channels", type=Path, default=None,
                    help="prediction_channels.tsv (default <out>/prediction_channels.tsv)")
     a = ap.parse_args(argv)
-    api = load_api()
+    api = api or load_api()
+    try:
+        return _run(a, api)
+    except ApiError as exc:  # message holds the call and code name only
+        print(f"ag2_meta: {exc}", file=sys.stderr)
+        return 1
+
+
+def _run(a, api) -> int:
     client = make_client(api)
     if a.cmd == "smoke":
         f = run_smoke(client, api, a.out, a.condition, a.max_calls)
