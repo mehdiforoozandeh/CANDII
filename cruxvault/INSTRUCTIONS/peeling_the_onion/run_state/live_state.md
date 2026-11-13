@@ -15,7 +15,9 @@ PI priorities: imputation, covariate artifact correction, calibrated uncertainty
 | (QCa returned) | QC fill batch 1 = job 27164529 (400 rows); batches 2-6 by the foreman when the queue has room (commands in results/t211/SUBMITTED.md); QCb must fix `collect` | - |
 | (L1a returned) | RUNG 1 RUNNING with the staging fix (kit L1fix; ONION_STAGE=1 for every later ladder submit): training 27197516-27197676, 24 runs, ~56 min each, scoring behind each at 128000M; a name watch fires when no mc_rung1 job is left -> L1b (collect and settle), with E7b's baseline validity. Open: rung 2 CPU speed is 2.7x the Fir figure | - |
 WAITING ON THE PI: nothing (PI cancelled the slow rung-1 jobs, 2026-11-13).
-| SM builder (opus) | scorer memory: per-region streaming, bit-identical scores (PI instruction 2026-11-13) | independent review (score.py is the selection scorer); merge; new memory figure for the ladder |
+| SM builder (opus) | scorer TIME: full scoring of eic_v1 in ~2 h, identical outputs (memory part done: commit 1e94d92, 16000M) | review; merge; resubmit the 4 baseline scorings and the 24 rung-1 scorings with the new scorer and job shape |
+| SM reviewer (opus) | review of 1e94d92 (memory change, bit identity) | merge if ACCEPT |
+WAITING ON THE PI: cancel the 28 old-scorer jobs (4 baseline scorings 27179565-27179568 + 24 pending rung-1 scoring jobs); training jobs stay.
 | (region wave R1: V7, ERx, STt, RBk merged) | next: TR (sampler `train_regions` + window loss weights) after the foreman reads SM's diff; SAx after L1a merges; then RB1a, STa, PRg | - |
 | (deck done) | law-of-total-variance deck: cruxvault/presentations/onion-total-variance/; artifact H8ShBq8tJ1eMzwpjNpdU87 | - |
 | (OXa returned) | second experiments submitted (jobs 27184156-27204216; notes results/t264); OXc collect when they end; 13 rows wait for their tail partners (with D6u). D6c (priority 4) HELD until rung 1 is through (fair-share) | - |
