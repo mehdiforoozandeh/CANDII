@@ -65,7 +65,9 @@ only for `minicandi_final - ag2_matched`, `rspec_cal`, `unseen_by_both`, assay c
 
 Board means (`ag2_board_<split>.tsv`): for each (track set, assay class, truth source, metric), every
 method's mean is taken on the common tracks, i.e. the tracks where every method of the board that has
-a number for that metric has a finite value; `n_<metric>` prints that count. Each excluded (track,
+a number for that metric has a finite value; `n_<metric>` prints that count. The
+`replicate_floor` kind (`pseudoreplicate_half`) is left out of that set and averages over its own
+finite tracks, with its own `n_<metric>`, so a target without halves drops out of no other mean. Each excluded (track,
 method, metric) case is listed in `ag2_board_excluded_<split>.tsv`.
 
 `uses_target_cell_control` comes per track from `lambda_source` of `tracks.json` (a string or
@@ -731,10 +733,13 @@ def _board(per, table, n_boot) -> tuple[list, list]:
     out, excluded = [], []
     for (tset, ac, tp), by_m in sorted(groups.items()):
         targets = sorted({t for rs in by_m.values() for t in rs})
+        floor = {m for m, rs in by_m.items()
+                 if any(r["kind"] == "replicate_floor" for r in rs.values())}
         common = {}
         for k in BOARD_METRICS:
             need = ("auprc", "auprc_posfrac") if k == "auprc_weighted" else (k,)
-            part = [m for m, rs in by_m.items() if any(_num(r[need[0]]) for r in rs.values())]
+            part = [m for m, rs in by_m.items() if m not in floor
+                    and any(_num(r[need[0]]) for r in rs.values())]
             keep = [t for t in targets
                     if all(t in by_m[m] and all(_finite(by_m[m][t][q]) for q in need) for m in part)]
             common[k] = (part, keep)
@@ -755,6 +760,16 @@ def _board(per, table, n_boot) -> tuple[list, list]:
             for k in BOARD_METRICS:
                 part, keep = common[k]
                 base = "auprc" if k == "auprc_weighted" else k
+                need = ("auprc", "auprc_posfrac") if k == "auprc_weighted" else (k,)
+                if method in floor and any(_num(r[base]) for r in rs):
+                    # the noise floor row: its own finite tracks; it never shrinks the common set
+                    part, keep = [method], [t for t in sorted(rmap)
+                                            if all(_finite(rmap[t][q]) for q in need)]
+                    if k != "auprc_weighted":
+                        excluded.extend({"track_set": tset, "assay_class": ac, "truth_peaks": tp,
+                                         "metric": k, "target": t, "method": method,
+                                         "value": rmap[t][k]}
+                                        for t in sorted(rmap) if not _finite(rmap[t][k]))
                 if method not in part:
                     b[k] = _agg([r[base] for r in rs])
                     b[f"n_{k}"] = 0
@@ -839,6 +854,7 @@ def _contrasts(per, table, n_boot) -> list:
 # ------------------------------------------------------------------------------------- gate
 
 GATE_TOL = {"pearson_cal": 0.005, "spearman": 0.005, "auprc": 0.005, "rspec_cal": 0.01}
+GATE_PRIMARY = "rspec_cal"         # Max's primary metric
 TILE = 20
 
 
@@ -860,7 +876,8 @@ def gate(targets, pred, store, tiles, reference, out, *, tracks=None,
     tiles, the seed-0 subsample), and compare with his per-target table (method `ag2`, setting
     `all`, stratum `all`). Returns True on PASS. FAIL when any target of `--targets` is skipped
     (no reference row, no prediction, no peak tiles), when one side of a metric is NaN and the other
-    is not, when `rspec_cal` cannot be computed (no `--tracks`), or when a difference passes its
+    is not, when a requested target is NaN on both sides of the primary metric `rspec_cal` (a
+    both-NaN case of another metric is reported apart and left out of its count), when `rspec_cal` cannot be computed (no `--tracks`), or when a difference passes its
     tolerance. Skipped targets go to `gate_skipped.tsv`."""
     if store_obj is None:
         from candi.store.reader import CorpusStore
@@ -952,7 +969,7 @@ def gate(targets, pred, store, tiles, reference, out, *, tracks=None,
                 if not _num(v):
                     status, diff = f"ours {v}", float("nan")
                 elif math.isnan(v) and math.isnan(theirs):
-                    status, diff = "both undefined", 0.0
+                    status, diff = "both undefined", float("nan")
                 elif math.isnan(v) or math.isnan(theirs):
                     status, diff = "one side undefined", float("nan")
                 else:
@@ -969,8 +986,14 @@ def gate(targets, pred, store, tiles, reference, out, *, tracks=None,
     ok = n_req > 0 and len(compared) == n_req
     for k, tol in GATE_TOL.items():
         rk = [r for r in rows if r["metric"] == k]
+        both = [r for r in rk if r["status"] == "both undefined"]
         bad = [r for r in rk if r["status"] not in ("compared", "both undefined")]
-        d = [r["abs_diff"] for r in rk if r["status"] in ("compared", "both undefined")]
+        if k == GATE_PRIMARY:          # every requested target needs a finite value on both sides
+            bad += both
+        d = [r["abs_diff"] for r in rk if r["status"] == "compared"]
+        if both:
+            log(f"{k}: {len(both)} target(s) undefined on both sides, not counted: "
+                + ", ".join(f"{r['biosample']}/{r['assay']}" for r in both))
         if bad or not d:
             why = bad[0]["status"] if bad else "no value"
             log(f"{k}: {len(bad)} target(s) not comparable ({why})")

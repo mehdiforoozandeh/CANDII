@@ -496,10 +496,12 @@ def test_board_means_on_common_tracks(tmp_path):
              if r["track_set"] == "unseen_by_both" and r["assay_class"] == "all"
              and r["truth_peaks"] == "encode"]
     assert board
-    assert {r["n_rspec_cal"] for r in board} == {"3"}
+    # the half row lacks m_c1: it averages over its own 3 tracks, every other method over all 4
+    assert {r["method"]: r["n_rspec_cal"] for r in board}["pseudoreplicate_half"] == "3"
+    assert {r["n_rspec_cal"] for r in board if r["method"] != "pseudoreplicate_half"} == {"4"}
     ag = next(r for r in board if r["method"] == "ag2_matched")
     vals = [float(r["rspec_cal"]) for r in per if r["method"] == "ag2_matched"
-            and r["truth_peaks"] == "encode" and r["cell"] in ("c2", "c3", "c4")]
+            and r["truth_peaks"] == "encode" and r["cell"] in ("c1", "c2", "c3", "c4")]
     assert float(ag["rspec_cal"]) == pytest.approx(np.mean(vals), rel=1e-5)
     assert ag["n_tracks"] == "4"
     ex = _read(tmp_path / "o" / "ag2_board_excluded_val.tsv")
@@ -564,6 +566,40 @@ def test_gate_fails_when_a_requested_target_is_skipped(tmp_path):
                        tmp_path / "g1", **dict(kw, log=lines.append))
     assert "targets compared: 1 of 2 requested; skipped 1 (gate_skipped.tsv)" in lines
     assert _read(tmp_path / "g1" / "gate_skipped.tsv")[0]["reason"] == "no prediction file"
+
+
+def test_gate_both_nan_is_no_match(tmp_path):
+    kw = _gate_world(tmp_path, ["b1"])
+    ref = tmp_path / "ref.tsv"
+    _ref(ref, [{"biosample": "b1", "pearson_cal": "nan", "spearman": "nan", "auprc": "nan",
+                "rspec_cal": "nan"}])
+    AS.gate(tmp_path / "targets.tsv", tmp_path / "pred", None, tmp_path / "tiles", ref,
+            tmp_path / "g0", **kw)
+    ours = {r["metric"]: r["ours"] for r in _read(tmp_path / "g0" / "gate.tsv")}
+    # primary metric NaN on both sides: FAIL
+    store = kw["store_obj"]
+    orig = AS.Mx.r_spec
+    try:
+        AS.Mx.r_spec = lambda *a, **k: float("nan")
+        _ref(ref, [{"biosample": "b1", **dict(ours, rspec_cal="nan")}])
+        lines = []
+        assert not AS.gate(tmp_path / "targets.tsv", tmp_path / "pred", None, tmp_path / "tiles",
+                           ref, tmp_path / "g1", **dict(kw, store_obj=store, log=lines.append))
+        assert any("undefined on both sides" in x for x in lines)
+    finally:
+        AS.Mx.r_spec = orig
+    # a secondary metric NaN on both sides is reported apart and not counted; it alone cannot pass
+    orig_ap = AS.PK.auprc
+    try:
+        AS.PK.auprc = lambda *a, **k: (float("nan"), float("nan"))
+        _ref(ref, [{"biosample": "b1", **dict(ours, auprc="nan")}])
+        lines = []
+        assert not AS.gate(tmp_path / "targets.tsv", tmp_path / "pred", None, tmp_path / "tiles",
+                           ref, tmp_path / "g2", **dict(kw, log=lines.append))
+        assert "auprc: 1 target(s) undefined on both sides, not counted: b1/" + ASSAY in lines
+        assert "auprc: 0 target(s) not comparable (no value)" in lines
+    finally:
+        AS.PK.auprc = orig_ap
 
 
 def test_gate_fails_when_one_side_is_nan(tmp_path):
