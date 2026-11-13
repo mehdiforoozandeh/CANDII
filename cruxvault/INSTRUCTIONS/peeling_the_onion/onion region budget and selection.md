@@ -51,6 +51,22 @@ The PI added these questions to the goals of the analysis on 2026-11-13. The PI'
 2. ==Code: what the current sampler does, and which budgets the ladder configs use.==
 3. ==Experiments on `eic_v1`: a budget curve and a selection comparison at an equal budget, each with 3 seeds, scored on the fixed evaluation set. The plan amendment states the arms, the cost and the rule that settles them.==
 
+## PI rulings of 2026-11-13
+
+- **Seen positions.** No change to the protocol now. Training windows may fall inside the evaluation regions. One experiment arm excludes the evaluation regions from training and is scored on the same set, so the gap between seen and unseen positions is measured. The PI rules after he sees it.
+- **Annotations.** The selection experiment uses leak-free strata only. cCRE and ChromHMM annotations are not used now. The PI asked to keep the idea for later; see the next section.
+- **Evaluation regions.** The count may go from 256 to 512 on the evidence of the interval study. A step to 1,024 comes back to the PI with the interval curve.
+
+## Ideas kept for later
+
+==**Training regions stratified by cCRE class or by ChromHMM state.** The idea is to draw training windows so that each regulatory class or chromatin state gets a chosen share of the budget, with loss weights that keep the objective unbiased. It is not used now, because both annotation sets may be built from data that includes EIC validation or blind cells, which makes them a leak for the EIC comparison. Routes that would make it usable later:==
+
+1. ==Use it as a labelled side arm, never for a headline or a default: one cCRE arm and one ChromHMM arm, about 6 runs and one annotation fetch.==
+2. ==Rebuild the annotation without the held-out cells: a ChromHMM model trained only on training cells, or a cCRE-like set called only from training tracks. The peak-frequency strata of the current experiment are a first step in this direction.==
+3. ==Use it on the extended dataset, where the split is by cell type and the annotation's source cells can be checked against the split.==
+
+==Things to settle before it runs: the registry version and license of the cCRE set, the list of cells behind the full-stack ChromHMM model, and the genome share of each class, which sets the loss weights.==
+
 ## Answers
 
 ==None yet. Results go to `cruxvault/results/` and are cited here.==

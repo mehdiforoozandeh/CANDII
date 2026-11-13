@@ -474,3 +474,11 @@ Agent calls from the same audit (code level; evidence `cruxvault/results/t233/AU
 - Cost of the FASTQ build so far: 4,511 CPU-hours used (19,894 allocated; the projection was 7,331). Archive on nearline: 55 tar files, 2,740 measurements, 242 GB.
 - Revised code-level call (2026-11-13): the evaluation set on `eic_v1` keeps H3K9ac as built. Its validation target is the replicate view of ENCSR521AIV, which has counts and no signal products. H3K9ac is therefore scored in count space (the selection rule's space), flagged in reports, and left out of the signal-space metrics until its pooled track arrives in an update. `eic_v1` has 9 scorable assays in count space. Evaluation set: 256 regions, 63 imputation items, 1,480 correction pairs, 3,134 replicate pairs, 0 blind items; hash starts `b5f7a4cf` (`cruxvault/results/t185/SUBMITTED.md`).
 - Scheduling call (2026-11-13): Nibi allows 1,000 queued jobs per user, with array tasks counted. Slots go to dataset rows first, then the ladder, then the second experiments, then the quality-metric fill.
+
+## PI rulings 39 to 41 (2026-11-13): region budget and selection
+
+- Source of the questions and of the kept idea: `onion region budget and selection.md` beside this file. Research: `cruxvault/results/region_budget/REGION_RESEARCH.md`.
+- **Ruling 39.** Training keeps the current protocol: windows may fall inside the evaluation regions. The gap between seen and unseen positions is measured by one arm that excludes the evaluation regions, and reported. The PI rules after that.
+- **Ruling 40.** Training-region selection uses leak-free strata only. cCRE and ChromHMM strata are not used now; the idea is written down for later, as the PI asked.
+- **Ruling 41.** The evaluation-region count may go to 512 on evidence. A step to 1,024 needs the PI.
+- PI instruction of 2026-11-13: fix the scorer memory (128 GB at 256 regions). Builder at work; scores must stay bit-identical.
