@@ -370,8 +370,9 @@ def fastq_path(fastq_root, experiment, acc) -> str:
 
 def build_input_json(row, files_json, genome_tsv, fastq_root=FASTQ_ROOT, eic=EIC,
                      cropped=None) -> dict:
-    """The Caper input JSON for one build-list row. `cropped` maps an accession to the path of its
-    pre-cropped FASTQ (ATAC crop arms only)."""
+    """The Caper input JSON for one build-list row. `cropped` maps an accession to the path the
+    run reads instead of the staged file: its pre-cropped FASTQ (ATAC crop arms) or its repaired
+    copy (prepare_reads); see input_paths."""
     key, ptype = pipeline_key(row)
     spec, pfx = PIPELINES[key], key
     restrict = [a for a in (row.get("fastq_files") or "").replace(",", ";").split(";") if a]
@@ -740,31 +741,45 @@ SUFFIX_RE = re.compile(r"/[12]$")
 def gz_stream(path, sink=None, bufsize=1 << 22) -> dict:
     """Decompress a (multi-member) gzip file as far as it goes, passing every decompressed chunk
     to `sink`. `gzip -cd` drops its last buffer at a break, so the kit reads with zlib itself.
-    Returns {"complete": the stream ends cleanly, "records": complete 4-line records}."""
+    Returns {"complete", "records": complete 4-line records, "trailing_garbage_bytes"}. Bytes after
+    a clean member end that do not start a new gzip member are trailing garbage: the stream counts
+    as complete (gzip itself says "decompression OK, trailing garbage ignored"), and the count of
+    those bytes is returned so the caller can record it. A member that starts and breaks off is a
+    truncation."""
     import zlib
-    lines, started, ok = 0, False, True
+    lines, started, ok, garbage = 0, False, True, 0
+    boundary = False                     # just after a clean member end
     d = zlib.decompressobj(31)
     with open(path, "rb") as fh:
         for buf in iter(lambda: fh.read(bufsize), b""):
+            if garbage:
+                garbage += len(buf)
+                continue
             while buf:
+                if boundary and not buf.startswith(b"\x1f\x8b"[:len(buf)]):
+                    garbage = len(buf)
+                    break
                 try:
                     out = d.decompress(buf)
                 except zlib.error:
+                    if boundary:
+                        garbage = len(buf)
+                        break
                     ok = False
                     break
-                started = True
+                started, boundary = True, False
                 lines += out.count(b"\n")
                 if sink is not None and out:
                     sink(out)
                 if d.eof:
-                    buf, d, started = d.unused_data, zlib.decompressobj(31), False
+                    buf, d, started, boundary = d.unused_data, zlib.decompressobj(31), False, True
                 else:
                     buf = b""
             if not ok:
                 break
     if started and not d.eof:
         ok = False
-    return {"complete": ok, "records": lines // 4}
+    return {"complete": ok, "records": lines // 4, "trailing_garbage_bytes": garbage}
 
 
 def gz_scan(path) -> dict:
@@ -781,7 +796,7 @@ def gz_scan_cached(path) -> dict:
     try:
         got = json.loads(memo.read_text())
         if {k: got.get(k) for k in key} == key:
-            return {"complete": got["complete"], "records": got["records"]}
+            return {k: got[k] for k in ("complete", "records", "trailing_garbage_bytes")}
     except (OSError, ValueError, KeyError):
         pass
     res = gz_scan(p)
@@ -887,7 +902,8 @@ def prepare_reads(reps, pe_per_rep, files_json, fastq_root, experiment, tmp, cpu
     for a, b in units:
         bad = [x for x in (a, b) if x and not scans[x]["complete"]]
         strip = bool(b) and (has_mate_suffix(path(a)) or has_mate_suffix(path(b)))
-        if not bad and not strip:
+        junk = [x for x in (a, b) if x and scans[x].get("trailing_garbage_bytes")]
+        if not bad and not strip and not junk:
             continue
         keep, note = 0, {}
         if bad:
@@ -897,8 +913,6 @@ def prepare_reads(reps, pe_per_rep, files_json, fastq_root, experiment, tmp, cpu
                 exp_n = (by.get(x) or {}).get("read_count") or read_count(x)
                 if exp_n:
                     break
-            if not exp_n and b:
-                exp_n = max(scans[a]["records"], scans[b]["records"])
             frac = keep / exp_n if exp_n else None
             note = {"truncated_source": True, "truncated_files": bad, "reads_kept": keep,
                     "reads_expected": exp_n,
@@ -906,7 +920,8 @@ def prepare_reads(reps, pe_per_rep, files_json, fastq_root, experiment, tmp, cpu
             log(f"truncated source FASTQ {bad}: {keep} complete records kept of {exp_n} expected")
             if frac is None or frac < MIN_KEPT_FRACTION:
                 raise SystemExit(f"truncated source FASTQ {bad} of {experiment}: kept fraction "
-                                 f"{frac} is under {MIN_KEPT_FRACTION} (or unknown); not built")
+                                 f"{frac} is under {MIN_KEPT_FRACTION}, or no portal read count "
+                                 "exists for either mate; not built")
         plan.append(((a, b), keep, strip, note))
     if not plan:
         return {}, {}
@@ -941,10 +956,31 @@ def prepare_reads(reps, pe_per_rep, files_json, fastq_root, experiment, tmp, cpu
                            if strip else "",
                            "truncated_source": bool(note), "records_written": n,
                            "source_md5": (by.get(x) or {}).get("md5", ""), **note}
+                g = scans[x].get("trailing_garbage_bytes") or 0
+                if g:
+                    prov[x]["trailing_garbage_bytes"] = g
+                    prov[x]["trailing_garbage_note"] = (
+                        f"{g} bytes after the last complete gzip member are not gzip data; "
+                        "dropped, the file counts as complete")
     log(f"prepared {len(paths)} FASTQ(s) under {out}: "
         + ", ".join(f"{x} (names {'stripped' if p['read_names_normalised'] else 'kept'}, "
                     f"truncated {p['truncated_source']})" for x, p in prov.items()))
     return paths, prov
+
+
+def input_paths(key, arm, reps, fastq_root, experiment, prepared, crop) -> tuple:
+    """(accession -> FASTQ path for the input JSON, or None for the staged paths; the crop_tool
+    record, or '' when no crop ran). `crop()` runs the ATAC pre-crop and is called only for an
+    ATAC crop arm; only then is a crop tool recorded (a repaired, uncropped run records none)."""
+    paths, crop_tool = (dict(prepared) if prepared else None), ""
+    if key == "atac" and arm["crop_length"]:
+        paths = crop()
+        crop_tool = ("encode_task_trimmomatic.py from " + PIPELINES["chip"]["image"]
+                     + f" (CROP {arm['crop_length']}, MINLEN {arm['crop_length'] - CROP_TOL})")
+    if paths is not None:
+        for a in [a for r in reps for a in r["r1"] + r["r2"]]:
+            paths.setdefault(a, fastq_path(fastq_root, experiment, a))
+    return paths, crop_tool
 
 
 def final_calls(meta, name) -> dict:
@@ -1039,20 +1075,16 @@ def run(rows, row, work, tmp, cpus, fastq_root=FASTQ_ROOT, refs=REFS, eic=EIC, m
 
     tmp = Path(tmp) / f"onion_{exp}_{row['unit']}_{row['arm']}"
     tmp.mkdir(parents=True, exist_ok=True)
-    cropped = None
     prepared, prep = prepare_reads(reps, arm["paired_end_per_rep"], fj, fastq_root, exp, tmp,
                                    cpus)
     if prep:
         rec["fastq_prep"] = prep
         rec["truncated_source"] = any(p["truncated_source"] for p in prep.values())
-        cropped = dict(prepared)
-    if key == "atac" and arm["crop_length"]:
-        cropped = crop_fastqs(reps, arm, fastq_root, exp, tmp, cpus, eic, src=prepared)
-    if cropped is not None:
-        for a in [a for r in reps for a in r["r1"] + r["r2"]]:
-            cropped.setdefault(a, fastq_path(fastq_root, exp, a))
-        rec["crop_tool"] = ("encode_task_trimmomatic.py from " + PIPELINES["chip"]["image"]
-                            + f" (CROP {arm['crop_length']}, MINLEN {arm['crop_length'] - CROP_TOL})")
+    cropped, crop_tool = input_paths(
+        key, arm, reps, fastq_root, exp, prepared,
+        lambda: crop_fastqs(reps, arm, fastq_root, exp, tmp, cpus, eic, src=prepared))
+    if crop_tool:
+        rec["crop_tool"] = crop_tool
     inp = build_input_json(row, fj, genome_tsv, fastq_root, eic, cropped)
     write_atomic(out / "input.json", json.dumps(inp, indent=2) + "\n")
     write_atomic(tmp / "input.json", json.dumps(inp, indent=2) + "\n")

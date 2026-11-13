@@ -743,3 +743,28 @@ def test_provenance_carries_what_the_fastq_kits_did_to_the_reads(driver):
     assert n["truncated_reads"]["R2"] == {"reads_kept": 6, "reads_expected": 10,
                                           "kept_fraction": 0.6}
     assert AV.run_notes({"mixed_run_types": "x"}) == {"mixed_run_types": "x"}
+
+
+def test_renote_backfills_kf2_rows_and_is_idempotent(driver, capsys):
+    """D6x review: `renote` drops a false crop_tool from a non-crop arm.json and writes
+    provenance notes; a second pass changes nothing."""
+    assert driver["run"](5) == 0
+    aj = driver["work"] / "ENCSRDNS" / "base" / "arm.json"
+    armj = json.loads(aj.read_text())
+    armj["crop_tool"] = "encode_task_trimmomatic.py (CROP 0, MINLEN -2)"
+    armj["adapter_kind"] = {"rep1": "stem"}
+    aj.write_text(json.dumps(armj))
+    pj = driver["out"] / "ENCSRDNS.pooled.uniform.base" / "provenance.json"
+    prov = json.loads(pj.read_text())
+    del prov["notes"]
+    pj.write_text(json.dumps(prov))
+    assert AV.main(["renote", "--build-list", str(driver["bl"]), "--rows", "5",
+                    "--work", str(driver["work"]), "--out", str(driver["out"])]) == 0
+    assert "crop_tool" not in json.loads(aj.read_text())
+    notes = json.loads(pj.read_text())["notes"]
+    assert notes["adapter_source"] == {"rep1": "auto_detect"}
+    assert notes["adapter_kind"] == {"rep1": "stem"}
+    capsys.readouterr()
+    AV.main(["renote", "--build-list", str(driver["bl"]), "--rows", "5",
+             "--work", str(driver["work"]), "--out", str(driver["out"])])
+    assert "renote: 0 file(s) changed" in capsys.readouterr().out

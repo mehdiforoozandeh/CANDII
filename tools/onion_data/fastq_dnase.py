@@ -373,6 +373,8 @@ def replicates_json(experiment, u, arm, fastq_path, detect=None) -> list[dict]:
             best = max(pe_libs, key=lambda lib: (counts[lib["library"]], lib["library"]))
             rep["adapters"] = best["adapters"]
             rep["_adapter_source"] = source
+            # the detector returns a 13-mer adapter stem; the portal gives full adapter sequences
+            rep["_adapter_kind"] = "stem" if source == "auto_detect" else "full"
             if len({json.dumps(lib["adapters"], sort_keys=True) for lib in pe_libs}) > 1:
                 rep["_adapters_note"] = (f"libraries disagree on adapters; used {best['library']}")
             rep["pe_fastqs"] = pe
@@ -773,6 +775,8 @@ def cmd_run(a):
                       if "_adapter_source" in r}
     detection = {f"rep{i}": r["_adapter_detection"] for i, r in enumerate(reps, 1)
                  if "_adapter_detection" in r}
+    adapter_kind = {f"rep{i}": r["_adapter_kind"] for i, r in enumerate(reps, 1)
+                    if "_adapter_kind" in r}
     (out / "input.json").write_text(json.dumps(inp, indent=1) + "\n")
     names = product_names(unit, [r["number"] for r in reps])
     t_staged = time.time()
@@ -831,6 +835,7 @@ def cmd_run(a):
     rec = arm_record(experiment, unit, arm, reps, u, used, row)
     rec["adapters_notes"] = notes
     rec["adapter_source"] = adapter_source
+    rec["adapter_kind"] = adapter_kind
     if detection:
         rec["adapter_detection"] = detection
     (out / "arm.json").write_text(json.dumps(rec, indent=2) + "\n")
@@ -853,6 +858,7 @@ def cmd_run(a):
         "workflow": WRAPPER_NAME, "workflow_id": md.get("id"),
         "read_length": {f"rep{i}": r["read_length"] for i, r in enumerate(reps, 1)},
         "fastqs_md5": used, "adapters_notes": notes, "adapter_source": adapter_source,
+        "adapter_kind": adapter_kind,
         "reference_set": REFERENCE_SET, "slurm_job_id": os.environ.get("SLURM_JOB_ID", ""),
         "finished": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     }
