@@ -173,9 +173,27 @@ def _strip(x, drop=()):
     return x
 
 
+def _shared(new, old):
+    """`new` restricted to the dict keys that the old reference also has (keys added after BASE by
+    later chunks are ignored, the shared ones are compared bit-exact); the ignored paths go to
+    IGNORED_NEW_KEYS."""
+    if isinstance(new, dict) and isinstance(old, dict):
+        for k in set(new) - set(old):
+            IGNORED_NEW_KEYS.add(k)
+        return {k: _shared(v, old[k]) for k, v in new.items() if k in old}
+    if isinstance(new, list) and isinstance(old, list) and len(new) == len(old):
+        return [_shared(v, o) for v, o in zip(new, old)]
+    return new
+
+
+#: keys of the new scorer that the BASE reference lacks (filled while the tests run)
+IGNORED_NEW_KEYS: set = set()
+
+
 def _same(a, b):
-    return json.dumps(_strip(a), sort_keys=True, default=str) == json.dumps(_strip(b), sort_keys=True,
-                                                                             default=str)
+    """`a` is the old reference, `b` the new value: equal on every key that `a` has."""
+    return json.dumps(_strip(a), sort_keys=True, default=str) == json.dumps(
+        _strip(_shared(b, a)), sort_keys=True, default=str)
 
 
 def test_observed_control_and_dnase_targets_bit_identical(runs, env):
@@ -184,7 +202,7 @@ def test_observed_control_and_dnase_targets_bit_identical(runs, env):
                                                   for c in ("s3", "s4", "s5")]
     for t in keep:
         assert LAB not in new[t]
-        assert set(old[t]) == set(new[t])
+        assert set(old[t]) <= set(new[t])
         for k in old[t]:
             assert _same(old[t][k], new[t][k]), (t, k)
     # the count space of every target is untouched
@@ -216,7 +234,8 @@ def _flat(x, p=""):
 
 
 def _changed(a, b):
-    fa, fb = dict(_flat(a)), dict(_flat(b))
+    """Paths whose value moved, over the keys of the old reference `a` (new-only keys ignored)."""
+    fa, fb = dict(_flat(a)), dict(_flat(_shared(b, a)))
     return sorted(k for k in set(fa) | set(fb) if fa.get(k) != fb.get(k))
 
 

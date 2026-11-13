@@ -493,7 +493,8 @@ class Scorer:
                  n_boot=200, seed=0, guardrail_windows=256, guardrail_seeds=(0, 1, 2),
                  device="cpu", no_halves=False, dnase_route=None, run_tables_sha256=None,
                  log=print, region_cache=True, infer_batch=None, lambda_source="auto",
-                 signal_override=None, addon=False):
+                 signal_override=None, addon=False, dump_signal=None, dump_targets=None,
+                 dump_method=None):
         from minicandi import contract as C
         from minicandi.dataset import OnionDataset, tables_sha256
         from onion_eval.evalset import tables_dir_of
@@ -600,6 +601,158 @@ class Scorer:
         self._ds_read, self._ds_dna = self.ds.read, self.ds.dna
         if self.region_cache:
             self.ds.read, self.ds.dna = self._cached_read, self._cached_dna
+        self._init_dump(dump_signal, dump_targets, dump_method)
+
+    # -------------------------------------------------------------- AGd dump hook (interface F)
+    def _init_dump(self, dump_signal, dump_targets, dump_method) -> None:
+        """Method track files (plan Amendment 5, pinned interface F): with `dump_signal`, every
+        scored imputation target of each regime writes its per-bin arrays under
+        `<dump_signal>/<regime>/`. Nothing else in the scorer reads them, so scores.json is the same."""
+        self.dump_dir = Path(dump_signal) if dump_signal else None
+        self.dump_targets = set(dump_targets) if dump_targets is not None else None
+        self._dump_ledgered = False        # set by score() after the blind ledger's `started` row
+        self._dump_meta: dict = {}
+        self._dump_ctl = None
+        self.dump_kind = ("external" if self.external else "run" if self.main == "model"
+                          else "baseline")
+        self.dump_method = dump_method or self.main
+        self.trained_on_roles = None
+        if self.dump_dir is None:
+            return
+        if self.dump_kind in ("run", "baseline"):
+            # the roles training read: the dataset built from the run's own config fills the
+            # default (train_on_validation false -> ("train",)); a baseline fits on the same tracks
+            self.trained_on_roles = list(self.ds.train_roles)
+
+    def _dump_wants_avg_ctl(self, job) -> bool:
+        """A baseline under --lambda-source predicted_control: its predicted-control substitute is
+        the training-average control (F4), here for every ChIP target with signal tracks."""
+        if (self.dump_dir is None or self.dump_kind != "baseline" or self.sig is None
+                or self.lambda_source != "predicted_control" or job["kind"] != "imputation"
+                or job.get("regime") == "control"):
+            return False
+        row = self.ds.rows[job["target"]]
+        try:
+            route = self.sig.route_of(row["assay_class"] or row["assay"])
+        except ValueError:
+            return False
+        return route == "chip" and self._signal_files(row)[0] is not None
+
+    def _dump_target(self, job, regime, n, mu, A, defined, sig) -> None:
+        """Write one target's arrays of interface F; record why an array is missing."""
+        from onion_eval import ag2_space as AS
+        mid = job["target"]
+        if regime == "control" or (self.dump_targets is not None and mid not in self.dump_targets):
+            return
+        m = self._dump_meta.setdefault(regime, {"targets": [], "left_out": {}, "lambda_sources": {},
+                                                "signal_pc_left_out": {}, "native_left_out": {},
+                                                "peakprob_left_out": {},
+                                                "signal_pc_same_as_signal": []})
+        if mid in self.flagged:
+            m["left_out"][mid] = FLAGGED_REASON
+            return
+        rec = sig["record"]
+        pred = sig.get(f"{SIGNAL_PREFIX['expectation']}pred")
+        if pred is None:
+            m["left_out"][mid] = rec.get("lambda_reason") or "no signal prediction for this target"
+            return
+        row = self._row(mid)
+        want = (len(self.regions) * self.rb,)
+        arrays = {"signal": pred}
+        src = {"signal": rec.get("lambda_source")}
+        if not self.external:
+            arrays["truth"] = sig[f"{SIGNAL_PREFIX['expectation']}truth"]
+            kw = dict(ds=self.ds, regions=self.regions, rb=self.rb)
+            if self.lambda_source == "predicted_control":
+                pc = sig.get(f"{PC_PREFIX}pred")
+                pc_src = rec.get("lambda_source" + PREDICTED_CONTROL)
+                why = rec.get("lambda_reason" + PREDICTED_CONTROL) or ""
+                if pc is None and defined and A.get("dump.avg_ctl_mu") is not None:
+                    try:
+                        sp, _ = self.sig.signal_from_nb(
+                            n, mu, dict(row, control_measurement_id=""), mode="expectation",
+                            predicted_control=A["dump.avg_ctl_mu"], dnase_route=self.dnase_route,
+                            **kw)
+                        pc = Mx.to_space(np.asarray(sp, np.float64), "signal_arcsinh")
+                        pc_src = TRAINING_AVERAGE_CONTROL
+                    except (ValueError, KeyError) as e:
+                        why = f"no signal from the training-average control: {e}"
+                if pc is None and self.sig.route_of(row["assay_class"] or row["assay"]) != "chip":
+                    # DNase-seq / ATAC-seq read no control on either route: signal_pc is signal
+                    pc, pc_src = pred, src["signal"]
+                    m["signal_pc_same_as_signal"].append(mid)
+                if pc is not None:
+                    arrays["signal_pc"] = pc
+                    src["signal_pc"] = pc_src
+                else:
+                    m["signal_pc_left_out"][mid] = why or "no predicted control for this target"
+            if defined:
+                ctl = self._dump_ctl
+                try:
+                    arrays["native"], src["native"] = AS.native_from_nb(
+                        n, mu, row, predicted_control=ctl, **kw)
+                    arrays["native_truth"], _ = AS.native_from_nb(
+                        np.ones_like(A["y"]), A["y"], row, predicted_control=ctl, **kw)
+                except (ValueError, KeyError) as e:
+                    arrays.pop("native", None)
+                    m["native_left_out"][mid] = f"no native-space track: {e}"
+                try:
+                    arrays["peakprob"] = AS.peak_probability_from_nb(
+                        n, mu, row, predicted_control=ctl, dnase_route=self.dnase_route, **kw)
+                except (ValueError, KeyError) as e:
+                    m["peakprob_left_out"][mid] = f"no peak probability: {e}"
+            else:
+                m["native_left_out"][mid] = m["peakprob_left_out"][mid] = (
+                    "the predictor is undefined on this target")
+        d = self.dump_dir / regime
+        d.mkdir(parents=True, exist_ok=True)
+        for name, a in arrays.items():
+            a = np.asarray(a, np.float32)
+            if a.shape != want:
+                raise ValueError(f"dump {mid}.{name}: shape {a.shape}, want {want}")
+            np.save(d / f"{mid}.{name}.npy", a)
+        m["targets"].append(mid)
+        m["lambda_sources"][mid] = src
+
+    def _dump_finish(self) -> None:
+        """tracks.json of each regime directory (interface F keys first)."""
+        from onion_eval.ag2_baselines import regions_sha256
+        esha, rsha = sha256_file(self.evalset_path), regions_sha256(self.regions, self.rb)
+        for regime, m in sorted(self._dump_meta.items()):
+            meta = {"method": self.dump_method, "kind": self.dump_kind, "evalset_sha256": esha,
+                    "regions_sha256": rsha, "split": self.split, "regime": regime,
+                    "region_bins": self.rb, "n_regions": len(self.regions),
+                    "lambda_source_mode": self.lambda_source, "targets": m["targets"],
+                    "space": "signal_arcsinh", "dnase_route": self.dnase_route,
+                    "left_out": m["left_out"],
+                    "dump_targets_given": self.dump_targets is not None,
+                    "evalset": str(self.evalset_path)}
+            # per track, the lambda source actually used, as signal_from_nb (or the scorer) reports
+            # it: `lambda_source` for signal.npy, `lambda_source_predicted_control` for signal_pc.npy
+            def by(arr):
+                return {t: v[arr] for t, v in m["lambda_sources"].items() if arr in v}
+            meta["lambda_source"] = by("signal")
+            if self.lambda_source == "predicted_control" and not self.external:
+                meta["lambda_source_predicted_control"] = by("signal_pc")
+            if not self.external:
+                meta["lambda_source_native"] = by("native")
+            if self.trained_on_roles is not None:
+                meta["trained_on_roles"] = self.trained_on_roles
+                meta["trained_on_roles_source"] = "dataset_train_roles"
+            if not self.external:
+                meta["native_left_out"] = m["native_left_out"]
+                meta["peakprob_left_out"] = m["peakprob_left_out"]
+                if self.lambda_source == "predicted_control":
+                    meta["signal_pc_left_out"] = m["signal_pc_left_out"]
+                    meta["signal_pc_same_as_signal"] = m["signal_pc_same_as_signal"]
+                else:
+                    meta["signal_pc_reason"] = ("no signal_pc: the scorer ran with --lambda-source "
+                                                f"{self.lambda_source}, not predicted_control")
+            d = self.dump_dir / regime
+            d.mkdir(parents=True, exist_ok=True)
+            tmp = d / "tracks.json.tmp"
+            tmp.write_text(json.dumps(meta, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+            tmp.replace(d / "tracks.json")
 
     # -------------------------------------------------------------- data
     def _set_region(self, chrom, start) -> None:
@@ -812,6 +965,7 @@ class Scorer:
         names = tuple(refs) + ((self.main,) if self.main in REFS and self.main not in refs else ())
         want_avg_ctl = ((not pair) and "position_average" in names
                         and self._needs_average_control(job))
+        want_dump_ctl = (not pair) and self._dump_wants_avg_ctl(job)    # AGd; read by the dump only
         out = defaultdict(list)
         for ri, tiles in self._tiles(self.regions):
             self._set_region(*self.regions[ri])
@@ -862,6 +1016,13 @@ class Scorer:
                 for name, p in preds.items():
                     out[f"{name}.n"].append(p["n"][:, :, t].reshape(-1))
                     out[f"{name}.mu"].append(p["mu"][:, :, t].reshape(-1))
+                if want_dump_ctl:      # AGd: the training-average control at the target's C'
+                    r0 = self.regions[ri][1]
+                    depth = 2.0 ** np.asarray(batch["c_out"][:, t, 0], np.float64)
+                    rate = self._average_control_rate(ri, tgt["cell"])
+                    out["dump.avg_ctl_mu"].append(np.concatenate([
+                        np.maximum(rate[s - r0:s - r0 + self.L] * depth[b], PRED_FLOOR)
+                        for b, (_, s) in enumerate(tl)]))
                 out["y"].append(batch["y_counts"][:, :, t].numpy().reshape(-1).astype(np.float64))
                 if pair:
                     out["x"].append(batch["x_counts"][:, :, t].numpy().reshape(-1).astype(np.float64))
@@ -874,6 +1035,8 @@ class Scorer:
         res = {k: (np.concatenate(v) if k != "log2r" else v[0]) for k, v in out.items()}
         if "position_average.ctl_mu" in res and not np.isfinite(res["position_average.ctl_mu"]).all():
             del res["position_average.ctl_mu"]     # no training control covers a bin: as before F4
+        if "dump.avg_ctl_mu" in res and not np.isfinite(res["dump.avg_ctl_mu"]).all():
+            del res["dump.avg_ctl_mu"]
         return res
 
     # -------------------------------------------------------------- headline 7 per rung
@@ -1059,6 +1222,8 @@ class Scorer:
             r["r_spec"] = (Mx.r_spec(ts, ps, a_s) if (defined and pa_ok)
                            else Mx.Undefined("prediction or training average undefined"))
             sig = self._signal_target(job, n, mu, A, defined, pa_ok)
+            if self.dump_dir is not None:
+                self._dump_target(job, regime, n, mu, A, defined, sig)
             r.update(sig.pop("record"))
             arrays.append({"defined": defined, "truth": ts, "pred": ps, "h1": h1, "h2": h2, "shares": f,
                            "n": n, "mu": mu, "y": y, "target": job["target"], **sig})
@@ -1194,6 +1359,7 @@ class Scorer:
         """Signal-space records of one target, once per NB-to-signal mode (SIGNAL_PREFIX): the
         headline `expectation` under `sig_*`, the `plug_in` variant under `sig_pi_*` (ruling 20)."""
         pc = self.lambda_source == "predicted_control"
+        self._dump_ctl = None        # AGd: the control of the headline signal, for the dump only
 
         def undef(reason):
             u = Mx.Undefined(reason)
@@ -1243,6 +1409,8 @@ class Scorer:
                         and self.lambda_source != "observed_control"
                         and A.get("position_average.ctl_mu") is not None):
                     ctl, avg = A["position_average.ctl_mu"], True     # F4
+                if pre == SIGNAL_PREFIX["expectation"]:
+                    self._dump_ctl = ctl
                 try:
                     sp, src = self.sig.signal_from_nb(n, mu, row_v, predicted_control=ctl,
                                                       mode=mode, **kw)
@@ -1473,6 +1641,9 @@ class Scorer:
 
     def run(self) -> dict:
         t0 = time.time()
+        if self.dump_dir is not None and self.split == "blind" and not self._dump_ledgered:
+            raise ScoreRefused("--dump-signal on the blind split: only inside a blind pass that "
+                               "the ledger records (score())")
         imp, cor, rep, ctl = self.jobs()
         sc = self.ev.get("scorable", {})
         sc_imp, sc_cor = sc.get("imputation", []), sc.get("correction", [])
@@ -1495,6 +1666,8 @@ class Scorer:
             self._pa_cache.clear()
             flagged_by_regime[regime] = [r for r in recs if r["target"] in self.flagged]
             recs_by_regime[regime] = [r for r in recs if r["target"] not in self.flagged]
+        if self.dump_dir is not None:
+            self._dump_finish()
         main_recs = recs_by_regime["leave_one_assay_out"]
         ta = time.perf_counter()
         scores.update(self._imputation_metrics(main_recs, sc_imp, require_all=True))
@@ -1967,6 +2140,8 @@ def score(evalset, out, *, run=None, baseline=None, model=None, config=None,
         raise ValueError(f"unknown baseline {baseline!r}; one of {REFS}")
     if signal_override is not None:
         kw["signal_override"] = signal_override
+    if run is not None and kw.get("dump_signal"):
+        kw.setdefault("dump_method", str(Path(run).resolve()))
     sc = Scorer(evalset, main=main, model=model, config=config, run_tables_sha256=run_sha, **kw)
     if main in PAIR_ONLY:
         _, cor, rep, _ = sc.jobs()
@@ -1994,6 +2169,7 @@ def score(evalset, out, *, run=None, baseline=None, model=None, config=None,
                  "git_sha": git_sha(), "out": str(out.resolve()),
                  "repeat_reason": reason if prior else ""}
         ledger_append(ledger, dict(entry, time=_utc(), status="started"))
+        sc._dump_ledgered = True
     scores = sc.run()
     if run is not None:
         scores["run"] = str(Path(run).resolve())
@@ -2019,6 +2195,29 @@ def set_threads() -> int:
     n = int(os.environ.get("OMP_NUM_THREADS") or allocated_cpus())
     torch.set_num_threads(max(1, n))
     return torch.get_num_threads()
+
+
+def add_dump_arguments(ap) -> None:
+    """AGd: --dump-signal <dir> [--dump-targets <file>] (score.py, external_signal.py score,
+    baseline_retrieval.py run)."""
+    ap.add_argument("--dump-signal", default=None, metavar="DIR",
+                    help="also write method track files (plan Amendment 5, interface F) under "
+                         "DIR/<regime>/; scores.json is unchanged")
+    ap.add_argument("--dump-targets", default=None, metavar="FILE",
+                    help="with --dump-signal: dump only these measurement ids (one per line)")
+
+
+def dump_kwargs(a) -> dict:
+    """The Scorer arguments of add_dump_arguments; {} without --dump-signal."""
+    if a.dump_targets and not a.dump_signal:
+        raise SystemExit("--dump-targets needs --dump-signal")
+    if not a.dump_signal:
+        return {}
+    ids = None
+    if a.dump_targets:
+        ids = {ln.strip() for ln in Path(a.dump_targets).read_text(encoding="utf-8").splitlines()
+               if ln.strip() and not ln.startswith("#")}
+    return {"dump_signal": a.dump_signal, "dump_targets": ids}
 
 
 def main(argv=None) -> int:
@@ -2054,6 +2253,7 @@ def main(argv=None) -> int:
     ap.add_argument("--addon", action="store_true",
                     help="score an add-on eval set (evalset.py addon; required for one) into "
                          "<seed dir>/ox; the run must be trained on the tables the add-on extends")
+    add_dump_arguments(ap)
     a = ap.parse_args(argv)
     if (Path(a.out) / SCORED).is_file() and not a.force:
         print(f"skip: {a.out}/{SCORED} exists")
@@ -2068,7 +2268,8 @@ def main(argv=None) -> int:
                   guardrail_windows=a.guardrail_windows, no_halves=a.no_halves,
                   dnase_route=a.dnase_route, repeat_blind_reason=a.repeat_blind_reason,
                   infer_batch=a.infer_batch, region_cache=not a.no_region_cache,
-                  lambda_source=a.lambda_source, **({"addon": True} if a.addon else {}))
+                  lambda_source=a.lambda_source, **({"addon": True} if a.addon else {}),
+                  **dump_kwargs(a))
     except (PermissionError, ScoreRefused) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2

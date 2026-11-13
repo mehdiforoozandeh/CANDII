@@ -222,6 +222,20 @@ def signal_only(full, *, team, entry_dir, base_evalset, base_sha, used_evalset, 
 
 
 # ------------------------------------------------------------------------------------ commands
+def stamp_control_record(dump_dir, uses: str) -> list:
+    """AGd: write the entry's own record `uses_target_cell_control` (yes|no) into each tracks.json
+    that the scorer dumped under `dump_dir`; returns the files."""
+    if uses not in ("yes", "no"):
+        raise ValueError(f"uses_target_cell_control {uses!r} not in (yes, no)")
+    done = []
+    for tj in sorted(Path(dump_dir).glob("*/tracks.json")):
+        meta = json.loads(tj.read_text(encoding="utf-8"))
+        meta["uses_target_cell_control"] = uses
+        tj.write_text(json.dumps(meta, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+        done.append(tj)
+    return done
+
+
 def cmd_score(a) -> int:
     out = Path(a.out)
     if (out / S.SCORED).is_file():
@@ -230,6 +244,10 @@ def cmd_score(a) -> int:
     team = int(a.entry)
     if team not in ES.TEAM_NAME:
         print(f"refused: {team} is not one of the {len(ES.TEAMS)} published entries", file=sys.stderr)
+        return 2
+    if a.dump_signal and a.uses_target_cell_control is None:
+        print("refused: --dump-signal needs --uses-target-cell-control yes|no, from the entry's own "
+              "record of its inputs", file=sys.stderr)
         return 2
     split = "blind" if a.allow_blind else "val"
     evp = Path(a.evalset).resolve()
@@ -258,10 +276,13 @@ def cmd_score(a) -> int:
     try:
         full = S.score(used, out, signal_override=tracks, split=split, allow_blind=a.allow_blind,
                        n_boot=a.n_boot, dnase_route=a.dnase_route,
-                       repeat_blind_reason=a.repeat_blind_reason)
+                       repeat_blind_reason=a.repeat_blind_reason,
+                       **dict(S.dump_kwargs(a), dump_method=ES.TEAM_NAME[team]))
     except (PermissionError, S.ScoreRefused) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2
+    if a.dump_signal:
+        stamp_control_record(a.dump_signal, a.uses_target_cell_control)
     budget = signal_error_budget(full, rows, tracks, [(c, int(s)) for c, s in json.loads(
         used.read_text(encoding="utf-8"))["regions"]], rb, full["scorable"].get("imputation", []))
     sig = signal_only(full, team=team, entry_dir=a.entry_dir, base_evalset=evp,
@@ -370,6 +391,10 @@ def main(argv=None) -> int:
     p.add_argument("--dnase-route", default=None, choices=("hotspot2_density", "macs2_no_control"),
                    help="route of the training average's DNase-seq signal (score.py's option)")
     p.add_argument("--n-boot", type=int, default=200)
+    S.add_dump_arguments(p)
+    p.add_argument("--uses-target-cell-control", default=None, choices=("yes", "no"),
+                   help="with --dump-signal (required): whether the entry's own record says it read "
+                        "the target cell's control; written to tracks.json")
     p.set_defaults(fn=cmd_score)
     t = sub.add_parser("table", help="entries and miniCANDI rows in one TSV")
     t.add_argument("--scores", nargs="*", help="external_signal.py score output dirs")
