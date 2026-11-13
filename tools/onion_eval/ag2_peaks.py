@@ -7,28 +7,33 @@
        (eic_track, role, experiment, file, output_type, md5, n_peaks, rule)
 
 Truth peaks, primary: one ENCODE peak file per track, from the track's own experiment. The rule
-(section B.3): a released GRCh38 `bed narrowPeak` file; files of the experiment's default analysis
-(`default_analysis` in the portal JSON) first, else files of its newest released analysis; then a
-file that ENCODE marks `preferred_default`; then replicated peaks before pseudoreplicated peaks
-before IDR peaks before plain peaks; then the newest file; then the accession. The `rule` column of
+(section B.3), portal route (the default): a released GRCh38 `bed narrowPeak` file that ENCODE
+marks `preferred_default` (any such file when none is marked); among those, files of the
+experiment's default analysis (`default_analysis` in the portal JSON) first, else files of its
+newest released analysis; then replicated peaks before pseudoreplicated peaks before IDR peaks
+before plain peaks; then the newest file; then the accession. The `rule` column of
 `peak_files.tsv` names the route and the keys that decided. A track with no peak file is listed with
-the reason in `rule` and an empty `file`. The catalog route (`--files`) is used for an experiment
-when the catalog lists peak files for it; the catalog has no `file_type`, no analysis and no
-`preferred_default`, so that route ranks by output type, then accession only, and says so in `rule`.
+the reason in `rule` and an empty `file`. The catalog route (`--files`) is the offline fallback,
+used for an experiment only when its portal JSON cannot be read; the catalog has no `file_type`, no
+analysis and no `preferred_default`, so that route ranks by output type, then the newest
+`pipeline_version`, then accession, and says so in `rule` (`catalog_fallback:...`).
 Controls are skipped. A rerun skips a file already on disk with the right md5, and merges its rows
 into an existing `peak_files.tsv` by `eic_track`.
 
 Blind discipline. A peak file and its `n_peaks` are statistics of the blind truth. `--roles` with
 `blind` needs `--allow-blind --evalset <json>`; the tool appends a `started` row to `BLIND_PASSES.tsv`
 beside that eval set before the first blind portal read, and a `fetched` row after the last blind
-download (`score.ledger_append`, key `peaks:<resolved out dir>`). A second blind fetch for the same
+download (`score.ledger_append`, key `peaks:<resolved out dir>`). The `fetched` row's status is
+`fetched failed_downloads=<n>`, the count of blind tracks whose fetch failed (score.py's ledger
+columns are fixed, so the count rides in `status`). A second blind fetch for the same
 key and eval set is refused without `--repeat-blind-reason`.
 
 Tiles and AUPRC (Max's design; ported, not rewritten; sources in GitHub
 mlibbrecht/01_2026-10-19_research at bde905a, projects/03_2026-10-20_epi_imputation/sprints/:
 S11 = 11_2026-11-11_alphagenome2, S12 = 12_2026-11-12_ag2_fair_test). A tile is 20 bins of 25 bp (500 bp), laid
 from the start of each eval region; a region of 16,384 bins holds 819 whole tiles and its last 4 bins
-belong to no tile (Max also drops partial tiles). A tile is called for a track when any of its bins
+belong to no tile (Max also drops partial tiles). With `region_starts`, the tile functions use a
+genome grid instead (multiples of 500 bp from position 0, as Max's chromosome-wide tiles). A tile is called for a track when any of its bins
 is a peak bin (`tile_any`; S12 `scripts/api/score_f1.py` `tile_calls` l.109-116, which reads the
 per-tile peak-bin counts of S11 `scripts/bridge/peak_tiles.py` l.2-13 and l.40-44 and tests > 0).
 Consensus tiles: tiles called in any track of the tile set (score_f1.py l.119-136); a track with no
@@ -128,27 +133,50 @@ def derived_peaks(neglog10p, threshold: float = DERIVED_THRESHOLD) -> np.ndarray
 
 # ---------------------------------------------------------------------------------------- tiles
 
-def _tiled(x, tile_bins: int, region_bins):
+def _tiled(x, tile_bins: int, region_bins, region_starts=None) -> np.ndarray:
+    """(n_tiles, tile_bins) view of `x`, one row per whole tile. Region grid (default): tiles are
+    laid from each region's start. Genome grid (`region_starts` = the start bin of each region, i.e.
+    the eval set's `regions[i][1]`): tiles sit on multiples of `tile_bins` bins from position 0 of
+    the chromosome (500 bp multiples at the defaults), as a chromosome-wide grid; the partial tiles
+    at both ends of a region are dropped."""
     x = np.asarray(x)
-    rb = x.size if region_bins is None else int(region_bins)
+    if region_bins is None:
+        region_bins = x.size if region_starts is None else x.size // max(len(region_starts), 1)
+    rb = int(region_bins)
     if rb <= 0 or x.size % rb:
         raise ValueError(f"{x.size} bins is not a whole number of regions of {rb} bins")
-    nt = rb // tile_bins
-    return x.reshape(-1, rb)[:, :nt * tile_bins].reshape(-1, nt, tile_bins)
+    r = x.reshape(-1, rb)
+    if region_starts is None:
+        nt = rb // tile_bins
+        return r[:, :nt * tile_bins].reshape(-1, tile_bins)
+    if len(region_starts) != r.shape[0]:
+        raise ValueError(f"{len(region_starts)} region starts for {r.shape[0]} regions")
+    rows = []
+    for i, sb in enumerate(region_starts):
+        off = (-int(sb)) % tile_bins
+        nt = (rb - off) // tile_bins
+        rows.append(r[i, off:off + nt * tile_bins].reshape(nt, tile_bins))
+    return np.concatenate(rows) if rows else r[:, :0].reshape(0, tile_bins)
 
 
-def tile_any(bins, tile_bins: int = TILE_BINS, region_bins=None) -> np.ndarray:
+def tile_any(bins, tile_bins: int = TILE_BINS, region_bins=None, region_starts=None) -> np.ndarray:
     """bool per tile: any bin of the tile set. Tiles are laid from each region's start
-    (`region_bins`; None = one region); the tail of a region shorter than a tile is dropped."""
-    return _tiled(np.asarray(bins, dtype=bool), tile_bins, region_bins).any(-1).ravel()
+    (`region_bins`; None = one region); the tail of a region shorter than a tile is dropped. With
+    `region_starts`, tiles are aligned to the genome instead (see `_tiled`)."""
+    return _tiled(np.asarray(bins, dtype=bool), tile_bins, region_bins,
+                  region_starts).any(-1).ravel()
 
 
-def tile_mean(values, tile_bins: int = TILE_BINS, region_bins=None) -> np.ndarray:
-    return _tiled(np.asarray(values, dtype=np.float64), tile_bins, region_bins).mean(-1).ravel()
+def tile_mean(values, tile_bins: int = TILE_BINS, region_bins=None,
+              region_starts=None) -> np.ndarray:
+    return _tiled(np.asarray(values, dtype=np.float64), tile_bins, region_bins,
+                  region_starts).mean(-1).ravel()
 
 
-def tile_max(values, tile_bins: int = TILE_BINS, region_bins=None) -> np.ndarray:
-    return _tiled(np.asarray(values, dtype=np.float64), tile_bins, region_bins).max(-1).ravel()
+def tile_max(values, tile_bins: int = TILE_BINS, region_bins=None,
+             region_starts=None) -> np.ndarray:
+    return _tiled(np.asarray(values, dtype=np.float64), tile_bins, region_bins,
+                  region_starts).max(-1).ravel()
 
 
 # ------------------------------------------------------------------------------ consensus, AUPRC
@@ -171,9 +199,25 @@ def frequency_bin(frequency, n_bins: int = 8) -> np.ndarray:
     return np.clip(np.ceil(f * n_bins - 1e-9).astype(int) - 1, 0, n_bins - 1)
 
 
+def _check_inside(target_tiles, consensus_tiles) -> None:
+    y = np.asarray(target_tiles, dtype=bool)
+    c = np.asarray(consensus_tiles, dtype=bool)
+    lost = int((y & ~c).sum())
+    if lost:
+        raise ValueError(f"{lost} positive tiles of the target lie outside the consensus; build the "
+                         f"consensus with the target's own tile calls in the tile set")
+
+
 def auprc(target_tiles, consensus_tiles, score):
     """(AUPRC, positive fraction) on the consensus tiles. Undefined (NaN) when the target has no
-    positive or every consensus tile is positive (a ranking with no negative measures nothing)."""
+    positive or every consensus tile is positive (a ranking with no negative measures nothing).
+    Raises ValueError when a positive tile of the target lies outside the consensus: the consensus
+    must be built with the target in the tile set, else positives would be lost silently."""
+    _check_inside(target_tiles, consensus_tiles)
+    return _auprc_on(target_tiles, consensus_tiles, score)
+
+
+def _auprc_on(target_tiles, consensus_tiles, score):
     c = np.asarray(consensus_tiles, dtype=bool)
     y = np.asarray(target_tiles, dtype=bool)[c]
     s = np.asarray(score, dtype=np.float64)[c]
@@ -188,20 +232,24 @@ def auprc(target_tiles, consensus_tiles, score):
 
 def auprc_by_frequency(target_tiles, consensus_tiles, score, frequency, n_bins: int = 8) -> list:
     """One dict per frequency bin (`bin` 1..n_bins, `n_tiles`, `n_pos`, `auprc`); the bins
-    partition the consensus tiles. An empty bin has n_tiles 0 and AUPRC NaN."""
+    partition the consensus tiles. An empty bin has n_tiles 0 and AUPRC NaN. Raises as `auprc`
+    when a positive tile of the target lies outside the consensus."""
+    _check_inside(target_tiles, consensus_tiles)
     c = np.asarray(consensus_tiles, dtype=bool)
     fb = frequency_bin(frequency, n_bins)
     y = np.asarray(target_tiles, dtype=bool)
     out = []
     for k in range(n_bins):
         m = c & (fb == k)
-        a, _ = auprc(y, m, score) if m.any() else (float("nan"), float("nan"))
+        a, _ = _auprc_on(y, m, score) if m.any() else (float("nan"), float("nan"))
         out.append({"bin": k + 1, "n_tiles": int(m.sum()), "n_pos": int((y & m).sum()), "auprc": a})
     return out
 
 
 def binary_prf(target_tiles, consensus_tiles, called_tiles):
-    """(precision, recall, F1) of a binary call on the consensus tiles; NaN where undefined."""
+    """(precision, recall, F1) of a binary call on the consensus tiles; NaN where undefined.
+    Raises as `auprc` when a positive tile of the target lies outside the consensus."""
+    _check_inside(target_tiles, consensus_tiles)
     c = np.asarray(consensus_tiles, dtype=bool)
     y = np.asarray(target_tiles, dtype=bool)[c]
     z = np.asarray(called_tiles, dtype=bool)[c]
@@ -244,6 +292,9 @@ def choose_from_portal(exp: dict):
     def ans(f):
         return {a.get("@id") if isinstance(a, dict) else a for a in f.get("analyses") or []}
 
+    pref = [f for f in files if f.get("preferred_default")]
+    if pref:                                    # the file ENCODE marks as the default
+        files = pref
     default = exp.get("default_analysis")
     default = default.get("@id") if isinstance(default, dict) else default
     scope = "default_analysis"
@@ -264,7 +315,7 @@ def choose_from_portal(exp: dict):
     pool.sort(key=lambda f: (not f.get("preferred_default"),             # stable: first keys
                              OUTPUT_RANK.get(f.get("output_type"), 9)))
     f = pool[0]
-    rule = (f"portal:{scope};preferred_default={'yes' if f.get('preferred_default') else 'no'};"
+    rule = (f"portal:preferred_default_narrowPeak_GRCh38;{scope};preferred_default={'yes' if f.get('preferred_default') else 'no'};"
             f"output_type_rank={OUTPUT_RANK.get(f.get('output_type'), 9)}")
     return {"file": f.get("accession"), "output_type": f.get("output_type") or "",
             "md5": f.get("md5sum") or "", "url": PORTAL + f["href"] if f.get("href") else ""}, rule
@@ -281,13 +332,28 @@ def catalog_peaks(files_tsv) -> dict:
     return by
 
 
+def _version(v: str) -> tuple:
+    """'v1.5.1' or '1.5.1' -> (1, 5, 1); empty or unparsable -> () (oldest)."""
+    parts = []
+    for x in str(v or "").strip().lstrip("vV").split("."):
+        if not x.isdigit():
+            break
+        parts.append(int(x))
+    return tuple(parts)
+
+
 def choose_from_catalog(rows: list):
-    rows = sorted(rows, key=lambda r: (OUTPUT_RANK.get(r["output_type"], 9), r["file"]))
+    """Offline fallback: output type rank, then the newest `pipeline_version`, then accession."""
+    rows = sorted(rows, key=lambda r: r["file"])
+    rows.sort(key=lambda r: _version(r.get("pipeline_version", "")), reverse=True)
+    rows.sort(key=lambda r: OUTPUT_RANK.get(r["output_type"], 9))
     r = rows[0]
     url = r.get("url") or f"{PORTAL}/files/{r['file']}/@@download/{r['file']}.bed.gz"
     return ({"file": r["file"], "output_type": r["output_type"], "md5": r.get("md5", ""),
              "url": url},
-            f"catalog:no_default_flag;output_type_rank={OUTPUT_RANK.get(r['output_type'], 9)}")
+            f"catalog_fallback:no_default_flag;output_type_rank="
+            f"{OUTPUT_RANK.get(r['output_type'], 9)};pipeline_version="
+            f"{r.get('pipeline_version', '') or 'none'}")
 
 
 def count_peaks(path) -> int:
@@ -330,13 +396,14 @@ def _write_rows(path: Path, rows: list) -> None:
 
 def _fetch_track(t: dict, out: Path, cat: dict, opener) -> dict:
     row = {"eic_track": t["eic_track"], "role": t["role"], "experiment": t["experiment"]}
-    if cat.get(t["experiment"]):
+    try:                                         # the portal route is the default
+        exp = json.loads(_get(opener, f"{PORTAL}/experiments/{t['experiment']}/?format=json"))
+    except Exception as e:
+        if not cat.get(t["experiment"]):
+            return dict(row, rule=f"failed: portal JSON ({type(e).__name__}); no catalog fallback")
         pick, rule = choose_from_catalog(cat[t["experiment"]])
+        rule = f"{rule};portal_unreachable={type(e).__name__}"
     else:
-        try:
-            exp = json.loads(_get(opener, f"{PORTAL}/experiments/{t['experiment']}/?format=json"))
-        except Exception as e:
-            return dict(row, rule=f"failed: portal JSON ({type(e).__name__})")
         pick, rule = choose_from_portal(exp)
     if pick is None:
         return dict(row, rule=f"no peak file: {rule}")
@@ -391,7 +458,11 @@ def fetch(ledger, roles, out, *, files=None, allow_blind=False, evalset=None,
     if entry is not None:
         S.ledger_append(ledger_path, dict(entry, time=S._utc(), status="started"))
         rows += [_fetch_track(t, out, cat, opener) for t in blind_rows]
-        S.ledger_append(ledger_path, dict(entry, time=S._utc(), status="fetched"))
+        n_fail = sum(1 for r in rows if r["role"] == "blind"
+                     and str(r.get("rule", "")).startswith("failed"))
+        # LEDGER_COLUMNS is fixed (score.py), so the failure count rides in `status`
+        S.ledger_append(ledger_path, dict(entry, time=S._utc(),
+                                          status=f"fetched failed_downloads={n_fail}"))
 
     table = out / "peak_files.tsv"
     old = {r["eic_track"]: r for r in _read_tsv(table)} if table.is_file() else {}
