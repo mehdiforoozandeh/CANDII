@@ -233,6 +233,81 @@ def test_smoke_call_budget(tmp_path):
         M.run_smoke(FakeClient(), _fake_api(), tmp_path, max_calls=11)
 
 
+def test_missing_accessibility_column_raises():
+    observed, supported, channels = _listing()
+    for col in ("dnase", "atac"):
+        with pytest.raises(ValueError, match="no '%s' column" % col):
+            M.normalize(observed, supported.drop(columns=[col]), channels)
+
+
+SECRET = "PLANTEDKEY0123456789secret"
+
+
+class _LeakyRpc(Exception):
+    def code(self):
+        return types.SimpleNamespace(name="PERMISSION_DENIED")
+
+
+class LeakyClient(FakeClient):
+    """Every API error message quotes the key, as a careless server might."""
+
+    def __init__(self, fail):
+        super().__init__(together=True)
+        self.fail = fail
+
+    def observed_metadata(self, organism):
+        if self.fail == "observed":
+            raise _LeakyRpc(f"denied for key {SECRET}")
+        return super().observed_metadata(organism)
+
+    def supported_conditions(self, organism):
+        if self.fail == "supported":
+            raise RuntimeError(f"bad key {SECRET}")
+        return super().supported_conditions(organism)
+
+    def predict_interval(self, iv, **kw):
+        if self.fail == "predict":
+            raise _LeakyRpc(f"quota for key {SECRET}")
+        return super().predict_interval(iv, **kw)
+
+
+@pytest.mark.parametrize("fail", ["create", "observed", "supported", "predict"])
+@pytest.mark.parametrize("cmd", ["smoke", "metadata"])
+def test_key_never_leaks(tmp_path, monkeypatch, capsys, fail, cmd):
+    monkeypatch.setenv("AG2_KEY_FILE", str(_key(tmp_path, SECRET + "\n")))
+    out = tmp_path / "out"
+    out.mkdir()
+    # metadata needs a channel listing; take it from a clean one-call smoke
+    M.run_smoke(FakeClient(), _fake_api(), out, condition="EFO:0002067", max_calls=1)
+    seen_keys = []
+
+    def create(key):
+        seen_keys.append(key)
+        if fail == "create":
+            raise RuntimeError(f"invalid key {key}")
+        return LeakyClient(fail)
+
+    api = _fake_api()
+    api.create = create
+    errors = []
+    try:
+        rc = M.main([cmd, "--out", str(out)], api=api)
+    except BaseException as exc:  # noqa: BLE001
+        rc = None
+        errors.append(repr(exc) + str(exc))
+    assert seen_keys == [SECRET]  # the tool read the key and passed it to the client only
+    cap = capsys.readouterr()
+    texts = [cap.out, cap.err, *errors] + [p.read_text() for p in out.iterdir()]
+    assert all(SECRET not in t for t in texts)
+    expect_fail = fail in ("create", "observed") or (fail == "supported" and cmd == "metadata")
+    if expect_fail:
+        assert rc == 1 and "failed:" in cap.err
+    else:
+        assert rc == 0, errors
+    if fail == "predict" and cmd == "smoke":
+        assert "PERMISSION_DENIED" in (out / "API_SMOKE.md").read_text()
+
+
 def test_chip_verdict():
     assert M.chip_verdict(1.1) == "mean"
     assert M.chip_verdict(128.0) == "sum"
