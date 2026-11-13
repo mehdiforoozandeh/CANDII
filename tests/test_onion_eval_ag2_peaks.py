@@ -51,6 +51,8 @@ def test_target_positive_outside_consensus_raises():
         P.auprc(y, c, s)
     with pytest.raises(ValueError, match="outside the consensus"):
         P.auprc_by_frequency(y, c, s, np.where(c, 0.5, 0.0))
+    with pytest.raises(ValueError, match="outside the consensus"):
+        P.binary_prf(y, c, np.ones(8, bool))
     cons, _ = P.consensus({"other": c, "target": y})       # target in the tile set: accepted
     assert not math.isnan(P.auprc(y, cons, s)[0])
 
