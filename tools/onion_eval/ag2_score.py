@@ -4,14 +4,16 @@ onion plan, Amendment 5, sections B.1 to B.6).
     ag2_score.py score --evalset <json> --audit <ag2_eic_audit.tsv> --tables <dir>
         --truth-from <run or baseline method track dir> --method <name>=<dir>[,<dir>...] [...]
         --ag2 <ag2 pack dir> --peaks <dir of narrowPeak> --split val|blind [--allow-blind]
-        [--repeat-blind-reason "<text>"] [--table headline|control_free] [--n-boot 2000] --out <dir>
-    -> <out>/per_target.tsv, ag2_board_<split>.tsv, ag2_contrasts_<split>.tsv, unscored_targets.tsv,
-       SCORED
+        [--repeat-blind-reason "<text>"] [--table headline|control_free] [--n-boot 2000]
+        [--allow-unscored] --out <dir>
+    -> <out>/per_target.tsv, ag2_board_<split>.tsv, ag2_board_excluded_<split>.tsv,
+       ag2_contrasts_<split>.tsv, unscored_targets.tsv, SCORED
 
     ag2_score.py gate --targets <tsv> --pred <Max's ag2pred dir> --store <CANDI_STORE dir>
         --tiles <dir> --reference <Max's per-target tsv> [--tracks <Max's tracks tsv>]
         [--chroms chr20,chr21,chr22] --out <dir>
-    -> <out>/gate.tsv and the printed lines `<metric>: max |diff| ...` and `gate: PASS|FAIL`
+    -> <out>/gate.tsv, gate_skipped.tsv and the printed lines `targets compared: k of n`,
+       `<metric>: max |diff| ...` and `gate: PASS|FAIL`
 
 Inputs of `score` are method track files (pinned interface F). A method directory is `<dir>/<regime>/`
 with `tracks.json`, or one regime directory. `--method name=d1,d2,d3` gives the seeds of one method:
@@ -52,16 +54,33 @@ Track sets (section B.1, PI ruling 34): a target of status `unseen` is in `unsee
 status `observed_matched` or `observed_other_read_type` is in `ag2_trained`, for every method that did
 not train on it; AG2 rows take the set from the status alone. Other statuses enter no set and are
 listed in `unscored_targets.tsv`. `trained_on_track`: kind `run` and `baseline` trained on the roles of
-`tracks.json` key `trained_on_roles` (list or comma string; default `train`); `external` on train and
+`tracks.json` key `trained_on_roles` (list or comma string; required for a run, default `train` for a
+baseline); `external` on train and
 val; `oracle_baseline` and `replicate_floor` on none; AG2 from the audit status. Contrasts are
 `method - ag2_matched` per target, per set (never pooled), with a cluster bootstrap over cells
 (`summarize_f1.py` `boot_ci`, l.46-53); a set under 10 tracks or 3 cells prints
 `too few tracks for a contrast` in place of an interval. The board intervals use the same rule.
+`pseudoreplicate_half` enters no contrast (its truth is the other half). Column `preregistered` is 1
+only for `minicandi_final - ag2_matched`, `rspec_cal`, `unseen_by_both`, assay class `all`.
+
+Board means (`ag2_board_<split>.tsv`): for each (track set, assay class, truth source, metric), every
+method's mean is taken on the common tracks, i.e. the tracks where every method of the board that has
+a number for that metric has a finite value; `n_<metric>` prints that count. Each excluded (track,
+method, metric) case is listed in `ag2_board_excluded_<split>.tsv`.
+
+`uses_target_cell_control` comes per track from `lambda_source` of `tracks.json` (a string or
+{measurement_id: string}): `observed_control` and `pipeline_signal` give `yes`; `predicted_control`,
+`training_average_control`, `local_background`, `hotspot2_density`, `none` and
+`training_tracks_own_observed_control` give `no`; another value is refused. In the control_free table
+a run or baseline reads `lambda_source_predicted_control` (default `predicted_control`). An external
+entry must state `uses_target_cell_control` (yes|no) in its `tracks.json`, else it is refused.
 
 Refusals: a method directory whose `regions_sha256` or `region_bins` differs from the eval set's, or
 whose `split` differs, or that lacks a scored target (kind `replicate_floor` apart: a target without
 halves prints `not available`); two truth arrays of one target that differ (`replicate_floor` apart);
-a target listed in two track sets; an AG2 directory without `EVALUATION_ONLY`. `evalset_sha256` is
+a target listed in two track sets; an AG2 directory without `EVALUATION_ONLY`; a run directory
+without `trained_on_roles`; an eval-set target of the split and regime that `--truth-from` lacks
+(unless `--allow-unscored`, which lists it in `unscored_targets.tsv` with the reason). `evalset_sha256` is
 recorded per method, never compared. `--split blind` needs `--allow-blind`; it appends `started` and
 `scored` rows (`score.ledger_append`) to `BLIND_PASSES.tsv` beside the eval set under the key
 `ag2:<resolved ag2 pack dir>`, and refuses a second pass without `--repeat-blind-reason`.
@@ -128,11 +147,17 @@ SIGNAL_METRICS = ["rspec_cal", "pearson_cal", "spearman", "rspec", "pearson", "r
 METRICS = SIGNAL_METRICS + PEAK_METRICS
 CI_METRICS = ["rspec_cal", "pearson_cal", "spearman", "auprc"]
 CONTRAST_METRICS = ["rspec_cal", "pearson_cal", "spearman", "auprc", "rspec_cal_128bp"]
+#: lambda_source of a track -> whether its signal used the target cell's observed control
+CONTROL_OF_LAMBDA = {"observed_control": "yes", "pipeline_signal": "yes",
+                     "predicted_control": "no", "training_average_control": "no",
+                     "local_background": "no", "hotspot2_density": "no", "none": "no",
+                     "training_tracks_own_observed_control": "no"}
+PREREGISTERED = ("minicandi_final", AG2_MATCHED, "rspec_cal", UNSEEN)
 LABEL_COLS = ["trained_on_cell_other_tracks", "reads_target_cell_inputs_at_test_positions",
               "uses_target_cell_control", "truth_peaks", "recalibration", "noise_floor_row"]
 PER_TARGET_COLS = (["method", "kind", "table", "regime", "target", "eic_track", "cell", "assay",
                     "assay_class", "role", "status", "api_label", "track_set", "comparison_label",
-                    "trained_on_track", "n_seeds"] + METRICS + ["rspec_cal_seed_range"]
+                    "trained_on_track", "lambda_source", "n_seeds"] + METRICS + ["rspec_cal_seed_range"]
                    + LABEL_COLS)
 BOARD_METRICS = ["rspec_cal", "pearson_cal", "spearman", "auprc", "auprc_weighted"] + \
     [f"auprc_f{k}" for k in range(1, 9)] + \
@@ -140,12 +165,15 @@ BOARD_METRICS = ["rspec_cal", "pearson_cal", "spearman", "auprc", "auprc_weighte
      "nbpeak_recall", "nbpeak_f1", "rspec", "pearson", "rspec_cal_128bp", "fe_pearson_25bp",
      "fe_spearman_25bp"]
 BOARD_COLS = (["method", "table", "track_set", "comparison_label", "assay_class", "n_tracks",
-               "n_cells"] + BOARD_METRICS + [f"{m}_{s}" for m in CI_METRICS for s in ("ci_lo", "ci_hi")]
-              + ["rspec_cal_seed_range", "n_seeds", "ag2_status", "ag2_api_label", "trained_on_track"]
+               "n_cells"] + [c for m in BOARD_METRICS for c in (m, f"n_{m}")]
+              + [f"{m}_{s}" for m in CI_METRICS for s in ("ci_lo", "ci_hi")]
+              + ["rspec_cal_seed_range", "n_seeds", "ag2_status", "ag2_api_label", "trained_on_track",
+                 "lambda_source"]
               + LABEL_COLS)
 CONTRAST_COLS = ["method", "reference", "table", "track_set", "comparison_label", "truth_peaks",
                  "assay_class", "metric", "n_tracks", "n_cells", "mean_method", "mean_reference",
-                 "mean_diff", "ci_lo", "ci_hi", "n_ahead", "call"]
+                 "mean_diff", "ci_lo", "ci_hi", "n_ahead", "call", "preregistered"]
+EXCLUDED_COLS = ["track_set", "assay_class", "truth_peaks", "metric", "target", "method", "value"]
 
 
 class Refused(RuntimeError):
@@ -249,7 +277,11 @@ def _resolve(d: Path, regime: str):
 def _roles(meta: dict) -> set:
     kind = meta["kind"]
     if kind in NB_KINDS:
-        r = meta.get("trained_on_roles", ["train"])
+        r = meta.get("trained_on_roles")
+        if r is None:
+            if kind == "run":
+                raise Refused(f"run {meta.get('method')!r}: tracks.json has no trained_on_roles")
+            r = ["train"]
         return set(r.split(",") if isinstance(r, str) else r)
     if kind == "external":
         return {"train", "val"}
@@ -262,15 +294,33 @@ def _trained(kind: str, roles: set, role: str, status: str) -> bool:
     return role in roles
 
 
-def _labels(method: str, kind: str, table: str, truth_peaks: str) -> dict:
-    if kind in NB_KINDS:
-        ctl = "yes" if table == "headline" else "no"
-    elif kind == "replicate_floor":
-        ctl = "yes"
-    elif kind == "external":
-        ctl = "unknown"
+def _per_target(v, mid):
+    return v.get(mid) if isinstance(v, dict) else v
+
+
+def lambda_and_control(meta: dict, mid: str, table: str) -> tuple[str, str]:
+    """(lambda_source, uses_target_cell_control) of one target of one method directory, from its
+    `tracks.json` (`lambda_source`: a string or {measurement_id: string}). In the control_free table
+    a run or baseline reads `signal_pc`, whose source is `lambda_source_predicted_control` (default
+    `predicted_control`). An external entry states `uses_target_cell_control` (yes|no) itself."""
+    kind = meta["kind"]
+    if kind in NB_KINDS and table == "control_free":
+        src = _per_target(meta.get("lambda_source_predicted_control", "predicted_control"), mid)
     else:
-        ctl = "no"
+        src = _per_target(meta.get("lambda_source"), mid)
+    if kind == "external":
+        ctl = _per_target(meta.get("uses_target_cell_control"), mid)
+        if ctl not in ("yes", "no"):
+            raise Refused(f"external {meta.get('method')!r}: tracks.json states no "
+                          f"uses_target_cell_control (yes|no) for {mid}")
+        return str(src or "external_entry"), ctl
+    if src not in CONTROL_OF_LAMBDA:
+        raise Refused(f"{meta.get('method')!r} ({kind}): lambda_source {src!r} of {mid} is not one "
+                      f"of {sorted(CONTROL_OF_LAMBDA)}")
+    return src, CONTROL_OF_LAMBDA[src]
+
+
+def _labels(method: str, kind: str, ctl: str, truth_peaks: str) -> dict:
     reads = "no" if kind == "ag2" or method == MEAN_METHOD else "yes"
     return {"trained_on_cell_other_tracks": "yes",
             "reads_target_cell_inputs_at_test_positions": reads,
@@ -335,7 +385,7 @@ def _parse_methods(specs) -> dict:
 
 def score(evalset, audit, tables, truth_from, methods, ag2, peaks, out, *, split="val",
           allow_blind=False, repeat_blind_reason=None, table="headline", n_boot=2000,
-          log=print) -> dict:
+          allow_unscored=False, log=print) -> dict:
     if split not in ("val", "blind"):
         raise ValueError(f"split {split!r} not in (val, blind)")
     if table not in TABLE_REGIME:
@@ -376,6 +426,8 @@ def score(evalset, audit, tables, truth_from, methods, ag2, peaks, out, *, split
                               f"set's ({rsha[:12]}, {rb})")
             if m.get("split") != split:
                 raise Refused(f"{name} ({d}): split {m.get('split')!r}, not {split!r}")
+        for _, m in ds:
+            _roles(m)                                  # a run must state trained_on_roles
         kinds = {m["kind"] for _, m in ds}
         if len(kinds) > 1:
             raise Refused(f"{name}: its seed directories differ in kind {sorted(kinds)}")
@@ -388,6 +440,14 @@ def score(evalset, audit, tables, truth_from, methods, ag2, peaks, out, *, split
         aud[r["eic_track"]].append(r)
     universe = sorted(t for t in tmeta.get("targets", []) if t in ev_targets)
     info, unscored = {}, []
+    for mid in sorted(set(ev_targets) - set(tmeta.get("targets", []))):
+        unscored.append({"target": mid, "cell": ev_targets[mid].get("cell", ""),
+                         "assay": ev_targets[mid].get("assay", ""), "role": split,
+                         "reason": f"no truth in --truth-from {tdir}"})
+    if unscored and not allow_unscored:
+        raise Refused(f"--truth-from {tdir} lacks {len(unscored)} {split} target(s) of regime "
+                      f"{regime} in the eval set, e.g. {unscored[0]['target']} "
+                      f"(--allow-unscored lists them in unscored_targets.tsv)")
     for mid in universe:
         row = by_id.get(mid)
         if row is None:
@@ -404,7 +464,7 @@ def score(evalset, audit, tables, truth_from, methods, ag2, peaks, out, *, split
                      "role": ev_targets[mid].get("split", split), "status": st,
                      "api_label": ar[0].get("api_label", ""), "set": sets.pop()}
         if info[mid]["set"] == NO_SET:
-            unscored.append(info[mid])
+            unscored.append(dict(info[mid], reason=f"status {st}: in no comparison set"))
     scored = [m for m in universe if info[m]["set"] != NO_SET]
     for name, ds in dirs.items():
         for d, m in ds:
@@ -475,25 +535,30 @@ def score(evalset, audit, tables, truth_from, methods, ag2, peaks, out, *, split
             if kind == "ag2" and mid in channels:
                 api = channels[mid].get("api_label_matched" if name == AG2_MATCHED
                                         else "api_label_otherend", api) or api
+            lc = {lambda_and_control(m, mid, table) for _, m in ds}
+            if len(lc) > 1:
+                raise Refused(f"{name}: seed directories differ in lambda_source for {mid}: {sorted(lc)}")
+            lam, ctl = lc.pop()
             for tp in TRUTH_PEAKS:
                 rec = _mean_seeds([sv[tp] for sv in seed_vals])
                 rec.update(t, method=name, kind=kind, table=table, regime=regime, api_label=api,
                            track_set=tset, n_seeds=len(ds),
                            comparison_label=COMPARISON_LABEL.get(tset, "not in a comparison set"),
-                           trained_on_track="yes" if trained else "no",
-                           **_labels(name, kind, table, tp))
+                           trained_on_track="yes" if trained else "no", lambda_source=lam,
+                           **_labels(name, kind, ctl, tp))
                 per.append(rec)
     out.mkdir(parents=True, exist_ok=True)
     _write_tsv(out / "per_target.tsv", PER_TARGET_COLS, per)
     _write_tsv(out / "unscored_targets.tsv",
-               ["target", "eic_track", "cell", "assay", "role", "status"], unscored)
-    board = _board(per, table, n_boot)
+               ["target", "eic_track", "cell", "assay", "role", "status", "reason"], unscored)
+    board, excluded = _board(per, table, n_boot)
     _write_tsv(out / f"ag2_board_{split}.tsv", BOARD_COLS, board)
+    _write_tsv(out / f"ag2_board_excluded_{split}.tsv", EXCLUDED_COLS, excluded)
     con = _contrasts(per, table, n_boot)
     _write_tsv(out / f"ag2_contrasts_{split}.tsv", CONTRAST_COLS, con)
     st = Counter(info[m]["status"] for m in universe)
     summary = {"split": split, "table": table, "regime": regime, "n_targets": len(universe),
-               "n_scored": len(scored), "status_counts": dict(sorted(st.items())),
+               "n_scored": len(scored), "n_unscored": len(unscored), "status_counts": dict(sorted(st.items())),
                "sets": dict(Counter(info[m]["set"] for m in scored)),
                "methods": {n: [{"dir": str(d.resolve()), "kind": m["kind"],
                                 "evalset_sha256": m.get("evalset_sha256", "")} for d, m in ds]
@@ -642,53 +707,92 @@ def _enough(n_tracks: int, n_cells: int) -> bool:
     return n_tracks >= MIN_TRACKS and n_cells >= MIN_CELLS
 
 
-def _board(per, table, n_boot) -> list:
-    groups = defaultdict(list)
+def _finite(v) -> bool:
+    return _num(v) and math.isfinite(float(v))
+
+
+def _yes_count(xs) -> str:
+    xs = list(xs)
+    ny = sum(x == "yes" for x in xs)
+    return "no" if ny == 0 else "yes" if ny == len(xs) else f"yes: {ny} of {len(xs)}"
+
+
+def _board(per, table, n_boot) -> tuple[list, list]:
+    """Board rows and the excluded (track, method, metric) cases. Every mean of a (track set, assay
+    class, truth source, metric) is taken on the common tracks: those where every method of the
+    board that has a number for the metric there has a finite value. `n_<metric>` is that count. A
+    method with no number at all for the metric prints its reason (`not applicable`, ...)."""
+    groups = defaultdict(lambda: defaultdict(dict))
     for r in per:
         if r["track_set"] == NO_SET:
             continue
         for ac in ("all", r["assay_class"]):
-            groups[(r["method"], r["track_set"], ac, r["truth_peaks"])].append(r)
-    out = []
-    for (method, tset, ac, tp), rs in sorted(groups.items()):
-        cells = [r["cell"] for r in rs]
-        b = {"method": method, "table": table, "track_set": tset,
-             "comparison_label": COMPARISON_LABEL[tset], "assay_class": ac, "n_tracks": len(rs),
-             "n_cells": len(set(cells)), "n_seeds": rs[0]["n_seeds"]}
+            groups[(r["track_set"], ac, r["truth_peaks"])][r["method"]][r["target"]] = r
+    out, excluded = [], []
+    for (tset, ac, tp), by_m in sorted(groups.items()):
+        targets = sorted({t for rs in by_m.values() for t in rs})
+        common = {}
         for k in BOARD_METRICS:
+            need = ("auprc", "auprc_posfrac") if k == "auprc_weighted" else (k,)
+            part = [m for m, rs in by_m.items() if any(_num(r[need[0]]) for r in rs.values())]
+            keep = [t for t in targets
+                    if all(t in by_m[m] and all(_finite(by_m[m][t][q]) for q in need) for m in part)]
+            common[k] = (part, keep)
             if k == "auprc_weighted":
-                pairs = [(r["auprc"], r["auprc_posfrac"]) for r in rs
-                         if _num(r["auprc"]) and _num(r["auprc_posfrac"])
-                         and math.isfinite(r["auprc"]) and math.isfinite(r["auprc_posfrac"])]
-                w = sum(p for _, p in pairs)
-                b[k] = (sum(x * p for x, p in pairs) / w if w > 0
-                        else _agg([r["auprc"] for r in rs]) if not pairs else float("nan"))
-            else:
-                b[k] = _agg([r[k] for r in rs])
-        b["rspec_cal_seed_range"] = _agg([r["rspec_cal_seed_range"] for r in rs])
-        for k in CI_METRICS:
-            vals = [r[k] for r in rs]
-            ok = [(float(v), c) for v, c in zip(vals, cells) if _num(v) and math.isfinite(v)]
-            if not ok:
-                b[f"{k}_ci_lo"] = b[f"{k}_ci_hi"] = b[k] if isinstance(b[k], str) else "nan"
-            elif not _enough(len(ok), len({c for _, c in ok})):
-                b[f"{k}_ci_lo"] = b[f"{k}_ci_hi"] = TOO_FEW
-            else:
-                b[f"{k}_ci_lo"], b[f"{k}_ci_hi"] = cluster_bootstrap(
-                    [v for v, _ in ok], [c for _, c in ok], n_boot)
-        b["ag2_status"] = _counts(r["status"] for r in rs)
-        b["ag2_api_label"] = _counts(r["api_label"] for r in rs)
-        ny = sum(r["trained_on_track"] == "yes" for r in rs)
-        b["trained_on_track"] = "no" if ny == 0 else "yes" if ny == len(rs) else f"yes: {ny} of {len(rs)}"
-        for k in LABEL_COLS:
-            b[k] = rs[0][k]
-        out.append(b)
-    return out
+                continue
+            for t in sorted(set(targets) - set(keep)):
+                for m in part:
+                    v = by_m[m][t][k] if t in by_m[m] else "no row"
+                    if not _finite(v):
+                        excluded.append({"track_set": tset, "assay_class": ac, "truth_peaks": tp,
+                                         "metric": k, "target": t, "method": m, "value": v})
+        for method, rmap in sorted(by_m.items()):
+            rs = list(rmap.values())
+            b = {"method": method, "table": table, "track_set": tset,
+                 "comparison_label": COMPARISON_LABEL[tset], "assay_class": ac,
+                 "n_tracks": len(rs), "n_cells": len({r["cell"] for r in rs}),
+                 "n_seeds": rs[0]["n_seeds"]}
+            for k in BOARD_METRICS:
+                part, keep = common[k]
+                base = "auprc" if k == "auprc_weighted" else k
+                if method not in part:
+                    b[k] = _agg([r[base] for r in rs])
+                    b[f"n_{k}"] = 0
+                    continue
+                b[f"n_{k}"] = len(keep)
+                if not keep:
+                    b[k] = float("nan")
+                elif k == "auprc_weighted":
+                    x = np.array([float(rmap[t]["auprc"]) for t in keep])
+                    w = np.array([float(rmap[t]["auprc_posfrac"]) for t in keep])
+                    b[k] = float((x * w).sum() / w.sum()) if w.sum() > 0 else float("nan")
+                else:
+                    b[k] = float(np.mean([float(rmap[t][k]) for t in keep]))
+                if k in CI_METRICS:
+                    cells = [rmap[t]["cell"] for t in keep]
+                    if not _enough(len(keep), len(set(cells))):
+                        b[f"{k}_ci_lo"] = b[f"{k}_ci_hi"] = TOO_FEW
+                    else:
+                        b[f"{k}_ci_lo"], b[f"{k}_ci_hi"] = cluster_bootstrap(
+                            [float(rmap[t][k]) for t in keep], cells, n_boot)
+            for k in CI_METRICS:
+                if f"{k}_ci_lo" not in b:
+                    b[f"{k}_ci_lo"] = b[f"{k}_ci_hi"] = b[k] if isinstance(b[k], str) else "nan"
+            b["rspec_cal_seed_range"] = _agg([r["rspec_cal_seed_range"] for r in rs])
+            b["ag2_status"] = _counts(r["status"] for r in rs)
+            b["ag2_api_label"] = _counts(r["api_label"] for r in rs)
+            b["trained_on_track"] = _yes_count(r["trained_on_track"] for r in rs)
+            b["lambda_source"] = _counts(r["lambda_source"] for r in rs)
+            for k in LABEL_COLS:
+                b[k] = rs[0][k]
+            b["uses_target_cell_control"] = _yes_count(r["uses_target_cell_control"] for r in rs)
+            out.append(b)
+    return out, excluded
 
 
 def _contrasts(per, table, n_boot) -> list:
     idx = {(r["method"], r["target"], r["truth_peaks"]): r for r in per}
-    methods = sorted({r["method"] for r in per} - {AG2_MATCHED})
+    methods = sorted({r["method"] for r in per if r["kind"] != "replicate_floor"} - {AG2_MATCHED})
     out = []
     for tset in (UNSEEN, AG2_TRAINED):            # never pooled
         for method in methods:
@@ -718,7 +822,9 @@ def _contrasts(per, table, n_boot) -> list:
                                "n_cells": len(set(cells)),
                                "mean_method": float(np.mean([x for _, _, x, _ in sel])),
                                "mean_reference": float(np.mean([z for _, _, _, z in sel])),
-                               "mean_diff": float(d.mean()), "n_ahead": int((d > 0).sum())}
+                               "mean_diff": float(d.mean()), "n_ahead": int((d > 0).sum()),
+                               "preregistered": int((method, AG2_MATCHED, metric, tset) == PREREGISTERED
+                                                     and ac == "all")}
                         if _enough(len(sel), len(set(cells))):
                             lo, hi = cluster_bootstrap(d, cells, n_boot)
                             row.update(ci_lo=lo, ci_hi=hi,
@@ -752,7 +858,10 @@ def gate(targets, pred, store, tiles, reference, out, *, tracks=None,
     """Reproduction gate (section B.6): score Max's cached AG2 matched channel against his truth with
     this module's functions, on his geometry (score_f1.py l.81-101: genome-mask bins, whole valid
     tiles, the seed-0 subsample), and compare with his per-target table (method `ag2`, setting
-    `all`, stratum `all`). Returns True on PASS."""
+    `all`, stratum `all`). Returns True on PASS. FAIL when any target of `--targets` is skipped
+    (no reference row, no prediction, no peak tiles), when one side of a metric is NaN and the other
+    is not, when `rspec_cal` cannot be computed (no `--tracks`), or when a difference passes its
+    tolerance. Skipped targets go to `gate_skipped.tsv`."""
     if store_obj is None:
         from candi.store.reader import CorpusStore
         store_obj = CorpusStore(store)
@@ -791,7 +900,7 @@ def gate(targets, pred, store, tiles, reference, out, *, tracks=None,
         m = np.concatenate([z[f"cnt_{c}"][:, names.index(a)] for c in CS]) > 0
         return m if m[tile_valid].any() else None
 
-    rows = []
+    rows, skipped, compared = [], [], set()
     for a in sorted({r["assay"] for r in tg}):
         if tr is not None:
             bios = sorted({r["biosample"] for r in tr if r["assay"] == a})
@@ -822,8 +931,13 @@ def gate(targets, pred, store, tiles, reference, out, *, tracks=None,
         for r in (r for r in tg if r["assay"] == a):
             b = r["biosample"]
             files = [pred / c / f"{b}__{a}.npz" for c in CS]
-            if (b, a) not in ref or not all(f.is_file() for f in files) or b not in calls:
+            why = ("no reference row" if (b, a) not in ref else
+                   "no prediction file" if not all(f.is_file() for f in files) else
+                   "no peak tiles" if b not in calls else "")
+            if why:
+                skipped.append({"biosample": b, "assay": a, "reason": why})
                 continue
+            compared.add((b, a))
             p = np.concatenate([_to25(np.load(f)["matched"], C.n_bins(c))[mask[c]]
                                 for f, c in zip(files, CS)])
             y = read_truth(b, a)
@@ -835,21 +949,36 @@ def gate(targets, pred, store, tiles, reference, out, *, tracks=None,
             for k, v in got.items():
                 theirs = float(ref[(b, a)][k]) if ref[(b, a)].get(k, "") not in ("", "nan") \
                     else float("nan")
-                diff = abs(v - theirs) if _num(v) else float("nan")
+                if not _num(v):
+                    status, diff = f"ours {v}", float("nan")
+                elif math.isnan(v) and math.isnan(theirs):
+                    status, diff = "both undefined", 0.0
+                elif math.isnan(v) or math.isnan(theirs):
+                    status, diff = "one side undefined", float("nan")
+                else:
+                    status, diff = "compared", abs(v - theirs)
                 rows.append({"biosample": b, "assay": a, "metric": k, "ours": v, "max": theirs,
-                             "abs_diff": diff})
+                             "abs_diff": diff, "status": status})
     out.mkdir(parents=True, exist_ok=True)
-    _write_tsv(out / "gate.tsv", ["biosample", "assay", "metric", "ours", "max", "abs_diff"], rows)
-    ok = bool(rows)
+    _write_tsv(out / "gate.tsv", ["biosample", "assay", "metric", "ours", "max", "abs_diff",
+                                  "status"], rows)
+    _write_tsv(out / "gate_skipped.tsv", ["biosample", "assay", "reason"], skipped)
+    n_req = len({(r["biosample"], r["assay"]) for r in tg})
+    log(f"targets compared: {len(compared)} of {n_req} requested"
+        + (f"; skipped {len(skipped)} (gate_skipped.tsv)" if skipped else ""))
+    ok = n_req > 0 and len(compared) == n_req
     for k, tol in GATE_TOL.items():
-        d = [r["abs_diff"] for r in rows if r["metric"] == k and math.isfinite(r["abs_diff"])]
-        if not d:
-            log(f"{k}: not compared ({'no --tracks' if k == 'rspec_cal' and tr is None else 'no value'})")
+        rk = [r for r in rows if r["metric"] == k]
+        bad = [r for r in rk if r["status"] not in ("compared", "both undefined")]
+        d = [r["abs_diff"] for r in rk if r["status"] in ("compared", "both undefined")]
+        if bad or not d:
+            why = bad[0]["status"] if bad else "no value"
+            log(f"{k}: {len(bad)} target(s) not comparable ({why})")
             ok = False
             continue
         mx = max(d)
         log(f"{k}: max |diff| {mx:.6g} over {len(d)} targets, tolerance {tol}")
-        ok &= mx <= tol
+        ok = ok and mx <= tol
     log(f"gate: {'PASS' if ok else 'FAIL'}")
     return ok
 
@@ -872,6 +1001,7 @@ def main(argv=None) -> int:
     s.add_argument("--repeat-blind-reason", default=None)
     s.add_argument("--table", choices=tuple(TABLE_REGIME), default="headline")
     s.add_argument("--n-boot", type=int, default=2000)
+    s.add_argument("--allow-unscored", action="store_true")
     s.add_argument("--out", required=True)
     g = sub.add_parser("gate")
     g.add_argument("--targets", required=True)
@@ -887,7 +1017,8 @@ def main(argv=None) -> int:
         if a.cmd == "score":
             score(a.evalset, a.audit, a.tables, a.truth_from, a.method, a.ag2, a.peaks, a.out,
                   split=a.split, allow_blind=a.allow_blind,
-                  repeat_blind_reason=a.repeat_blind_reason, table=a.table, n_boot=a.n_boot)
+                  repeat_blind_reason=a.repeat_blind_reason, table=a.table, n_boot=a.n_boot,
+                  allow_unscored=a.allow_unscored)
             return 0
         return 0 if gate(a.targets, a.pred, a.store, a.tiles, a.reference, a.out,
                          tracks=a.tracks, chroms=tuple(a.chroms.split(","))) else 1
