@@ -1244,7 +1244,7 @@ class Scorer:
         """Per-target records of one (regime, assay) group, and the assay-level shared/specific."""
         # SM: the position-average fits of this group keep only its target cells' own means, and
         # live only while the group is open (they were held for every region of the assay)
-        cells = {j["cell"] for j in jobs}
+        cells = {self.ds.rows[j["target"]]["cell"] for j in jobs}   # the window's meta cell
         self._pa_cache.clear()
         self._pa_keep_cells = cells
         try:
@@ -1254,7 +1254,7 @@ class Scorer:
             self._pa_keep_cells = None
             if self._cells_ahead is not None:   # run(): drop control rates no later group reads
                 for j in jobs:
-                    self._cells_ahead[j["cell"]] -= 1
+                    self._cells_ahead[self.ds.rows[j["target"]]["cell"]] -= 1
                 self._pa_ctl_rate = {k: v for k, v in self._pa_ctl_rate.items()
                                      if self._cells_ahead[k[1]] > 0}
             _trim_heap()
@@ -1758,7 +1758,7 @@ class Scorer:
         self.timing["fit_marginal"] += time.perf_counter() - tq
         _trim_heap()
         from collections import Counter
-        self._cells_ahead = Counter(j["cell"] for j in imp + ctl)
+        self._cells_ahead = Counter(self.ds.rows[j["target"]]["cell"] for j in imp + ctl)
         scores = {}
         recs_by_regime, flagged_by_regime = {}, {}
         for regime in REGIMES + ("control",):
@@ -1800,7 +1800,7 @@ class Scorer:
         # SM: with main position_average, pair windows read the position-average fits too; they
         # keep only the pair cells' own means and are dropped after the pair phase
         self._pa_cache.clear()
-        self._pa_keep_cells = {j["cell"] for j in cor + rep}
+        self._pa_keep_cells = {self.ds.rows[j["target"]]["cell"] for j in cor + rep}
         try:
             cor_recs = [self._pair_record(j) for j in cor]
             rep_recs = [self._pair_record(j) for j in rep]

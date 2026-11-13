@@ -166,11 +166,35 @@ def f4_keys(env, baseline=False) -> set:
     return keys
 
 
+#: paths of the new scorer that the BASE reference lacks (keys added by later chunks; filled while
+#: the tests run, ignored by the comparison)
+IGNORED_NEW_KEYS: set = set()
+
+
+def _shared(new, old, p=""):
+    """`new` restricted to the dict keys that the old reference also has (as in
+    test_onion_eval_score_avgctl.py): a key added after BASE is ignored and recorded, every shared
+    key is compared bit-exact, and a key the old reference has but `new` lacks still fails."""
+    if isinstance(new, dict) and isinstance(old, dict):
+        for k in set(new) - set(old):
+            IGNORED_NEW_KEYS.add(f"{p}/{k}")
+        return {k: _shared(v, old[k], f"{p}/{k}") for k, v in new.items() if k in old}
+    if isinstance(new, list) and isinstance(old, list) and len(new) == len(old):
+        return [_shared(v, o, f"{p}[{i}]") for i, (v, o) in enumerate(zip(new, old))]
+    return new
+
+
 def assert_same_but_f4(old: dict, new: dict, allowed: set):
-    """Every key outside `allowed` is bit-identical (same JSON text), and the keys that differ are
-    exactly `allowed` (the F4 list is exact, not a loose mask)."""
-    fo, fn = dict(_flat(old)), dict(_flat(new))
+    """Every key of the old reference outside `allowed` is bit-identical (same JSON text) in the new
+    output, and the keys that differ are exactly `allowed` (the F4 list is exact, not a loose mask).
+    Keys only the new scorer writes are ignored (IGNORED_NEW_KEYS)."""
+    fo, fn = dict(_flat(old)), dict(_flat(_shared(new, old)))
     changed = {k for k in set(fo) | set(fn) if fo.get(k) != fn.get(k)}
+    # an F4 key the old reference lacks is a new-only key: it must be present in the new output
+    added = {k for k in allowed if k not in fo}
+    fall = dict(_flat(new))
+    assert all(k in fall for k in added), sorted(k for k in added if k not in fall)
+    allowed = allowed - added
     assert changed == allowed, (sorted(changed - allowed), sorted(allowed - changed))
 
 
