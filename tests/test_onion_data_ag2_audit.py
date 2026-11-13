@@ -137,6 +137,23 @@ def test_row_count_equals_non_control_rows(tmp_path):
     assert (fc["CL:1"]["n_val_tracks"], fc["CL:1"]["n_blind_tracks"]) == ("1", "1")
 
 
+def test_trained_on_accessibility_track_needs_accessibility():
+    # CL:1 has an observed DNase-seq track: a validation DNase-seq track there is in the AG2-trained set,
+    # and is still fetched (PI ruling 34). A sibling-condition accessibility track is not scored.
+    extra = [L("T10", "val", "c1", "DNase-seq", "accessibility_dnase", "E1d"),
+             L("T11", "blind", "c4", "DNase-seq", "accessibility_dnase", "E4b")]
+    exps = EXPERIMENTS + [{"experiment": "E1d", "biosample_term_id": "CL:1"},
+                          {"experiment": "E4b", "biosample_term_id": "CL:4"}]
+    observed = OBSERVED + [obs("CL:4_CL:7", "DNASE", "", "", "dnase")]
+    rows = A.audit(LEDGER + extra, exps, A.Ag2Meta(observed, CONDITIONS, CHANNELS))
+    st = {r["eic_track"]: r["status"] for r in rows}
+    assert st["T10"] == "observed_matched" and st["T11"] == "sibling_condition"
+    fc = {r["condition"]: r for r in A.fetch_conditions(rows)}
+    assert fc["CL:1"]["needs_accessibility"] == 1
+    assert fc["CL:2"]["needs_accessibility"] == 1                # unseen DNase-seq (T08)
+    assert fc["CL:4"]["needs_accessibility"] == 0                # sibling accessibility track is not scored
+
+
 def test_unmapped_mark_is_an_error():
     bad = LEDGER + [L("T99", "val", "c1", "H3K99xx", "narrow_histone", "E1")]
     with pytest.raises(A.AuditError, match="unmapped mark"):

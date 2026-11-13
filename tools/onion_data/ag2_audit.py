@@ -32,8 +32,9 @@ Model `final` trained on the train role (sets on val and blind); `final_tv` and 
 from at least 3 cells.
 
 `fetch_conditions.tsv`: per condition with a queryable validation or blind track, the count of such tracks per
-role, and `needs_accessibility` = 1 when one of them is a DNase-seq or ATAC-seq track with status `unseen`
-(decision 10: an accessibility track is fetched only when unseen).
+role, and `needs_accessibility` = 1 when one of them is a scored DNase-seq or ATAC-seq track, i.e. status `unseen`
+(the unseen-by-both set) or `observed_matched` / `observed_other_read_type` (the AG2-trained set, PI ruling 34;
+foreman ruling of 2026-11-13: the same API calls return it).
 
 Usage:
   ag2_audit.py run --ledger <tsv> --experiments <experiments.tsv> --observed <ag2_observed.tsv>
@@ -229,7 +230,7 @@ def fetch_conditions(rows: list[dict]) -> list[dict]:
         a = agg.setdefault(r["condition"], {"condition": r["condition"], "n_val_tracks": 0, "n_blind_tracks": 0,
                                             "needs_accessibility": 0})
         a[f"n_{r['role']}_tracks"] += 1
-        if r["assay"] in ACCESSIBILITY and r["status"] == "unseen":
+        if r["assay"] in ACCESSIBILITY and (r["status"] == "unseen" or r["status"] in AG2_TRAINED):
             a["needs_accessibility"] = 1
     return [agg[c] for c in sorted(agg)]
 
