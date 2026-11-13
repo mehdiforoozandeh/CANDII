@@ -2,7 +2,7 @@
 
     python tools/minicandi/train.py --config <json> --tables <dir> --seed <k> --out <run dir>
         [--device cpu|cuda] [--max-windows N] [--val-every W] [--val-batches 8]
-        [--log-every 50] [--ckpt-minutes 15] [--workers 0]
+        [--log-every 50] [--ckpt-minutes 15] [--workers 0] [--stage-dir <local dir>]
 
 One run directory holds:
   ckpt.pt         the pinned dict (`contract.make_ckpt`): state_dict, the full config, param_count,
@@ -19,6 +19,14 @@ One run directory holds:
   CAPPED          written (before DONE) when the run stopped at `--max-windows` short of the
                   budget: json {"windows_seen", "max_windows", "budget"}. A run with CAPPED is
                   NOT a full-budget run; run.json then has "done": false, "capped": true.
+
+Staging (`--stage-dir`, default off). Before the first batch, the `counts.h5` of every measurement
+the training dataset may read is copied (8 threads, size-checked) to `<stage dir>/<measurement dir
+name>/counts.h5`; its `pr1.h5` / `pr2.h5` become symlinks to the originals; the dataset rows then
+point at the copies. The bytes are the same, so batches, losses and checkpoints are bit-identical
+to an unstaged run, and a resume may switch staging on or off. Reason (chunk L1a, Nibi
+2026-11-13): an h5 open on Nibi's NFS /scratch took 0.21 s, the LRU of 256 handles reopens most
+files, and a rung-1 batch took 11.4 s; staged on the node's local disk it took 0.17 s.
 
 Budget. `config["windows_seen"]` is the training budget in windows; steps = ceil(budget /
 batch_size). `--max-windows N` stops this invocation at N windows (checkpointed) and ends it in
@@ -112,6 +120,50 @@ def worker_batches(ds: OnionDataset, batch_size: int, seed: int, first_step: int
         sampler=range(first_step, total_steps), num_workers=workers,
         generator=torch.Generator().manual_seed(seed))
     return iter(loader)
+
+
+def stage_counts(ds: OnionDataset, stage_dir, threads: int = 8) -> dict:
+    """`--stage-dir`: copy the counts.h5 of every row `ds` may read to local disk and point the rows
+    at the copies (pr1.h5 / pr2.h5 symlinked to the originals). Returns files, bytes, seconds."""
+    from concurrent.futures import ThreadPoolExecutor
+    import shutil
+    root = Path(stage_dir)
+    t0 = time.time()
+    jobs = {}
+    for mid in sorted(ds.allowed):
+        path = ds.rows[mid]["counts_path"]
+        if not path.startswith("h5:"):
+            continue
+        src = Path(path[3:])
+        dst = root / src.parent.name / src.name
+        if jobs.setdefault(dst, src) != src:
+            raise ValueError(f"--stage-dir: two sources map to {dst}")
+
+    def copy(item):
+        dst, src = item
+        size = src.stat().st_size
+        if not (dst.is_file() and dst.stat().st_size == size):
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            tmp = dst.with_name(dst.name + ".part")
+            shutil.copyfile(src, tmp)
+            if tmp.stat().st_size != size:
+                raise OSError(f"--stage-dir: short copy of {src}")
+            os.replace(tmp, dst)
+        for sib in ("pr1.h5", "pr2.h5"):
+            s_, d_ = src.parent / sib, dst.parent / sib
+            if s_.exists() and not d_.exists():
+                d_.symlink_to(s_)
+        return size
+
+    with ThreadPoolExecutor(max_workers=max(1, int(threads))) as pool:
+        nbytes = sum(pool.map(copy, sorted(jobs.items())))
+    staged = {str(src): str(dst) for dst, src in jobs.items()}
+    for row in ds.rows.values():
+        path = row["counts_path"]
+        if path.startswith("h5:") and path[3:] in staged:
+            row["counts_path"] = "h5:" + staged[path[3:]]
+    ds._close_all()
+    return {"files": len(jobs), "bytes": int(nbytes), "seconds": round(time.time() - t0, 1)}
 
 
 def full_config(config: dict) -> dict:
@@ -221,7 +273,8 @@ def _write_json(obj, path: Path) -> None:
 
 def train(config: dict, tables, seed: int, out, device: str = "cpu",
           max_windows: int | None = None, val_every: int = 0, val_batches: int = 8,
-          log_every: int = 50, ckpt_minutes: float = 15.0, workers: int = 0) -> dict:
+          log_every: int = 50, ckpt_minutes: float = 15.0, workers: int = 0,
+          stage_dir=None) -> dict:
     """Train (or resume) one run; returns the run.json dict."""
     cfg = full_config(config)
     check_loss_config(cfg)
@@ -250,6 +303,10 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     ds = OnionDataset(tables, "train", cfg, seed)
+    if stage_dir:
+        st_ = stage_counts(ds, stage_dir)
+        print(f"staged {st_['files']} counts files, {st_['bytes'] / 1e9:.2f} GB, in "
+              f"{st_['seconds']} s to {stage_dir}", flush=True)
     torch.manual_seed(seed)
     model = build_model(cfg)
     model.to(dev)
@@ -409,10 +466,13 @@ def main(argv=None) -> int:
     ap.add_argument("--ckpt-minutes", type=float, default=15.0)
     ap.add_argument("--workers", type=int, default=0,
                     help="DataLoader worker processes for training batches (0 = in-process)")
+    ap.add_argument("--stage-dir", default=None,
+                    help="copy the training counts.h5 files to this local dir first (identical "
+                         "batches; see 'Staging')")
     a = ap.parse_args(argv)
     config = json.loads(Path(a.config).read_text(encoding="utf-8"))
     info = train(config, a.tables, a.seed, a.out, a.device, a.max_windows, a.val_every,
-                 a.val_batches, a.log_every, a.ckpt_minutes, a.workers)
+                 a.val_batches, a.log_every, a.ckpt_minutes, a.workers, a.stage_dir)
     print(json.dumps({k: info[k] for k in ("windows_seen", "steps", "param_count",
                                            "flops_per_window", "training_flops", "done")}))
     return 0

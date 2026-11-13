@@ -321,6 +321,49 @@ def test_train_sh_passes_workers(cpus, want):
     assert r.stdout.split()[-2:] == ["--workers", want]
 
 
+def _losses(out):
+    return [json.loads(x)["loss"] for x in (out / "log.jsonl").read_text().splitlines()]
+
+
+def test_stage_dir_gives_a_bit_identical_run_and_reads_the_copies(tables, tmp_path):
+    """chunk L1a: --stage-dir copies the training counts.h5 files to local disk; the run is the
+    same bit for bit, and a resume may switch staging on (the stream does not change)."""
+    cfg = dict(SMALL, windows_seen=24, scramble_covariates=True)
+    T.train(cfg, tables, 2, tmp_path / "plain", log_every=1)
+    T.train(cfg, tables, 2, tmp_path / "staged", log_every=1, stage_dir=tmp_path / "st")
+    T.train(cfg, tables, 2, tmp_path / "mixed", log_every=1, max_windows=12)
+    T.train(cfg, tables, 2, tmp_path / "mixed", log_every=1, stage_dir=tmp_path / "st2")
+    sd = {d: torch.load(tmp_path / d / "ckpt.pt", weights_only=False)["state_dict"]
+          for d in ("plain", "staged", "mixed")}
+    for d in ("staged", "mixed"):
+        assert all(torch.equal(sd["plain"][k], sd[d][k]) for k in sd["plain"]), d
+        assert _losses(tmp_path / d) == _losses(tmp_path / "plain"), d
+    ds = OnionDataset(tables, "train", T.full_config(cfg), 2)
+    info = T.stage_counts(ds, tmp_path / "st3")
+    assert info["files"] == len([m for m in ds.allowed
+                                 if ds.rows[m]["counts_path"].startswith("h5:")]) > 0
+    for m in ds.allowed:
+        p = Path(ds.rows[m]["counts_path"][3:])
+        assert p.parent.parent == tmp_path / "st3" and p.is_file() and not p.is_symlink()
+        for sib in ("pr1.h5", "pr2.h5"):
+            if (p.parent / sib).exists():
+                assert (p.parent / sib).is_symlink()
+    assert T.stage_counts(ds, tmp_path / "st3")["files"] == info["files"]   # idempotent
+
+
+def test_train_sh_stage_option_is_off_by_default():
+    import os
+    import subprocess
+    cmd = ["bash", str(_ROOT / "slurm/minicandi/train.sh"), "K", "c.json", "T", "0", "O", "cpu"]
+    env = dict(os.environ, DRY_RUN="1", SLURM_TMPDIR="/loc/x")
+    env.pop("ONION_STAGE", None)
+    off = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    on = subprocess.run(cmd, env=dict(env, ONION_STAGE="1"), capture_output=True, text=True)
+    assert off.returncode == 0 and on.returncode == 0
+    assert "--stage-dir" not in off.stdout
+    assert on.stdout.split()[-2:] == ["--stage-dir", "/loc/x/stage"]
+
+
 def _fake_slurm(tmp_path, venv_rc: int, update_rc: int = 0) -> dict:
     """A PATH whose module/virtualenv/pip/sbatch/scontrol/squeue are logging fakes."""
     import os
