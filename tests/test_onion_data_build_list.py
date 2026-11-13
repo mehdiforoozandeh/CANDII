@@ -459,7 +459,9 @@ def _d6x_rows():
 def _run_build_row(args, env_extra, tmp_path):
     import os
     import subprocess
-    env = dict(os.environ, ONION_OUT=str(tmp_path / "meas"), ONION_WORK=str(tmp_path / "work"),
+    # the job's own SLURM_* variables never leak in (the suite also runs inside Slurm jobs)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("SLURM_")}
+    env.update(ONION_OUT=str(tmp_path / "meas"), ONION_WORK=str(tmp_path / "work"),
                ONION_FASTQ_ROOT=str(tmp_path / "fq"), **env_extra)
     # output to files, not pipes: the script's 30 s memory sampler outlives it by one sleep
     log = tmp_path / "build_row.log"
@@ -498,20 +500,18 @@ def test_not_applicable_row_exits_zero_without_verify(tmp_path):
     """D6x class B: a row whose align step writes NOT_APPLICABLE ends with exit 0, skipping the
     views step and verify (verify fails on an experiment with no measurement yet)."""
     import json
-    import os
     bl = _tsv(tmp_path, _d6x_rows())
-    stub = tmp_path / "bin"
-    stub.mkdir()
     rd = tmp_path / "work" / "MIX" / "se"
-    # the align step's python writes NOT_APPLICABLE (as fastq_uniform.run does) and returns 0
-    (stub / "python").write_text(
-        "#!/bin/bash\nmkdir -p %s && echo '%s' > %s/NOT_APPLICABLE\nexit 0\n"
-        % (rd, json.dumps({"reason": "arm se: mixed"}), rd))
-    (stub / "python").chmod(0o755)
+    # The align step's `python` writes NOT_APPLICABLE (as fastq_uniform.run does) and returns 0.
+    # It is an exported bash function, not a PATH stub: on Nibi the align step sources
+    # EIC_REPRO's runner/env.sh, whose Caper venv puts its own python first on PATH (Nibi check
+    # 27090566 ran the real fastq_uniform on this fake build list). A function wins over PATH.
+    na = json.dumps({"reason": "arm se: mixed"})
+    stub = f"() {{ mkdir -p {rd} && echo '{na}' > {rd}/NOT_APPLICABLE; return 0; }}"
     (tmp_path / "slurmtmp").mkdir()
     p = _run_build_row([str(_ROOT), str(bl), "102"],
                        {"SLURM_TMPDIR": str(tmp_path / "slurmtmp"),
-                        "PATH": f"{stub}:{os.environ['PATH']}"}, tmp_path)
+                        "BASH_FUNC_python%%": stub}, tmp_path)
     assert "nothing to build, verify skipped" in p.stdout, p.stdout + p.stderr
     assert "=== verify" not in p.stdout and "views step" not in p.stdout
     assert p.stdout.strip().endswith("[onion-build] exit=0") and p.returncode == 0

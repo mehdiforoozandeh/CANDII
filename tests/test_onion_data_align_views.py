@@ -745,10 +745,11 @@ def test_provenance_carries_what_the_fastq_kits_did_to_the_reads(driver):
     assert AV.run_notes({"mixed_run_types": "x"}) == {"mixed_run_types": "x"}
 
 
-def test_renote_backfills_kf2_rows_and_is_idempotent(driver, capsys):
+def test_renote_backfills_kf2_rows_and_is_idempotent(driver, capsys, monkeypatch):
     """D6x review: `renote` drops a false crop_tool from a non-crop arm.json and writes
-    provenance notes; a second pass changes nothing."""
+    provenance notes; a second pass changes nothing; a queued or running row is skipped."""
     assert driver["run"](5) == 0
+    monkeypatch.setattr(AV, "active_rows", lambda: set())
     aj = driver["work"] / "ENCSRDNS" / "base" / "arm.json"
     armj = json.loads(aj.read_text())
     armj["crop_tool"] = "encode_task_trimmomatic.py (CROP 0, MINLEN -2)"
@@ -768,3 +769,13 @@ def test_renote_backfills_kf2_rows_and_is_idempotent(driver, capsys):
     AV.main(["renote", "--build-list", str(driver["bl"]), "--rows", "5",
              "--work", str(driver["work"]), "--out", str(driver["out"])])
     assert "renote: 0 file(s) changed" in capsys.readouterr().out
+    # a row still queued or running is never touched
+    prov = json.loads(pj.read_text())
+    del prov["notes"]
+    pj.write_text(json.dumps(prov))
+    monkeypatch.setattr(AV, "active_rows", lambda: {5})
+    AV.main(["renote", "--build-list", str(driver["bl"]), "--rows", "5",
+             "--work", str(driver["work"]), "--out", str(driver["out"])])
+    out = capsys.readouterr().out
+    assert "row 5: queued or running; skipped" in out and "0 file(s) changed" in out
+    assert "notes" not in json.loads(pj.read_text())

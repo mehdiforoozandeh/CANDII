@@ -1700,21 +1700,40 @@ def run_row(a) -> int:
     return 0
 
 
+def active_rows() -> set:
+    """Array indices (build-list rows) of this user's queued or running onion_build,
+    onion_signal and onion_stage tasks, as build_row.sh submit reads them; empty without squeue."""
+    try:
+        res = subprocess.run(["squeue", "-u", os.environ.get("USER", ""), "-h", "-r", "-n",
+                              "onion_build,onion_signal,onion_stage", "-o", "%K"],
+                             capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise SystemExit(f"renote: squeue failed ({e}); not touching rows that may be running")
+    if res.returncode != 0:
+        raise SystemExit(f"renote: squeue exit {res.returncode}: {res.stderr.strip()}")
+    return {int(x) for x in res.stdout.split() if x.isdigit()}
+
+
 def renote(build_list, rows_spec, work, out) -> int:
     """D6x backfill for rows aligned and viewed by kit KF2, after their jobs end. Per row:
     (1) arm.json of a run that is not a crop arm (crop_length 0) loses the `crop_tool` that KF2
-    wrote for every repaired run (it named a crop that never ran); the same key leaves ALIGN_DONE
-    if present; (2) each expected measurement's provenance.json gets `notes` = run_notes(arm.json).
-    Idempotent: a file already right is not rewritten. Rows without arm.json (native, not
-    applicable, not aligned yet) and measurements without provenance.json are skipped."""
+    wrote for every repaired run (it named a crop that never ran); (2) each expected
+    measurement's provenance.json gets `notes` = run_notes(arm.json). Idempotent: a file already
+    right is not rewritten. Rows that squeue lists as queued or running (any onion_* job), rows
+    without arm.json (native, not applicable, not aligned yet) and measurements without
+    provenance.json are skipped."""
     FU = _fu()
     want = set()
     for part in rows_spec.split(","):
         lo, _, hi = part.partition("-")
         want.update(range(int(lo), int(hi or lo) + 1))
     changed = 0
+    busy = active_rows()
     for row in FU.read_build_list(build_list):
         if int(row["row"]) not in want:
+            continue
+        if int(row["row"]) in busy:
+            print(f"row {row['row']}: queued or running; skipped")
             continue
         rundir = FU.arm_dir(work, row)
         aj = rundir / "arm.json"
