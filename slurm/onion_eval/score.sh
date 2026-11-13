@@ -21,6 +21,11 @@
 #   --gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1 --cpus-per-task=1 --mem=24000M (and on Fir
 #   --exclude=fc10713,fc10715) to the sbatch line; score.py's --device auto then runs on the GPU.
 # Torch uses OMP_NUM_THREADS = the allocated CPUs (never the node's cores; F3).
+# SM speed (outputs identical either way): ONION_STAGE=1 (default) copies the h5 files the scoring
+#   reads to $SLURM_TMPDIR/stage first (--stage-dir; Nibi NFS opens cost 0.21 s); ONION_STAGE=0 reads
+#   in place. ONION_SCORE_WORKERS=<n> (default: the allocated CPUs) forks n worker processes over
+#   the imputation groups and the pairs (--workers; CPU device only: a GPU scoring stays serial).
+#   Memory grows with the workers (each holds one target group): see cruxvault/results/scorer_memory.
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=onion_score
 #SBATCH --time=03:00:00
@@ -47,10 +52,15 @@ case "$WHAT" in
   *) echo "$USAGE" >&2; exit 2 ;;
 esac
 [ -f "$EVALSET" ] || { echo "no evalset $EVALSET" >&2; exit 2; }
-CMD=(python3 "$KIT/tools/onion_eval/score.py" "${SRC[@]}" --evalset "$EVALSET" --out "$OUT" "$@")
+SPEED=(--workers "${ONION_SCORE_WORKERS:-${SLURM_CPUS_PER_TASK:-1}}")
+if [ "${ONION_STAGE:-1}" = 1 ] && [ -n "${SLURM_TMPDIR:-}" ]; then
+  SPEED+=(--stage-dir "$SLURM_TMPDIR/stage")
+fi
+CMD=(python3 "$KIT/tools/onion_eval/score.py" "${SRC[@]}" --evalset "$EVALSET" --out "$OUT" "${SPEED[@]}" "$@")
 if [ "${DRY_RUN:-0}" = 1 ]; then echo "${CMD[*]}"; exit 0; fi
 if [ -f "$OUT/SCORED" ]; then echo "skip: $OUT/SCORED exists"; exit 0; fi
 echo "=== onion score job ${SLURM_JOB_ID:-local} host=$(hostname) $(date -u)"
+[ -z "${SLURM_TMPDIR:-}" ] || df -h "$SLURM_TMPDIR" | tail -1
 set +u; module load python/3.10.13; set -u
 virtualenv --no-download "$SLURM_TMPDIR/venv"
 source "$SLURM_TMPDIR/venv/bin/activate"

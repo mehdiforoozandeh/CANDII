@@ -559,13 +559,40 @@ def _np_out(o):
 
 # ------------------------------------------------------------------------------------------ scorer
 
+#: SM: (scorer, tasks) of the parent, read by forked workers
+_WORKER = None
+
+
+def _worker_init() -> None:
+    sc, _ = _WORKER
+    sc._cells_ahead = None                       # the parent counts; a worker clears per group
+    sc._pa_cache.clear()
+    sc._pa_keep_cells = None
+
+
+def _worker_task(i: int):
+    """One task in a forked worker: (records, suffstats items, timing, dump metadata)."""
+    sc, tasks = _WORKER
+    kind, regime, job = tasks[i]
+    sc.suff, sc.timing, sc._dump_meta = {}, defaultdict(float), {}
+    if kind == "group":
+        out = sc._imputation_group(job, regime)
+        sc._pa_ctl_rate.clear()                  # bounded memory; a later group refits (same values)
+    else:
+        if sc._pa_keep_cells is None:            # first pair after a group: the pair-phase cache
+            sc._pa_cache.clear()
+            sc._pa_keep_cells = sc._pair_keep
+        out = sc._pair_record(job)
+    return out, list(sc.suff.items()), dict(sc.timing), sc._dump_meta
+
+
 class Scorer:
     def __init__(self, evalset, *, main, model=None, config=None, split="val", allow_blind=False,
                  n_boot=200, seed=0, guardrail_windows=256, guardrail_seeds=(0, 1, 2),
                  device="cpu", no_halves=False, dnase_route=None, run_tables_sha256=None,
                  log=print, region_cache=True, infer_batch=None, lambda_source="auto",
                  signal_override=None, addon=False, dump_signal=None, dump_targets=None,
-                 dump_method=None):
+                 dump_method=None, workers=1, stage_dir=None):
         from minicandi import contract as C
         from minicandi.dataset import OnionDataset, tables_sha256
         from onion_eval.evalset import tables_dir_of
@@ -677,6 +704,16 @@ class Scorer:
         if self.region_cache:
             self.ds.read, self.ds.dna = self._cached_read, self._cached_dna
         self._init_dump(dump_signal, dump_targets, dump_method)
+        #: SM: worker processes over the imputation groups and the pairs (fork; results merged in
+        #: the serial order, so every output is the serial one); 1 = the serial path
+        self.workers = max(1, int(workers or 1))
+        if self.workers > 1 and str(device) != "cpu":
+            log(f"score: --workers {self.workers} ignored on device {device} (CUDA does not "
+                f"survive fork); scoring serially")
+            self.workers = 1
+        #: SM: copy the files the scoring reads to local disk first (see _stage)
+        self.stage_dir = Path(stage_dir) if stage_dir else None
+        self.stage_info = None
 
     # -------------------------------------------------------------- AGd dump hook (interface F)
     def _init_dump(self, dump_signal, dump_targets, dump_method) -> None:
@@ -1697,6 +1734,89 @@ class Scorer:
         }
 
     # -------------------------------------------------------------- run
+    # -------------------------------------------------------------- SM: staging to local disk
+    def _stage(self, imp, cor, rep, ctl, threads: int = 8) -> dict:
+        """Copy the h5 files this scoring reads to `self.stage_dir` and point the rows at the copies
+        (as `minicandi/train.py --stage-dir`; Nibi NFS: 0.21 s per open, ~9 ms per region read).
+        counts.h5 of every measurement read (training tracks of the scored assays and controls,
+        targets, inputs, pair sides, observed controls, replicate-ladder pair members); pr1.h5 and
+        pr2.h5 of targets and pair sides; the three signal files of imputation targets. Every other
+        file of a staged directory is a symlink to the original, so any read still works. The
+        copies are byte copies (size-checked), so every value read is the same."""
+        from concurrent.futures import ThreadPoolExecutor
+        import shutil
+        t0 = time.time()
+        rows = self.ds.rows
+        want = defaultdict(set)                  # measurement -> file names to copy
+        assays = {j["assay"] for j in imp + ctl}
+        for (_, a), m in sorted(self.ds.train_base.items()):
+            if a in assays or a == CONTROL:
+                want[m].add("counts.h5")
+        for j in imp + ctl:
+            want[j["target"]] |= {"counts.h5", "pr1.h5", "pr2.h5", "signal.h5", "pr1_signal.h5",
+                                  "pr2_signal.h5"}
+            for m in j.get("inputs", []):
+                want[m].add("counts.h5")
+        for j in cor + rep:
+            for m in (j["source"], j["target"]):
+                want[m] |= {"counts.h5", "pr1.h5", "pr2.h5"}
+        for j in imp + ctl + cor + rep:
+            c = (rows[j["target"]].get("control_measurement_id") or "").strip()
+            if c in rows:
+                want[c].add("counts.h5")
+        self._rung_pairs("", "")
+        for by in self._rung_pair_index.values():
+            for lst in by.values():
+                for a, b in lst:
+                    want[a].add("counts.h5")
+                    want[b].add("counts.h5")
+        root = Path(self.stage_dir)
+        dirs = {}                                # source dir -> staged dir
+        copies = {}
+        for m in sorted(want):
+            path = rows[m]["counts_path"]
+            if not path.startswith("h5:"):
+                continue
+            src = Path(path[3:]).parent
+            dst = root / src.name
+            if dirs.setdefault(src, dst) != dst or sum(1 for v in dirs.values() if v == dst) > 1:
+                raise ValueError(f"--stage-dir: two source directories map to {dst}")
+            for nm in want[m]:
+                if (src / nm).is_file():
+                    copies[dst / nm] = src / nm
+
+        def copy(item):
+            dst, src = item
+            size = src.stat().st_size
+            if not (dst.is_file() and dst.stat().st_size == size):
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                tmp = dst.with_name(dst.name + ".part")
+                shutil.copyfile(src, tmp)
+                if tmp.stat().st_size != size:
+                    raise OSError(f"--stage-dir: short copy of {src}")
+                os.replace(tmp, dst)
+            return size
+
+        with ThreadPoolExecutor(max_workers=max(1, int(threads))) as pool:
+            nbytes = sum(pool.map(copy, sorted(copies.items())))
+        for src, dst in dirs.items():               # every other file: a link to the original
+            dst.mkdir(parents=True, exist_ok=True)
+            for f in src.iterdir():
+                d = dst / f.name
+                if not d.exists() and not d.is_symlink():
+                    d.symlink_to(f)
+        for row in rows.values():
+            path = row["counts_path"]
+            if path.startswith("h5:") and Path(path[3:]).parent in dirs:
+                row["counts_path"] = "h5:" + str(dirs[Path(path[3:]).parent] / Path(path[3:]).name)
+        self.ds._close_all()
+        self._region, self._rc = None, {}
+        info = {"files": len(copies), "directories": len(dirs), "bytes": int(nbytes),
+                "seconds": round(time.time() - t0, 1)}
+        self.log(f"score: staged {info['files']} files ({info['bytes'] / 1e9:.1f} GB) of "
+                 f"{info['directories']} measurements to {root} in {info['seconds']} s")
+        return info
+
     def jobs(self):
         meas = self.ds.rows
         imp = [dict(t, kind="imputation") for t in self.ev["imputation_targets"]
@@ -1745,6 +1865,44 @@ class Scorer:
             ctl = []
         return imp, cor, rep, ctl
 
+    # -------------------------------------------------------------- SM: worker processes
+    def _parallel(self, group_list, pairs) -> dict:
+        """Run every imputation group and every pair in `self.workers` forked processes. Each task
+        returns its records and the suffstats, timing and dump-metadata entries it wrote; run()
+        merges them in the serial order, so scores.json, suffstats.npz and tracks.json are the
+        serial ones. Each task is the serial code on the same inputs (numpy only for a baseline;
+        a model keeps the parent's torch thread count), so every float is the serial one."""
+        import multiprocessing as mp
+        global _WORKER
+        self._rung_pairs("", "")                 # build the index once, before the fork
+        self.ds._close_all()                     # no h5 handle crosses the fork
+        self._region, self._rc = None, {}
+        tasks = [("group", regime, jobs) for regime, _, jobs in group_list] + [
+            ("pair", None, j) for j in pairs]
+        _WORKER = (self, tasks)
+        try:
+            ctx = mp.get_context("fork")
+            with ctx.Pool(self.workers, initializer=_worker_init) as pool:
+                res = list(pool.imap(_worker_task, range(len(tasks)), chunksize=1))
+        finally:
+            _WORKER = None
+        return {"groups": res[:len(group_list)], "pairs": res[len(group_list):]}
+
+    def _merge_result(self, r):
+        """Fold one worker result into this scorer, in the serial order; returns its records."""
+        out, suff, timing, dump_meta = r
+        self.suff.update(suff)
+        for k, v in timing.items():
+            self.timing[k] += v
+        for regime, m in dump_meta.items():
+            mine = self._dump_meta.setdefault(regime, {k: type(v)() for k, v in m.items()})
+            for k, v in m.items():
+                if isinstance(v, list):
+                    mine.setdefault(k, []).extend(v)
+                else:
+                    mine.setdefault(k, {}).update(v)
+        return out
+
     def run(self) -> dict:
         t0 = time.time()
         if self.dump_dir is not None and self.split == "blind" and not self._dump_ledgered:
@@ -1753,24 +1911,44 @@ class Scorer:
         imp, cor, rep, ctl = self.jobs()
         sc = self.ev.get("scorable", {})
         sc_imp, sc_cor = sc.get("imputation", []), sc.get("correction", [])
+        if self.stage_dir is not None:
+            ts = time.perf_counter()
+            self.stage_info = self._stage(imp, cor, rep, ctl)
+            self.timing["stage"] += time.perf_counter() - ts
         tq = time.perf_counter()
         self.marg = self._fit_marginal({j["assay"] for j in imp + ctl})
         self.timing["fit_marginal"] += time.perf_counter() - tq
         _trim_heap()
         from collections import Counter
         self._cells_ahead = Counter(self.ds.rows[j["target"]]["cell"] for j in imp + ctl)
-        scores = {}
-        recs_by_regime, flagged_by_regime = {}, {}
+        group_list = []                          # (regime, assay, jobs) in the serial order
         for regime in REGIMES + ("control",):
             groups = defaultdict(list)
             for j in (ctl if regime == "control" else imp):
                 if j["regime"] == regime:
                     groups[j["assay"]].append(j)
+            group_list += [(regime, a, groups[a]) for a in sorted(groups)]
+        self._pair_keep = {self.ds.rows[j["target"]]["cell"] for j in cor + rep}
+        par = None
+        if self.workers > 1:
+            tp = time.perf_counter()
+            self.log(f"score: {len(group_list)} groups and {len(cor) + len(rep)} pairs on "
+                     f"{self.workers} worker processes")
+            par = self._parallel(group_list, cor + rep)
+            self.timing["workers_wall"] += time.perf_counter() - tp
+        scores = {}
+        recs_by_regime, flagged_by_regime = {}, {}
+        for regime in REGIMES + ("control",):
             recs = []
-            for a in sorted(groups):
-                self.log(f"score: {regime} {a}: {len(groups[a])} targets")
+            for gi, (rg, a, gjobs) in enumerate(group_list):
+                if rg != regime:
+                    continue
+                self.log(f"score: {regime} {a}: {len(gjobs)} targets")
                 tq = time.perf_counter()
-                recs += self._imputation_group(groups[a], regime)
+                if par is None:
+                    recs += self._imputation_group(gjobs, regime)
+                else:
+                    recs += self._merge_result(par["groups"][gi])
                 self.timing["targets_total"] += time.perf_counter() - tq
             self._pa_cache.clear()
             flagged_by_regime[regime] = [r for r in recs if r["target"] in self.flagged]
@@ -1800,10 +1978,14 @@ class Scorer:
         # SM: with main position_average, pair windows read the position-average fits too; they
         # keep only the pair cells' own means and are dropped after the pair phase
         self._pa_cache.clear()
-        self._pa_keep_cells = {self.ds.rows[j["target"]]["cell"] for j in cor + rep}
+        self._pa_keep_cells = self._pair_keep
         try:
-            cor_recs = [self._pair_record(j) for j in cor]
-            rep_recs = [self._pair_record(j) for j in rep]
+            if par is None:
+                cor_recs = [self._pair_record(j) for j in cor]
+                rep_recs = [self._pair_record(j) for j in rep]
+            else:
+                outs = [self._merge_result(r) for r in par["pairs"]]
+                cor_recs, rep_recs = outs[:len(cor)], outs[len(cor):]
         finally:
             self._pa_cache.clear()
             self._pa_keep_cells = None
@@ -2370,6 +2552,12 @@ def main(argv=None) -> int:
     ap.add_argument("--addon", action="store_true",
                     help="score an add-on eval set (evalset.py addon; required for one) into "
                          "<seed dir>/ox; the run must be trained on the tables the add-on extends")
+    ap.add_argument("--workers", type=int, default=1,
+                    help="SM: worker processes over the imputation groups and the pairs (forked; "
+                         "outputs identical to 1 worker; CPU device only); default 1")
+    ap.add_argument("--stage-dir", default=None,
+                    help="SM: copy the h5 files the scoring reads to this local directory first "
+                         "(e.g. $SLURM_TMPDIR/stage); outputs identical; default off")
     add_dump_arguments(ap)
     a = ap.parse_args(argv)
     if (Path(a.out) / SCORED).is_file() and not a.force:
@@ -2386,6 +2574,8 @@ def main(argv=None) -> int:
                   dnase_route=a.dnase_route, repeat_blind_reason=a.repeat_blind_reason,
                   infer_batch=a.infer_batch, region_cache=not a.no_region_cache,
                   lambda_source=a.lambda_source, **({"addon": True} if a.addon else {}),
+                  **({"workers": a.workers} if a.workers > 1 else {}),
+                  **({"stage_dir": a.stage_dir} if a.stage_dir else {}),
                   **dump_kwargs(a))
     except (PermissionError, ScoreRefused) as e:
         print(f"refused: {e}", file=sys.stderr)
