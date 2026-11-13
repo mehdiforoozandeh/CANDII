@@ -23,6 +23,7 @@ def test_expand_spec():
 
 def test_latest_task_per_row_takes_the_newest_job_and_expands_pending_arrays():
     got = T.latest_tasks(SACCT, [10, 11, 46, 56, 96, 132, 396, 999])
+    assert T.latest_tasks(["5_1|RUNNING", "5_1|COMPLETED"], [1]) == {1: ("5_1", "COMPLETED")}
     assert got[46] == ("26853275_46", "PENDING")            # newer than the failed build
     assert got[10] == ("27123484_10", "PENDING") and got[11] == ("26853275_11", "PENDING")
     assert got[56] == ("26853261_56", "TIMEOUT")
@@ -79,8 +80,10 @@ def test_cli_init_and_status_write_files(tmp_path, monkeypatch):
     (meas / "E96.pooled.uniform.crop50" / "provenance.json").write_text("{}")
 
     def fake_run(cmd, **kw):
+        if cmd[0] == "squeue":     # a task pending on a dependency is in squeue only
+            return subprocess.CompletedProcess(cmd, 0, "26853275_56|PENDING\n", "")
         assert cmd[0] == "sacct"
-        return subprocess.CompletedProcess(cmd, 0, "26853261_56|RUNNING\n27087748_96|COMPLETED\n", "")
+        return subprocess.CompletedProcess(cmd, 0, "26853261_56|TIMEOUT\n27087748_96|COMPLETED\n", "")
     monkeypatch.setattr(T.subprocess, "run", fake_run)
     args = ["status", "--build-list", str(bl), "--out-dir", str(td), "--measurements", str(meas),
             "--work", str(tmp_path / "work"), "--logs", str(tmp_path)]
@@ -88,8 +91,11 @@ def test_cli_init_and_status_write_files(tmp_path, monkeypatch):
     st = (td / "TAIL_STATUS.tsv").read_text().splitlines()
     assert st[0].split("\t")[:3] == ["row", "experiment", "eic_track"] and len(st) == 3
     assert not (td / "TAIL_DONE").exists()
+    assert "26853275_56\tPENDING" in (td / "TAIL_STATUS.tsv").read_text()
 
     def fake_done(cmd, **kw):
+        if cmd[0] == "squeue":
+            return subprocess.CompletedProcess(cmd, 0, "", "")
         return subprocess.CompletedProcess(cmd, 0, "26853261_56|TIMEOUT\n27087748_96|COMPLETED\n", "")
     monkeypatch.setattr(T.subprocess, "run", fake_done)
     assert T.main(args) == 0

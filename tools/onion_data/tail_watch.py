@@ -54,7 +54,8 @@ def expand_spec(spec: str) -> list[int]:
 
 def latest_tasks(sacct_lines, rows) -> dict:
     """row -> (task id, state) of the newest array job holding that row. Lines are
-    `JobID|State` (sacct -X -P); a pending array prints as `<job>_[<spec>]`."""
+    `JobID|State` (sacct -X -P, then squeue -r); a pending array prints as `<job>_[<spec>]`.
+    For one job id a later line wins, so squeue (current) overrides sacct."""
     want, best = set(rows), {}
     for ln in sacct_lines:
         if "|" not in ln:
@@ -70,7 +71,7 @@ def latest_tasks(sacct_lines, rows) -> dict:
                 continue
             items = [(int(m.group(1)), r) for r in expand_spec(m.group(2))]
         for job, r in items:
-            if r in want and (r not in best or job > best[r][0]):
+            if r in want and (r not in best or job >= best[r][0]):
                 best[r] = (job, state)
     return {r: (f"{job}_{r}", st) for r, (job, st) in best.items()}
 
@@ -160,7 +161,10 @@ def main(argv=None) -> int:
     sa = subprocess.run(["sacct", "-u", os.environ.get("USER", ""), "-S", SINCE, "-X", "-n", "-P",
                          "--name", JOB_NAMES, "-o", "JobID,State"],
                         capture_output=True, text=True, check=True).stdout.splitlines()
-    latest = latest_tasks(sa, nums)
+    # sacct leaves out a job that has never been eligible (pending on a dependency): add squeue
+    sq = subprocess.run(["squeue", "-u", os.environ.get("USER", ""), "-h", "-r", "-n", JOB_NAMES,
+                         "-o", "%i|%T"], capture_output=True, text=True, check=True)
+    latest = latest_tasks(sa + sq.stdout.splitlines(), nums)
     verified = {n: BL.row_state(rows[n], a.measurements, a.work)[0] != "todo" for n in nums}
     logs = {}
     for n, (task, state) in latest.items():
