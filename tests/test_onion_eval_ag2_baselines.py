@@ -174,6 +174,52 @@ def test_oracle_picks_planted_copy_and_never_own_cell(world, val_out):
     assert np.corrcoef(oracle, truth)[0, 1] >= np.corrcoef(mean, truth)[0, 1]
 
 
+def test_planted_leaks_never_candidates(world, val_out, tmp_path):
+    """An evaluation-only second experiment (both markings), a validation track and a blind track,
+    each a copy of the truth in a cell of its own, never enter picks.tsv or the training mean."""
+    ldir = world["tdir"].parent / "leak"
+    ldir.mkdir(exist_ok=True)
+    for f in world["tdir"].iterdir():
+        if f.is_file():
+            shutil.copy(f, ldir / f.name)
+    src = world["by_id"][world["copy_mid"]]
+    plants = {"evalonly": ("x1", "evalonly"), "other_experiment": ("x2", "train"),
+              "val": ("x3", "val"), "blind": ("x4", "blind")}
+    rows, leak_ids = list(world["rows"]), []
+    for i, (name, (cell, role)) in enumerate(plants.items()):
+        mid = f"ENCSR88888{i}.pooled.uniform.base"
+        rows.append(dict(src, measurement_id=mid, experiment=f"ENCSR88888{i}", cell=cell,
+                         eic_track=f"X{i}", in_eic=role))
+        leak_ids.append(mid)
+    _write_rows(ldir / "measurements.tsv", rows)
+    _write_rows(ldir / "evaluation_only.tsv",
+                [{"measurement_id": leak_ids[1], "use": "other_experiment"}])
+    assert set(leak_ids[:2]) <= E.second_experiment_ids(ldir)
+    out = tmp_path / "leak_out"
+    AB.run(ldir, world["ev_val"], world["tf_val"], out, split="val", log=lambda *_: None)
+    t = world["val_target"]
+    picks = list(csv.DictReader(open(out / AB.ORACLE / REGIME / "picks.tsv"), delimiter="\t"))
+    picked = {m for p in picks for m in p["picked"].split(";")}
+    assert picks and not picked & set(leak_ids)
+    np.testing.assert_array_equal(np.load(out / AB.MEAN / REGIME / f"{t}.signal.npy"),
+                                  np.load(val_out / AB.MEAN / REGIME / f"{t}.signal.npy"))
+    meta = json.loads((out / AB.MEAN / REGIME / "tracks.json").read_text())
+    assert meta["n_training_tracks"][t] == 6
+    assert not set(meta["training_tracks_left_out"]) & set(leak_ids)
+
+
+def test_regions_hash_mismatch_refused(world, tmp_path):
+    tf = tmp_path / "tf"
+    shutil.copytree(world["tf_val"], tf)
+    p = tf / REGIME / "tracks.json"
+    m = json.loads(p.read_text())
+    m["regions_sha256"] = "0" * 64
+    p.write_text(json.dumps(m))
+    with pytest.raises(AB.Refused, match="regions_sha256"):
+        AB.run(world["tdir"], world["ev_val"], tf, tmp_path / "o", split="val",
+               log=lambda *_: None)
+
+
 def test_truth_from_must_match_evalset(world, tmp_path):
     with pytest.raises(AB.Refused):
         AB.run(world["tdir"], world["ev_val"], world["tf_blind"], tmp_path / "o", split="val",
