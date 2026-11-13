@@ -422,3 +422,26 @@ Agent calls from the same audit (code level; evidence `cruxvault/results/t233/AU
 - **32. Explained fraction per layer (PI ruling, 2026-11-12).** For each layer, the share of that layer's variance that the model's prediction difference over a replicate pair captures. It is a reported metric beside the headline set. It does not enter the selection rule.
 - **33. Evaluation-only second experiments for EIC (PI ruling, 2026-11-12).** EIC has one experiment per cell type and assay, so the experiment (lab) layer, the upper bound of the variance ratio and the explained fraction on that layer were undefined on it. ENCODE holds a second experiment for 121 of the 363 non-control EIC tracks (48 from another lab; 20 validation tracks; 1 blind track). One second experiment per track is reprocessed with the uniform pipeline, preferring another lab. These views enter the evaluation set only and are never used in training, so D8 holds. Evidence: `cruxvault/results/pi_notes_2026-11-12/other_experiment_census.tsv`.
 - **Second experiments: agent calls (2026-11-12).** (1) The single second experiment of a blind track is left out, so the count is at most 120. A second experiment of a blind track could become an input of that track in the blind pass, and it would be scored before the single ledgered blind pass. (2) A track whose candidates all fail the checks is dropped and listed. (3) Second experiments get count tracks only, with no control and no signal track. (4) At most one track per experiment, validation tracks first. (5) The evaluation-only mark sits in a hashed table column, and training is refused on any add-on tables.
+
+## PI task of 2026-11-13: AlphaGenome 2 as a competitor
+
+- Source of the task: `AlphaGenome 2.md` beside this file (PI's words).
+- Requirements: (1) read the paper and the blog, and ingest the paper into the literature wiki; (2) follow every design fork that Max decided in his sprint 12 (`sprints/12_2026-11-12_ag2_fair_test`); (3) map imputed counts into AlphaGenome 2's prediction space (fold change), as we map counts to signal p-value for EIC; (4) derive binary peaks from counts for the AUPRC metrics; (5) audit AlphaGenome 2's training tracks, so the comparison is fair to CANDI, to AlphaGenome 2 and to the other methods; (6) put AlphaGenome 2 on the leaderboard beside CANDI, the baselines and the other competitors; (7) predictions come from the API (no open weights).
+- PI fact of 2026-11-13: the Nibi `/scratch` soft quota is 20 TB. The storage risk is closed for now.
+
+## Frozen DNA embeddings: collected (2026-11-13)
+
+- Both sets passed the check: 23 chromosomes, bins match the genome layer, 0 NaN.
+- Flashzoi `johahi/flashzoi-replicate-0` @72040fb5: PCA to 128 dimensions, explained variance 0.775. Nucleotide Transformer v2 `InstaDeepAI/nt-v2-500m-multi-species` @06615c16: PCA to 128 dimensions, explained variance 0.550. The PCA fit used chr1 training folds, with fold 3 excluded.
+- Layout: `/scratch/mforooz/onion/dna_emb/<model>/chr*.h5`, dataset `emb`, float16, [n_bins, 128], 25 bp. Size: 31.05 GB per set.
+- Cost: 1.83 GPU-slice-h (Flashzoi) and 15.22 GPU-slice-h (Nucleotide Transformer v2); 35.74 CPU-h over 56 jobs. Source: `cruxvault/results/t207/DNA_EMBEDDINGS.md`.
+- Code-level decisions for the failed build rows (2026-11-13): a truncated ENCODE FASTQ is used up to its last complete record and flagged in the provenance (skipped under 50% of reads); an ATAC-seq library with no adapter sequences on the portal uses the pipeline's adapter auto-detection. Source: `cruxvault/results/t183/EARLY_COLLECT.md`.
+- PI check of 2026-11-13: the AlphaGenome Terms of Service allow publishing benchmark results from API outputs for non-commercial research. AlphaGenome 2 outputs stay evaluation-only (README: outputs must not train other models).
+
+## PI rulings 34 to 37 (2026-11-13): AlphaGenome 2 comparison
+
+- **Ruling 34, headline.** The headline comparison uses only the tracks that AlphaGenome 2 never trained on, same tracks for both methods. A second, labelled comparison scores tracks that are in AlphaGenome 2's training data and that CANDI did not train on, e.g. from the EIC blind set. The PI expects AlphaGenome 2 to win that second comparison by a large margin. Reason (PI): AlphaGenome 2 is not open weight, so it cannot be retrained; a test on its training data puts CANDI at a large disadvantage.
+- **Ruling 34b, extended dataset.** When the extended dataset is built, its test set must hold enough tracks that are outside AlphaGenome 2's training set, so that a fair comparison is possible. This is a design requirement of the extended-dataset split (D11).
+- **Ruling 35.** AlphaGenome 2 gets no row on the EIC challenge board. It appears on a separate comparison board on our evaluation regions.
+- **Ruling 36.** No single-cell RNA-seq conditioning. Cells that AlphaGenome 2 cannot query are reported as not queryable.
+- **Ruling 37.** "Our leaderboard" means this run's comparison tables plus the new AlphaGenome 2 board. The repo leaderboard (`tools/leaderboard.py`) is not changed.

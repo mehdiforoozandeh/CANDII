@@ -3,9 +3,9 @@ type: wiki
 title: ENCODE Imputation Challenge (EIC)
 summary: The 2019 prospective benchmark of 23 imputation methods (retrospective analysis published 2023): its two-stage design, the 35-assay × 51-biosample panel, and its finding that a naive baseline beat almost every entrant.
 category: dataset
-sources: raw/schreiber-2023-encode-imputation-challenge.pdf, raw/encode-2020-expanded-encyclopedias.xml, raw/amemiya-2019-encode-blacklist.xml, raw/zhang-2008-macs.xml
+sources: raw/schreiber-2023-encode-imputation-challenge.pdf, raw/encode-2020-expanded-encyclopedias.xml, raw/amemiya-2019-encode-blacklist.xml, raw/zhang-2008-macs.xml, raw/gayoso-2026-alphagenome2.pdf
 created: 2026-07-31T21:26:00
-updated: 2026-07-31T21:26:00
+updated: 2026-11-12T18:00:00
 ---
 
 # ENCODE Imputation Challenge (EIC)
@@ -46,6 +46,8 @@ Under the performance measures fixed *before* the challenge began, the [[average
 ## As a benchmark panel
 
 The EIC panel (35 assays across ~51 biosamples, with its published train/validation/test split) remains a standard benchmark for epigenome imputation, and the paper's recommendation — always compare against naive baselines — is its most quoted line.
+
+Its lessons now shape benchmark design outside the panel. AlphaGenome 2 (`raw/gayoso-2026-alphagenome2.pdf`, p.41) states that its imputation metrics follow the EIC, drops MSE as scale-dependent, and makes single-end vs paired-end a separate output channel because conflating them "posed a major issue" in the challenge. It does not score the EIC tracks themselves. See [[alphagenome-2]].
 
 ## See also
 

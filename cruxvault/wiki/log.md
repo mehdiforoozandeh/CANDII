@@ -379,3 +379,7 @@ existing page carried.
 ## [2026-09-16] ingest | Identification of factors associated with duplicate rate in ChIP-seq data — Shulan Tian, Shuxia Peng, Michael Kalmbach, Krutika S. Gaonkar, Aditya Bhagwate, Wei Ding, Jeanette Eckel-Passow, Huihuang Yan, Susan L. Slager (2019)
 
 ## [2026-10-26] page | Pseudocount log ratios carry a signal-level curve — new concept page (PI request); no raw/ source, evidence is a CANDII split-half test
+
+## [2026-11-12] ingest | AlphaGenome 2 predicts regulatory activity and variant effects across cell states — Adam Gayoso, Anne Mottram, Alexander Karollus, Guido Novati, Pavol Drotár, John Reid, Laetitia Meng-Papaxanthos, Adam Kosiorek, Eirini Arvaniti, Vincent Dutordoir, Soham De, Tom Ward, Lai Hong Wong, Matteo Perino, Kyle Taylor, Jun Cheng, Natasha Latysheva, Joshua Pan, Dhavanthi Hariharan, Clare Bycroft, Lauren Nicolaisen, Demis Hassabis, Pushmeet Kohli, Žiga Avsec (2026)
+
+## [2026-11-12] lint | AlphaGenome 2 ingest: new page alphagenome-2; updated sequence-conditioned-epigenome-models, epigenome-imputation, film-conditioning, encode-imputation-challenge, avocado. No contradictions found. AG2 ChIP targets are fold change over control, which differs from the -log10 p-value convention on epigenome-imputation; the page now states both. Data gap: AG2 Supplementary Tables 2-17 are not in the PDF.

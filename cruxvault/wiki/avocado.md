@@ -3,9 +3,9 @@ type: wiki
 title: Avocado
 summary: Schreiber et al. 2020: deep multi-scale tensor factorisation that both imputes epigenomic tracks and yields a reusable latent representation of the genome; extended to the full ENCODE3 compendium.
 category: method
-sources: raw/schreiber-2020-avocado.xml, raw/schreiber-2020-encode3-compendium.xml, raw/durham-2018-predictd.xml, raw/schreiber-2023-encode-imputation-challenge.pdf, raw/hawkins-hooker-2023-edice.xml
+sources: raw/schreiber-2020-avocado.xml, raw/schreiber-2020-encode3-compendium.xml, raw/durham-2018-predictd.xml, raw/schreiber-2023-encode-imputation-challenge.pdf, raw/hawkins-hooker-2023-edice.xml, raw/gayoso-2026-alphagenome2.pdf
 created: 2026-07-31T21:26:00
-updated: 2026-07-31T21:26:00
+updated: 2026-11-12T18:00:00
 ---
 
 # Avocado
@@ -45,6 +45,10 @@ This matters for a peak head: the region where the factorisation lineage is *wea
 ## Role in the challenge
 
 Avocado occupies an unusual position in `raw/schreiber-2023-encode-imputation-challenge.pdf`: three of the 23 submissions consumed **Avocado's imputations as input features**, and those submissions had the highest genome-wide correlation with Avocado's predictions. Avocado also served as one of the two reference baselines against which entrant error patterns were compared (the other being the [[average-activity-baseline]]).
+
+## As a retrained baseline (2026)
+
+`raw/gayoso-2026-alphagenome2.pdf` retrained Avocado as the external baseline for [[alphagenome-2]]: moved from 25 bp to 32 bp (factors at 32 bp, 320 bp and 6.4 kb), trained on arcsinh-transformed coverage and fold-change tracks, swept 100 configurations on the ENCODE pilot regions, fine-tuned the top 10 genome-wide, and selected by peak AUPRC (p.42-43). On held-out tracks its genome-wide Pearson (0.39-0.73 across chromatin assays) was similar to the channel mean (0.47-0.72), and on rare condition-specific TF peaks it was near or below random (p.6-7). This is consistent with the MSE1obs result above, where Avocado is weakest at the highest-signal positions; the AG2 benchmark adds that the weakness is sharpest for peaks present in few cell types.
 
 ## See also
 
