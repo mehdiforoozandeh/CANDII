@@ -232,8 +232,9 @@ def run(tables, evalset, truth_from, out, *, split="val", allow_blind=False,
         if stray:
             raise Refused(f"{d}: {len(stray)} target(s) are not {split} imputation targets of "
                           f"regime {regime} in the eval set, e.g. {stray[0]}")
-        if meta.get("regions_sha256"):
-            rsha = meta["regions_sha256"]     # AGd's own hash of the same regions
+        if meta.get("regions_sha256") and meta["regions_sha256"] != rsha:
+            raise Refused(f"{d}: regions_sha256 {meta['regions_sha256'][:12]} differs from this "
+                          f"eval set's {rsha[:12]}")
 
     ledger, entry = None, None
     if split == "blind":
