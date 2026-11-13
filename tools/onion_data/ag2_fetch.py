@@ -5,7 +5,7 @@ method track files (onion plan Amendment 5, pinned interface F). AG2 outputs are
                         --outputs chip_histone[,dnase,atac] --cache <dir> [--model all_folds]
                         [--max-calls 2000] [--workers 5] [--chunk 25] [--strict] [--dry-run]
     ag2_fetch.py status --conditions <tsv> (--evalset <json> | --chroms ...) --cache <dir>
-                        [--outputs chip_histone] [--model all_folds] [--strict]
+                        --outputs chip_histone[,dnase,atac] [--model all_folds] [--strict]
 
 `--dry-run` prints the planned calls per condition and reads no key and creates no client. `--max-calls`
 counts every attempt: a retry after a quota error resends its whole chunk and counts again. An unreadable
@@ -672,7 +672,7 @@ def main(argv=None, *, client_factory=_client, sleep=time.sleep) -> int:
         p.add_argument("--conditions", required=True)
         p.add_argument("--evalset")
         p.add_argument("--chroms")
-        p.add_argument("--outputs", default="chip_histone", required=(name == "fetch"))
+        p.add_argument("--outputs", required=True)
         p.add_argument("--cache", required=True)
         p.add_argument("--model", default="all_folds", choices=["all_folds"])
         p.add_argument("--strict", action="store_true", help="an unreadable part file is an error, not missing")

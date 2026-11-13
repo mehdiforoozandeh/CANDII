@@ -211,7 +211,8 @@ def test_max_calls_stops_cleanly(tmp_path, keyfile, capsys):
     assert rc == 75 and sum(len(x) for x in c.calls) == 2 and _parts(cache) == ["part_0.npz"]
     assert "max-calls" in capsys.readouterr().out
     ev, cf = tmp_path / "ev.json", tmp_path / "conds.tsv"
-    assert F.main(["status", "--conditions", str(cf), "--evalset", str(ev), "--cache", str(cache)]) == 0
+    assert F.main(["status", "--conditions", str(cf), "--evalset", str(ev), "--outputs", "chip_histone",
+                   "--cache", str(cache)]) == 0
     assert "windows: 4, cached: 2, missing: 2" in capsys.readouterr().out
 
 
@@ -455,7 +456,7 @@ def test_corrupt_part_is_refetched_unless_strict(tmp_path, keyfile, capsys):
     bad = F.cond_dir(cache, "all_folds", "EFO:0001") / "part_2.npz"
     bad.write_bytes(b"not a zip file")
     ev, cf = tmp_path / "ev.json", tmp_path / "conds.tsv"
-    assert F.main(["status", "--strict", "--conditions", str(cf), "--evalset", str(ev),
+    assert F.main(["status", "--strict", "--conditions", str(cf), "--evalset", str(ev), "--outputs", "chip_histone",
                    "--cache", str(cache)]) == 1
     assert "part_2.npz" in capsys.readouterr().err
     c = FakeClient()
@@ -477,3 +478,15 @@ def test_regions_sha256_equals_ag2_baselines():
     B = pytest.importorskip("onion_eval.ag2_baselines")
     ev = {"regions": [["chr1", 16384], ["chrX", 0]], "region_bins": 16384}
     assert F.regions_sha256(ev) == B.regions_sha256(ev["regions"], ev["region_bins"])
+
+
+def test_status_requires_outputs(tmp_path, keyfile, capsys):
+    rc, cache = _run(tmp_path, FakeClient(), outputs="chip_histone,dnase")
+    assert rc == 0
+    ev, cf = tmp_path / "ev.json", tmp_path / "conds.tsv"
+    with pytest.raises(SystemExit) as e:
+        F.main(["status", "--conditions", str(cf), "--evalset", str(ev), "--cache", str(cache)])
+    assert e.value.code == 2 and "--outputs" in capsys.readouterr().err
+    assert F.main(["status", "--conditions", str(cf), "--evalset", str(ev), "--outputs", "chip_histone,dnase",
+                   "--cache", str(cache)]) == 0
+    assert "missing: 0" in capsys.readouterr().out
