@@ -31,7 +31,7 @@ Each file is `arms/rung4/base.json` plus one key, or no key for `today`. The run
 | `no_eval` | `exclude_regions` | `$O/eval/regions_v1/regions.json` |
 | `today` | none | the ladder's sampler, unchanged |
 
-## `selection20k/` (B.4 selection at a limited budget; 20,000 windows; 7 files)
+## `selection20k/` (B.4 selection at a limited budget; 20,000 windows; 8 files)
 
 Each file is `budget/rung4_base_w20000.json` plus `train_regions`. The run name is `rg_<arm>`.
 
@@ -39,10 +39,16 @@ Each file is `budget/rung4_base_w20000.json` plus `train_regions`. The run name 
 |---|---|
 | `blocks_minus_eval_w20k` | `$O/region/lists/blocks_minus_eval.tsv` |
 | `terr_r1024_w20k` | `$O/region/lists/terr_r1024_s{seed}.tsv` |
+| `tile_uniform` | `$O/region/lists/tile_uniform.tsv` |
 | `peakfreq_w`, `peakfreq_u`, `ccre_like_w`, `variance_w`, `kcenter` | `$O/region/lists/<arm>.tsv` |
+
+The three controls are `blocks_minus_eval_w20k`, `terr_r1024_w20k` and `tile_uniform`. The
+control `tile_uniform` samples the tile universe of the weighted tile arms uniformly, with q in
+proportion to valid bins and w = 1. It has the same window-in-tile edge effect as the tile arms.
 
 ## `confirm80k/` (the conditional confirmation; 80,000 windows; 5 files)
 
 The file `confirm80k/<arm>_w80k.json` is `arms/rung4/base.json` plus the `train_regions` key of
-the selection arm `<arm>`. There is one file for each of the five selection arms. Chunk RTc runs
+the selection arm `<arm>`. There is one file for each of the five selection arms. The folder
+holds no control: the confirmation compares against `region80k/blocks_minus_eval.json`. Chunk RTc runs
 only the best winner of B.4, and only if B.4 names a winner. The run name is `rg_<arm>_w80k`.

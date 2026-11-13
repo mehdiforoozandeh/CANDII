@@ -1,7 +1,8 @@
 """Configs of the region experiments (Amendment 7, chunk RBk) under
 tools/minicandi/configs/region/: each file differs from its ladder source in the stated keys only,
-every list path is under $O/region/lists/, and the file counts are 30 budget files, 8 + 7 region
-files and 5 confirmation files. Stdlib only (no torch import)."""
+every list path is under $O/region/lists/, and the file counts are 30 budget files, 8 + 8 region
+files (the plan's 7 plus the control `tile_uniform`, a foreman decision) and 5 confirmation
+files. Stdlib only (no torch import)."""
 from __future__ import annotations
 
 import json
@@ -37,6 +38,7 @@ REGION80K = {
 SELECTION20K = {
     "blocks_minus_eval_w20k": f"{LISTS}blocks_minus_eval.tsv",
     "terr_r1024_w20k": f"{LISTS}terr_r1024_s{{seed}}.tsv",
+    "tile_uniform": f"{LISTS}tile_uniform.tsv",
     **{a: f"{LISTS}{a}.tsv" for a in SELECTION},
 }
 
@@ -65,7 +67,7 @@ def test_counts():
     def n(sub):
         return len(list((REGION / sub).glob("*.json")))
     assert len(_equal_budget_arms(1)) == 7 and len(_equal_budget_arms(4)) == 8
-    assert (n("budget"), n("region80k"), n("selection20k"), n("confirm80k")) == (30, 8, 7, 5)
+    assert (n("budget"), n("region80k"), n("selection20k"), n("confirm80k")) == (30, 8, 8, 5)
     assert sorted(p.name for p in REGION.iterdir() if p.is_file()) == ["README.md"]
     assert sorted(p.name for p in REGION.iterdir() if p.is_dir()) == \
         ["budget", "confirm80k", "region80k", "selection20k"]
@@ -124,7 +126,7 @@ def test_file_sets_are_exact():
 
 def test_paths_and_invariants_over_every_file():
     files = sorted(REGION.glob("*/*.json"))
-    assert len(files) == 50
+    assert len(files) == 51
     base4 = _ladder(4, "base")
     for p in files:
         cfg = _load(p)
