@@ -540,8 +540,10 @@ def _gate_world(tmp_path, targets):
                  matched=np.abs(rng.normal(1, 1, -(-n * 25 // 128))))
     (tmp_path / "tiles").mkdir()
     for b in bios:
-        np.savez(tmp_path / "tiles" / f"{b}.npz", tracks=np.array([ASSAY]),
-                 **{f"cnt_{c}": (rng.random((n // 20, 1)) < 0.3).astype(int) for c, n in nb.items()})
+        cnt = {f"cnt_{c}": (rng.random((n // 20, 1)) < 0.3).astype(int) for c, n in nb.items()}
+        for v in cnt.values():
+            v[0, 0] = 1          # a peak on tile 0, which holds masked bins: not a whole valid tile
+        np.savez(tmp_path / "tiles" / f"{b}.npz", tracks=np.array([ASSAY]), **cnt)
     kw = dict(tracks=tmp_path / "tracks.tsv", chroms=tuple(nb), store_obj=_FakeStore(tracks, nb),
               log=lambda *_: None)
     return kw
@@ -616,3 +618,49 @@ def test_gate_fails_when_one_side_is_nan(tmp_path):
     _ref(ref, [{"biosample": "b1", **ours}])
     assert AS.gate(tmp_path / "targets.tsv", tmp_path / "pred", None, tmp_path / "tiles", ref,
                    tmp_path / "g2", **kw)
+
+
+# ------------------------------------------------------- tile universe (Max's rule, gate on Fir)
+
+def _tiles_case():
+    universe = np.array([1, 1, 1, 1, 1, 1, 0, 0, 1, 1], bool)
+    cons = np.array([1, 1, 1, 1, 0, 1, 0, 0, 1, 1], bool)
+    target = np.array([1, 0, 1, 0, 0, 0, 1, 1, 1, 0], bool)      # 2 positives off the universe
+    score = np.array([.9, .1, .8, .3, .5, .2, .99, .99, .4, .05])
+    return universe, cons, target, score
+
+
+def test_positives_on_partial_tiles_dropped_and_counted():
+    universe, cons, target, score = _tiles_case()
+    with pytest.raises(ValueError, match="outside the consensus"):
+        AS.PK.auprc(target, cons, score)                          # the raw calls are refused
+    out = AS.peak_metrics(target, cons, cons.astype(float) / 2, score, score > 0.5, AS.NA_APPL,
+                          universe=universe)
+    assert out["n_positive_tiles_dropped"] == 2 and out["n_tiles_dropped"] == 2
+    ref, pf = AS.PK.auprc(target & universe, cons, score)
+    assert out["auprc"] == pytest.approx(ref) and out["auprc_posfrac"] == pytest.approx(pf)
+    assert out["peak_precision"] == pytest.approx(
+        AS.PK.binary_prf(target & universe, cons, (score > 0.5) & universe)[0])
+
+
+def test_positive_inside_universe_outside_consensus_still_raises():
+    universe, cons, target, score = _tiles_case()
+    target = target.copy()
+    target[4] = True                 # tile 4: inside the universe, not in the consensus
+    with pytest.raises(ValueError, match="outside the consensus"):
+        AS.peak_metrics(target, cons, cons.astype(float), score, score > 0.5, AS.NA_APPL,
+                        universe=universe)
+
+
+def test_gate_counts_dropped_partial_tile_positives(tmp_path):
+    kw = _gate_world(tmp_path, ["b1"])
+    ref = tmp_path / "ref.tsv"
+    _ref(ref, [{"biosample": "b1", "pearson_cal": "nan", "spearman": "nan", "auprc": "nan",
+                "rspec_cal": "nan"}])
+    lines = []
+    AS.gate(tmp_path / "targets.tsv", tmp_path / "pred", None, tmp_path / "tiles", ref,
+            tmp_path / "g0", **dict(kw, log=lines.append))
+    rows = _read(tmp_path / "g0" / "gate.tsv")
+    assert {r["n_positive_tiles_dropped"] for r in rows} == {"2"}    # tile 0 of each chromosome
+    assert {r["n_tiles_dropped"] for r in rows} == {"2"}
+    assert any("2 positive tiles off the whole valid tiles dropped" in x for x in lines)

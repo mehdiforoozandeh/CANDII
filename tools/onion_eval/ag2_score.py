@@ -39,7 +39,13 @@ projects/03_2026-10-20_epi_imputation/sprints/12_2026-11-12_ag2_fair_test):
   split, second experiments removed) and `pipeline_derived` (bins of the truth with -log10 p >= 2; the
   tile set is the scored targets of the assay, because a training track has no `signal.h5`).
   `auprc` (Max's unweighted mean over tracks), `auprc_posfrac` (the weight of the paper's
-  `auprc_weighted`), `auprc_f1` .. `auprc_f8` (8 peak-frequency bins).
+  `auprc_weighted`), `auprc_f1` .. `auprc_f8` (8 peak-frequency bins). Before any peak metric the
+  target's tile calls, every method's tile scores and calls are restricted to the tile universe,
+  i.e. the whole valid tiles from which the consensus is built (Max's rule, score_f1.py l.274). A
+  dropped positive is never silent: `n_positive_tiles_dropped` and `n_tiles_dropped` go to
+  `per_target.tsv`, to the excluded side table and, in `gate`, to `gate.tsv`. On the eval regions
+  every tile is whole (no bin mask, decision 6), so `score` drops none; `gate` drops tiles with a
+  genome-masked bin. A positive inside the universe but outside the consensus still raises.
 - Binary call of decision 17 (`peak_*`, oracle threshold): a tile is called when any bin of the
   recalibrated prediction is >= asinh(2). `auprc_peakprob` and `nbpeak_*` (call at probability 0.5)
   from `peakprob` (tile max); `not applicable` for kinds that give no probability.
@@ -143,7 +149,8 @@ NB_KINDS = ("run", "baseline")
 
 PEAK_METRICS = (["auprc", "auprc_posfrac"] + [f"auprc_f{k}" for k in range(1, 9)]
                 + ["auprc_peakprob", "peak_precision", "peak_recall", "peak_f1",
-                   "nbpeak_precision", "nbpeak_recall", "nbpeak_f1"])
+                   "nbpeak_precision", "nbpeak_recall", "nbpeak_f1",
+                   "n_positive_tiles_dropped", "n_tiles_dropped"])
 SIGNAL_METRICS = ["rspec_cal", "pearson_cal", "spearman", "rspec", "pearson", "rspec_cal_128bp",
                   "fe_pearson_25bp", "fe_spearman_25bp"]
 METRICS = SIGNAL_METRICS + PEAK_METRICS
@@ -349,13 +356,39 @@ def signal_metrics(p, y, a, regions, rb: int) -> tuple[dict, np.ndarray | None]:
     return out, cal
 
 
-def peak_metrics(target_tiles, cons, freq, score_tiles, called_tiles, prob_tiles) -> dict:
-    """Peak metrics of one row on one truth source. `prob_tiles` is an array or a reason string."""
+def restrict_to_universe(target_tiles, universe, consensus):
+    """Max's rule (score_f1.py l.274, `ypos = calls[x][cidx]`): the tile universe is the whole valid
+    tiles, as the consensus is built; a target's positive tile off the universe is dropped, and
+    counted. Returns (target tiles inside the universe, n_positive_tiles_dropped, n_tiles_dropped).
+    Raises ValueError when the consensus holds a tile off the universe (misuse). A positive inside
+    the universe but outside the consensus is left for `ag2_peaks` to refuse."""
+    y = np.asarray(target_tiles, dtype=bool)
+    u = np.ones(y.shape, bool) if universe is None else np.asarray(universe, dtype=bool)
+    if u.shape != y.shape:
+        raise ValueError(f"tile universe has {u.size} tiles, target has {y.size}")
+    if (np.asarray(consensus, dtype=bool) & ~u).any():
+        raise ValueError("the consensus holds tiles outside the tile universe")
+    return y & u, int((y & ~u).sum()), int((~u).sum())
+
+
+def peak_metrics(target_tiles, cons, freq, score_tiles, called_tiles, prob_tiles,
+                 universe=None) -> dict:
+    """Peak metrics of one row on one truth source. `prob_tiles` is an array or a reason string.
+    The target's tiles, the scores and the calls are first restricted to the tile `universe`
+    (`restrict_to_universe`; None = every tile)."""
     out = {}
     if target_tiles is None:
         for k in PEAK_METRICS:
             out[k] = NA_AVAIL
         return out
+    target_tiles, out["n_positive_tiles_dropped"], out["n_tiles_dropped"] = \
+        restrict_to_universe(target_tiles, universe, cons)
+    if universe is not None:
+        u = np.asarray(universe, bool)
+        score_tiles = np.where(u, score_tiles, np.nan)
+        called_tiles = np.asarray(called_tiles, bool) & u
+        if not isinstance(prob_tiles, str):
+            prob_tiles = np.where(u, prob_tiles, np.nan)
     out["auprc"], out["auprc_posfrac"] = PK.auprc(target_tiles, cons, score_tiles)
     for b in PK.auprc_by_frequency(target_tiles, cons, score_tiles, freq):
         out[f"auprc_f{b['bin']}"] = b["auprc"]
@@ -603,7 +636,9 @@ def _tile_sets(rows, tables, peaks, split, scored, info, truth, regions, rb, log
             if tl is not None:
                 by_cell[cell] = tl if cell not in by_cell else (by_cell[cell] | tl)
         cons, freq = PK.consensus(by_cell) if by_cell else (None, None)
-        enc = {"cons": cons, "freq": freq}
+        n_tiles = len(regions) * (rb // PK.TILE_BINS)
+        universe = np.ones(n_tiles, bool)    # every tile is whole: no bin mask on the eval regions
+        enc = {"cons": cons, "freq": freq, "universe": universe}
         for m in scored:
             if info[m]["assay"] == assay:
                 tl = peak_tiles(info[m]["eic_track"])
@@ -619,6 +654,7 @@ def _tile_sets(rows, tables, peaks, split, scored, info, truth, regions, rb, log
             c = info[m]["cell"]
             der_cells[c] = tl if c not in der_cells else (der_cells[c] | tl)
         der["cons"], der["freq"] = PK.consensus(der_cells)
+        der["universe"] = universe
         out[(assay, "pipeline_derived")] = der
         log(f"{assay}: encode tile set {len(by_cell)} cells, "
             f"{0 if cons is None else int(cons.sum())} consensus tiles; derived tile set "
@@ -672,7 +708,7 @@ def _score_one(name, kind, d, mid, y, a, nat_truth, regions, rb, table, ts_by_so
     score_tiles = PK.tile_mean(p, region_bins=rb)
     called = PK.tile_any(cal >= PEAK_CALL, region_bins=rb)
     return {tp: dict(rec, **peak_metrics(ts.get(mid), ts["cons"], ts["freq"], score_tiles, called,
-                                         prob))
+                                         prob, universe=ts.get("universe")))
             for tp, ts in ts_by_source.items()}
 
 
@@ -751,6 +787,14 @@ def _board(per, table, n_boot) -> tuple[list, list]:
                     if not _finite(v):
                         excluded.append({"track_set": tset, "assay_class": ac, "truth_peaks": tp,
                                          "metric": k, "target": t, "method": m, "value": v})
+        for t in targets:                 # positives dropped off the tile universe (Max's rule)
+            r0 = next(by_m[m][t] for m in sorted(by_m) if t in by_m[m])
+            k = r0.get("n_positive_tiles_dropped")
+            if _num(k) and k > 0:
+                excluded.append({"track_set": tset, "assay_class": ac, "truth_peaks": tp,
+                                 "metric": "auprc", "target": t, "method": "all methods",
+                                 "value": f"{int(k)} positive tiles dropped; "
+                                          f"{int(r0['n_tiles_dropped'])} tiles off the universe"})
         for method, rmap in sorted(by_m.items()):
             rs = list(rmap.values())
             b = {"method": method, "table": table, "track_set": tset,
@@ -960,8 +1004,11 @@ def gate(targets, pred, store, tiles, reference, out, *, tracks=None,
             y = read_truth(b, a)
             cal = SP.isotonic_recalibrate(p, y, n_bins=NCAL)
             s = np.bincount(tidx, weights=p, minlength=NT + 1)[:NT] / TILE
+            yt, npd, ntd = restrict_to_universe(calls[b], tile_valid, cons)
+            if npd:
+                log(f"{b}/{a}: {npd} positive tiles off the whole valid tiles dropped (Max's rule)")
             got = {"pearson_cal": corr(cal, y), "spearman": spearman(p, y),
-                   "auprc": PK.auprc(calls[b], cons, s)[0],
+                   "auprc": PK.auprc(yt, cons, np.where(tile_valid, s, np.nan))[0],
                    "rspec_cal": float(Mx.r_spec(y, cal, avg)) if avg is not None else NA_AVAIL}
             for k, v in got.items():
                 theirs = float(ref[(b, a)][k]) if ref[(b, a)].get(k, "") not in ("", "nan") \
@@ -975,10 +1022,11 @@ def gate(targets, pred, store, tiles, reference, out, *, tracks=None,
                 else:
                     status, diff = "compared", abs(v - theirs)
                 rows.append({"biosample": b, "assay": a, "metric": k, "ours": v, "max": theirs,
-                             "abs_diff": diff, "status": status})
+                             "abs_diff": diff, "status": status, "n_positive_tiles_dropped": npd,
+                             "n_tiles_dropped": ntd})
     out.mkdir(parents=True, exist_ok=True)
     _write_tsv(out / "gate.tsv", ["biosample", "assay", "metric", "ours", "max", "abs_diff",
-                                  "status"], rows)
+                                  "status", "n_positive_tiles_dropped", "n_tiles_dropped"], rows)
     _write_tsv(out / "gate_skipped.tsv", ["biosample", "assay", "reason"], skipped)
     n_req = len({(r["biosample"], r["assay"]) for r in tg})
     log(f"targets compared: {len(compared)} of {n_req} requested"
