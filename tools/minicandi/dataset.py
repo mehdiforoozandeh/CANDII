@@ -122,7 +122,8 @@ the code before them, and `plan()` draws no extra random number. The two may not
                    again, inside the loop of tries, which rises from 8 to EXCLUDE_TRIES (64). A
                    window that overlaps is never returned: if no try is free of the regions, the
                    draw raises. Every draw comes from the window's generator, so the stream stays
-                   deterministic per seed.
+                   deterministic per seed. `plan()` then also returns `exclude_rejections` (the
+                   starts of this window rejected for overlap), and `meta` holds it.
   train_regions    the path of a TSV; the text `{seed}` in it is replaced by the dataset seed (the
                    training seed). Header comment lines `# roles_read=train` (required: a file
                    without it is refused), `# universe=...`, `# sha256_inputs=...`, then the columns
@@ -402,6 +403,7 @@ class OnionDataset(IterableDataset):
         """`exclude_regions` / `train_regions` (pinned interface I); train mode only."""
         cfg = self.config
         self.excluded = self.regions = None
+        self._exclude_rejections = 0
         self._region_record: dict = {}
         ex, tr = cfg.get("exclude_regions"), cfg.get("train_regions")
         if ex and tr:
@@ -757,7 +759,8 @@ class OnionDataset(IterableDataset):
             chrom = self.chroms[int(rng.choice(len(self.chroms), p=w / w.sum()))]
             start = int(rng.integers(0, self.n_bins[chrom] - self.L + 1))
             if excl and self._overlaps_excluded(chrom, start):
-                continue                       # interface I: rejected, drawn again
+                self._exclude_rejections += 1  # interface I: rejected, drawn again
+                continue
             if not self.genome.has_mask:
                 return chrom, start
             frac = float(self.genome.mask(chrom, start, start + self.L).mean())
@@ -779,6 +782,7 @@ class OnionDataset(IterableDataset):
         if self.regions is not None:
             chrom, start, row = self._draw_region(rng)
         else:
+            self._exclude_rejections = 0
             chrom, start = self._draw_locus(rng)
         assays = sorted(a for c, a in self.train_tracks if c == cell)
         order = [assays[i] for i in rng.permutation(len(assays))]
@@ -801,6 +805,8 @@ class OnionDataset(IterableDataset):
         if row is not None:
             out["loss_weight"] = float(self.regions["loss_weight"][row])
             out["stratum"] = self.regions["stratum"][row]
+        if self.excluded is not None:
+            out["exclude_rejections"] = self._exclude_rejections
         return out
 
     def _masked_set(self, cell: str, order: list, rng) -> set:
@@ -994,6 +1000,8 @@ class OnionDataset(IterableDataset):
         if "loss_weight" in plan:                               # interface I: train_regions
             win["w_window"] = torch.tensor(plan["loss_weight"], dtype=torch.float32)
             win["meta"] = dict(win["meta"], stratum=plan["stratum"])
+        if "exclude_rejections" in plan:                        # interface I: exclude_regions
+            win["meta"] = dict(win["meta"], exclude_rejections=plan["exclude_rejections"])
         return win
 
     def _bin_mask(self, rng, shape: str = "random") -> np.ndarray:

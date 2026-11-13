@@ -386,3 +386,77 @@ def test_train_records_the_file_and_the_windows_per_stratum(tables, tmp_path):
     last = [r for r in logs if "windows_per_stratum" in r][-1]
     assert sum(last["windows_per_stratum"].values()) == 16
     assert set(last["windows_per_stratum"]) <= {"a", "b"}
+
+
+TINY = {"rung": 1, "context_bins": L, "batch_size": 4, "param_budget": 1.4e5, "lr": 3e-3,
+        "dna": "own"}
+
+
+def _log(run: Path) -> list:
+    return [json.loads(x) for x in (run / "log.jsonl").read_text().splitlines()]
+
+
+def _same_log_line(a: dict, b: dict) -> dict:
+    return {k: v for k, v in a.items() if k != "wall_seconds"} == \
+        {k: v for k, v in b.items() if k != "wall_seconds"}
+
+
+def test_train_regions_resume_is_bit_exact(tables, tmp_path):
+    lst = _write_list(tmp_path / "t.tsv", [("chr1", 0, 1024, "a", 0.3, 2.0),
+                                           ("chr2", 0, 1024, "b", 0.7, 4.0 / 7.0)])
+    cfg = dict(TINY, windows_seen=32, train_regions=str(lst), loss_shape_weight=0.5)
+    T.train(cfg, tables, 3, tmp_path / "a", log_every=1)
+    T.train(cfg, tables, 3, tmp_path / "b", max_windows=16, log_every=1)
+    T.train(cfg, tables, 3, tmp_path / "b", log_every=1)
+    la, lb = _log(tmp_path / "a"), _log(tmp_path / "b")
+    assert [r["step"] for r in lb] == list(range(1, 9))
+    assert all(_same_log_line(x, y) for x, y in zip(la, lb))   # losses, parts, strata per step
+    assert sum(lb[-1]["windows_per_stratum"].values()) == 32
+    sa = torch.load(tmp_path / "a" / "ckpt.pt", weights_only=False)["state_dict"]
+    sb = torch.load(tmp_path / "b" / "ckpt.pt", weights_only=False)["state_dict"]
+    for k in sa:
+        assert torch.equal(sa[k], sb[k]), k
+
+
+def test_train_regions_stream_is_deterministic_per_seed(tables, tmp_path):
+    lst = _write_list(tmp_path / "t.tsv", ROWS)
+    cfg = {"context_bins": L, "batch_size": 4, "two_step": True, "train_regions": str(lst)}
+
+    def run(seed):
+        it = iter(D.OnionDataset(tables, "train", cfg, seed=seed))
+        return _digest(next(it) for _ in range(20))
+
+    assert run(2) == run(2)
+    assert run(2) != run(3)
+
+
+def test_resume_refuses_a_changed_region_file(tables, tmp_path):
+    lst = _write_list(tmp_path / "t.tsv", [("chr1", 0, 1024, "a", 1.0, 1.0)])
+    cfg = dict(TINY, windows_seen=16, train_regions=str(lst))
+    T.train(cfg, tables, 0, tmp_path / "r", max_windows=8)
+    _write_list(lst, [("chr1", 0, 1000, "a", 1.0, 1.0)])          # same path, new rows
+    with pytest.raises(ValueError, match="train_regions_sha256"):
+        T.train(cfg, tables, 0, tmp_path / "r")
+
+
+def test_exclusion_rejections_are_counted_and_logged(tables, tmp_path):
+    p, blocked = _exclusion(tmp_path)
+    ds = D.OnionDataset(tables, "train", {"context_bins": L, "exclude_regions": str(p)}, seed=0)
+    rng = np.random.default_rng(5)
+    plans = [ds.plan(rng) for _ in range(20_000)]
+    rej = sum(q["exclude_rejections"] for q in plans)
+    n_all = sum(ds.n_bins[c] - L + 1 for c in ds.chroms)
+    n_bad = sum(1 for c in ds.chroms for s in range(ds.n_bins[c] - L + 1)
+                if any(a < s + L and s < e for a, e in blocked[c]))
+    rate = rej / (rej + len(plans))           # the mask passes every L = 64 window here
+    se = math.sqrt(n_bad / n_all * (1 - n_bad / n_all) / (rej + len(plans)))
+    assert abs(rate - n_bad / n_all) < 5 * se, (rate, n_bad / n_all)
+    b = ds.batch(3, np.random.default_rng(0))
+    assert all("exclude_rejections" in m for m in b["meta"]) and "w_window" not in b
+    cfg = dict(TINY, windows_seen=8, exclude_regions=str(p))
+    T.train(cfg, tables, 0, tmp_path / "x", log_every=1)
+    last = _log(tmp_path / "x")[-1]
+    assert last["exclude_rejections"] >= 0 and 0 <= last["exclude_rejection_rate"] < 1
+    T.train(dict(TINY, windows_seen=8), tables, 0, tmp_path / "plain", log_every=1)
+    assert all("exclude_rejections" not in r and "windows_per_stratum" not in r
+               for r in _log(tmp_path / "plain"))
