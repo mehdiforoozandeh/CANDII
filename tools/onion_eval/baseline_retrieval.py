@@ -324,13 +324,15 @@ def main(argv=None) -> int:
     p.add_argument("--out", required=True)
     p.add_argument("--addon", action="store_true",
                    help="score an add-on eval set (required for one); passed to the scorer")
+    S.add_dump_arguments(p)
     a = ap.parse_args(argv)
     if (Path(a.out) / S.SCORED).is_file():
         print(f"skip: {a.out}/{S.SCORED} exists")
         return 0
     S.set_threads()
     try:
-        s = run(a.tables, a.evalset, a.out, **({"addon": True} if a.addon else {}))
+        s = run(a.tables, a.evalset, a.out, **({"addon": True} if a.addon else {}),
+                **S.dump_kwargs(a))
     except (PermissionError, S.ScoreRefused) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2
