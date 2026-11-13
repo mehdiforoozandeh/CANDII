@@ -159,3 +159,6 @@ Every chunk of the peeling-the-onion plan maps to one crux child task of t152. `
 | AGwa | t280 | miniCANDI against AG2 on the validation tracks (submit) |
 | AGwb | t281 | miniCANDI against AG2 on the validation tracks (collect) |
 | AGz | t282 | AG2 on the blind tracks, inside the single blind pass |
+| ERg | t283 | The eval regions, written before the tables exist |
+| AGxf | t284 | AlphaGenome 2 fetch on the regions file |
+| D6u | t285 | Update the dataset from a watchdog report |

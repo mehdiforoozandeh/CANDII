@@ -95,6 +95,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t270` [implementation] Onion: Space maps: counts to AG2's space, recalibration, peak probability
 - `t271` [implementation] Onion: Peaks: ENCODE peak files, tiles, consensus AUPRC
 - `t272` [implementation] Onion: Signal-space baselines of Max: training mean and closest-5 oracle
+- `t283` [implementation] Onion: The eval regions, written before the tables exist
 
 ## Blocked
 
@@ -191,6 +192,8 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t280` [implementation] Onion: miniCANDI against AG2 on the validation tracks (submit) — blocked by `t223`, `t279`
 - `t281` [implementation] Onion: miniCANDI against AG2 on the validation tracks (collect) — blocked by `t280`
 - `t282` [implementation] Onion: AG2 on the blind tracks, inside the single blind pass — blocked by `t225`, `t281`
+- `t284` [data-acquisition] Onion: AlphaGenome 2 fetch on the regions file — blocked by `t283`, `t273`, `t268`, `t271`, `t276`
+- `t285` [data-acquisition] Onion: Update the dataset from a watchdog report — blocked by `t183`, `t198`
 
 ## By category
 
@@ -233,6 +236,8 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t267` [data-acquisition] Onion: The AG2 metadata tables and the remaining API facts — *open*
 - `t273` [data-acquisition] Onion: Run the leakage audit on the EIC ledger — *blocked*
 - `t277` [data-acquisition] Onion: Fetch AG2 for the EIC cells on the eval regions — *blocked*
+- `t284` [data-acquisition] Onion: AlphaGenome 2 fetch on the regions file — *blocked*
+- `t285` [data-acquisition] Onion: Update the dataset from a watchdog report — *blocked*
 
 ### hpc-setup
 
@@ -379,6 +384,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t280` [implementation] Onion: miniCANDI against AG2 on the validation tracks (submit) — *blocked*
 - `t281` [implementation] Onion: miniCANDI against AG2 on the validation tracks (collect) — *blocked*
 - `t282` [implementation] Onion: AG2 on the blind tracks, inside the single blind pass — *blocked*
+- `t283` [implementation] Onion: The eval regions, written before the tables exist — *open*
 
 ### manuscript
 
