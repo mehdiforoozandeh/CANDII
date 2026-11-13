@@ -3,9 +3,14 @@ method track files (onion plan Amendment 5, pinned interface F). AG2 outputs are
 
     ag2_fetch.py fetch  --conditions <tsv> (--evalset <json> | --chroms chr20,chr21,chr22)
                         --outputs chip_histone[,dnase,atac] --cache <dir> [--model all_folds]
-                        [--max-calls 2000] [--workers 5] [--chunk 25]
+                        [--max-calls 2000] [--workers 5] [--chunk 25] [--strict] [--dry-run]
     ag2_fetch.py status --conditions <tsv> (--evalset <json> | --chroms ...) --cache <dir>
-                        [--outputs chip_histone] [--model all_folds]
+                        [--outputs chip_histone] [--model all_folds] [--strict]
+
+`--dry-run` prints the planned calls per condition and reads no key and creates no client. `--max-calls`
+counts every attempt: a retry after a quota error resends its whole chunk and counts again. An unreadable
+part file (truncated, corrupt) is named on stderr and its windows count as missing (they are refetched);
+with `--strict` it is an error.
     ag2_fetch.py pack   --cache <dir> --evalset <json> --audit <ag2_eic_audit.tsv> --tables <dir>
                         --split val|blind --out <dir> [--model all_folds]
 
@@ -19,6 +24,9 @@ projects/03_2026-10-20_epi_imputation/sprints/11_2026-11-11_alphagenome2/):
   scripts/api/pack_ag2.py  l.5-7, l.29-36 (matched channel = the target's mark and read type; the other
                                     read type kept too) -> `pack`; here the channels come from the leakage
                                     audit (`matched_channel`, `otherend_channel`), which applies that rule.
+                                    When the audit names no channel of the target's read type, the other
+                                    read type is written as `matched.signal.npy` (plan section A) and
+                                    `channels.tsv` says `matched_source = otherend_fallback`.
 Changes against Max's code: the cache holds one file per chunk of windows (`part_<first window index>.npz`)
 instead of one file per chromosome, so a kill loses at most the chunk in flight; windows can also be centred
 on the regions of an onion eval set; only RESOURCE_EXHAUSTED, UNAVAILABLE and DEADLINE_EXCEEDED are retried;
@@ -40,7 +48,8 @@ it with every requested output. `<cache>/calls.tsv` appends `time, condition, wi
 
 Exit codes of `fetch`: 0 when no window is missing; 75 when it stopped with windows missing (8 retryable errors
 in a row on one chunk, or `--max-calls` reached): rerun the same command; 1 on a non-retryable API error;
-2 on a refused key file or bad arguments. The cache is consistent after every exit.
+2 on a refused key file or bad arguments. The cache is consistent after every exit. An exception from the
+client (its creation or a call) is reported by its status code name or class name only, never by its text.
 
 The key is read only from the file named by `AG2_KEY_FILE` (default `~/.secrets/alphagenome_api_key`), which
 must have mode 600 and hold exactly one non-empty line. No command takes, prints or writes the key.
@@ -58,6 +67,7 @@ import re
 import stat
 import sys
 import time
+import zipfile
 from pathlib import Path
 
 import numpy as np
@@ -79,7 +89,10 @@ GRPC_CODES = ("RESOURCE_EXHAUSTED", "UNAVAILABLE", "DEADLINE_EXCEEDED", "INVALID
 DEFAULT_KEY_FILE = "~/.secrets/alphagenome_api_key"
 CALLS_COLUMNS = ("time", "condition", "window", "status", "seconds")
 CHANNEL_COLUMNS = ("measurement_id", "condition", "matched_channel", "otherend_channel",
-                   "api_label_matched", "api_label_otherend")
+                   "api_label_matched", "api_label_otherend",
+                   "matched_source", "output_type", "chip_bin_value", "native_divisor")   # last four: additive
+# The API value of a ChIP-seq 128 bp bin is the SUM of the per-bp fold change (API smoke, t267 section 2).
+CHIP_NATIVE_DIVISOR = {"sum": RES, "mean": 1}
 ASSAY_OUTPUT = {"DNase-seq": "dnase", "ATAC-seq": "atac"}     # every other assay: chip_histone
 # hg38 chromosome lengths (UCSC); Max's table (fetch_ag2.py l.26) holds chr6, chr9, chr13, chr20-22 and agrees.
 HG38 = {"chr1": 248956422, "chr2": 242193529, "chr3": 198295559, "chr4": 190214555, "chr5": 181538259,
@@ -114,6 +127,15 @@ def read_key(path=None) -> str:
     return lines[0].strip()
 
 
+def _track(output, values, metadata):
+    """(values, channel names, imputation_mode labels) of one output; refuses metadata without the label."""
+    for col in ("name", "imputation_mode"):
+        if col not in metadata:
+            raise FetchError(f"{output}: the API metadata has no `{col}` column")
+    return (np.asarray(values), np.asarray(metadata["name"]).astype(str),
+            np.asarray(metadata["imputation_mode"]).astype(str))
+
+
 class _Api:
     """Adapter over `alphagenome` 2.0.0 `DnaClient`: the one method `predict` that the fetch needs."""
 
@@ -131,11 +153,7 @@ class _Api:
             d = {}
             for name in outputs:
                 t = getattr(o, name)
-                md = t.metadata
-                n = len(md)
-                modes = (np.asarray(md["imputation_mode"]).astype(str) if "imputation_mode" in md
-                         else np.full(n, "", dtype=str))
-                d[name] = (np.asarray(t.values), np.asarray(md["name"]).astype(str), modes)
+                d[name] = _track(name, t.values, t.metadata)
             out.append(d)
         return out
 
@@ -190,6 +208,8 @@ def evalset_windows(ev: dict, sizes=HG38) -> list[dict]:
             raise ValueError(f"region {chrom}:{sb} does not fit a {W} bp window on {chrom}")
         ws = ((rs + re_) // 2 - W // 2) // RES * RES
         ws = max(0, min(ws, (L - W) // RES * RES))
+        if not (ws <= rs and re_ <= ws + W):                 # a region the shifted window does not cover
+            raise ValueError(f"region {chrom}:{sb} ([{rs}, {re_})) is not inside its window [{ws}, {ws + W})")
         out.append(_window(i, chrom, ws, rs, re_))
     return out
 
@@ -245,26 +265,40 @@ def _coord_row(w):
     return [w["ws"], w["we"], w["rs"], w["re"], w["cs"], w["as"]]
 
 
-def cache_index(cache, model, condition, windows) -> dict:
-    """window index -> list of (part file, outputs held). Refuses a cache of another condition or other windows."""
+def _read_part_header(f: Path):
+    """(condition, outputs, window_index, chroms, coords) of a part file; zip or format errors propagate."""
+    with np.load(f) as z:
+        return (str(z["condition"]), set(z["outputs"].tolist()), z["window_index"].tolist(),
+                [str(c) for c in z["chroms"]], z["coords"].tolist())
+
+
+def cache_index(cache, model, condition, windows, strict=False) -> dict:
+    """window index -> list of (part file, outputs held). Refuses a cache of another condition or other windows.
+    A part file that cannot be read (truncated, corrupt) is named on stderr and its windows count as missing,
+    so a fetch refetches them; with `strict` it is an error."""
     d = cond_dir(cache, model, condition)
     idx: dict[int, list] = {}
     for f in _part_files(d):
-        with np.load(f) as z:
-            if str(z["condition"]) != condition:
-                raise FetchError(f"{f} holds condition {str(z['condition'])!r}, not {condition!r}")
-            outs = set(z["outputs"].tolist())
-            for k, i in enumerate(z["window_index"].tolist()):
-                if i >= len(windows) or str(z["chroms"][k]) != windows[i]["chrom"] or \
-                        z["coords"][k].tolist() != _coord_row(windows[i]):
-                    raise FetchError(f"{f}: window {i} has other coordinates than this window set "
-                                     f"(another eval set or tiling uses this cache; use another --cache)")
-                idx.setdefault(i, []).append((f, outs))
+        try:
+            cond_f, outs, wins, chroms, coords = _read_part_header(f)
+        except (zipfile.BadZipFile, OSError, EOFError, ValueError, KeyError) as e:
+            msg = f"unreadable part file {f} ({type(e).__name__})"
+            if strict:
+                raise FetchError(msg) from None
+            print(f"warning: {msg}; its windows count as missing", file=sys.stderr, flush=True)
+            continue
+        if cond_f != condition:
+            raise FetchError(f"{f} holds condition {cond_f!r}, not {condition!r}")
+        for k, i in enumerate(wins):
+            if i >= len(windows) or chroms[k] != windows[i]["chrom"] or coords[k] != _coord_row(windows[i]):
+                raise FetchError(f"{f}: window {i} has other coordinates than this window set "
+                                 f"(another eval set or tiling uses this cache; use another --cache)")
+            idx.setdefault(i, []).append((f, outs))
     return idx
 
 
-def missing_windows(cache, model, condition, windows, outputs) -> list[int]:
-    idx = cache_index(cache, model, condition, windows)
+def missing_windows(cache, model, condition, windows, outputs, strict=False) -> list[int]:
+    idx = cache_index(cache, model, condition, windows, strict=strict)
     need = set(outputs)
     return [w["index"] for w in windows if not any(need <= o for _, o in idx.get(w["index"], []))]
 
@@ -278,13 +312,23 @@ def _write_part(d: Path, condition, model, outputs, group, results) -> int:
             "coords": np.array([_coord_row(w) for w in group], dtype=np.int64).reshape(len(group), 6)}
     nclip = 0
     for o in outputs:
-        names0, modes0 = results[0][o][1], results[0][o][2]
+        # Channels are matched by name on every response, never by a stored index (the channel order is not
+        # known to be stable): each window's columns are put in the order of the first window's names.
+        names0, modes0 = [str(x) for x in results[0][o][1]], [str(x) for x in results[0][o][2]]
+        if len(set(names0)) != len(names0):
+            raise FetchError(f"{o}: duplicate channel names in a response")
+        label0 = dict(zip(names0, modes0))
         arrs[f"{o}_names"], arrs[f"{o}_modes"] = np.asarray(names0, dtype=str), np.asarray(modes0, dtype=str)
         for k, (w, r) in enumerate(zip(group, results)):
             vals, names, modes = r[o]
-            if list(names) != list(names0) or list(modes) != list(modes0):
+            names, modes = [str(x) for x in names], [str(x) for x in modes]
+            if sorted(names) != sorted(names0) or dict(zip(names, modes)) != label0:
                 raise FetchError(f"{o}: the channels or their labels differ between windows of one call")
             vals = np.asarray(vals, dtype=np.float64)
+            if vals.ndim != 2 or vals.shape[1] != len(names):
+                raise FetchError(f"{o}: shape {vals.shape} does not match {len(names)} channel names")
+            pos = {n: j for j, n in enumerate(names)}
+            vals = vals[:, [pos[n] for n in names0]]
             if o == "chip_histone":
                 if vals.shape != (W // RES, len(names0)):
                     raise FetchError(f"chip_histone: shape {vals.shape}, expected {(W // RES, len(names0))}")
@@ -316,15 +360,24 @@ def _log_calls(cache, condition, group, status, seconds):
 
 # --------------------------------------------------------------------------------------------------- fetch
 
-def _predict_with_backoff(client, cache, condition, group, outputs, workers, sleep, log):
-    """Max's retry loop (fetch_ag2.py l.53-66). Returns the results, or None after MAX_TRIES retryable errors."""
+def _predict_with_backoff(client, cache, condition, group, outputs, workers, sleep, log, budget):
+    """Max's retry loop (fetch_ag2.py l.53-66). Every attempt sends every interval of the chunk, so every
+    attempt is counted in `budget` ({"calls", "max"}) before it is sent. Returns (results, "ok"),
+    (None, "retries") after MAX_TRIES retryable errors, or (None, "max_calls") when the next attempt would pass
+    the cap. A client exception is reported by its status code name only, never by its message."""
     intervals = [(w["chrom"], w["ws"], w["we"]) for w in group]
     for attempt in range(MAX_TRIES):
+        if budget["calls"] + len(group) > budget["max"]:
+            return None, "max_calls"
+        budget["calls"] += len(group)
         t0 = time.time()
         try:
             res = client.predict(intervals, condition, list(outputs), workers)
+        except FetchError:                                  # our own message (no client text in it)
+            raise
         except Exception as e:                              # noqa: BLE001 -- classified by its status code
             name = status_name(e)
+            del e
             _log_calls(cache, condition, group, name, time.time() - t0)
             if name not in RETRYABLE:
                 raise FetchError(f"{condition}: windows {group[0]['index']}..{group[-1]['index']}: {name}") from None
@@ -335,47 +388,65 @@ def _predict_with_backoff(client, cache, condition, group, outputs, workers, sle
         if len(res) != len(group):
             raise FetchError(f"{condition}: {len(res)} results for {len(group)} windows")
         _log_calls(cache, condition, group, "OK", time.time() - t0)
-        return res
-    return None
+        return res, "ok"
+    return None, "retries"
+
+
+def plan(conditions, windows, outputs, cache, model="all_folds", strict=False) -> list[str]:
+    """Dry run: the calls a fetch would send per condition (without retries); no key, no client."""
+    lines, total = [], 0
+    for c in conditions:
+        m = len(missing_windows(cache, model, c, windows, outputs, strict=strict))
+        total += m
+        lines.append(f"{c}\tmissing windows: {m}, planned calls: {m}")
+    lines.append(f"total planned calls: {total} (each retry after a quota error resends its chunk)")
+    return lines
 
 
 def fetch(conditions, windows, outputs, cache, *, model="all_folds", max_calls=2000, workers=5, chunk=25,
-          client_factory=_client, sleep=time.sleep, key_file=None, log=None) -> int:
+          client_factory=_client, sleep=time.sleep, key_file=None, log=None, strict=False) -> int:
     log = log or (lambda m: print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {m}", flush=True))
     Path(cache).mkdir(parents=True, exist_ok=True)
-    todo = {c: missing_windows(cache, model, c, windows, outputs) for c in conditions}
+    todo = {c: missing_windows(cache, model, c, windows, outputs, strict=strict) for c in conditions}
     total = sum(len(v) for v in todo.values())
     log(f"{len(conditions)} conditions x {len(windows)} windows; {total} missing")
     if not total:
         return EXIT_OK
-    client = client_factory(read_key(key_file), model)
-    calls, t0 = 0, time.time()
+    key = read_key(key_file)
+    try:
+        client = client_factory(key, model)
+    except Exception as e:                                  # noqa: BLE001 -- the message may echo the key
+        name = status_name(e)
+        del e
+        raise FetchError(f"creating the client failed: {name}") from None
+    finally:
+        del key
+    budget, t0 = {"calls": 0, "max": int(max_calls)}, time.time()
     for cond in conditions:
         miss = todo[cond]
         d = cond_dir(cache, model, cond)
         for i in range(0, len(miss), chunk):
             group = [windows[j] for j in miss[i:i + chunk]]
-            if calls + len(group) > max_calls:
-                log(f"stopped: --max-calls {max_calls} reached after {calls} calls; rerun to continue")
+            res, why = _predict_with_backoff(client, cache, cond, group, outputs, workers, sleep, log, budget)
+            if why == "max_calls":
+                log(f"stopped: --max-calls {max_calls} reached after {budget['calls']} calls; rerun to continue")
                 return EXIT_RETRY
-            calls += len(group)
-            res = _predict_with_backoff(client, cache, cond, group, outputs, workers, sleep, log)
-            if res is None:
+            if why == "retries":
                 log(f"stopped: {MAX_TRIES} retryable errors in a row on {cond}; the cache is consistent; "
                     f"rerun later")
                 return EXIT_RETRY
             nclip = _write_part(d, cond, model, outputs, group, res)
             log(f"{cond}: windows {group[0]['index']}..{group[-1]['index']} cached ({nclip} values clipped); "
-                f"{calls} calls in {time.time() - t0:.0f} s")
-    left = sum(len(missing_windows(cache, model, c, windows, outputs)) for c in conditions)
+                f"{budget['calls']} calls in {time.time() - t0:.0f} s")
+    left = sum(len(missing_windows(cache, model, c, windows, outputs, strict=strict)) for c in conditions)
     log(f"done: {left} windows missing")
     return EXIT_OK if not left else EXIT_RETRY
 
 
-def status(conditions, windows, outputs, cache, model="all_folds") -> list[str]:
+def status(conditions, windows, outputs, cache, model="all_folds", strict=False) -> list[str]:
     lines = []
     for c in conditions:
-        m = len(missing_windows(cache, model, c, windows, outputs))
+        m = len(missing_windows(cache, model, c, windows, outputs, strict=strict))
         n = len(windows)
         lines.append(f"{c}\twindows: {n}, cached: {n - m}, missing: {m}")
     return lines
@@ -420,6 +491,7 @@ def _condition_tracks(cache, model, condition, windows, channels):
     idx = cache_index(cache, model, condition, windows)
     out = {ch: [] for ch in channels}
     labels = {ch: set() for ch in channels}
+    kinds = {ch: set() for ch in channels}
     opened: dict[Path, object] = {}
     try:
         for w in windows:
@@ -444,6 +516,7 @@ def _condition_tracks(cache, model, condition, windows, channels):
                     raise FetchError(f"{condition}: channel {ch!r} is in no cached output of window {w['index']}")
                 z, o, j, k = hit
                 labels[ch].add(str(z[f"{o}_modes"][j]))
+                kinds[ch].add(o)
                 n = w["re"] - w["rs"]
                 if o == "chip_histone":
                     lo, hi = (w["rs"] - w["cs"]) // RES, -(-(w["re"] - w["cs"]) // RES)   # rows under the
@@ -460,13 +533,28 @@ def _condition_tracks(cache, model, condition, windows, channels):
     finally:
         for zz in opened.values():
             zz.close()
-    return {ch: (np.concatenate(out[ch]).astype(np.float32), ";".join(sorted(labels[ch]))) for ch in channels}
+    for ch in channels:
+        if len(kinds[ch]) != 1:
+            raise FetchError(f"{condition}: channel {ch!r} is found in several outputs {sorted(kinds[ch])}")
+    return {ch: (np.concatenate(out[ch]).astype(np.float32), ";".join(sorted(labels[ch])), kinds[ch].pop())
+            for ch in channels}
 
 
-def pack(cache, evalset, audit, tables, split, out, model="all_folds", log=print) -> dict:
-    """Write `<out>/<regime>/` (pinned interface F, kind `ag2`) for the split's queryable targets."""
+def pack(cache, evalset, audit, tables, split, out, model="all_folds", chip_bin_value="sum", log=print) -> dict:
+    """Write `<out>/<regime>/` (pinned interface F, kind `ag2`) for the split's queryable targets.
+
+    `matched.signal` and `otherend.signal` are the API values as returned, 128 bp to 25 bp by the overlap mean
+    (plan B.2: raw, no transform; the recalibrated metrics are scale-free). `native` is AG2's own unit: for
+    ChIP-seq the fold change per bp, i.e. the API value divided by CHIP_NATIVE_DIVISOR[chip_bin_value]
+    (`sum`: the API value of a 128 bp bin is the sum of the per-bp fold change, measured by the API smoke
+    `cruxvault/results/t267/API_SMOKE.md` section 2, so the divisor is 128; `mean`: 1); for DNase-seq and
+    ATAC-seq the insertions per 25 bp bin, the same array as `matched.signal`. The convention is recorded in
+    `tracks.json` and per row in `channels.tsv`."""
     if split not in ("val", "blind"):
         raise ValueError("--split is val or blind")
+    if chip_bin_value not in CHIP_NATIVE_DIVISOR:
+        raise ValueError(f"--chip-bin-value is one of {sorted(CHIP_NATIVE_DIVISOR)}")
+    chip_div = CHIP_NATIVE_DIVISOR[chip_bin_value]
     ev_bytes = Path(evalset).read_bytes()
     ev = json.loads(ev_bytes)
     rb = int(ev["region_bins"])
@@ -503,7 +591,12 @@ def pack(cache, evalset, audit, tables, split, out, model="all_folds", log=print
     base = {"method": "ag2", "kind": "ag2", "evalset_sha256": hashlib.sha256(ev_bytes).hexdigest(),
             "regions_sha256": regions_sha256(ev), "split": split, "region_bins": rb,
             "n_regions": len(ev["regions"]), "lambda_source": "none", "model": model,
-            "evaluation_only": True, "skipped": dict(sorted(skipped.items()))}
+            "evaluation_only": True, "skipped": dict(sorted(skipped.items())),
+            "chip_bin_value": chip_bin_value, "chip_native_divisor": chip_div,
+            "chip_bin_value_source": "cruxvault/results/t267/API_SMOKE.md section 2",
+            "signal_unit": "API value as returned, overlap mean to 25 bp",
+            "native_unit": "ChIP-seq: fold change per bp (API value / chip_native_divisor); "
+                           "accessibility: normalized insertions per 25 bp bin"}
     summary = {}
     for regime, items in sorted(by_regime.items()):
         d = Path(out) / regime
@@ -511,15 +604,21 @@ def pack(cache, evalset, audit, tables, split, out, model="all_folds", log=print
         rows = []
         for mid, m, a in items:
             cond, mc, oc = a["condition"], a.get("matched_channel", ""), a.get("otherend_channel", "")
-            row = {"measurement_id": mid, "condition": cond, "matched_channel": mc, "otherend_channel": oc,
-                   "api_label_matched": "", "api_label_otherend": ""}
-            if mc:
-                arr, row["api_label_matched"] = tracks[cond][mc]
-                np.save(d / f"{mid}.matched.signal.npy", arr)
+            # plan section A (Max): with no channel of the target's read type, the other one is scored as
+            # "matched"; channels.tsv says so (matched_source = otherend_fallback).
+            scored = mc or oc
+            row = {"measurement_id": mid, "condition": cond, "matched_channel": scored, "otherend_channel": oc,
+                   "api_label_matched": "", "api_label_otherend": "",
+                   "matched_source": "matched" if mc else "otherend_fallback"}
+            arr, row["api_label_matched"], kind = tracks[cond][scored]
+            div = chip_div if kind == "chip_histone" else 1
+            row.update(output_type=kind, chip_bin_value=chip_bin_value if kind == "chip_histone" else "",
+                       native_divisor=div)
+            np.save(d / f"{mid}.matched.signal.npy", arr)
+            np.save(d / f"{mid}.native.npy", (arr / np.float32(div)).astype(np.float32))
             if oc:
-                arr2, row["api_label_otherend"] = tracks[cond][oc]
+                arr2, row["api_label_otherend"], _ = tracks[cond][oc]
                 np.save(d / f"{mid}.otherend.signal.npy", arr2)
-            np.save(d / f"{mid}.native.npy", tracks[cond][mc or oc][0])
             rows.append(row)
         write_tsv(d / "channels.tsv", CHANNEL_COLUMNS, rows)
         (d / "EVALUATION_ONLY").write_bytes(b"")
@@ -576,7 +675,10 @@ def main(argv=None, *, client_factory=_client, sleep=time.sleep) -> int:
         p.add_argument("--outputs", default="chip_histone", required=(name == "fetch"))
         p.add_argument("--cache", required=True)
         p.add_argument("--model", default="all_folds", choices=["all_folds"])
+        p.add_argument("--strict", action="store_true", help="an unreadable part file is an error, not missing")
         if name == "fetch":
+            p.add_argument("--dry-run", action="store_true",
+                           help="print the planned calls per condition; read no key, create no client")
             p.add_argument("--max-calls", type=int, default=2000)
             p.add_argument("--workers", type=int, default=5)
             p.add_argument("--chunk", type=int, default=25)
@@ -585,20 +687,25 @@ def main(argv=None, *, client_factory=_client, sleep=time.sleep) -> int:
         p.add_argument(k, required=True)
     p.add_argument("--split", required=True, choices=["val", "blind"])
     p.add_argument("--model", default="all_folds", choices=["all_folds"])
+    p.add_argument("--chip-bin-value", default="sum", choices=sorted(CHIP_NATIVE_DIVISOR),
+                   help="what one API ChIP-seq 128 bp value is (API smoke t267 section 2 measured: sum)")
     a = ap.parse_args(argv)
     try:
         if a.cmd == "pack":
-            pack(a.cache, a.evalset, a.audit, a.tables, a.split, a.out, model=a.model)
+            pack(a.cache, a.evalset, a.audit, a.tables, a.split, a.out, model=a.model,
+                 chip_bin_value=a.chip_bin_value)
             return EXIT_OK
         windows, outputs, conds = _windows_of(a), _outputs_of(a.outputs), read_conditions(a.conditions)
-        if a.cmd == "status":
-            for line in status(conds, windows, outputs, a.cache, a.model):
+        if a.cmd == "status" or getattr(a, "dry_run", False):
+            lines = (status(conds, windows, outputs, a.cache, a.model, strict=a.strict) if a.cmd == "status"
+                     else plan(conds, windows, outputs, a.cache, a.model, strict=a.strict))
+            for line in lines:
                 print(line)
             return EXIT_OK
         if a.chunk < 1 or a.max_calls < 0 or a.workers < 1:
             raise ValueError("--chunk and --workers must be >= 1, --max-calls >= 0")
         return fetch(conds, windows, outputs, a.cache, model=a.model, max_calls=a.max_calls, workers=a.workers,
-                     chunk=a.chunk, client_factory=client_factory, sleep=sleep)
+                     chunk=a.chunk, client_factory=client_factory, sleep=sleep, strict=a.strict)
     except KeyFileError as e:
         print(f"refused: {e}", file=sys.stderr)
         return EXIT_USAGE
