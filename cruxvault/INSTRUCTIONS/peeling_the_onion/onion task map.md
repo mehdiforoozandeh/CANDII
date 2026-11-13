@@ -143,3 +143,19 @@ Every chunk of the peeling-the-onion plan maps to one crux child task of t152. `
 | OXc | t264 | Collect the second experiments |
 | OXx | t265 | Build and check the eic_v1x tables |
 | OXy | t266 | Add-on eval set, the experiment layer and the baselines' two bounds |
+| AG0 | t267 | The AG2 metadata tables and the remaining API facts |
+| AGf | t268 | Fetch tool with a restartable cache and quota backoff |
+| AGl | t269 | Leakage audit tool |
+| AGs | t270 | Space maps: counts to AG2's space, recalibration, peak probability |
+| AGk | t271 | Peaks: ENCODE peak files, tiles, consensus AUPRC |
+| AGb | t272 | Signal-space baselines of Max: training mean and closest-5 oracle |
+| AGa | t273 | Run the leakage audit on the EIC ledger |
+| AGc | t274 | The same-track scorer and the ag2_board table |
+| AGd | t275 | Dump hook: method track files from the scorer |
+| AGm | t276 | Reproduction gate against Max's numbers |
+| AGx | t277 | Fetch AG2 for the EIC cells on the eval regions |
+| AGva | t278 | AG2 against the baselines on the validation tracks (submit) |
+| AGvb | t279 | AG2 against the baselines on the validation tracks (collect) |
+| AGwa | t280 | miniCANDI against AG2 on the validation tracks (submit) |
+| AGwb | t281 | miniCANDI against AG2 on the validation tracks (collect) |
+| AGz | t282 | AG2 on the blind tracks, inside the single blind pass |

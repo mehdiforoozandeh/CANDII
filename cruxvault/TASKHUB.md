@@ -89,6 +89,12 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t258` [implementation] Onion: Dataset guard for evaluation-only second experiments
 - `t260` [implementation] Onion: Layers by pair class
 - `t261` [implementation] Onion: Arm report: metric 7 per rung with two bounds
+- `t267` [data-acquisition] Onion: The AG2 metadata tables and the remaining API facts
+- `t268` [implementation] Onion: Fetch tool with a restartable cache and quota backoff
+- `t269` [implementation] Onion: Leakage audit tool
+- `t270` [implementation] Onion: Space maps: counts to AG2's space, recalibration, peak probability
+- `t271` [implementation] Onion: Peaks: ENCODE peak files, tiles, consensus AUPRC
+- `t272` [implementation] Onion: Signal-space baselines of Max: training mean and closest-5 oracle
 
 ## Blocked
 
@@ -175,6 +181,16 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t264` [data-acquisition] Onion: Build the second experiments: submit and collect — blocked by `t262`, `t183`
 - `t265` [data-acquisition] Onion: Build and check the eic_v1x tables — blocked by `t264`, `t263`, `t183`
 - `t266` [implementation] Onion: Add-on eval set, the experiment layer and the baselines' two bounds — blocked by `t265`, `t259`, `t260`, `t261`, `t185`, `t186`, `t236`
+- `t273` [data-acquisition] Onion: Run the leakage audit on the EIC ledger — blocked by `t267`, `t269`
+- `t274` [implementation] Onion: The same-track scorer and the ag2_board table — blocked by `t270`, `t271`
+- `t275` [implementation] Onion: Dump hook: method track files from the scorer — blocked by `t270`
+- `t276` [implementation] Onion: Reproduction gate against Max's numbers — blocked by `t274`, `t270`, `t271`
+- `t277` [data-acquisition] Onion: Fetch AG2 for the EIC cells on the eval regions — blocked by `t273`, `t268`, `t271`, `t276`, `t185`
+- `t278` [implementation] Onion: AG2 against the baselines on the validation tracks (submit) — blocked by `t277`, `t275`, `t272`, `t274`, `t186`
+- `t279` [implementation] Onion: AG2 against the baselines on the validation tracks (collect) — blocked by `t278`
+- `t280` [implementation] Onion: miniCANDI against AG2 on the validation tracks (submit) — blocked by `t223`, `t279`
+- `t281` [implementation] Onion: miniCANDI against AG2 on the validation tracks (collect) — blocked by `t280`
+- `t282` [implementation] Onion: AG2 on the blind tracks, inside the single blind pass — blocked by `t225`, `t281`
 
 ## By category
 
@@ -214,6 +230,9 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t262` [data-acquisition] Onion: Build list of the second experiments, and its kit — *blocked*
 - `t264` [data-acquisition] Onion: Build the second experiments: submit and collect — *blocked*
 - `t265` [data-acquisition] Onion: Build and check the eic_v1x tables — *blocked*
+- `t267` [data-acquisition] Onion: The AG2 metadata tables and the remaining API facts — *open*
+- `t273` [data-acquisition] Onion: Run the leakage audit on the EIC ledger — *blocked*
+- `t277` [data-acquisition] Onion: Fetch AG2 for the EIC cells on the eval regions — *blocked*
 
 ### hpc-setup
 
@@ -347,6 +366,19 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t261` [implementation] Onion: Arm report: metric 7 per rung with two bounds — *open*
 - `t263` [implementation] Onion: Tables add-on and the ledger exception — *blocked*
 - `t266` [implementation] Onion: Add-on eval set, the experiment layer and the baselines' two bounds — *blocked*
+- `t268` [implementation] Onion: Fetch tool with a restartable cache and quota backoff — *open*
+- `t269` [implementation] Onion: Leakage audit tool — *open*
+- `t270` [implementation] Onion: Space maps: counts to AG2's space, recalibration, peak probability — *open*
+- `t271` [implementation] Onion: Peaks: ENCODE peak files, tiles, consensus AUPRC — *open*
+- `t272` [implementation] Onion: Signal-space baselines of Max: training mean and closest-5 oracle — *open*
+- `t274` [implementation] Onion: The same-track scorer and the ag2_board table — *blocked*
+- `t275` [implementation] Onion: Dump hook: method track files from the scorer — *blocked*
+- `t276` [implementation] Onion: Reproduction gate against Max's numbers — *blocked*
+- `t278` [implementation] Onion: AG2 against the baselines on the validation tracks (submit) — *blocked*
+- `t279` [implementation] Onion: AG2 against the baselines on the validation tracks (collect) — *blocked*
+- `t280` [implementation] Onion: miniCANDI against AG2 on the validation tracks (submit) — *blocked*
+- `t281` [implementation] Onion: miniCANDI against AG2 on the validation tracks (collect) — *blocked*
+- `t282` [implementation] Onion: AG2 on the blind tracks, inside the single blind pass — *blocked*
 
 ### manuscript
 
