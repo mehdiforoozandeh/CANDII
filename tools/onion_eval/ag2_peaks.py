@@ -247,7 +247,9 @@ def auprc_by_frequency(target_tiles, consensus_tiles, score, frequency, n_bins: 
 
 
 def binary_prf(target_tiles, consensus_tiles, called_tiles):
-    """(precision, recall, F1) of a binary call on the consensus tiles; NaN where undefined."""
+    """(precision, recall, F1) of a binary call on the consensus tiles; NaN where undefined.
+    Raises as `auprc` when a positive tile of the target lies outside the consensus."""
+    _check_inside(target_tiles, consensus_tiles)
     c = np.asarray(consensus_tiles, dtype=bool)
     y = np.asarray(target_tiles, dtype=bool)[c]
     z = np.asarray(called_tiles, dtype=bool)[c]
