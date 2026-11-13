@@ -88,9 +88,12 @@ def make_world(root: Path, rng_seed: int = 0) -> dict:
     for k, (c, a, role) in enumerate(tracks):
         t = f"{c}M{k:02d}"
         cp = counts / f"{t}.h5"
-        with h5py.File(cp, "w") as f:
-            for ch in CHROMS:
-                f.create_dataset(ch, data=rng.poisson(1 + k % 4, nb).astype(np.int32))
+        if role == "val":                                  # planted: opening it would fail loudly
+            cp.write_bytes(b"validation counts: must never be opened")
+        else:
+            with h5py.File(cp, "w") as f:
+                for ch in CHROMS:
+                    f.create_dataset(ch, data=rng.poisson(1 + k % 4, nb).astype(np.int32))
         rows.append({"measurement_id": f"{t}.base", "eic_track": t, "cell": c, "assay": a,
                      "in_eic": role, "arm_knob": "base", "layer": "uniform", "unit": "pooled",
                      "depth_reads": "1000000", "counts_path": f"h5:{cp}"})
@@ -114,6 +117,8 @@ def make_world(root: Path, rng_seed: int = 0) -> dict:
                 gr.create_dataset(ch, data=rng.gamma(2.0, 1.0, nb).astype(np.float32))
     emb = root / "ntv2_pca"
     emb.mkdir()
+    (emb / "meta.json").write_text(json.dumps({"source": "ntv2", "trained_on_encode_tracks": False,
+                                               "model_id": "InstaDeepAI/nucleotide-transformer-v2"}))
     for ch in CHROMS:
         with h5py.File(emb / f"{ch}.h5", "w") as f:
             d = f.create_dataset("emb", data=rng.normal(size=(nb, 4)).astype(np.float16))
@@ -204,7 +209,7 @@ def test_tiles_files(tmp_path):
     pk = {(r["chrom"], int(r["start_bin"])): r for r in tt}
     assert float(pk[PEAK_TILE]["peak_fraction"]) == 1.0
     assert pk[PEAK_TILE]["ccre_like_class"] == "promoter_like"
-    for name in ("peakfreq_w", "peakfreq_u", "ccre_like_w", "variance_w", "kcenter"):
+    for name in ("tile_uniform", "peakfreq_w", "peakfreq_u", "ccre_like_w", "variance_w", "kcenter"):
         head, rows = S.read_list(out / f"{name}.tsv")
         assert head["roles_read"] == "train"
         qw, q = _qw(rows)
@@ -212,6 +217,12 @@ def test_tiles_files(tmp_path):
         assert q == pytest.approx(1.0, abs=1e-12), name
         assert not _overlaps_taken(rows), name
         assert all(r["n_bins"] == 2048 for r in rows)
+    _, tu = S.read_list(out / "tile_uniform.tsv")
+    assert len(tu) == res["tiles"] and all(r["loss_weight"] == 1.0 for r in tu)
+    assert {r["stratum"] for r in tu} == {"tile"}
+    vb = {(r["chrom"], int(r["start_bin"])): int(r["valid_bins"]) for r in tt}
+    tot = sum(vb.values())
+    assert all(r["sample_weight"] == pytest.approx(vb[(r["chrom"], r["start_bin"])] / tot) for r in tu)
     _, pu = S.read_list(out / "peakfreq_u.tsv")
     assert all(r["loss_weight"] == 1.0 for r in pu)
     _, pw = S.read_list(out / "peakfreq_w.tsv")
@@ -230,6 +241,12 @@ def test_tiles_files(tmp_path):
         assert f"## {name}" in md
     assert "Peak-frequency denominator: 9 training tracks" in md
     assert "Effective sample size" in md and "Cluster sizes" in md
+    assert "## tile_uniform" in md and "edge effect" in md
+    assert f"1 of {n_u * 8} tiles of U" in md                # the tile below 0.9 valid gets q = 0
+    n = res["tiles"]
+    assert f"kcenter {(n - 6) / n:.1%}" in md and "biased coreset by design" in md
+    assert "tile_uniform 0.0%" in md
+    assert "cCRE-like denominators: 3 training cells" in md
     sec = md.split("## peakfreq_u")[1].split("## ccre_like_w")[0]
     g_rows = [x.split("|") for x in sec.splitlines() if x.startswith("| pf_")]
     gw = md.split("## peakfreq_w")[1].split("## peakfreq_u")[0]
@@ -315,27 +332,67 @@ def test_average_with_non_training_id_raises(tmp_path):
         S.check_average(w["average"], w["tables"])
 
 
-@pytest.mark.parametrize("where", ["dataset_attr", "file_attr", "meta_json", "path"])
-def test_named_embedding_raises(tmp_path, where):  # tmp path must not hold the model names
+@pytest.mark.parametrize("where", ["meta_source", "meta_encode", "meta_encode_missing",
+                                   "no_meta", "chrom_attr"])
+def test_non_ntv2_embedding_raises(tmp_path, where):
     w = make_world(tmp_path)
     emb = w["embedding"]
-    if where == "dataset_attr":
+    meta = json.loads((emb / "meta.json").read_text())
+    if where == "meta_source":
+        meta["source"] = "flashzoi"
+    elif where == "meta_encode":
+        meta["trained_on_encode_tracks"] = True
+    elif where == "meta_encode_missing":
+        del meta["trained_on_encode_tracks"]
+    (emb / "meta.json").write_text(json.dumps(meta))
+    if where == "no_meta":
+        (emb / "meta.json").unlink()
+    if where == "chrom_attr":
         with h5py.File(emb / "chr1.h5", "a") as f:
             f["emb"].attrs["source"] = "flashzoi"
-    elif where == "file_attr":
-        with h5py.File(emb / "chr2.h5", "a") as f:
-            f.attrs["model"] = "Borzoi replicate 0"
-    elif where == "meta_json":
-        (emb / "meta.json").write_text(json.dumps({"source": "Flashzoi"}))
-    else:
-        emb = emb.rename(tmp_path / "flashzoi_pca")
     with pytest.raises(S.LeakError):
         S.check_embedding(emb)
 
 
 def test_ntv2_embedding_passes(tmp_path):
     w = make_world(tmp_path)
-    S.check_embedding(w["embedding"])
+    assert S.check_embedding(w["embedding"])["source"] == "ntv2"
+    one = tmp_path / "one.h5"                                   # the single-file layout
+    with h5py.File(one, "w") as f:
+        f.attrs["source"] = "ntv2"
+        f.attrs["trained_on_encode_tracks"] = False
+        f.create_dataset("chr1", data=np.zeros((4, 2), np.float16))
+    S.check_embedding(one)
+    with h5py.File(one, "a") as f:
+        f.attrs["trained_on_encode_tracks"] = True
+    with pytest.raises(S.LeakError):
+        S.check_embedding(one)
+
+
+def test_validation_counts_never_opened(tmp_path, monkeypatch):
+    w = make_world(tmp_path)
+    val = [r for r in w["rows"] if r["in_eic"] == "val"][0]["counts_path"][3:]
+    opened = []
+    real = h5py.File
+
+    def spy(name, *a, **k):
+        opened.append(str(name))
+        return real(name, *a, **k)
+    monkeypatch.setattr(h5py, "File", spy)
+    _run_tiles(w, tmp_path / "o")
+    assert opened and val not in opened
+    assert any("counts" in o for o in opened)                 # training counts were read
+
+
+def test_second_experiment_is_removed(tmp_path):
+    w = make_world(tmp_path)
+    second = [r for r in w["rows"] if r["in_eic"] == "train" and r["assay"] == "H3K27ac"][0]
+    _write_tsv(w["tables"] / "evaluation_only.tsv",
+               [{"measurement_id": second["measurement_id"], "use": "other_experiment"}])
+    trows, _ = S.train_tables(w["tables"])
+    assert second["measurement_id"] not in {r["measurement_id"] for r in trows}
+    with pytest.raises(S.LeakError):                          # the average sums it
+        S.check_average(w["average"], w["tables"])
 
 
 def test_no_ccre_or_chromhmm_option():
@@ -364,18 +421,23 @@ def test_ccre_like_hand_classes():
     tracks = [("a1", "A", "DNase-seq", None), ("a2", "A", "H3K4me3", None),
               ("a3", "A", "H3K27ac", None), ("a4", "A", "H3K4me1", None),
               ("b1", "B", "ATAC-seq", None), ("b2", "B", "H3K4me3", None),
-              ("b3", "B", "H3K27me3", None)]
+              ("b3", "B", "H3K27me3", None), ("c1", "C", "DNase-seq", None),
+              ("c2", "C", "H3K27ac", None)]
     # tiles: 0 promoter (A acc + A K4me3), 1 enhancer (A acc + A K27ac), 2 acc in A and K4me3 in B
     # only -> accessible_only, 3 only K27me3 -> other_marked, 4 nothing -> none,
     # 5 A acc + K4me1 + K4me3 -> promoter, 6 B ATAC + A K4me1 -> accessible_only,
     # 7 B ATAC + B K4me3 -> promoter, 8 A acc + K4me1 -> enhancer
-    H = np.zeros((7, 9), bool)
-    on = {0: [0, 1], 1: [0, 2], 2: [0, 5], 3: [6], 5: [0, 3, 1], 6: [4, 3], 7: [4, 5], 8: [0, 3]}
+    # 9: C (no H3K4me3 track) acc + K27ac -> accessible_only, never enhancer_like
+    H = np.zeros((9, 10), bool)
+    on = {0: [0, 1], 1: [0, 2], 2: [0, 5], 3: [6], 5: [0, 3, 1], 6: [4, 3], 7: [4, 5], 8: [0, 3],
+          9: [7, 8]}
     for t, ks in on.items():
         H[ks, t] = True
-    assert S.ccre_like(tracks, H) == ["promoter_like", "enhancer_like", "accessible_only",
-                                      "other_marked", "none", "promoter_like", "accessible_only",
-                                      "promoter_like", "enhancer_like"]
+    n = {}
+    assert S.ccre_like(tracks, H, n) == ["promoter_like", "enhancer_like", "accessible_only",
+                                         "other_marked", "none", "promoter_like", "accessible_only",
+                                         "promoter_like", "enhancer_like", "accessible_only"]
+    assert n == {"cells": 3, "accessibility": 3, "promoter_rule": 2, "enhancer_rule": 1}
 
 
 def test_peakfreq_edges_and_deciles():
@@ -392,3 +454,28 @@ def test_write_list_refuses_bad_sums(tmp_path):
              "sample_weight": 0.5, "loss_weight": 1.0}]
     with pytest.raises(ValueError):
         S.write_list(tmp_path / "x.tsv", rows, "u", "0" * 64)
+
+
+def _strata_of(totals_by_assay):
+    """Decile stratum of each tile from linear totals {assay: [cells, tiles]}."""
+    return S.decile_strata(S.variance_score({a: np.log1p(v) for a, v in totals_by_assay.items()}))
+
+
+def test_variance_equal_mean_different_spread():
+    rng = np.random.default_rng(3)
+    base = rng.uniform(1e3, 1e4, size=(4, 40)) * rng.uniform(0.5, 2.0, size=(4, 40))
+    base[:, 0] = [1000, 1000, 1000, 1000]                     # mean 1000, no spread
+    base[:, 1] = [100, 400, 1600, 1900]                       # mean 1000, wide spread
+    st = _strata_of({"H3K4me3": base, "H3K27ac": base})
+    assert st[0] == "d01" and st[1] == "d10"
+
+
+def test_variance_equal_relative_spread_same_stratum():
+    rng = np.random.default_rng(4)
+    base = rng.uniform(1e3, 1e4, size=(4, 40)) * rng.uniform(0.5, 2.0, size=(4, 40))
+    base[:, 0] = np.array([1, 2, 4, 8]) * 5e3                 # mean 18,750
+    base[:, 1] = np.array([1, 2, 4, 8]) * 5e5                 # mean 100 times higher, same ratios
+    st = _strata_of({"H3K4me3": base})
+    assert st[0] == st[1]
+    v = np.log1p(base[:, :2]).var(axis=0, ddof=1)             # log1p is ~log at these totals
+    assert v[0] == pytest.approx(v[1], rel=1e-3)

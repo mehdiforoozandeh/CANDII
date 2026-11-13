@@ -28,25 +28,30 @@ evaluation regions, half on U, w = 1; the dose arm of B.3, so unweighted) and, p
 `default_rng([s, TERR_SALT])`), so the sets are nested within a seed and differ between seeds.
 
 `tiles` writes `tile_table.tsv` (chrom, start_bin, valid_bins, peak_fraction, ccre_like_class,
-variance) and the five strata files of B.4 plus `STRATA.md`:
+variance) and the five strata files of B.4, the control `tile_uniform`, plus `STRATA.md`:
+  tile_uniform the whole tile table, q in proportion to valid bins, w = 1: the control that shares
+               the tile arms' window-in-tile edge effect (a window of 1,024 bins inside a tile of
+               2,048 covers the tile's edge bins far less often than its middle bins); its config
+               must name `$O/region/lists/tile_uniform.tsv`
   peakfreq_w   5 strata of peak_fraction: 0, (0, .05], (.05, .2], (.2, .5], > .5; q_h ~ sqrt(g_h);
                w = g_h / q_h
   peakfreq_u   the same q_h, w = 1
   ccre_like_w  per tile, by priority: promoter_like (one training cell has an accessibility peak
-               and an H3K4me3 peak in the tile), enhancer_like (one training cell has an
-               accessibility peak and an H3K27ac or H3K4me1 peak, and no H3K4me3 peak), accessible_only
-               (any accessibility peak), other_marked (any other training peak), none;
-               q_h ~ sqrt(g_h); w = g_h / q_h
-  variance_w   deciles (by tile rank) of `variance`: per assay, the sample variance across training
-               cells of log1p(the tile's mean count per million reads over its valid bins), averaged
-               over the assays with >= 2 training cells (the ChIP-seq control is left out: it is never
-               a target); the top 3 deciles get twice the mass per genome share; w = g_h / q_h
+               and an H3K4me3 peak in the tile), enhancer_like (one training cell that has an
+               H3K4me3 track has an accessibility peak, an H3K27ac or H3K4me1 peak, and no H3K4me3
+               peak), accessible_only (any accessibility peak), other_marked (any other training
+               peak), none; q_h ~ sqrt(g_h); w = g_h / q_h. STRATA.md states the cell counts.
+  variance_w   deciles (by tile rank; ties share a decile) of `variance`: per assay, the sample
+               variance across training cells of log1p(the tile's TOTAL signal in reads per million,
+               summed over its valid bins), rank-normalised to [0, 1] over tiles; then the mean over
+               the assays with >= 2 training cells (the ChIP-seq control is left out: it is never a
+               target); the top 3 deciles get twice the mass per genome share; w = g_h / q_h
   kcenter      k (8,192) tiles by greedy k-center (first centre seeded by KCENTER_SEED) on a per-tile
                vector: log1p of the tile mean of the training-average rate per assay (sum / n_cells of
                the average h5) joined to the tile mean of the Nucleotide Transformer v2 embedding; each
                column z-scored, then each part divided by sqrt(its column count), so the two parts
                weigh the same; w = cluster size / mean cluster size (every tile of the table is in the
-               cluster of its nearest centre)
+               cluster of its nearest centre). A biased coreset by design: most tiles get q = 0.
 `peak_fraction` is the fraction of the peak-frequency denominator tracks with a peak overlapping
 the tile by >= 1 bp. The denominator: the training tracks of the tables (every row of the
 eic_track has in_eic = train) that have a peak file (`peak_files.tsv` role train, non-empty
@@ -57,11 +62,14 @@ over the region's tiles of the per-tile peak fraction from the same training tra
 the peakfreq edges. It reads no validation track; it checks that the tile table was built from the
 same denominator tracks (the `# peak_tracks_sha256` header) and raises otherwise.
 
-Leak guards (ruling 40). Only measurement rows with in_eic = train are read; a peak file is read only
+Leak guards (ruling 40). Second experiments (`evalset.second_experiment_ids`) are removed first, as
+`ag2_baselines` does. Only measurement rows with in_eic = train are read; a peak file is read only
 when its `peak_files.tsv` role is train and every tables row of its eic_track has in_eic = train
 (else LeakError); a role outside train, val, blind raises; the average h5 must list
-`measurement_ids` in every group, each a tables row with in_eic = train (else LeakError). An
-embedding whose path, attributes or `meta.json` name Flashzoi or Borzoi raises. No cCRE and no
+`measurement_ids` in every group, each a tables row with in_eic = train (else LeakError). The
+embedding is read only when its `meta.json` (written by `dna_embed.precompute`; for a single h5
+file, its root attributes) has `source == "ntv2"` and `trained_on_encode_tracks` false, and every
+chromosome file's `source` attribute, where present, is ntv2 (else LeakError). No cCRE and no
 ChromHMM file is taken.
 """
 from __future__ import annotations
@@ -82,8 +90,8 @@ if str(_TOOLS) not in sys.path:
     sys.path.insert(0, str(_TOOLS))
 
 from onion_eval.ag2_peaks import read_peaks  # noqa: E402
-from onion_eval.evalset import (ACCESSIBILITY, CONTROL, MIN_VALID, REGION_BINS,  # noqa: E402
-                                candidate_blocks, read_chrom_sizes, read_tsv)
+from onion_eval.evalset import (CONTROL, MIN_VALID, REGION_BINS,  # noqa: E402
+                                candidate_blocks, read_tsv, second_experiment_ids)
 
 RES = 25
 TILE_BINS = 2048
@@ -91,6 +99,7 @@ TERR_SIZES = (64, 256, 1024, 4096)
 TERR_SALT = 283
 KCENTER_SEED = 0
 KCENTER_K = 8192
+WINDOW_BINS = 1024          # one training window (context_bins of the ladder configs)
 PEAKFREQ_EDGES = (0.05, 0.20, 0.50)
 PEAKFREQ_NAMES = ("pf_0", "pf_0-0.05", "pf_0.05-0.20", "pf_0.20-0.50", "pf_gt0.50")
 CCRE_NAMES = ("promoter_like", "enhancer_like", "accessible_only", "other_marked", "none")
@@ -101,7 +110,7 @@ VARIANCE_TOP_FACTOR = 2.0
 LIST_COLUMNS = ("chrom", "start_bin", "n_bins", "stratum", "sample_weight", "loss_weight")
 TILE_COLUMNS = ("chrom", "start_bin", "valid_bins", "peak_fraction", "ccre_like_class", "variance")
 ROLES = ("train", "val", "blind")
-FORBIDDEN_EMBEDDINGS = ("flashzoi", "borzoi")
+EMBEDDING_SOURCE = "ntv2"
 FULL_HASH_BYTES = 64 << 20
 
 
@@ -292,8 +301,12 @@ def run_universe(evalset, genome, seeds, out, sizes=TERR_SIZES) -> dict:
 # ------------------------------------------------------------------------------------ guards
 
 def train_tables(tables) -> tuple[list, dict]:
-    """(rows with in_eic = train, eic_track -> set of in_eic over ALL rows)."""
-    rows = read_tsv(Path(tables) / "measurements.tsv")
+    """(rows with in_eic = train, eic_track -> set of in_eic over all rows), after every second
+    experiment (`evalset.second_experiment_ids`: evaluation-only, never training data) is removed,
+    as `ag2_baselines` does."""
+    second = second_experiment_ids(tables)
+    rows = [r for r in read_tsv(Path(tables) / "measurements.tsv")
+            if r["measurement_id"] not in second]
     roles = defaultdict(set)
     for r in rows:
         roles[r.get("eic_track", "")].add(r["in_eic"])
@@ -345,7 +358,8 @@ def tracks_sha(tracks: list) -> str:
 def check_average(path, tables) -> list:
     """Groups (assays) of a training-average h5; every summed id must be a train row."""
     import h5py
-    rows = {r["measurement_id"]: r for r in read_tsv(Path(tables) / "measurements.tsv")}
+    trows, _ = train_tables(tables)
+    rows = {r["measurement_id"]: r for r in trows}
     with h5py.File(path, "r") as f:
         groups = sorted(f.keys())
         for a in groups:
@@ -354,39 +368,49 @@ def check_average(path, tables) -> list:
             for m in np.atleast_1d(f[a].attrs["measurement_ids"]):
                 m = m.decode() if isinstance(m, bytes) else str(m)
                 if m not in rows or rows[m]["in_eic"] != "train":
-                    raise LeakError(f"{path}: group {a} sums {m!r}, in_eic "
-                                    f"{rows[m]['in_eic'] if m in rows else 'absent'}")
+                    raise LeakError(f"{path}: group {a} sums {m!r}, which is not a training row "
+                                    f"(or is a second experiment) of {tables}")
     return groups
 
 
-def _texts(obj) -> list:
-    out = []
-    for k, v in obj.attrs.items():
-        out.append(str(k))
-        out.append(v.decode(errors="replace") if isinstance(v, bytes) else str(v))
-    return out
-
-
-def check_embedding(path) -> None:
-    """Refuse an embedding whose path, h5 attributes or meta.json name Flashzoi or Borzoi."""
+def embedding_meta(path) -> dict:
+    """The identity record of an embedding: `<dir>/meta.json` (the chunk A5 layout, written by
+    `dna_embed.precompute`), or the root attributes of a single h5 file."""
     import h5py
     p = Path(path)
-    texts = [str(p)]
+    if p.is_dir():
+        mp = p / "meta.json"
+        if not mp.is_file():
+            raise LeakError(f"{p}: no meta.json; the embedding's model cannot be checked")
+        return json.loads(mp.read_text(encoding="utf-8"))
+    with h5py.File(p, "r") as f:
+        return {k: (v.decode() if isinstance(v, bytes) else v.item() if hasattr(v, "item") else v)
+                for k, v in f.attrs.items()}
+
+
+def check_embedding(path) -> dict:
+    """Accept only the Nucleotide Transformer v2 set: `source == "ntv2"` and
+    `trained_on_encode_tracks` false in its meta (ruling 40). Every chromosome file that carries a
+    `source` attribute must also say ntv2."""
+    import h5py
+    p = Path(path)
+    meta = embedding_meta(p)
+    src, enc = meta.get("source"), meta.get("trained_on_encode_tracks")
+    if src != EMBEDDING_SOURCE or enc is not False:
+        raise LeakError(f"{p}: source {src!r}, trained_on_encode_tracks {enc!r}; only source "
+                        f"{EMBEDDING_SOURCE!r} with trained_on_encode_tracks false is read (a model "
+                        f"trained on ENCODE tracks may hold EIC validation or blind experiments)")
     files = sorted(p.glob("*.h5")) if p.is_dir() else [p]
-    if p.is_dir() and (p / "meta.json").is_file():
-        texts.append((p / "meta.json").read_text(encoding="utf-8", errors="replace"))
     if not files:
         raise FileNotFoundError(f"{p}: no embedding file")
     for q in files:
-        texts.append(str(q))
         with h5py.File(q, "r") as f:
-            texts += _texts(f)
-            f.visititems(lambda name, o: texts.extend([name] + _texts(o)))
-    blob = "\n".join(texts).lower()
-    hit = [m for m in FORBIDDEN_EMBEDDINGS if m in blob]
-    if hit:
-        raise LeakError(f"{p}: names {hit}; a model trained on ENCODE tracks may hold EIC "
-                        f"validation or blind experiments (ruling 40)")
+            for o in [f] + [f[k] for k in f.keys()]:
+                v = o.attrs.get("source")
+                v = v.decode() if isinstance(v, bytes) else v
+                if v is not None and v != EMBEDDING_SOURCE:
+                    raise LeakError(f"{q}: {o.name} has source {v!r}, not {EMBEDDING_SOURCE!r}")
+    return meta
 
 
 # ------------------------------------------------------------------------------------ tiles
@@ -433,21 +457,39 @@ def peakfreq_class(frac: np.ndarray) -> list:
     return [PEAKFREQ_NAMES[int(i)] for i in k]
 
 
-def ccre_like(tracks: list, hits: np.ndarray) -> list:
-    """Per tile, the cCRE-recipe class from training peaks of one cell at a time."""
+def ccre_like(tracks: list, hits: np.ndarray, counts: dict | None = None) -> list:
+    """Per tile, the cCRE-recipe class from training peaks of one cell at a time. A cell counts
+    for promoter_like only when it has an accessibility and an H3K4me3 track, and for
+    enhancer_like only when it has an accessibility, an H3K4me3 and an H3K27ac or H3K4me1 track
+    (so "no H3K4me3 peak" is never met by a cell without the track). `counts`, when given, gets
+    the number of cells of each rule (the denominators)."""
     n = hits.shape[1]
-    by_cell = defaultdict(lambda: defaultdict(lambda: np.zeros(n, bool)))
+    by_cell = defaultdict(dict)
     for (t, c, a, _), h in zip(tracks, hits):
-        by_cell[c][a] |= h
+        by_cell[c][a] = by_cell[c].get(a, np.zeros(n, bool)) | h
     prom, enh, acc = np.zeros(n, bool), np.zeros(n, bool), np.zeros(n, bool)
+    n_acc = n_prom = n_enh = 0
     for marks in by_cell.values():
+        has_acc = "DNase-seq" in marks or "ATAC-seq" in marks
+        if not has_acc:
+            continue
+        n_acc += 1
         z = np.zeros(n, bool)
         a = marks.get("DNase-seq", z) | marks.get("ATAC-seq", z)
-        k4 = marks.get(PROMOTER_MARK, z)
-        en = marks.get(ENHANCER_MARKS[0], z) | marks.get(ENHANCER_MARKS[1], z)
-        prom |= a & k4
-        enh |= a & en & ~k4
         acc |= a
+        if PROMOTER_MARK not in marks:
+            continue
+        n_prom += 1
+        k4 = marks[PROMOTER_MARK]
+        prom |= a & k4
+        if not any(m in marks for m in ENHANCER_MARKS):
+            continue
+        n_enh += 1
+        en = marks.get(ENHANCER_MARKS[0], z) | marks.get(ENHANCER_MARKS[1], z)
+        enh |= a & en & ~k4
+    if counts is not None:
+        counts.update(cells=len(by_cell), accessibility=n_acc, promoter_rule=n_prom,
+                      enhancer_rule=n_enh)
     anyp = hits.any(axis=0)
     out = np.full(n, CCRE_NAMES[4], object)
     out[anyp] = CCRE_NAMES[3]
@@ -474,9 +516,11 @@ def _by_chrom(tiles: list) -> dict:
     return by
 
 
-def tile_variance(tables, tiles: list, genome: Path) -> np.ndarray:
-    """Per tile, the mean over assays (>= 2 training cells, control left out) of the sample
-    variance across training cells of log1p(tile mean CPM over valid bins)."""
+def tile_totals(tables, tiles: list, genome: Path) -> dict:
+    """assay -> float64 [cells, tiles]: log1p of each training cell's TOTAL depth-normalised signal
+    (counts x 1e6 / depth_reads, summed over the tile's valid bins), for the assays with >= 2
+    training cells (the ChIP-seq control is left out: it is never a target). Only training base
+    views are opened."""
     import h5py
     from onion_eval.evalset import base_views
     trows, _ = train_tables(tables)
@@ -491,27 +535,48 @@ def tile_variance(tables, tiles: list, genome: Path) -> np.ndarray:
     if not by_assay:
         raise ValueError("no assay has two training cells; the variance strata are undefined")
     bc = _by_chrom(tiles)
-    acc = np.zeros(len(tiles), np.float64)
     with h5py.File(Path(genome) / "mask.h5", "r") as mf:
         masks = {c: np.asarray(mf[c][:], bool) for c in bc}
+    out = {}
     for a, rs in sorted(by_assay.items()):
         vals = np.zeros((len(rs), len(tiles)), np.float64)
         for j, r in enumerate(rs):
-            path = r["counts_path"]
+            path = require_train(r)["counts_path"]
             if not path.startswith("h5:"):
                 raise ValueError(f"{r['measurement_id']}: counts_path {path!r}: only h5: is read")
             scale = 1e6 / float(r["depth_reads"])
             with h5py.File(path[3:], "r") as f:
                 for c, v in bc.items():
                     x = np.asarray(f[c][:], np.float64) * scale
-                    idx = [i for i, _ in v]
-                    vals[j, idx] = _tile_means(x, [s for _, s in v], masks[c])
-        acc += np.log1p(vals).var(axis=0, ddof=1)
-    return acc / len(by_assay)
+                    m = masks[c]
+                    for i, s in v:
+                        xs = x[s:s + TILE_BINS]
+                        vals[j, i] = xs[m[s:s + xs.shape[0]]].sum()
+        out[a] = np.log1p(vals)
+    return out
+
+
+def rank01(x: np.ndarray) -> np.ndarray:
+    """Rank of each value in [0, 1] (ties get their lowest rank)."""
+    srt = np.sort(x)
+    return np.searchsorted(srt, x, side="left") / max(len(x) - 1, 1)
+
+
+def variance_score(totals: dict) -> np.ndarray:
+    """Per tile: the mean over assays of the rank-normalised (in [0, 1] over tiles) sample variance
+    across training cells of log1p(total signal). A log scale makes the variance relative, so two
+    tiles with the same relative spread score alike whatever their mean."""
+    return np.mean([rank01(v.var(axis=0, ddof=1)) for _, v in sorted(totals.items())], axis=0)
+
+
+def tile_variance(tables, tiles: list, genome: Path) -> np.ndarray:
+    return variance_score(tile_totals(tables, tiles, genome))
 
 
 def decile_strata(x: np.ndarray) -> list:
-    rank = np.argsort(np.argsort(x, kind="stable"), kind="stable")
+    """Deciles by rank (ties share their lowest rank, so equal values share a decile)."""
+    srt = np.sort(x)
+    rank = np.searchsorted(srt, x, side="left")
     d = (rank * 10) // len(x)
     return [f"d{int(i) + 1:02d}" for i in d]
 
@@ -610,6 +675,15 @@ def arm_summary(name: str, rows: list, tile_peak: dict, tile_valid: dict, note: 
     return lines
 
 
+def edge_coverage(n: int, L: int = WINDOW_BINS) -> tuple[float, float]:
+    """A window of L bins drawn with a uniform start inside a row of n bins: (coverage of the
+    row's first bin relative to its middle bin, share of the row's bins covered at less than half
+    the middle bin's rate)."""
+    j = np.arange(n)
+    cov = np.minimum(j, n - L) - np.maximum(0, j - L + 1) + 1
+    return float(cov[0] / cov.max()), float((cov < cov.max() / 2).mean())
+
+
 def run_tiles(tables, peaks, peak_files, average, embedding, genome, evalset, out,
               k: int = KCENTER_K) -> dict:
     genome, out = Path(genome), Path(out)
@@ -637,7 +711,8 @@ def run_tiles(tables, peaks, peak_files, average, embedding, genome, evalset, ou
                                      "chrom_sizes": genome / "chrom_sizes.json"})
     hits = peak_matrix(tracks, tiles)
     frac = hits.mean(axis=0)
-    ccre = ccre_like(tracks, hits)
+    ccre_n: dict = {}
+    ccre = ccre_like(tracks, hits, ccre_n)
     var = tile_variance(tables, tiles, genome)
     with open(out / "tile_table.tsv", "w", encoding="utf-8") as fh:
         fh.write("# roles_read=train\n")
@@ -653,6 +728,11 @@ def run_tiles(tables, peaks, peak_files, average, embedding, genome, evalset, ou
     tile_peak = {t: float(f_) for t, f_ in zip(tiles, frac)}
     tile_valid = dict(zip(tiles, valid))
     arms = {}
+    arms["tile_uniform"] = (strata_rows(tiles, valid, ["tile"] * len(tiles), {"tile": 1.0},
+                                        {"tile": 1.0}, TILE_BINS),
+                            "The tile-uniform control: the tile table, q in proportion to valid "
+                            "bins, w = 1. It shares the window-in-tile edge effect of the tile arms "
+                            "(see above), which `blocks_minus_eval` does not.")
     pf = peakfreq_class(frac)
     g = genome_shares(valid, pf)
     q, w = sqrt_design(g)
@@ -672,7 +752,10 @@ def run_tiles(tables, peaks, peak_files, average, embedding, genome, evalset, ou
     m = {h: g[h] * (VARIANCE_TOP_FACTOR if h in top else 1.0) for h in g}
     q = {h: x / sum(m.values()) for h, x in m.items()}
     arms["variance_w"] = (strata_rows(tiles, valid, dec, q, {h: g[h] / q[h] for h in g}, TILE_BINS),
-                          f"Deciles of the across-cell variance; the top {VARIANCE_TOP_DECILES} "
+                          f"Deciles of the variance score (per assay, the sample variance across "
+                          f"training cells of log1p of the tile's total signal in reads per million "
+                          f"over its valid bins, rank-normalised to [0, 1] over tiles; then the mean "
+                          f"over the assays with >= 2 training cells); the top {VARIANCE_TOP_DECILES} "
                           f"deciles at {VARIANCE_TOP_FACTOR:g} times the mass per genome share; "
                           f"w = g_h / q_h.")
     X = kcenter_features(tiles, average, embedding, genome)
@@ -686,13 +769,35 @@ def run_tiles(tables, peaks, peak_files, average, embedding, genome, evalset, ou
                        f"{X.shape[1]} features ({len(groups)} average assays + embedding); "
                        f"each tile q = 1/k, w = cluster size / mean cluster size. Cluster sizes "
                        f"(tiles of the table): min {qs[0]:g}, quartiles {qs[1]:g}, {qs[2]:g}, "
-                       f"{qs[3]:g}, max {qs[4]:g}; sum {int(sizes.sum())}.")
+                       f"{qs[3]:g}, max {qs[4]:g}; sum {int(sizes.sum())}. "
+                       f"kcenter is a biased coreset by design: {len(tiles) - k} of {len(tiles)} "
+                       f"tiles ({(len(tiles) - k) / len(tiles):.1%}) get q = 0, and the cluster "
+                       f"weights restore the mass of each cluster, not the uniform loss over U.")
+    n_low = len(all_tiles) - len(tiles)
+    zero = {a: 1.0 - len({(r["chrom"], r["start_bin"]) for r in rows if r["sample_weight"] > 0})
+            / len(tiles) for a, (rows, _) in arms.items()}
+    e_tile, e_blk = edge_coverage(TILE_BINS), edge_coverage(rb)
     md = ["# Strata tables (STt, plan Amendment 7, B.4)", "",
           f"Universe: {uni}.", "",
           f"Peak-frequency denominator: {len(tracks)} training tracks of the tables that have a "
           f"peak file (role train in `peak_files.tsv`; ChIP-seq controls left out).", "",
           "g_h is the share of the valid bins of the tile table in stratum h; q_h is its sampling "
-          "share; w_h is its loss weight. In every file the sum of q_h x w_h is 1.", ""]
+          "share; w_h is its loss weight. In every file the sum of q_h x w_h is 1.", "",
+          f"Tiles below {MIN_VALID} valid get q = 0 in every tile arm: {n_low} of {len(all_tiles)} "
+          f"tiles of U ({n_low / len(all_tiles):.2%}) are not in the tile table. Share of the tile "
+          f"table's tiles with q = 0, per arm: " + ", ".join(
+              f"{a} {zero[a]:.1%}" for a in arms) + ".", "",
+          f"Window-in-tile edge effect. A window of {WINDOW_BINS} bins is drawn with a uniform start "
+          f"inside its row. In a tile of {TILE_BINS} bins the first bin is covered "
+          f"{e_tile[0]:.4f} times as often as the middle bin, and {e_tile[1]:.1%} of the tile's "
+          f"bins are covered at less than half the middle rate; in a block of {rb} bins these are "
+          f"{e_blk[0]:.6f} and {e_blk[1]:.1%}. So every tile arm under-samples tile edges far more "
+          f"than the block lists do; `tile_uniform` is the control that shares this effect.", "",
+          f"cCRE-like denominators: {ccre_n['cells']} training cells with a peak file; "
+          f"{ccre_n['accessibility']} have an accessibility track; {ccre_n['promoter_rule']} also "
+          f"have an H3K4me3 track (the cells of the promoter_like rule); {ccre_n['enhancer_rule']} "
+          f"also have an H3K27ac or H3K4me1 track (the cells of the enhancer_like rule). A cell "
+          f"without an H3K4me3 track never meets \"no H3K4me3 peak\".", ""]
     for name, (rows, note) in arms.items():
         write_list(out / f"{name}.tsv", rows, f"{name}: {uni}", sha)
         md += arm_summary(name, rows, tile_peak, tile_valid, note)
