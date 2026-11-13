@@ -69,9 +69,11 @@ sum of weights): the main term (each per-bin loss, before the kind weights, the 
 the per-assay mean; with `loss_assay_weight` the per-assay sum is weighted and its count is not),
 the shape term (each (window, track) multinomial NLL), each multiscale term (each block NLL) and
 the base leg (each base bin). With w = genome share / sampling share the expected weighted loss under
-the tilted draw equals the loss under the uniform draw. The `parts` stay unweighted per-bin means
-(`impute`, `correct`, `same`, `main_no_control`), so they compare across samplers; `main`, `shape`,
-`multiscale_<k>` and `base` are the weighted terms. Without `w_window` every term is bit-identical.
+the tilted draw equals the loss under the uniform draw. The parts `impute`, `correct`, `same` and
+`main_no_control` stay unweighted per-bin means, so they compare across samplers. The parts `main`,
+`shape`, `multiscale_<k>`, `base` and `assay_mean` (with `loss_assay_weight`: the mean over the
+present assays of each assay's window-weighted per-bin mean) are weighted. Without `w_window` every
+term is bit-identical.
 """
 from __future__ import annotations
 
