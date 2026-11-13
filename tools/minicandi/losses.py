@@ -61,6 +61,17 @@ leaves the loss bit-identical to the loss above.
                                under conditional independence, Amendment 3 section C), over the
                                blocks of k consecutive bins that the loss mask covers whole; a
                                trailing L mod k bins are dropped. part `multiscale_<k>`.
+
+Per-window loss weights (pinned interface I, chunk TR). A batch from a `train_regions` sampler
+carries `w_window` float32 [B]. Every per-bin loss of window b is then multiplied by w_window[b] in
+every term, and every denominator stays as above (the counts of bins, blocks or windows, never the
+sum of weights): the main term (each per-bin loss, before the kind weights, the bin-equal form or
+the per-assay mean; with `loss_assay_weight` the per-assay sum is weighted and its count is not),
+the shape term (each (window, track) multinomial NLL), each multiscale term (each block NLL) and
+the base leg (each base bin). With w = genome share / sampling share the expected weighted loss under
+the tilted draw equals the loss under the uniform draw. The `parts` stay unweighted per-bin means
+(`impute`, `correct`, `same`, `main_no_control`), so they compare across samplers; `main`, `shape`,
+`multiscale_<k>` and `base` are the weighted terms. Without `w_window` every term is bit-identical.
 """
 from __future__ import annotations
 
@@ -232,20 +243,25 @@ def _block_sum(x, k: int, dim: int = 1):
     return x[..., :nb * k].reshape(*x.shape[:-1], nb, k).sum(-1).movedim(-1, dim)
 
 
-def multiscale_nll(n, mu, y, mask, k: int):
+def multiscale_nll(n, mu, y, mask, k: int, w=None):
     """Mean NB NLL of the k-bin sums of y under `pool_nb(mu, n, k)` over the blocks that `mask`
-    covers whole; a zero with a graph when there is none."""
+    covers whole; a zero with a graph when there is none. `w` [B]: each block of window b is
+    weighted by w[b]; the denominator stays the block count."""
     mu_p, n_p = pool_nb(mu, n, k)
     y_p = _block_sum(y.to(mu.dtype), k)
     full = _block_sum(mask.to(torch.int64), k) == k
     if not full.any():
         return (mu * 0.0).sum()
-    return nb_nll_per(n_p[full], mu_p[full], y_p[full]).mean()
+    if w is None:
+        return nb_nll_per(n_p[full], mu_p[full], y_p[full]).mean()
+    wf = w.to(mu.dtype)[:, None, None].expand_as(full)[full]
+    return (nb_nll_per(n_p[full], mu_p[full], y_p[full]) * wf).sum() / int(full.sum())
 
 
-def shape_nll(mu, y, mask):
+def shape_nll(mu, y, mask, w=None):
     """Multinomial NLL of y under mu / sum(mu) over the `mask` bins of each (window, track), summed
-    over (window, track) and divided by the number of masked bins."""
+    over (window, track) and divided by the number of masked bins. `w` [B]: the NLL of each
+    (window b, track) is weighted by w[b]; the denominator stays the masked-bin count."""
     k = int(mask.sum())
     if k == 0:
         return (mu * 0.0).sum()
@@ -256,6 +272,8 @@ def shape_nll(mu, y, mask):
     N = yy.sum(1)
     nll = (-(yy * log_p).sum(1) - torch.lgamma(N + 1.0)
            + (torch.lgamma(yy + 1.0) * m).sum(1))
+    if w is not None:
+        nll = nll * w.to(nll.dtype)[:, None]
     return nll.sum() / k
 
 
@@ -276,7 +294,8 @@ def total_loss(out: dict, batch: dict, config: dict | None) -> tuple[torch.Tenso
     bin_equal = bool(config.get("loss_bin_equal", False))
     assay_w = config.get("loss_assay_weight", "none")
     track = torch.arange(mask.shape[-1], device=mask.device).expand_as(mask)[mask]
-    if name == DEFAULT_LOSS and unit and not bin_equal and assay_w == "none":
+    ww = batch.get("w_window")                               # interface I; None by default
+    if name == DEFAULT_LOSS and unit and not bin_equal and assay_w == "none" and ww is None:
         main = C.nb_nll(out["n"], out["mu"], y, mask)      # the pre-A1 loss, bit for bit
         with torch.no_grad():
             per_m = nb_nll_per(out["n"][mask], out["mu"][mask], y[mask])
@@ -293,6 +312,8 @@ def total_loss(out: dict, batch: dict, config: dict | None) -> tuple[torch.Tenso
             for kd, key in KIND_KEYS.items():
                 wk[kd] = w[key]
             per_w = per_m * wk[kind[mask].long()]
+            if ww is not None:
+                per_w = per_w * ww.to(per_w.dtype)[:, None, None].expand_as(mask)[mask]
             if assay_w == "none":
                 main = per_w.sum() / k
             else:
@@ -325,11 +346,11 @@ def total_loss(out: dict, batch: dict, config: dict | None) -> tuple[torch.Tenso
     loss = main
     sw = float(config.get("loss_shape_weight", 0))
     if sw != 0.0:
-        shape = shape_nll(out["mu"], y, mask)
+        shape = shape_nll(out["mu"], y, mask, ww)
         parts["shape"] = float(shape.detach())
         loss = loss + sw * shape
     for kb in config.get("loss_multiscale") or []:
-        ms = multiscale_nll(out["n"], out["mu"], y, mask, int(kb))
+        ms = multiscale_nll(out["n"], out["mu"], y, mask, int(kb), ww)
         parts[f"multiscale_{int(kb)}"] = float(ms.detach())
         loss = loss + ms
     if "mu_base" in out:
@@ -337,7 +358,13 @@ def total_loss(out: dict, batch: dict, config: dict | None) -> tuple[torch.Tenso
             raise KeyError("a two-step output needs batch['y_base'] and batch['c_base']")
         has_base = batch["c_base"][..., C.LOG2_DEPTH_COL] != 0              # [B, A]
         bmask = mask & has_base[:, None, :]
-        base = C.nb_nll(out["n_base"], out["mu_base"], batch["y_base"], bmask)
+        if ww is None:
+            base = C.nb_nll(out["n_base"], out["mu_base"], batch["y_base"], bmask)
+        else:
+            kb_ = int(bmask.sum())
+            per_b = nb_nll_per(out["n_base"], out["mu_base"], batch["y_base"])
+            per_b = per_b * ww.to(per_b.dtype)[:, None, None]
+            base = per_b[bmask].sum() / kb_ if kb_ else (out["mu_base"] * 0.0).sum()
         parts["base"] = float(base.detach())
         loss = loss + w["base"] * base
     return loss, parts

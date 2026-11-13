@@ -60,6 +60,12 @@ Each worker opens its own h5 handles (`OnionDataset` drops inherited handles aft
 pickles without them under spawn). The two streams differ, so a resume refuses a switch between
 0 and N > 0 workers. Measured on Fir: 0.93 s per batch in-process against 0.081 s with 8 workers.
 
+Training regions (pinned interface I): with `train_regions` or `exclude_regions`, run.json also
+holds the path and sha256 of the region file read (`OnionDataset.region_record`); with
+`train_regions`, each log line holds `windows_per_stratum`, the cumulative window count per stratum
+(kept in train_state.pt across a resume), and the loss weights ride in the batch (`w_window`).
+Without the keys run.json, log.jsonl and train_state.pt are unchanged.
+
 `--val-every W` (windows, 0 = off) logs the NB loss (of the main output, whatever `loss` is) over the first `--val-batches` batches of the
 dataset in val mode (needs the tables' evalset.json); the batches are fixed for the whole run.
 """
@@ -313,6 +319,8 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
     opt = torch.optim.AdamW(model.parameters(), lr=float(cfg["lr"]), weight_decay=WEIGHT_DECAY)
     data_rng = np.random.default_rng([seed, 1])
     scr_gen = torch.Generator().manual_seed(seed)
+    region = ds.region_record()                      # interface I; {} without its keys
+    strata: dict = {}
 
     ckpt_path, state_path = out / CKPT_NAME, out / STATE_NAME
     resumed = ckpt_path.is_file()
@@ -335,6 +343,7 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
         wall0, fpw, fpw_fwd = float(st["wall_seconds"]), st["flops_per_window"], \
             st["flops_per_window_forward"]
         n_resumes = int(st.get("n_resumes", 0)) + 1
+        strata = dict(st.get("windows_per_stratum", {}))
         if (int(st.get("workers", 0)) > 0) != (workers > 0):
             raise ValueError(f"{state_path}: the run started with --workers {st.get('workers', 0)}; "
                              f"0 and N > 0 workers draw different batch streams, resume with "
@@ -380,7 +389,7 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
                 "total_steps": total_steps, "wall_seconds": wall0 + (time.time() - t0),
                 "device": str(dev), "host": socket.gethostname(), "torch": torch.__version__,
                 "n_resumes": n_resumes, "done": done, **({"workers": workers} if workers else {}),
-                **last}
+                **region, **last}
 
     def checkpoint(done: bool, last: dict) -> dict:
         _save(C.make_ckpt(model, cfg, windows, tsha, sha), ckpt_path)
@@ -389,7 +398,8 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
                "data_rng": data_rng.bit_generator.state, "scramble_rng": scr_gen.get_state(),
                "wall_seconds": wall0 + (time.time() - t0), "flops_per_window": fpw,
                "flops_per_window_forward": fpw_fwd, "n_resumes": n_resumes,
-               **({"workers": workers} if workers else {})}, state_path)
+               **({"workers": workers} if workers else {}),
+               **({"windows_per_stratum": dict(strata)} if strata else {})}, state_path)
         info = summary(done, last)
         _write_json(info, out / "run.json")
         return info
@@ -406,6 +416,9 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
             break
         batch = ds.batch(bs, data_rng) if loader is None else next(loader)
         batch = to_device(batch, dev)
+        if "w_window" in batch:                      # interface I: windows per stratum
+            for m in batch["meta"]:
+                strata[m["stratum"]] = strata.get(m["stratum"], 0) + 1
         for g in opt.param_groups:
             g["lr"] = lr_at(step, total_steps, float(cfg["lr"]))
         parts: dict = {}
@@ -423,7 +436,8 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
             rec = {"step": step, "windows_seen": windows, "training_flops": windows * fpw,
                    "loss": float(loss.item()), "grad_norm": gnorm,
                    "lr": opt.param_groups[0]["lr"],
-                   "wall_seconds": round(wall0 + time.time() - t0, 2), "parts": parts}
+                   "wall_seconds": round(wall0 + time.time() - t0, 2), "parts": parts,
+                   **({"windows_per_stratum": dict(strata)} if strata else {})}
             log.write(json.dumps(rec) + "\n")
             log.flush()
         if next_val is not None and windows >= next_val:
