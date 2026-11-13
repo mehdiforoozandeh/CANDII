@@ -18,7 +18,7 @@ Sources.
   covered length (Max divides by the full 25 bp), and a bin with no overlap is NaN. Inside the source
   span the two are identical.
 * `isotonic_recalibrate` ports `pava` and `monotone_cal` of the same file (lines 238-261, with
-  `NCAL = 2000` from line 43): isotonic regression of the truth on the prediction through `n_bins`
+  `NCAL = 2000` from line 42): isotonic regression of the truth on the prediction through `n_bins`
   quantile bins of the prediction, then linear interpolation between the bin means. The only addition
   is `valid`, which restricts the fit (not the output) to a subset of bins.
 * `fold_change_track` and `peak_probability_from_nb` use the lambda of the D9b ChIP-seq and MACS2
@@ -278,7 +278,9 @@ def isotonic_recalibrate(pred, truth, n_bins: int = 2000, valid=None) -> np.ndar
     p, y = p_all[m], y_all[m]
     if p.size == 0:
         raise ValueError("no valid bin to fit the recalibration on")
-    o = np.argsort(p, kind="stable")
+    if not (np.all(np.isfinite(p)) and np.all(np.isfinite(y))):
+        raise ValueError("pred and truth must be finite on every fitted bin (mask the others with `valid`)")
+    o =np.argsort(p, kind="stable")
     edges = np.unique(np.linspace(0, p.size, int(n_bins) + 1).astype(np.int64))
     cp = np.concatenate([[0.0], np.cumsum(p[o])])
     cy = np.concatenate([[0.0], np.cumsum(y[o])])
