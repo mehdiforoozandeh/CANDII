@@ -1,0 +1,5 @@
+#!/bin/bash
+# Foreman helper: resubmit, with a 3-day limit and 192000M, every DNase tail row of the given list whose
+# original 1-day task (array 26855580) ended as TIMEOUT / FAILED / OUT_OF_MEMORY and that is not queued or running.
+# Usage: resub_dnase_tail.sh 337 381 385 ...   (prints what it did; submit itself skips built and queued rows)
+hpc run nibi 'K=/project/def-maxwl/mforooz/onion_kit/KF4; B=/project/def-maxwl/mforooz/ONION/eic/build_list.tsv; q=$(squeue -u mforooz -h -r -o "%i %j" | grep -E "onion_(build|stage|signal)" | cut -d" " -f1); for r in '"$*"'; do st=$(sacct -j 26855580_$r -X -n -o State | head -1 | tr -d " "); if echo "$q" | grep -q "_${r}$"; then echo "row $r: still queued or running ($st)"; continue; fi; case "$st" in TIMEOUT|FAILED|OUT_OF_ME*) p=$(awk -F"\t" -v r=$r "\$1==r{print \$2}" $B); echo "row $r: $st -> resubmit (priority $p)"; ONION_TIME=3-00:00:00 ONION_MEM=192000M bash $K/slurm/onion_data/build_row.sh submit $K $B $p 50 2 $r 2>&1 | tail -1;; *) echo "row $r: $st (nothing to do)";; esac; done'
