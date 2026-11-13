@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import platform
 import shutil
 import sys
 from pathlib import Path
@@ -42,17 +43,21 @@ REFERENCE = {
                          "950ab06d0d4b6a7e3c4448e082c3e63f9a65448f89e91f6eb60596039ac9273a",
                          2956069215334489786),
 }
-#: base af4ee30: total_loss on the fixed output of `_fixed_out` (float.hex)
-LOSS_REFERENCE = [
-    ({}, "0x1.2f16afd98f1d5p+2"),
-    ({"loss_shape_weight": 0.5}, "0x1.83b50c10f5e95p+2"),
-    ({"loss_multiscale": [4, 16]}, "0x1.432dbbf37dcc3p+4"),
-    ({"loss_assay_weight": "equal"}, "0x1.bdb9721522356p+1"),
-    ({"loss_assay_weight": "learned"}, "0x1.7cb3fc4b8b01cp+2"),
-    ({"loss_bin_equal": True}, "0x1.64211d83abf75p+2"),
-    ({"loss": "nb_crps"}, "0x1.14a23a09c544ep+2"),
-    ({"loss_weights": {"impute": 2.0, "base": 0.5}}, "0x1.182610d624e3ap+2"),
-]
+#: base af4ee30: total_loss on the fixed output of `_fixed_out` (float.hex), per machine: the last
+#: bit differs between the laptop (arm64, macOS) and Nibi (x86_64); each column was computed with
+#: the base code on that machine (Nibi: kit TRbase, git af4ee30)
+LOSS_CONFIGS = [{}, {"loss_shape_weight": 0.5}, {"loss_multiscale": [4, 16]},
+                {"loss_assay_weight": "equal"}, {"loss_assay_weight": "learned"},
+                {"loss_bin_equal": True}, {"loss": "nb_crps"},
+                {"loss_weights": {"impute": 2.0, "base": 0.5}}]
+LOSS_REFERENCE = {
+    "arm64": ["0x1.2f16afd98f1d5p+2", "0x1.83b50c10f5e95p+2", "0x1.432dbbf37dcc3p+4",
+              "0x1.bdb9721522356p+1", "0x1.7cb3fc4b8b01cp+2", "0x1.64211d83abf75p+2",
+              "0x1.14a23a09c544ep+2", "0x1.182610d624e3ap+2"],
+    "x86_64": ["0x1.2f16afd98f1d4p+2", "0x1.83b50c10f5e95p+2", "0x1.432dbbf37dcc2p+4",
+               "0x1.bdb9721522355p+1", "0x1.7cb3fc4b8b01cp+2", "0x1.64211d83abf74p+2",
+               "0x1.14a23a09c544ep+2", "0x1.182610d624e39p+2"],
+}
 
 
 @pytest.fixture(scope="module")
@@ -137,10 +142,15 @@ def _fixed_out(tables):
     return out, b
 
 
-@pytest.mark.parametrize("cfg,want", LOSS_REFERENCE)
-def test_without_w_window_the_loss_equals_the_base(tables, cfg, want):
+@pytest.mark.parametrize("i", range(len(LOSS_CONFIGS)))
+def test_without_w_window_the_loss_equals_the_base(tables, i):
     out, b = _fixed_out(tables)
-    assert float(LS.total_loss(out, b, cfg)[0]).hex() == want
+    got = float(LS.total_loss(out, b, LOSS_CONFIGS[i])[0])
+    ref = LOSS_REFERENCE.get(platform.machine())
+    if ref is not None:
+        assert got.hex() == ref[i]
+    else:                                   # another machine: within the last bits
+        assert got == pytest.approx(float.fromhex(LOSS_REFERENCE["x86_64"][i]), rel=1e-13)
 
 
 # ------------------------------------------------------------------------------- refusals
