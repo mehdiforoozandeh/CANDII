@@ -869,6 +869,8 @@ def write_measurement(cfg, unit, arm, halves_counts: dict, half_tas: dict, half_
         "slurm_job_ids": bam_arm._job_ids(), "code": {"git_sha": git_sha()},
         "created_utc": utc(), **extra_prov,
     }
+    if cfg.get("notes"):
+        prov["notes"] = cfg["notes"]
     (stage / "provenance.json").write_text(json.dumps(prov, indent=1) + "\n")
     shutil.rmtree(final, ignore_errors=True)
     os.replace(stage, final)
@@ -1530,7 +1532,7 @@ def config_from_row(a) -> dict | None:
         mapq = armj.get("mapq_threshold", BASE_MAPQ[pipeline])
         if (rundir / "metadata.json").is_file():
             run_metadata = str(rundir / "metadata.json")
-        notes = {"mixed_run_types": armj.get("mixed_run_types", "")}
+        notes = run_notes(armj)
     else:
         bj = Path(a.fastq_root) / exp / "bams.json"
         if not bj.is_file():
@@ -1603,6 +1605,27 @@ def config_from_row(a) -> dict | None:
         "row": row, "rows": rows,
     }
     return cfg
+
+
+def run_notes(armj: dict) -> dict:
+    """What the FASTQ kits did to the reads before alignment (arm.json), for provenance.json:
+    the mixed-run-type rule, D6x's `fastq_prep` (read names stripped of /1 /2, truncated source
+    files cut to their complete records), `truncated_source` with the reads kept and expected
+    per truncated file, and the DNase `adapter_source` (portal or auto_detect)."""
+    notes = {"mixed_run_types": armj.get("mixed_run_types", "")}
+    prep = armj.get("fastq_prep") or {}
+    if prep:
+        notes["fastq_prep"] = prep
+    if prep or "truncated_source" in armj:
+        notes["truncated_source"] = bool(armj.get("truncated_source"))
+        notes["truncated_reads"] = {
+            a: {k: p.get(k) for k in ("reads_kept", "reads_expected", "kept_fraction")}
+            for a, p in prep.items() if p.get("truncated_source")}
+    if armj.get("adapter_source"):
+        notes["adapter_source"] = armj["adapter_source"]
+        if armj.get("adapter_detection"):
+            notes["adapter_detection"] = armj["adapter_detection"]
+    return notes
 
 
 def bam_readers_pending(cfg) -> list:
