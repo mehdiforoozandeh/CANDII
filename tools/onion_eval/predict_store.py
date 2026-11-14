@@ -228,20 +228,40 @@ def _jsonable(x):
 
 
 def _claim_store(out_dir: Path, head: dict) -> None:
-    """Write STORE.json, or refuse when it exists with another identity or settings."""
+    """Write STORE.json, or refuse when it exists with another identity or settings. Shards start
+    together: the content goes to a unique .part file first and is hard-linked to STORE.json (the
+    link fails when the file exists), so STORE.json never exists half written; a loser of the race
+    reads it with a short retry."""
     p = out_dir / STORE_FILE
     body = (json.dumps(head, indent=1, sort_keys=True) + "\n").encode("utf-8")
+    tmp = out_dir / f".{STORE_FILE}.{os.getpid()}.{time.time_ns()}.part"
     try:
-        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-    except FileExistsError:
-        old = json.loads(p.read_text(encoding="utf-8"))
-        diff = sorted(k for k in set(old) | set(head) if old.get(k) != head.get(k))
-        if diff:
-            raise S.ScoreRefused(f"{out_dir}: a prediction store of another scoring ({', '.join(diff)}"
-                                 f" differ); use another --pred-store")
+        with open(tmp, "wb") as fh:
+            fh.write(body)
+        os.link(tmp, p)
         return
-    with os.fdopen(fd, "wb") as fh:
-        fh.write(body)
+    except FileExistsError:
+        pass
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+    old = None
+    for k in range(_CLAIM_TRIES):
+        try:
+            old = json.loads(p.read_text(encoding="utf-8"))
+            break
+        except (json.JSONDecodeError, FileNotFoundError):
+            if k + 1 < _CLAIM_TRIES:
+                time.sleep(_CLAIM_WAIT)
+    if not isinstance(old, dict):
+        raise S.ScoreRefused(f"{p}: unreadable after {_CLAIM_TRIES} tries; use another --pred-store")
+    diff = sorted(k for k in set(old) | set(head) if old.get(k) != head.get(k))
+    if diff:
+        raise S.ScoreRefused(f"{out_dir}: a prediction store of another scoring ({', '.join(diff)}"
+                             f" differ); use another --pred-store")
+
+
+_CLAIM_TRIES, _CLAIM_WAIT = 5, 0.2
 
 
 def tf32_flags() -> tuple:
