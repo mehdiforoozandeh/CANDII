@@ -506,20 +506,28 @@ def _bench_device(a, device, log) -> dict:
     # the stored floats against the legacy _job_arrays at the legacy batch (one item, one pair)
     if sc.tile_bs in batches:
         st = PredictionStore(Path(a.store_root) / device.replace(":", "") / f"b{sc.tile_bs}")
-        eq = {}
-        for r in [x for x in reqs if x["kind"] != "correction"][:1] + [
-                x for x in reqs if x["kind"] == "correction"][:1]:
-            old_regions = sc.regions
-            sc.regions = [old_regions[i] for i in r["region_indices"]]
+        # the legacy path never sets the TF32 flags: compare it with the flags as PyTorch leaves
+        # them (cuDNN TF32 on by default) and with both flags off, as the predict phase runs
+        default = tf32_flags()
+        for label, flags in (("tf32_default", default), ("tf32_off", (False, False))):
+            eq = {}
+            torch.backends.cuda.matmul.allow_tf32, torch.backends.cudnn.allow_tf32 = flags
             try:
-                L = sc._job_arrays(r["job"], ())
+                for r in [x for x in reqs if x["kind"] != "correction"][:1] + [
+                        x for x in reqs if x["kind"] == "correction"][:1]:
+                    old_regions = sc.regions
+                    sc.regions = [old_regions[i] for i in r["region_indices"]]
+                    try:
+                        L = sc._job_arrays(r["job"], ())
+                    finally:
+                        sc.regions = old_regions
+                    s = st.read(r["key"])
+                    eq[r["key"]] = {k: {"bit_identical": bool(np.array_equal(
+                        s[k].reshape(-1).astype(np.float64), L[f"main.{k}"])),
+                        "max_rel_diff": _rel(s[k].reshape(-1), L[f"main.{k}"])} for k in s}
             finally:
-                sc.regions = old_regions
-            s = st.read(r["key"])
-            eq[r["key"]] = {k: bool(np.array_equal(s[k].reshape(-1).astype(np.float64),
-                                                   L[f"main.{k}" if k != "ctl_mu" else "main.ctl_mu"]))
-                            for k in s}
-        res["legacy_bit_identical"] = eq
+                torch.backends.cuda.matmul.allow_tf32, torch.backends.cudnn.allow_tf32 = default
+            res[f"legacy_vs_store_{label}"] = {"flags": list(flags), "requests": eq}
     return res
 
 
