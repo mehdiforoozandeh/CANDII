@@ -2,7 +2,7 @@
 title: where we are (peeling the onion run)
 kind: live status page, maintained by the foreman agent
 parent: "[[peeling the onion]]"
-updated: 2026-11-14T12:49Z
+updated: 2026-11-14T21:26Z
 ---
 
 # Where we are
@@ -48,20 +48,23 @@ Working copies of items 2 and 3 live in the worktree at `.claude/worktrees/onion
 - Globus: two transfers Nibi to Fir started at about 09:50; not verified on Fir yet.
 - Status deck 2026-11-14: `cruxvault/presentations/onion-status-2026-11-14/`, artifact https://claude.ai/artifact/FwKjytRr1UuhT3xhTpWDrL (private).
 
-**In work**
-- Rung-1 predict jobs on GPU slices (results/forwards_rung1/): group (1) = base, scrambled_covariates, dna_off (72 jobs, released 12:29); groups (3) 27278967-27279070 and (4) 27279077-27279130 HELD. Foreman releases (3) when (1) has no pending job, then (4).
-- Builder: predict jobs of the CPU runs (rungs 2 to 6, rung-4 arms, `rg_no_eval`, selection arms), 4 shards on CPU, results/forwards_cpu_runs/.
-- Builder: metric jobs, one timed first, results/metrics_screening/ (first screening scores).
-- Builder: five small review fixes of the scorer (checkpoint hash in the store identity, and others).
-- GPU trainings pending: `average_input` seed 1 (27273016), `two_step_native` seed 0 (27272462). Foreman: check speed and peak memory, then submit the other seeds (lines in results/arms_d10_d15/SUBMITTED.md, kit A1k2).
+**In work** (state at 2026-11-14T21:26Z)
+- First screening scores exist: rung-1 base, scrambled_covariates, dna_off (8 of 9 scored; results/metrics_screening/first_scores.md). Baselines report done (results/t307/BASELINES.md; vault f55 to f60, q32).
+- Builder: metric jobs for every other store, then the ladder table and the rung-1 arm table (results/metrics_screening/scores_ladder.md, scores_rung1_arms.md).
+- Predict jobs released at 21:25: rung 5 seeds 1 and 2, the other 5 rung-1 arms, the 7 selection arms. All ladder stores of rungs 2, 3, 4, 6 and rung 5 seed 0 are complete.
+- Builder: ship-1 deck and paper note (presentations/onion-ship1-2026-11-15; cut 03:00, ship 06:00 on 2026-11-15). The AlphaGenome 2 slide shows the audit only.
+- Builder: fragment length for single-end tracks (frag_len is empty for them in the frozen tables, so signal-space metrics are undefined for those tracks; fix = estimated fragment length from the quality-control fill, scoring side only; results/fraglen_single_end/). The AlphaGenome 2 board waits for it.
+- GPU trainings still pending: average_input seed 1 (27273016), two_step_native seed 0 (27272462). Then seeds per results/arms_d10_d15/SUBMITTED.md (kit A1k2).
+- rg_variance_e50_w seed 2 training timed out (27266404): resubmit with a longer limit.
 
 **Next steps, in order**
-1. Ship 1 (due 2026-11-15 06:00, deck cut 03:00): AlphaGenome 2 board against the baselines, baseline table, layers report, deck, vault recorder, snapshot.
-2. Release rung-1 predict groups (3) and (4); collect metric jobs; arm reports.
-3. Rung-4 check of 16 against 256 pair regions (predict at 256, nice 300), after the ladder predict jobs.
-4. Ship 2 (due 2026-11-15 18:00): arm reports, deck, vault recorder, snapshot.
+1. Ship 1 at 06:00: deck link to the PI, vault recorder (close t306, baselines and layers are recorded), snapshot.
+2. Collect the metric builder's tables; arm reports; rung-4 check of 16 against 256 pair regions (stores of rung4_base and rung4_scrambled_covariates are kept).
+3. After the fragment-length review: rescore baselines with the signal dump, rerun the AlphaGenome 2 chain.
+4. Ship 2 (due 2026-11-15 18:00; hard limit 2026-11-16 08:00): deck, vault recorder, snapshot.
 5. Verify the Globus copies on Fir; move new code snapshots to /scratch.
-6. Vault housekeeping: point findings f34, f35 at LAYERS_REAL_first_run.md; complete the manifest of results/t305.
+6. RULE: never open a question dialog to the PI while held jobs or timed releases are owed (a dialog blocked the foreman for 7 hours on 2026-11-14).
 
 **Open with the PI**
-- None.
+- Decision on the scale of the correction metric "gap closed" (options A, B, C; vault question q32).
+- Cancel stuck jobs 27281609 and 27290159.
