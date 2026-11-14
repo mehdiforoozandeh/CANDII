@@ -1,15 +1,15 @@
 ---
 id: t248
 type: task
-title: Onion: Smoke of the Amendment 3 arms on the pilot tables (Fir)
+title: "Onion: Smoke of the Amendment 3 arms on the pilot tables (Fir)"
 category: implementation
 parent: t152
 blocked_by: t246, t247, t209
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-11T23:05:10
-updated: 2026-11-11T23:05:10
+status: done
+created: "2026-11-11T23:05:10"
+updated: "2026-11-14T02:20:32"
 ---
 
 # t248 — Onion: Smoke of the Amendment 3 arms on the pilot tables (Fir)
@@ -24,7 +24,7 @@ shows every stage-3 arm and the resolution code run before they spend compute (a
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [30 of 30 smokes ok](results/t248/ARM_SMOKE_3.md)
 
 ## Evidence
 

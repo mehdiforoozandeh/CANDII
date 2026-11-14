@@ -1,15 +1,15 @@
 ---
 id: t269
 type: task
-title: Onion: Leakage audit tool
+title: "Onion: Leakage audit tool"
 category: implementation
 parent: t152
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-12T18:39:25
-updated: 2026-11-12T18:39:25
+status: done
+created: "2026-11-12T18:39:25"
+updated: "2026-11-14T02:20:34"
 ---
 
 # t269 — Onion: Leakage audit tool
@@ -24,7 +24,7 @@ PI task of 2026-11-13 (AlphaGenome 2 as a competitor): the tool that labels ever
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged b647359: leakage audit tool](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

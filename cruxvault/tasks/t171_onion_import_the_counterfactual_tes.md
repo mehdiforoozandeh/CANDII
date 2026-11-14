@@ -1,15 +1,15 @@
 ---
 id: t171
 type: task
-title: Onion: Import the counterfactual testbed as views
+title: "Onion: Import the counterfactual testbed as views"
 category: data-acquisition
 parent: t152
 blocked_by: t158
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-10T22:47:25
-updated: 2026-11-10T22:47:25
+status: done
+created: "2026-11-10T22:47:25"
+updated: "2026-11-14T02:20:21"
 ---
 
 # t171 — Onion: Import the counterfactual testbed as views
@@ -24,7 +24,7 @@ adds the testbed products of 7 EIC tracks as extra views
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged bca30bb](results/t171/import.md)
 
 ## Evidence
 

@@ -1,15 +1,15 @@
 ---
 id: t207
 type: task
-title: Onion: Frozen DNA embeddings: environment, smoke, genome-wide jobs and collect
+title: "Onion: Frozen DNA embeddings: environment, smoke, genome-wide jobs and collect"
 category: hpc-setup
 parent: t152
 blocked_by: t192
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-11T11:20:28
-updated: 2026-11-11T11:20:28
+status: done
+created: "2026-11-11T11:20:28"
+updated: "2026-11-14T02:20:28"
 ---
 
 # t207 — Onion: Frozen DNA embeddings: environment, smoke, genome-wide jobs and collect
@@ -24,7 +24,7 @@ produces the frozen DNA embeddings that stage 2 needs (chunks A5x and A5c)
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged cb9b9bb; both embedding sets verified](results/t207/DNA_EMBEDDINGS.md)
 
 ## Evidence
 

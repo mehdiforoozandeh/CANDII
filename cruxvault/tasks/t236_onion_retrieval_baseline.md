@@ -1,15 +1,15 @@
 ---
 id: t236
 type: task
-title: Onion: Retrieval baseline
+title: "Onion: Retrieval baseline"
 category: implementation
 parent: t152
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-11T23:05:08
-updated: 2026-11-11T23:05:08
+status: done
+created: "2026-11-11T23:05:08"
+updated: "2026-11-14T02:20:29"
 ---
 
 # t236 — Onion: Retrieval baseline
@@ -24,7 +24,7 @@ adds a training-free retrieval baseline row to every headline table
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 5d4f453: retrieval baseline](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

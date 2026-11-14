@@ -1,15 +1,15 @@
 ---
 id: t163
 type: task
-title: Onion: Development evals: error budget in counts
+title: "Onion: Development evals: error budget in counts"
 category: implementation
 parent: t152
 blocked_by: t153
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-10T22:47:23
-updated: 2026-11-10T22:47:23
+status: done
+created: "2026-11-10T22:47:23"
+updated: "2026-11-14T02:20:19"
 ---
 
 # t163 — Onion: Development evals: error budget in counts
@@ -24,7 +24,7 @@ gives the error budget in counts as a development eval
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 3b5f799: error budget in counts](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

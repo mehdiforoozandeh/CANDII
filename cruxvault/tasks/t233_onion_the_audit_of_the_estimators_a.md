@@ -1,15 +1,15 @@
 ---
 id: t233
 type: task
-title: Onion: The audit of the estimators against the identity
+title: "Onion: The audit of the estimators against the identity"
 category: implementation
 parent: t152
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-11T23:05:08
-updated: 2026-11-11T23:05:08
+status: done
+created: "2026-11-11T23:05:08"
+updated: "2026-11-14T02:20:29"
 ---
 
 # t233 — Onion: The audit of the estimators against the identity
@@ -24,7 +24,7 @@ shows whether the layer and error-budget estimators sum to the total and are unb
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 8e68695](results/t233/AUDIT.md)
 
 ## Evidence
 

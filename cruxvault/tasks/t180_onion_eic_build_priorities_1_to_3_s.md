@@ -1,15 +1,15 @@
 ---
 id: t180
 type: task
-title: Onion: EIC build, priorities 1 to 3 (submit)
+title: "Onion: EIC build, priorities 1 to 3 (submit)"
 category: data-acquisition
 parent: t152
 blocked_by: t170, t167, t168, t169
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-10T22:47:26
-updated: 2026-11-10T22:47:26
+status: done
+created: "2026-11-10T22:47:26"
+updated: "2026-11-14T02:20:23"
 ---
 
 # t180 — Onion: EIC build, priorities 1 to 3 (submit)
@@ -24,7 +24,7 @@ submits the build of the validation and training experiments
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [EIC build priorities 1 to 3 submitted](results/t180/SUBMITTED.md)
 
 ## Evidence
 

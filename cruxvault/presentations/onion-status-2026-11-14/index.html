@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="prezit-arc" content="paper">
+<title>Onion Run Status</title>
+
+<!--
+  Status deck of the peeling-the-onion run, 2026-11-14 (PI request: the story, what is done, what is
+  left; the 256 and the 16 regions; why two sets; why not more regions; the iterations).
+  arc      paper arc used as a status report: story -> done -> the evaluation regions -> the iterations
+           -> where we are -> what is left (prezit references/paper-arc.md)
+  anchor   none; study slug onion-status-2026-11-14
+  build    python build_deck.py  ->  index.html beside this file
+  numbers  every number comes from DATA, which build_deck.py reads from the vault files it lists;
+           the speaker notes of each slide name the files of that slide (DATA.src).
+           Typed: panel letters, and rung numbers marked data-src="literal".
+  notes    every slide carries speaker notes (press n). All prose is drafted by Claude for the PI's review.
+-->
+<script type="application/json" id="deck-sources">{"INSTRUCTIONS/peeling_the_onion/long-horizon notepad.md": "22587dddf3c584ca6fb34bac6b3fc4d05873357fff82a4ee3b56ffbe41bcf2a4", "INSTRUCTIONS/peeling_the_onion/run_state/WHERE_WE_ARE.md": "6087ee4bd77cef2b4c4235006b73edd34a4389b61aafdac1e0c284e8a37ea434", "INSTRUCTIONS/peeling_the_onion/run_state/plan.md": "ed4d5cbfe8e719aab6d2bc7789d4bc9bb381cef7d54f0bc87e90c9e7849643f2", "presentations/onion-status-2026-11-14/build_deck.py": "391ec6d7ae4828b400313b32eae2fc460990219c8ed7755518404822ca50c322", "presentations/onion-status-2026-11-14/chrom_sizes.json": "5c2409a37a1cb7b0d69735711c0ff616742ea7667dac4f0211a8dae94a9cd3e2", "presentations/onion-status-2026-11-14/deck_src.html": "82640621c99d1d5e85d9bb8aaaffd17032b9ebbd25bce0a54591d59faaad90e4", "results/arms_d10_d15/SUBMITTED.md": "30cc79fe232f624a7b42ff920b1e9782190918f82546c5dab6c3f1c3cf1b414b", "results/pair_region_check/PAIR_CHECK_PREREGISTRATION.md": "5a8d1601265cfe5c5d882aa99989092246a59094a69b5e293b582df41fb20fc8", "results/predict_store_speed/FORWARD_SPEED.md": "bce04e4708cd70f4546c5dfb4399231817793c8c68b4c9979c610b7b7654a5d5", "results/region_budget/REGION_RESEARCH.md": "363cbc72bf4ab34279a7571effebd74e6de3034f0eabcf3d64555a76678b51c9", "results/scorer_memory/NOTES.md": "61b1c01a00103f7bf89b9c96e5193afd32d0733815cdb5577ed44896f4901b33", "results/t183/DATASET_EIC_V1.md": "4ae2e52ec6f949ebc523c27a271f712e75c49794b0b83f312b91a3eea8dec464", "results/t185/SUBMITTED.md": "ab413ac44825a8276d15155c11a58d738d6923b49325b9d79980843008aa4b4c", "results/t213/SUBMITTED.md": "1e7f807103542ff5b95496a75a4a46b0edef733652ff337a22e6eb5204a72ac8", "results/t273/AG2_LEAKAGE.md": "e2c2d6e8ba5b6567f6317714ecd36e3c07d9cbf9a66a7aea32e653f7595d4b0a", "results/t276/MAX_REPRO.md": "5a2d90c3aa798ff5948f5ad3aec36bcb0678ca6b46574a5d313dba3ebf3222e4", "results/t283/REGIONS.md": "5470516731bd97b396c9cb872ae39aab78ae9201d8eb6b2ab6c9e211262af9cc", "results/t283/regions.json": "d0107317006c864ccaa54e3c9aad1d0dedbfd98b37b6c54c83754f42b521a38a", "results/t284/calls_summary.tsv": "a85a6b11997e38aee81846f8b79546a64df6b4545321bf70591e5dc810c26cf3", "results/t291/SUBMITTED.md": "3a81b89407209109daa6619602437b57deeb5ba0fbaaaf35e2c07e784900d983", "results/t305/LAYERS_REAL.md": "0e02fd40fca22572cb58800f5e70b2d0fcbfe0867066751cad9dfdc1a5e60f7f", "results/t305/layers_by_assay.tsv": "7ca7136fc8f9445520e36a30d70582690339738e0fa23746297fd0016f0ea03c", "results/t305/layers_by_stratum.tsv": "4e3408ea0515e82ca54d3948fd028d5557214600a37a3cbe3a97c2cf81495515", "results/t308/SUBMITTED.md": "1f612aa76e9f87460bf7ac204bc18b7bdb4135e1d40d8a16f34a207882e0d3ca", "results/t311/SUBMITTED.md": "c39368d5c2ac13cf12418c9469c6f8043d2d2cb6b347f0681f7ef9ca2486f6f8", "results/trainings_iteration1/SUBMITTED.md": "433b9acd1bf48e7baad6c66e4e0728edbba8e5c514c373f4046e827775e25295"}</script>
+
+<style>
+  /* Layout: one 16:9 slide at a time, a wide figure over a few conclusion bullets. */
+  :root{
+    --paper:#f7f7f4; --card:#ffffff; --ink:#1b1d1f; --ink2:#36393d; --muted:#6c6f73; --faint:#9a9c9f;
+    --hair:#e2e3df; --grid:#ececea; --accent:#2f6f8f;
+    --samp:#c8b88f; --rep:#4f9a8a; --ct:#b5543a;
+    --p256:#5c6f9e; --p16:#d9822b; --fit:#a7a9ad; --gen:#e6e6e1;
+    --ok:#3f8a5c; --run:#2f6f8f; --wait:#c99a2e; --bad:#b5543a;
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --disp:"Space Grotesk","Inter",-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+    --paper:#141618; --card:#1d2023; --ink:#eceae6; --ink2:#d2d0cb; --muted:#a3a29d; --faint:#7d7d79;
+    --hair:#33373b; --grid:#2a2d30; --accent:#6fb3d2;
+    --samp:#a8996f; --rep:#5fb3a1; --ct:#d77657;
+    --p256:#8496c8; --p16:#f0a050; --fit:#6d7075; --gen:#2c3034;
+    --ok:#62b182; --run:#6fb3d2; --wait:#d9b04a; --bad:#d77657; color-scheme:dark }}
+  :root[data-theme="dark"]{
+    --paper:#141618; --card:#1d2023; --ink:#eceae6; --ink2:#d2d0cb; --muted:#a3a29d; --faint:#7d7d79;
+    --hair:#33373b; --grid:#2a2d30; --accent:#6fb3d2;
+    --samp:#a8996f; --rep:#5fb3a1; --ct:#d77657;
+    --p256:#8496c8; --p16:#f0a050; --fit:#6d7075; --gen:#2c3034;
+    --ok:#62b182; --run:#6fb3d2; --wait:#d9b04a; --bad:#d77657; color-scheme:dark }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;overflow:hidden}
+  #progress{position:fixed;top:0;left:0;height:3px;background:var(--accent);width:0;transition:width .5s ease;z-index:50}
+  #deck{position:fixed;inset:0}
+  .slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+    padding:4.5vh 6vw 8.5vh;opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .5s ease,visibility .5s ease}
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+  .wrap{width:100%;max-width:1200px;margin:0 auto}
+
+  .kicker{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:16px}
+  .kicker .sec{display:inline-block;background:var(--accent);color:var(--paper);padding:3px 9px;border-radius:4px;margin-right:12px;letter-spacing:.14em}
+  h1{font-family:var(--disp);font-weight:600;line-height:1.1;font-size:clamp(30px,4.4vw,56px);letter-spacing:-.015em;text-wrap:balance}
+  h2{font-family:var(--disp);font-weight:600;line-height:1.16;font-size:clamp(21px,2.6vw,34px);letter-spacing:-.01em;margin-bottom:16px;text-wrap:balance;max-width:58ch}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;margin-top:20px;max-width:62ch}
+  .note{color:var(--muted);font-size:13.5px;line-height:1.5;margin-top:12px;max-width:110ch}
+  ul.pts{list-style:none;margin-top:10px;max-width:none;display:grid;gap:8px}
+  ul.pts li{position:relative;padding-left:22px;font-size:clamp(14px,1.35vw,17.5px);line-height:1.45;color:var(--ink2)}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.6em;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  ul.pts.cols{grid-template-columns:1fr 1fr;column-gap:40px}
+  [data-src],[data-derived],.v{font-variant-numeric:tabular-nums;font-weight:600}
+  .tag{display:inline-block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;border-radius:4px;padding:1px 7px;
+    border:1px solid currentColor;font-weight:600;vertical-align:1px}
+  .tag.m{color:var(--ok)} .tag.p{color:var(--wait)} .tag.n{color:var(--bad)}
+
+  .fig{display:flex;justify-content:center}
+  .fig svg{width:100%;height:auto;max-height:46vh;display:block}
+  .fig.tall svg{max-height:52vh}
+  .fig.short svg{max-height:36vh}
+  .chartbox{margin:4px 0}
+  .legend{display:flex;gap:22px;flex-wrap:wrap;margin-top:6px;justify-content:center;font-size:14.5px;color:var(--muted)}
+  .legend .item{display:flex;align-items:center;gap:8px}
+  .legend .sw{width:15px;height:15px;border-radius:3px;flex:none}
+
+  .split{display:grid;grid-template-columns:1.25fr 1fr;gap:36px;align-items:center;margin-top:6px}
+  .split>*{min-width:0}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:10px}
+  .cards.four{grid-template-columns:repeat(2,1fr)}
+  .card{border:1px solid var(--hair);border-top:3px solid var(--c,var(--accent));background:var(--card);border-radius:8px;padding:14px 16px;min-width:0}
+  .card .rl{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--c,var(--accent));font-weight:700;margin-bottom:6px}
+  .card .big{font-family:var(--disp);font-size:clamp(22px,2.4vw,32px);font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .card p{font-size:clamp(13.5px,1.25vw,16px);line-height:1.45;color:var(--ink2);margin-top:4px}
+
+  table.dtable{border-collapse:collapse;width:100%;font-size:15px}
+  table.dtable th{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:600;text-align:left;padding:0 12px 8px 0;border-bottom:1px solid var(--hair)}
+  table.dtable td{padding:9px 12px 9px 0;border-bottom:1px solid var(--hair);color:var(--ink2);line-height:1.35;vertical-align:top}
+  table.dtable td:first-child{font-weight:600;color:var(--ink)}
+  .chip{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:4px;color:var(--paper);white-space:nowrap}
+  .chip.done{background:var(--ok)} .chip.run{background:var(--run)} .chip.wait{background:var(--wait)} .chip.block{background:var(--bad)}
+
+  /* SVG text, sized for a projector */
+  .ptitle{font:600 21px var(--sans);fill:var(--ink)}
+  .axlbl{font:500 16px var(--sans);fill:var(--ink2)}
+  .lbl{font:500 15px var(--sans);fill:var(--ink2)}
+  .small{font:400 13px var(--sans);fill:var(--muted)}
+  .tick{font:400 14px var(--sans);fill:var(--faint)}
+  .val{font:600 16px var(--sans);fill:var(--ink)}
+  .big{font:600 26px var(--disp);fill:var(--ink)}
+  .panel{font:700 20px var(--sans);fill:var(--accent)}
+  .gridl{stroke:var(--grid);stroke-width:1}
+  .axis{stroke:var(--faint);stroke-width:1.2}
+  .sepl{stroke:var(--hair);stroke-width:1.5}
+
+  .foot{position:fixed;bottom:20px;left:6vw;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:6vw;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:15px;right:calc(6vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:var(--card);color:var(--muted);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px}
+  .nav button:hover,.nav button:focus-visible{border-color:var(--accent);color:var(--accent);outline:none}
+  .hint{margin-top:34px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:var(--card)}
+  aside.notes{display:none}
+  body.shownotes .slide.active aside.notes{display:block;position:fixed;left:6vw;right:6vw;bottom:58px;max-height:52vh;overflow:auto;
+    background:var(--card);border:1px solid var(--hair);border-left:4px solid var(--accent);border-radius:10px;padding:16px 22px;
+    font-size:16px;line-height:1.55;color:var(--ink2);z-index:60;box-shadow:0 10px 40px rgba(0,0,0,.25)}
+  aside.notes::before{content:"Speaker notes · n to close";display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+  aside.notes p{margin:0 0 6px}
+  aside.notes p.srcs{font-size:13px;color:var(--muted);font-family:ui-monospace,Menlo,monospace}
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint{display:none}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;height:100vh;transition:none}
+    aside.notes{display:block;margin-top:14px;border-top:1px solid var(--hair);padding-top:8px;font-size:12px}
+  }
+  @media (max-width:760px){
+    .slide{justify-content:flex-start;overflow-y:auto;padding:24px max(16px,env(safe-area-inset-right,0px)) 80px max(16px,env(safe-area-inset-left,0px))}
+    .split,.cards,.cards.four,ul.pts.cols{grid-template-columns:1fr}
+    .foot{display:none}
+    .table-scroll{overflow-x:auto}
+  }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- 1 · TITLE
+       job      the subject and the scope in one line
+       source   run_state/WHERE_WE_ARE.md (date of the state)
+       numbers  the date of the state; the two region counts
+       cut      the agenda list -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">peeling the onion · status for the PI</div>
+      <h1>Peeling the onion: where the run stands on <span class="v" data-k="today"></span></h1>
+      <p class="sub">The story in one picture, what is done, what the <span class="v" data-k="n256"></span> and the <span class="v" data-k="n16"></span> evaluation regions are and why there are two sets, the iterations and their dates, and what is left. All slide text is drafted by Claude for your review.</p>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd> &nbsp;·&nbsp; <kbd>n</kbd> shows the speaker notes and the source files of each slide</p>
+      <aside class="notes"><p>The state is the status page of the foreman agent, plus the result notes that landed after it. Every number on a slide is read by the build from a result note, the plan snapshot or the status page.</p><p class="srcs" data-s="now"></p></aside>
+    </div>
+  </section>
+
+  <!-- 2 · STORY
+       job      what the project asks, in one drawing
+       source   plan.md (goal, ladder); LAYERS_REAL.md (layer names)
+       numbers  none
+       cut      the rung architectures in detail -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Story</span>what the project asks</div>
+      <h2>We split the variance of an epigenomic signal into layers, then ask how much of each layer a small model can predict</h2>
+      <div class="chartbox fig wide" id="figStory"></div>
+      <ul class="pts cols">
+        <li><b>Variance layer</b> (the part of the signal's variance from one source): read sampling, replicates, cell type.</li>
+        <li><b>Model ladder</b>: six small models of equal parameter budget, from a pointwise model to a Perceiver.</li>
+        <li><b>Three goals</b>: imputation, covariate correction (a covariate is a recorded experiment setting, such as depth), calibrated uncertainty.</li>
+        <li><b>Comparison</b>: training-free baselines and AlphaGenome <span data-src="literal">2</span>, on the same tracks and regions.</li>
+      </ul>
+      <aside class="notes"><p>Panel a is the onion: the total variance of a track splits into nested layers, from read sampling at the core to cell type at the outside. Panel b is the ladder of models, each a step up in context. Panel c is the comparison: every model and baseline is scored on the same three goals.</p><p class="srcs" data-s="story"></p></aside>
+    </div>
+  </section>
+
+  <!-- 3 · DONE (a) dataset and evaluation set
+       job      the dataset and the evaluation set are frozen
+       source   results/t183/DATASET_EIC_V1.md, results/t185/SUBMITTED.md
+       numbers  DATA.ds, DATA.ev
+       cut      the per-assay breakdown -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Done</span>(a) the data</div>
+      <h2>The dataset and the evaluation set are frozen</h2>
+      <div class="chartbox fig wide" id="figData"></div>
+      <ul class="pts">
+        <li>Every track was built from FASTQ with the standard ENCODE pipeline of its assay. The missing tracks arrive in later dataset versions.</li>
+        <li>The evaluation set is the fixed list of what is scored: imputation items and pair tests on <span class="v" data-k="n256"></span> regions (explained in the next part).</li>
+      </ul>
+      <aside class="notes"><p>Panel a shows tracks present in the frozen dataset against tracks planned, per role. Panel b shows what the evaluation set holds. The evaluation set has a hash, and every score records it, so scores on different sets cannot be mixed by mistake.</p><p class="srcs" data-s="data"></p></aside>
+    </div>
+  </section>
+
+  <!-- 4 · DONE (b) variance layers on real data
+       job      the first model-free result: the layers per assay at 25 bp and at a broad scale
+       source   results/t305/layers_by_assay.tsv, layers_by_stratum.tsv, LAYERS_REAL.md (the rerun with the sampling layer)
+       numbers  DATA.layers
+       cut      strata, other bands, the per-layer intervals (in the note) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Done</span>(b) the variance layers on real data</div>
+      <h2>At <span class="v" data-k="bp"></span> bp, read sampling is the largest layer of every assay; at the broad scale the cell-type layer leads</h2>
+      <div class="chartbox fig wide" id="figLayers"></div>
+      <div class="legend" id="legLayers"></div>
+      <ul class="pts">
+        <li id="tLay1"></li>
+        <li><b>Caveats.</b> Values are on <span data-src="literal">log1p</span> counts at the depth of a pseudoreplicate half (a random half of one library's reads), so at full depth sampling is smaller. The cell-type layer also holds donor and lab, because those pairs are absent.</li>
+      </ul>
+      <aside class="notes"><p>A layer is the difference of two pair values. The sampling layer comes from pseudoreplicate pairs, the replicate layer from isogenic replicates minus that, and the cell-type layer from pairs of other cell types minus the replicates. Each pair value has a cluster-bootstrap interval over cells; the replicate layer is small but its interval excludes zero for most histone marks. At the broad band a negative increment is drawn as zero.</p><p>This rerun replaces the first run, which had no sampling layer; no number of the first run is used.</p><p class="srcs" data-s="layers"></p></aside>
+    </div>
+  </section>
+
+  <!-- 5 · DONE (c) AlphaGenome <span data-src="literal">2</span>
+       job      the AlphaGenome <span data-src="literal">2</span> predictions, audit and scorer check are done
+       source   results/t273/AG2_LEAKAGE.md, results/t308/SUBMITTED.md, results/t284/calls_summary.tsv, results/t276/MAX_REPRO.md
+       numbers  DATA.ag2
+       cut      the blind-track audit -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Done</span>(c) AlphaGenome <span data-src="literal">2</span></div>
+      <h2>AlphaGenome <span data-src="literal">2</span> predictions are cached, the tracks it trained on are known, and our scorer matches Max's</h2>
+      <div class="chartbox fig wide" id="figAG2"></div>
+      <ul class="pts">
+        <li><b>Predictions</b>: <span class="v" data-k="agCalls"></span> API calls, all successful, cached on the cluster for the evaluation regions.</li>
+        <li><b>Scorer check</b>: <span class="v" data-k="agGate"></span>; <span class="v" data-k="agGateC"></span> comparisons on <span class="v" data-k="agGateT"></span> targets were inside the tolerances fixed before the run.</li>
+        <li><b>Not done</b>: the board against the baselines waits for the position-average baseline scoring, which runs now.</li>
+      </ul>
+      <aside class="notes"><p>Panel a sorts the validation tracks by what AlphaGenome <span data-src="literal">2</span> saw in training: the same condition and mark, a sibling condition, or nothing. A fair comparison uses only the unseen tracks; the trained-on tracks are shown under their own label. Panel b gives the two sets in the packed predictions; they are smaller than the audit's sets because two validation DNase-seq tracks are absent from the dataset.</p><p class="srcs" data-s="ag2"></p></aside>
+    </div>
+  </section>
+
+  <!-- 6 · DONE (d) trainings and the fast scorer
+       job      the trained models wait for the fast scorer, whose forward half is built
+       source   results/t213/SUBMITTED.md, results/t291/SUBMITTED.md, FORWARD_SPEED.md, WHERE_WE_ARE.md
+       numbers  DATA.st, DATA.cost.speed
+       cut      the per-arm list -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Done</span>(d) trained models and the fast scorer</div>
+      <h2>The first models are trained but not scored; the fast scorer splits a scoring into GPU forwards and CPU metrics</h2>
+      <div class="chartbox fig wide" id="figTrained"></div>
+      <ul class="pts">
+        <li>The old scorer ran every model forward inside the metric loop on one CPU core. The new path runs the forwards once per run on a GPU slice and stores them.</li>
+        <li>Measured forward speed of the rung-<span data-src="literal">1</span> model on one GPU slice: <span class="v" data-k="speed"></span> windows per second. The metric phase is being built and tested, not merged.</li>
+      </ul>
+      <aside class="notes"><p>Panel a counts the trained runs: the eight arms of the smallest model with three seeds each, and the budget-curve runs at smaller training budgets. None is scored yet. Panel b is the new scoring path. The prediction command, the store and the job scripts are merged; the metric phase is being built and is not merged.</p><p class="srcs" data-s="trained"></p></aside>
+    </div>
+  </section>
+
+  <!-- 7 · REGIONS (a) what a region is
+       job      define a region, and show where the 256 lie on the genome
+       source   results/t283/REGIONS.md, regions.json; chrom_sizes.json (copy; sha256 equals REGIONS.md)
+       numbers  DATA.reg
+       cut      the region hashes -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Regions</span>(a) what a region is</div>
+      <h2>A region is one fixed stretch of the genome; <span class="v" data-k="n256"></span> of them were drawn at random from <span class="v" data-k="cand"></span> candidate blocks</h2>
+      <div class="chartbox fig tall" id="figGenome"></div>
+      <ul class="pts cols">
+        <li>One region = <span class="v" data-k="bins"></span> bins of <span class="v" data-k="bp"></span> bp = <span class="v" data-k="regbp"></span> bp. All regions together: <span class="v" data-k="mb"></span> Mb on <span class="v" data-k="chroms"></span> chromosomes.</li>
+        <li>The draw used only the genome mask, the chromosome sizes and seed <span class="v" data-k="seed"></span>, so every dataset version is scored on the same regions. <span class="v" data-k="nfit"></span> more fit regions are kept apart.</li>
+      </ul>
+      <aside class="notes"><p>A candidate block is an aligned block of the region size whose bins are mostly valid under the genome mask. Each tick on a chromosome is one evaluation region, drawn to scale but widened so that it is visible; grey ticks are the fit regions. Bins are the model's unit: one count per bin per track.</p><p class="srcs" data-s="region"></p></aside>
+    </div>
+  </section>
+
+  <!-- 8 · REGIONS (b) what is scored on the regions
+       job      imputation items versus pair tests, with counts; pair tests are most of the work
+       source   results/t185/SUBMITTED.md, plan.md Amendment 8 section A, Amendment 10; FORWARD_SPEED.md
+       numbers  DATA.ev, DATA.cost
+       cut      the seven headline metrics -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Regions</span>(b) what is scored on them</div>
+      <h2>Two kinds of test run on the regions: imputation items and pair tests</h2>
+      <div class="chartbox fig wide" id="figScored"></div>
+      <ul class="pts">
+        <li id="tCross"></li>
+        <li id="tShare"></li>
+      </ul>
+      <aside class="notes"><p>An imputation item hides one track of a validation cell and asks the model to predict it from the cell's other tracks. A correction pair asks the model to turn one processing view of an experiment into another view with other covariates, for example a single-end view into a paired-end view. A replicate pair compares the prediction with an independent replicate. Each pair test needs its own model forwards on every region it uses, which is why pair tests dominate the cost.</p><p class="srcs" data-s="scored"></p></aside>
+    </div>
+  </section>
+
+  <!-- 9 · REGIONS (c, d) the 256 and the 16
+       job      the full frozen set, and the nested screening subset with its exact positions
+       source   results/t311/SUBMITTED.md, results/t283/REGIONS.md; plan.md Amendment 8 B.4
+       numbers  DATA.screen, DATA.reg
+       cut      the 8- and 32-region subsets in prose (shown in the figure) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Regions</span>(c) the <span class="v" data-k="n256"></span> and (d) the <span class="v" data-k="n16"></span></div>
+      <h2>The <span class="v" data-k="n256"></span> regions are the frozen set; the screening set runs pair tests on every <span class="v" data-k="step"></span>th of them only</h2>
+      <div class="chartbox fig wide" id="figGrid"></div>
+      <ul class="pts cols">
+        <li><b>On the <span class="v" data-k="n16"></span> regions</b>: the three pair-test metrics only. These are the correction gap closed against depth-only scaling, the depth-law error, and the replicate-pair gap closed per rung.</li>
+        <li><b>On all <span class="v" data-k="n256"></span> regions</b>: the imputation items, the predicted-over-replicate variance ratio, the explained fraction per layer, the copy-leak guardrail and every signal-space metric.</li>
+      </ul>
+      <aside class="notes"><p>Panel a lists the regions in the order the evaluation set stores them, sorted by chromosome name and then start. The screening set takes the regions at every sixteenth position of that order, starting at the first. The candidate subsets of eight and thirty-two regions are nested with it: every thirty-second region is inside, and every sixteenth region is inside the subset of every eighth. Panel b shows the same sixteen regions on the genome.</p><p>The screening set is the frozen set plus one key that names the pair regions. Its regions, items and pairs are those of the frozen set.</p><p class="srcs" data-s="screen"></p></aside>
+    </div>
+  </section>
+
+  <!-- 10 · REGIONS (e) why two tiers
+       job      cost and feedback speed of the two tiers, side by side, each labelled measured or projected
+       source   FORWARD_SPEED.md; plan.md Amendments 8 and 10; scorer_memory/NOTES.md
+       numbers  DATA.cost (ratios computed at render)
+       cut      the per-rung forward speeds -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Regions</span>(e) why two tiers: cost and feedback speed</div>
+      <h2 id="tCostHead"></h2>
+      <div class="chartbox fig wide" id="figCost"></div>
+      <ul class="pts">
+        <li><b>Screening tier</b> (pair tests on <span class="v" data-k="n16"></span> regions): fast enough to compare many arms within a day. Every number from it carries the label screening, and no selection is settled from it.</li>
+        <li><b>Settled tier</b> (pair tests on <span class="v" data-k="n256"></span> regions): used for a settled selection until the check of the next slide chooses a smaller count. Measured today: one baseline scoring on all regions took <span class="v" data-k="baseWall"></span> on <span class="v" data-k="baseCpus"></span> CPUs.</li>
+      </ul>
+      <aside class="notes"><p>The window counts are exact: they follow from the evaluation set. The forward hours are projected from the measured forward speed of the smallest model. The store size and the metric hours are planning estimates; the first metric job will measure them. The baseline time is measured.</p><p class="srcs" data-s="cost"></p></aside>
+    </div>
+  </section>
+
+  <!-- 11 · REGIONS (f) why not more regions
+       job      the PI ruling on 512 and 1,024, the pre-registered check, and its status (not run)
+       source   long-horizon notepad.md (ruling 41); PAIR_CHECK_PREREGISTRATION.md; plan.md Amendment 10; REGION_RESEARCH.md
+       numbers  DATA.more, DATA.check
+       cut      the five conditions in full (in the notes) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Regions</span>(f) why not more regions</div>
+      <h2>More regions wait for evidence; a pre-registered check decides whether <span class="v" data-k="n16"></span> pair regions are enough, and it has not run yet</h2>
+      <div class="split">
+        <div class="chartbox fig" id="figNest"></div>
+        <ul class="pts">
+          <li><b>Your ruling</b>: the evaluation regions may go to <span class="v" data-k="r512"></span> on evidence; <span class="v" data-k="r1024"></span> needs you.</li>
+          <li><b>The check</b>, written before any data: score <span class="v" data-k="chkRuns"></span> rung-<span data-src="literal">4</span> runs (base and scrambled covariates, three seeds) with pair tests on all regions. A size passes if all <span data-k="nCond"></span> conditions hold, e.g. each metric stays inside the <span class="v" data-k="ci"></span>% region-bootstrap interval (<span class="v" data-k="nBoot"></span> draws) and the selection verdict does not change.</li>
+          <li><b>Result rule</b>: the smallest of <span class="v" data-k="sizes"></span> that passes; if none passes, pair tests stay on all regions.</li>
+          <li><b>Status</b>: not run. Its rung-<span data-src="literal">4</span> trainings are in the queue. Prior evidence: <span class="v" data-k="priorPct"></span>% of bins kept the model ordering in <span class="v" data-k="priorK"></span> draws; <span class="v" data-k="n256"></span> regions are <span class="v" data-k="nowPct"></span>%.</li>
+        </ul>
+      </div>
+      <aside class="notes"><p>The five conditions: each run's pair metrics on the subset lie inside the region-bootstrap interval of the all-region value; the same holds per assay for nearly every cell; the selection verdict of scrambled covariates against base is unchanged; the range of the correction term across seeds (maximum minus minimum) grows by at most the set factor; and the variance-ratio metric, which uses no pair test, is unchanged by construction.</p><p>The check rests on one rung and one pair of arms. You moved it from the smallest model to rung four because rung four's forwards are much cheaper; the version on the smallest model is a later phase. The study of the interval width at more evaluation regions, with a superset of regions, is also a later phase.</p><p class="srcs" data-s="more"></p></aside>
+    </div>
+  </section>
+
+  <!-- 12 · ITERATIONS (a) the principle
+       job      iterative deployment in one drawing
+       source   plan.md Amendment 9 (the principle) and Amendment 10 (rulings 43 to 46)
+       numbers  none
+       cut      the core-before-scale principle -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Iterations</span>(a) the principle</div>
+      <h2>Iterative deployment: few iterations, many parallel paths, and a paper that grows one section at a time</h2>
+      <div class="chartbox fig wide" id="figPrinciple"></div>
+      <ul class="pts cols">
+        <li>Each ship adds paper sections in paper order: Methods first, then Results, then Discussion. Each ship stands on its own.</li>
+        <li>A new iteration starts only for work that needs a result of the one before. Everything else starts at once, in parallel.</li>
+      </ul>
+      <aside class="notes"><p>Panel a: the columns are the ships, and the rows are the sections of the paper; a filled cell is a section that a ship adds or grows. Panel b: inside one iteration the paths start together; the arrow marks the one true dependency, the ablations that need the comparison of the rungs.</p><p class="srcs" data-s="principle"></p></aside>
+    </div>
+  </section>
+
+  <!-- 13 · ITERATIONS (b) this run's schedule
+       job      ship <span data-src="literal">1</span>, ship <span data-src="literal">2</span>, iteration <span data-src="literal">2</span> and later phases, with dates in UTC and the parallel paths
+       source   WHERE_WE_ARE.md (schedule table); plan.md Amendment 10 (paths, rulings 43 to 46)
+       numbers  DATA.sch
+       cut      the job counts per path -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Iterations</span>(b) this run's schedule (UTC)</div>
+      <h2>Iteration <span data-src="literal">1</span> runs eleven paths at once and ships twice; iteration <span data-src="literal">2</span> holds only the work that needs its results</h2>
+      <div class="chartbox fig tall" id="figGantt"></div>
+      <p class="note" id="tGantt"></p>
+      <aside class="notes"><p>Each bar runs from the start of iteration one to the ship that carries the path; some paths, such as the Methods writing, started before it. Ship <span data-src="literal">1</span> needs no model score. Ship <span data-src="literal">2</span> needs the fast scorer and queue time, not a result of ship <span data-src="literal">1</span>, so both ships belong to one iteration. Iteration <span data-src="literal">2</span> takes the ablations of the best one or two rungs, the first settled selections if the check chose a region count, the selection-arm scores, and moves CPU work to Fir.</p><p>The status page lists iteration <span data-src="literal">2</span> as the region check, the budget curve, the dataset update and CPU work on Fir. The adopted plan puts the budget curve and the check on the smallest model in later phases. This slide follows the adopted plan.</p><p class="srcs" data-s="schedule"></p></aside>
+    </div>
+  </section>
+
+  <!-- 14 · NOW
+       job      what runs right now, per path, with its state
+       source   WHERE_WE_ARE.md; trainings_iteration1/SUBMITTED.md; arms_d10_d15/SUBMITTED.md; t311/SUBMITTED.md; t305/LAYERS_REAL.md
+       numbers  DATA.st
+       cut      job ids (in the result notes) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Now</span>what runs</div>
+      <h2>Trainings, baseline scorings and the Globus copy run; the metric phase is the last piece of the fast scorer</h2>
+      <div class="table-scroll">
+      <table class="dtable" id="tabNow">
+        <thead><tr><th>path</th><th>state</th><th>what</th></tr></thead>
+        <tbody>
+          <tr><td>CPU trainings</td><td><span class="chip run">queued or running</span></td><td><span class="v" data-k="nTr"></span> runs: rung bases <span data-src="literal">2</span> to <span data-src="literal">6</span>, rung-<span data-src="literal">4</span> scrambled covariates, the seen-versus-unseen arm, seven selection arms</td></tr>
+          <tr><td>New rung-<span data-src="literal">1</span> input arms</td><td><span class="chip wait">first two released</span></td><td><span class="v" data-k="nA1"></span> GPU trainings: average as input, two-step correction; code not merged</td></tr>
+          <tr><td>Baselines</td><td><span class="chip run">running</span></td><td><span class="v" data-k="nBase"></span> scorings: four baselines on <span class="v" data-k="n16"></span> and on <span class="v" data-k="n256"></span> pair regions</td></tr>
+          <tr><td>Metric phase of the scorer</td><td><span class="chip wait">being built</span></td><td>then one timed rung-<span data-src="literal">1</span> scoring, then the release of all forwards</td></tr>
+          <tr><td>Variance layers</td><td><span class="chip done">done</span></td><td>rerun with the sampling layer landed after the status page</td></tr>
+          <tr><td>Globus copy to Fir</td><td><span class="chip run">transferring</span></td><td>two transfers, same paths; counts, sizes and hashes are checked on Fir after success</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p class="note">State of the status page at <span class="v" data-k="when"></span> UTC, plus the result notes that landed after it.</p>
+      <aside class="notes"><p>The trainings and the baselines restarted after the file-limit outage of this morning. Every failed job is listed in the result notes and is never counted as scored. The new input arms wait for a review of their code before the remaining trainings are released.</p><p class="srcs" data-s="now"></p></aside>
+    </div>
+  </section>
+
+  <!-- 15 · LEFT AND RISKS
+       job      what is left, and the risks with their checks
+       source   WHERE_WE_ARE.md; long-horizon notepad.md (file limit, /scratch rule); plan.md (fair-share, slices, fallbacks)
+       numbers  DATA.st
+       cut      the per-risk compute figures -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Left</span>what is left, and the risks</div>
+      <h2>The queue, the unmerged metric phase and the lab's file limit are the risks to ship <span data-src="literal">2</span></h2>
+      <div class="cards four">
+        <div class="card" style="--c:var(--bad)"><div class="rl">GPU queue on Nibi</div><p>Fair-share is low (GPU about <span class="v" data-k="fairGpu"></span>, CPU about <span class="v" data-k="fairCpu"></span>), and <span class="v" data-k="slLo"></span> to <span class="v" data-k="slHi"></span> GPU slices run at a time. The rung-<span data-src="literal">1</span> forwards need <span class="v" data-k="fwaGpu"></span> GPU-slice hours. Fallback: the hypothesis runs go first; ship <span data-src="literal">2</span> shows the runs that are scored.</p></div>
+        <div class="card" style="--c:var(--wait)"><div class="rl">Metric phase not merged</div><p>Forwards can run before it merges. If it is late, the foreman scores the base and scrambled-covariate runs on the old path and tells you.</p></div>
+        <div class="card" style="--c:var(--bad)"><div class="rl">File limit of the lab's project space</div><p>The limit is <span class="v" data-k="limit"></span> files, shared by the whole lab. It was full at <span class="v" data-k="fullAt"></span> UTC and jobs failed. <span class="v" data-k="rmKits"></span> unused code snapshots (<span class="v" data-k="rmFiles"></span> files) were archived; now <span class="v" data-k="filesNow"></span>. New rule: new snapshots, environments and logs go to /scratch.</p></div>
+        <div class="card" style="--c:var(--accent)"><div class="rl">Still to do</div><p>Merge the metric phase; time one scoring; release the forwards; write ship <span data-src="literal">1</span> and ship <span data-src="literal">2</span>; verify the Fir copy; run the pair-region check.</p></div>
+      </div>
+      <aside class="notes"><p>Fair-share is the group's share of the cluster against its recent use; below one means a low priority. The file limit cost about half an hour of failed jobs this morning, and one removal took the shared wheel folder with it; both are fixed and the keep-list now includes it.</p><p class="srcs" data-s="risks"></p></aside>
+    </div>
+  </section>
+
+  <!-- 16 · CLOSE
+       job      what the PI gets and when
+       source   WHERE_WE_ARE.md (schedule); plan.md Amendment 10 (ship contents)
+       numbers  DATA.sch (dates)
+       cut      the figure list per ship -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Close</span>what you get, and when (UTC)</div>
+      <h2>Two decks in the next day and a half, then iteration <span data-src="literal">2</span></h2>
+      <div class="cards">
+        <div class="card" style="--c:var(--p256)"><div class="rl">Ship <span data-src="literal">1</span></div><div class="big" data-k="dShip1"></div><p>Methods (data, evaluation) and the model-free results: variance layers, the baselines on the three goals, AlphaGenome <span data-src="literal">2</span> against the baselines. One deck.</p></div>
+        <div class="card" style="--c:var(--p16)"><div class="rl">Ship <span data-src="literal">2</span></div><div class="big" data-k="dShip2"></div><p>Model results on screening scores: the smallest model against the baselines, the wiring checks, the six rung bases, seen against unseen loci, a first Discussion. Hard limit <span class="v" data-k="dHard2"></span>.</p></div>
+        <div class="card" style="--c:var(--rep)"><div class="rl">Iteration <span data-src="literal">2</span></div><div class="big" data-k="dIt2"></div><p>Ablations of the best one or two rungs, the first settled selections if the check chose a region count, and CPU work on Fir.</p></div>
+      </div>
+      <aside class="notes"><p>Each ship is one deck and one growing section of the paper note. A ship goes out on its date with what is done; a late part gets one line saying when it arrives.</p><p class="srcs" data-s="close"></p></aside>
+    </div>
+  </section>
+
+</div>
+
+<div class="foot">peeling the onion · status</div>
+<div class="nav"><button id="prev" aria-label="previous slide">&larr;</button><button id="next" aria-label="next slide">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+
+<script>
+/* Every number below comes from DATA, which build_deck.py embeds from the vault files.
+   Sums, ratios and ranges are computed here, never typed. */
+const DATA = {"ds":{"training":[249,267],"validation":[42,45],"control":[37,40]},"ev":{"regions":256,"region_bins":16384,"fit":16,"items":63,"loao":43,"acc":20,"corr":1480,"rep":3134,"cross_cell":589,"val_rep":619,"rep_jobs":30},"reg":{"bins":16384,"bp_unit":25,"bp":409600,"cand":6724,"n":256,"chroms":23,"fit":16,"seed":0,"list":[["chr1",327680],["chr1",1425408],["chr1",2981888],["chr1",3080192],["chr1",3227648],["chr1",3571712],["chr1",3801088],["chr1",3850240],["chr1",4292608],["chr1",4833280],["chr1",5931008],["chr1",6930432],["chr1",7143424],["chr1",7733248],["chr1",8142848],["chr1",8421376],["chr1",8732672],["chr1",8765440],["chr1",8781824],["chr1",8978432],["chr1",9715712],["chr1",9748480],["chr10",212992],["chr10",573440],["chr10",753664],["chr10",802816],["chr10",1114112],["chr10",1310720],["chr10",2277376],["chr10",2310144],["chr10",3227648],["chr10",3293184],["chr10",3637248],["chr10",4636672],["chr10",4669440],["chr10",4685824],["chr10",5029888],["chr11",98304],["chr11",475136],["chr11",2621440],["chr11",2899968],["chr11",2949120],["chr11",3096576],["chr11",3899392],["chr11",4046848],["chr12",491520],["chr12",540672],["chr12",3538944],["chr12",4014080],["chr12",4112384],["chr12",4849664],["chr13",835584],["chr13",1081344],["chr13",1228800],["chr13",1310720],["chr13",1736704],["chr13",1753088],["chr13",2031616],["chr13",2064384],["chr13",2244608],["chr13",2293760],["chr13",2392064],["chr13",2424832],["chr13",3014656],["chr13",3031040],["chr13",3129344],["chr13",3473408],["chr13",3522560],["chr14",1261568],["chr14",1441792],["chr14",2146304],["chr14",2359296],["chr14",2621440],["chr14",3588096],["chr14",3768320],["chr14",3784704],["chr14",4227072],["chr15",950272],["chr15",1179648],["chr15",1605632],["chr15",1851392],["chr15",2424832],["chr15",2703360],["chr15",2867200],["chr15",3997696],["chr16",81920],["chr16",851968],["chr16",1916928],["chr16",1998848],["chr17",1343488],["chr17",1376256],["chr17",1540096],["chr17",2523136],["chr18",901120],["chr18",1245184],["chr18",1523712],["chr18",1949696],["chr18",2605056],["chr18",2654208],["chr18",2719744],["chr18",2801664],["chr18",2965504],["chr19",622592],["chr19",1523712],["chr19",1884160],["chr19",2048000],["chr2",688128],["chr2",1179648],["chr2",1343488],["chr2",1507328],["chr2",1818624],["chr2",1900544],["chr2",2195456],["chr2",2572288],["chr2",3538944],["chr2",4374528],["chr2",4898816],["chr2",5013504],["chr2",5160960],["chr2",5849088],["chr2",6225920],["chr2",6324224],["chr2",6995968],["chr2",7684096],["chr2",7766016],["chr2",8470528],["chr2",9306112],["chr20",229376],["chr20",638976],["chr20",704512],["chr20",1015808],["chr20",1327104],["chr20",2031616],["chr20",2048000],["chr20",2441216],["chr20",2555904],["chr21",606208],["chr21",655360],["chr21",950272],["chr21",1327104],["chr22",1458176],["chr22",1720320],["chr3",147456],["chr3",393216],["chr3",540672],["chr3",589824],["chr3",655360],["chr3",704512],["chr3",720896],["chr3",1327104],["chr3",1769472],["chr3",1998848],["chr3",2031616],["chr3",2064384],["chr3",2899968],["chr3",3407872],["chr3",3784704],["chr3",4456448],["chr3",5160960],["chr3",5505024],["chr3",5554176],["chr3",6406144],["chr3",6635520],["chr3",7389184],["chr3",7766016],["chr3",7847936],["chr4",294912],["chr4",557056],["chr4",688128],["chr4",1114112],["chr4",1753088],["chr4",1867776],["chr4",2457600],["chr4",2998272],["chr4",3047424],["chr4",3391488],["chr4",3719168],["chr4",4308992],["chr4",4390912],["chr4",5226496],["chr4",5636096],["chr4",6471680],["chr4",7225344],["chr5",770048],["chr5",884736],["chr5",1638400],["chr5",1687552],["chr5",2113536],["chr5",2539520],["chr5",2621440],["chr5",2686976],["chr5",4161536],["chr5",4374528],["chr5",4915200],["chr5",5373952],["chr5",6275072],["chr5",6979584],["chr5",7159808],["chr6",245760],["chr6",262144],["chr6",1114112],["chr6",1622016],["chr6",1687552],["chr6",2605056],["chr6",3031040],["chr6",3145728],["chr6",3342336],["chr6",3358720],["chr6",3653632],["chr6",3719168],["chr6",4882432],["chr6",5029888],["chr6",5128192],["chr6",5357568],["chr6",6127616],["chr7",917504],["chr7",1507328],["chr7",2064384],["chr7",2129920],["chr7",2752512],["chr7",2981888],["chr7",4014080],["chr7",4390912],["chr7",5357568],["chr7",5373952],["chr7",6111232],["chr8",606208],["chr8",1687552],["chr8",1916928],["chr8",1982464],["chr8",3751936],["chr8",4079616],["chr8",4440064],["chr8",5079040],["chr8",5668864],["chr9",278528],["chr9",409600],["chr9",458752],["chr9",475136],["chr9",704512],["chr9",3555328],["chr9",4030464],["chr9",4128768],["chr9",4243456],["chr9",5079040],["chrX",229376],["chrX",966656],["chrX",1146880],["chrX",1228800],["chrX",1835008],["chrX",1884160],["chrX",2850816],["chrX",3670016],["chrX",4882432],["chrX",5390336],["chrX",5734400]],"fit_list":[["chr1",737280],["chr1",7028736],["chr1",9289728],["chr11",2654208],["chr12",2949120],["chr14",2293760],["chr16",491520],["chr18",1572864],["chr19",2146304],["chr2",589824],["chr21",1638400],["chr4",950272],["chr5",4128768],["chr5",5816320],["chr7",2932736],["chr7",5488640]],"chrom":{"chr1":248956422,"chr2":242193529,"chr3":198295559,"chr4":190214555,"chr5":181538259,"chr6":170805979,"chr7":159345973,"chr8":145138636,"chr9":138394717,"chr10":133797422,"chr11":135086622,"chr12":133275309,"chr13":114364328,"chr14":107043718,"chr15":101991189,"chr16":90338345,"chr17":83257441,"chr18":80373285,"chr19":58617616,"chr20":64444167,"chr21":46709983,"chr22":50818468,"chrX":156040895,"chrY":57227415}},"screen":{"n":16,"positions":[0,16,32,48,64,80,96,112,128,144,160,176,192,208,224,240]},"check":{"sizes":[8,16,32],"n_boot":2000,"spread_max":1.5,"per_assay":0.95,"pct":[2.5,97.5],"runs":6,"n_cond":"five","r4_runs":6,"r4_gpu":15.4,"r4_cpu":114.0},"more":{"r512":512,"r1024":1024,"prior_pct":2.67,"prior_k":194,"prior_n":200,"now_pct":3.4},"cost":{"speed":79.6,"win16":644608,"win256":6443008,"gpu16":2.25,"gpu256":22.5,"item_win":258048,"pairs":1510,"met16":10.6,"met256":19.0,"st16":5.3,"st256":53.0,"base_cpus":16,"base_wall":"1:30:27"},"layers":[{"assay":"DNase-seq","samp":{"v":0.0483283,"lo":0.0449952,"hi":0.0516613,"pairs":33,"share":0.7602},"samp_broad":3.70801e-05,"rep":{"v":0.000594846,"lo":-0.000276235,"hi":0.00146593,"pairs":8,"share":0.009357},"rep_broad":0.00010442,"ct":{"v":0.0146506,"lo":0.0117482,"hi":0.0175529,"pairs":136,"share":0.2305},"ct_broad":0.00131753},{"assay":"H3K27ac","samp":{"v":0.0272813,"lo":0.0239194,"hi":0.0306432,"pairs":59,"share":0.7875},"samp_broad":1.92315e-05,"rep":{"v":0.000480948,"lo":0.000116186,"hi":0.00084571,"pairs":19,"share":0.01388},"rep_broad":8.89225e-05,"ct":{"v":0.00688205,"lo":0.0031198,"hi":0.0106443,"pairs":300,"share":0.1986},"ct_broad":0.000985256},{"assay":"H3K4me3","samp":{"v":0.0221632,"lo":0.0185992,"hi":0.0257272,"pairs":71,"share":0.7905},"samp_broad":1.63684e-05,"rep":{"v":0.000400269,"lo":0.000149663,"hi":0.000650876,"pairs":19,"share":0.01428},"rep_broad":3.0794e-05,"ct":{"v":0.00547389,"lo":0.00200312,"hi":0.00894467,"pairs":528,"share":0.1952},"ct_broad":0.000351308},{"assay":"H3K9ac","samp":{"v":0.0210323,"lo":0.0172719,"hi":0.0247927,"pairs":33,"share":0.8264},"samp_broad":1.57466e-05,"rep":{"v":0.000679774,"lo":4.01858e-05,"hi":0.00131936,"pairs":10,"share":0.02671},"rep_broad":6.30609e-05,"ct":{"v":0.00373768,"lo":0.00138868,"hi":0.00608667,"pairs":78,"share":0.1469},"ct_broad":0.000277845},{"assay":"H3K4me1","samp":{"v":0.0354813,"lo":0.0304269,"hi":0.0405358,"pairs":49,"share":0.8479},"samp_broad":3.00576e-05,"rep":{"v":0.000490604,"lo":4.6272e-05,"hi":0.000934936,"pairs":13,"share":0.01172},"rep_broad":8.52056e-05,"ct":{"v":0.00587246,"lo":0.0017979,"hi":0.00994703,"pairs":210,"share":0.1403},"ct_broad":0.00111391},{"assay":"H3K27me3","samp":{"v":0.047036,"lo":0.0410449,"hi":0.0530272,"pairs":43,"share":0.8783},"samp_broad":4.25792e-05,"rep":{"v":0.00119055,"lo":0.000476647,"hi":0.00190445,"pairs":11,"share":0.02223},"rep_broad":0.000397407,"ct":{"v":0.00532527,"lo":0.00220065,"hi":0.0084499,"pairs":171,"share":0.09944},"ct_broad":0.000691908},{"assay":"H3K9me3","samp":{"v":0.046885,"lo":0.0415021,"hi":0.0522679,"pairs":41,"share":0.8828},"samp_broad":4.08736e-05,"rep":{"v":0.00100571,"lo":-0.000677595,"hi":0.00268901,"pairs":12,"share":0.01894},"rep_broad":0.000189937,"ct":{"v":0.00522105,"lo":0.00165203,"hi":0.00879006,"pairs":190,"share":0.0983},"ct_broad":0.000360266},{"assay":"H3K36me3","samp":{"v":0.0409171,"lo":0.0366248,"hi":0.0452094,"pairs":59,"share":0.8939},"samp_broad":3.71608e-05,"rep":{"v":0.000368812,"lo":-3.66799e-07,"hi":0.00073799,"pairs":16,"share":0.008057},"rep_broad":0.000195128,"ct":{"v":0.00448888,"lo":0.00154821,"hi":0.00742954,"pairs":300,"share":0.09806},"ct_broad":0.00102048},{"assay":"chipseq-control","samp":{"v":0.0350311,"lo":0.0322195,"hi":0.0378427,"pairs":88,"share":0.9748},"samp_broad":2.51981e-05,"rep":{"v":0.000972832,"lo":-0.000385553,"hi":0.00233122,"pairs":16,"share":0.02707},"rep_broad":5.25176e-05,"ct":{"v":-6.73704e-05,"lo":-0.0034466,"hi":0.00331186,"pairs":703,"share":-0.001875},"ct_broad":0.000118124}],"lay_pairs":[3908,2911,778,219],"ag2":{"val":{"observed_matched":32,"observed_other_read_type":0,"sibling_condition":1,"unseen":12,"no_channel":0,"no_condition":0},"rows":[363,267,45,51],"unseen":[11,9],"trained":[31,20],"calls":8960,"ok":8960,"gate":"PASS","gate_t":12,"gate_c":48},"st":{"r1":24,"bc":42,"tr":42,"a1":6,"base":8,"files_now":372000,"files_max":500000,"limit":500000,"full_at":"09:40","kit_files":2000,"rm_kits":68,"rm_files":130067,"fair_cpu":0.14,"fair_gpu":0.23,"queue_max":1000,"sl_lo":2,"sl_hi":10,"fwa_gpu":67.5,"fwa_jobs":240,"when":"2026-11-14 10:25"},"sch":{"t0":["2026-11-14","12:00"],"ship1":["2026-11-15","06:00"],"cut1":"03:00","ship2":["2026-11-15","18:00"],"hard2":["2026-11-16","08:00"],"it2":["2026-11-17","12:00"]},"src":{"data":["results/t183/DATASET_EIC_V1.md","results/t185/SUBMITTED.md"],"scored":["results/t185/SUBMITTED.md","INSTRUCTIONS/peeling_the_onion/run_state/plan.md","results/predict_store_speed/FORWARD_SPEED.md"],"region":["results/t283/REGIONS.md","results/t283/regions.json","presentations/onion-status-2026-11-14/chrom_sizes.json"],"screen":["results/t311/SUBMITTED.md","results/t283/REGIONS.md"],"more":["INSTRUCTIONS/peeling_the_onion/long-horizon notepad.md","results/pair_region_check/PAIR_CHECK_PREREGISTRATION.md","INSTRUCTIONS/peeling_the_onion/run_state/plan.md","results/region_budget/REGION_RESEARCH.md"],"cost":["results/predict_store_speed/FORWARD_SPEED.md","INSTRUCTIONS/peeling_the_onion/run_state/plan.md","results/scorer_memory/NOTES.md"],"layers":["results/t305/layers_by_assay.tsv","results/t305/layers_by_stratum.tsv","results/t305/LAYERS_REAL.md"],"ag2":["results/t273/AG2_LEAKAGE.md","results/t308/SUBMITTED.md","results/t284/calls_summary.tsv","results/t276/MAX_REPRO.md"],"trained":["results/t213/SUBMITTED.md","results/t291/SUBMITTED.md","results/predict_store_speed/FORWARD_SPEED.md","INSTRUCTIONS/peeling_the_onion/run_state/WHERE_WE_ARE.md"],"now":["INSTRUCTIONS/peeling_the_onion/run_state/WHERE_WE_ARE.md","results/trainings_iteration1/SUBMITTED.md","results/arms_d10_d15/SUBMITTED.md","results/t311/SUBMITTED.md","results/t305/LAYERS_REAL.md"],"risks":["INSTRUCTIONS/peeling_the_onion/run_state/WHERE_WE_ARE.md","INSTRUCTIONS/peeling_the_onion/long-horizon notepad.md","INSTRUCTIONS/peeling_the_onion/run_state/plan.md"],"schedule":["INSTRUCTIONS/peeling_the_onion/run_state/WHERE_WE_ARE.md","INSTRUCTIONS/peeling_the_onion/run_state/plan.md"],"principle":["INSTRUCTIONS/peeling_the_onion/run_state/plan.md"],"close":["INSTRUCTIONS/peeling_the_onion/run_state/WHERE_WE_ARE.md","INSTRUCTIONS/peeling_the_onion/run_state/plan.md"],"story":["INSTRUCTIONS/peeling_the_onion/run_state/plan.md","results/t305/LAYERS_REAL.md"]}};
+const put=(id,h)=>{const e=document.getElementById(id); if(e) e.innerHTML=h;};
+const fmt=v=>Number(v).toLocaleString('en-US');
+const svg=(w,h,b)=>`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet" role="img">${b}</svg>`;
+let AID='ar', arN=0;
+const mkAR=()=>{AID='ar'+(++arN); return `<defs><marker id="${AID}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--faint)"/></marker></defs>`;};
+const R=DATA.reg, E=DATA.ev, Cst=DATA.cost, S=DATA.st, K=DATA.check, M=DATA.more, SCH=DATA.sch;
+const pct=(x,d=0)=>(100*x).toFixed(d)+'%';
+
+/* ---- values filled into [data-k] ---- */
+const T={
+  today:S.when.split(' ')[0], when:S.when, n256:R.n, n16:DATA.screen.n, step:R.n/DATA.screen.n,
+  bp:R.bp_unit, bins:fmt(R.bins), regbp:fmt(R.bp), cand:fmt(R.cand), chroms:R.chroms, seed:R.seed, nfit:R.fit,
+  mb:(R.n*R.bp/1e6).toFixed(1), speed:Cst.speed, baseWall:Cst.base_wall.replace(/^(\d+):(\d+):(\d+)$/,'$1 h $2 min'), baseCpus:Cst.base_cpus,
+  agCalls:fmt(DATA.ag2.calls), agGate:DATA.ag2.gate==='PASS'?'passed':'failed', agGateC:`${DATA.ag2.gate_c} of ${DATA.ag2.gate_c}`, agGateT:DATA.ag2.gate_t,
+  r512:fmt(M.r512), r1024:fmt(M.r1024), chkRuns:K.r4_runs, nCond:K.n_cond, ci:(K.pct[1]-K.pct[0]), nBoot:fmt(K.n_boot),
+  sizes:`${K.sizes.slice(0,-1).join(', ')} and ${K.sizes.slice(-1)}`, priorPct:M.prior_pct, priorK:`${M.prior_k} of ${M.prior_n}`, nowPct:M.now_pct,
+  nTr:S.tr, nA1:S.a1, nBase:S.base, fairGpu:S.fair_gpu, fairCpu:S.fair_cpu, slLo:S.sl_lo, slHi:S.sl_hi, fwaGpu:S.fwa_gpu,
+  limit:fmt(S.limit), fullAt:S.full_at, rmKits:S.rm_kits, rmFiles:fmt(S.rm_files), filesNow:`${fmt(S.files_now)} of ${fmt(S.files_max)}`,
+  dShip1:`${SCH.ship1[0].slice(5)} ${SCH.ship1[1]}`, dShip2:`${SCH.ship2[0].slice(5)} ${SCH.ship2[1]}`, dHard2:`${SCH.hard2[0]} ${SCH.hard2[1]}`, dIt2:`${SCH.it2[0].slice(5)} ${SCH.it2[1]}`,
+};
+document.querySelectorAll('[data-k]').forEach(e=>{const k=e.dataset.k; if(!(k in T)) console.error('no value for',k); e.textContent=T[k];});
+document.querySelectorAll('p.srcs').forEach(e=>{e.textContent='Sources: '+(DATA.src[e.dataset.s]||[]).join('; ');});
+
+/* ---- (2) story ---- */
+(function(){
+  const W=1160,H=330; let s=mkAR();
+  s+=`<text x="10" y="26" class="panel">(a)</text><text x="44" y="26" class="ptitle">The onion of variance</text>`;
+  const rings=[['cell type, donor, lab','ct',150],['replicates','rep',112],['read sampling','samp',76]];
+  const cx=180, cy=185;
+  rings.forEach(([lab,c,r],i)=>{ s+=`<circle cx="${cx}" cy="${cy}" r="${r*0.95}" fill="var(--${c})" fill-opacity="${0.35+i*0.2}" stroke="var(--paper)" stroke-width="2"/>`; });
+  s+=`<text x="${cx}" y="${cy+6}" text-anchor="middle" class="lbl">read sampling</text>`;
+  s+=`<text x="${cx}" y="${cy-80}" text-anchor="middle" class="lbl">replicates</text>`;
+  s+=`<text x="${cx}" y="${cy-118}" text-anchor="middle" class="lbl">cell type, donor, lab</text>`;
+  s+=`<line x1="380" y1="45" x2="380" y2="315" class="sepl"/>`;
+  s+=`<text x="400" y="26" class="panel">(b)</text><text x="434" y="26" class="ptitle">The model ladder</text>`;
+  const rungs=['pointwise','convolution','conv + attention','U-Net','axial transformer','Perceiver IO'];
+  rungs.forEach((r,i)=>{ const x=405+i*58, h=120+i*30, y=300-h; s+=`<rect x="${x}" y="${y}" width="50" height="${h}" rx="4" fill="var(--accent)" fill-opacity="${0.3+i*0.12}"/>`;
+    s+=`<text x="${x+25}" y="${y-8}" text-anchor="middle" class="val">${i+1}</text>`;
+    s+=`<text transform="translate(${x+31},${296}) rotate(-90)" class="small" style="fill:var(--ink)">${r}</text>`; });
+  s+=`<line x1="760" y1="45" x2="760" y2="315" class="sepl"/>`;
+  s+=`<text x="780" y="26" class="panel">(c)</text><text x="814" y="26" class="ptitle">One scoring, three goals</text>`;
+  const goals=['imputation','covariate correction','calibrated uncertainty'], who=['our models','baselines','AlphaGenome 2'];
+  goals.forEach((g,i)=>{ s+=`<rect x="790" y="${60+i*82}" width="350" height="66" rx="8" fill="var(--card)" stroke="var(--hair)"/>`;
+    s+=`<text x="808" y="${89+i*82}" class="axlbl" style="font-weight:600">${g}</text>`;
+    who.forEach((w,j)=>{ s+=`<circle cx="${814+j*112}" cy="${108+i*82}" r="5" fill="${['var(--accent)','var(--fit)','var(--p16)'][j]}"/><text x="${824+j*112}" y="${113+i*82}" class="small">${w}</text>`; }); });
+  put('figStory', svg(W,H,s));
+})();
+
+/* ---- (3) dataset and evaluation set ---- */
+(function(){
+  const D=DATA.ds, W=1160, H=270; let s='';
+  s+=`<text x="10" y="26" class="panel">(a)</text><text x="44" y="26" class="ptitle">Tracks in the frozen dataset, against tracks planned</text>`;
+  const rows=[['training','training'],['validation','validation'],['control','ChIP-seq controls']];
+  const mx=Math.max(...rows.map(r=>D[r[0]][1])), L=170, PW=330;
+  rows.forEach(([k,lab],i)=>{ const y=60+i*66, [have,plan]=D[k];
+    s+=`<text x="${L-12}" y="${y+24}" text-anchor="end" class="axlbl">${lab}</text>`;
+    s+=`<rect x="${L}" y="${y}" width="${PW*plan/mx}" height="36" rx="3" fill="none" stroke="var(--faint)" stroke-dasharray="4 3"/>`;
+    s+=`<rect x="${L}" y="${y}" width="${PW*have/mx}" height="36" rx="3" fill="var(--accent)"/>`;
+    s+=`<text x="${L+PW*plan/mx+10}" y="${y+24}" class="val">${have} of ${plan}</text>`; });
+  s+=`<text x="${L}" y="${H-12}" class="small">filled: present · dashed: planned</text>`;
+  s+=`<line x1="620" y1="45" x2="620" y2="${H-10}" class="sepl"/>`;
+  s+=`<text x="640" y="26" class="panel">(b)</text><text x="674" y="26" class="ptitle">What the frozen evaluation set holds</text>`;
+  const cards=[[fmt(E.regions),'regions'],[E.items,`imputation items (${E.loao} + ${E.acc})`],[fmt(E.corr),'correction pairs'],[fmt(E.rep),'replicate pairs']];
+  cards.forEach(([v,l],i)=>{ const x=650+(i%2)*255, y=52+Math.floor(i/2)*100;
+    s+=`<rect x="${x}" y="${y}" width="240" height="86" rx="8" fill="var(--card)" stroke="var(--hair)"/>`;
+    s+=`<text x="${x+16}" y="${y+40}" class="big">${v}</text><text x="${x+16}" y="${y+68}" class="small">${l}</text>`; });
+  s+=`<text x="650" y="${H-12}" class="small">items: ${E.loao} leave one assay out + ${E.acc} accessibility only</text>`;
+  put('figData', svg(W,H,s));
+})();
+
+/* ---- (4) variance layers ---- */
+(function(){
+  const L=DATA.layers, W=1160, H=392, top=60, rowh=31, LBL=150, PW=380, gap=60;
+  const NAME={'chipseq-control':'ChIP-seq control'};
+  let s='';
+  const panel=(x0,title,letter,getter)=>{
+    s+=`<text x="${x0}" y="26" class="panel">${letter}</text><text x="${x0+34}" y="26" class="ptitle">${title}</text>`;
+    [0,0.25,0.5,0.75,1].forEach(t=>{ const x=x0+LBL+PW*t; s+=`<line x1="${x}" x2="${x}" y1="${top-6}" y2="${top+L.length*rowh}" class="gridl"/><text x="${x}" y="${top+L.length*rowh+18}" text-anchor="middle" class="tick">${pct(t)}</text>`; });
+    L.forEach((a,i)=>{ const y=top+i*rowh; const v=getter(a).map(x=>Math.max(0,x)); const tot=v.reduce((p,q)=>p+q,0);
+      s+=`<text x="${x0+LBL-10}" y="${y+18}" text-anchor="end" class="lbl">${NAME[a.assay]||a.assay}</text>`;
+      let x=x0+LBL; ['samp','rep','ct'].forEach((k,j)=>{ const w=PW*v[j]/tot; s+=`<rect x="${x}" y="${y+3}" width="${w}" height="${rowh-8}" fill="var(--${k})"/>`; x+=w; });
+      const ctS=v[2]/tot; s+=`<text x="${x0+LBL+PW+8}" y="${y+18}" class="small">${pct(ctS)}</text>`; });
+  };
+  panel(10,`At ${DATA.reg.bp_unit} bp, all regions`,'(a)',a=>[a.samp.v,a.rep.v,a.ct.v]);
+  s+=`<line x1="${10+LBL+PW+gap-10}" y1="45" x2="${10+LBL+PW+gap-10}" y2="${H-10}" class="sepl"/>`;
+  panel(10+LBL+PW+gap,'At the broad scale band','(b)',a=>[a.samp_broad,a.rep_broad,a.ct_broad]);
+  s+=`<text x="10" y="${H-8}" class="small">share of the three layers; the number at the right of each bar is the cell-type share</text>`;
+  put('figLayers', svg(W,H,s));
+  put('legLayers', [['samp','read sampling (pseudoreplicate halves)'],['rep','replicates above sampling'],['ct','cell type, mixed with donor and lab']].map(([k,l])=>`<span class="item"><span class="sw" style="background:var(--${k})"></span>${l}</span>`).join(''));
+  const histone=L.filter(a=>a.assay!=='chipseq-control');
+  const sh=histone.map(a=>a.samp.share), cb=histone.map(a=>{const v=[a.samp_broad,a.rep_broad,a.ct_broad].map(x=>Math.max(0,x)); return v[2]/(v[0]+v[1]+v[2]);});
+  put('tLay1', `<b>At ${DATA.reg.bp_unit} bp</b> sampling is <span class="v">${pct(Math.min(...sh))}</span> to <span class="v">${pct(Math.max(...sh))}</span> of the three layers in these assays; the replicate layer is at most <span class="v">${pct(Math.max(...histone.map(a=>a.rep.share)))}</span>. <b>At the broad band</b> the cell-type layer is <span class="v">${pct(Math.min(...cb))}</span> to <span class="v">${pct(Math.max(...cb))}</span>. Layers from <span class="v">${fmt(DATA.lay_pairs[0])}</span> pairs.`);
+})();
+
+/* ---- (5) AlphaGenome 2 ---- */
+(function(){
+  const A=DATA.ag2, W=1160, H=230; let s='';
+  s+=`<text x="10" y="26" class="panel">(a)</text><text x="44" y="26" class="ptitle">The ${A.rows[2]} validation tracks, by what AlphaGenome 2 trained on</text>`;
+  const parts=[['observed_matched','trained on the same condition and mark','var(--ct)'],['sibling_condition','sibling condition (set aside)','var(--fit)'],['unseen','unseen','var(--ok)']];
+  const tot=A.rows[2], PW=560; let x=20;
+  parts.forEach(([k,l,c],i)=>{ const n=A.val[k]; if(!n) return; const w=PW*n/tot; s+=`<rect x="${x}" y="60" width="${w}" height="50" fill="${c}"/>`;
+    s+=`<text x="${x+w/2}" y="92" text-anchor="middle" class="val" style="fill:var(--paper)">${n}</text>`;
+    s+=`<text x="${x+w/2}" y="${i===1?160:134}" text-anchor="middle" class="small">${l}</text>`; x+=w; });
+  s+=`<line x1="620" y1="45" x2="620" y2="${H-10}" class="sepl"/>`;
+  s+=`<text x="640" y="26" class="panel">(b)</text><text x="674" y="26" class="ptitle">The two sets in the packed predictions</text>`;
+  [[A.unseen,'unseen by both models: the fair set','var(--ok)'],[A.trained,'trained on by AlphaGenome 2: labelled','var(--ct)']].forEach(([v,l,c],i)=>{ const y=54+i*80;
+    s+=`<rect x="650" y="${y}" width="490" height="66" rx="8" fill="var(--card)" stroke="${c}" stroke-width="2"/>`;
+    s+=`<text x="668" y="${y+43}" class="big">${v[0]}</text><text x="730" y="${y+30}" class="lbl">tracks in ${v[1]} cells</text><text x="730" y="${y+52}" class="small">${l}</text>`; });
+  put('figAG2', svg(W,H,s));
+})();
+
+/* ---- (6) trained runs and the scorer path ---- */
+(function(){
+  const W=1160, H=270; let s=mkAR();
+  s+=`<text x="10" y="26" class="panel">(a)</text><text x="44" y="26" class="ptitle">Trained runs, waiting for scores</text>`;
+  const rows=[['smallest model, eight arms × three seeds',S.r1],['budget curve on the smallest model',S.bc]];
+  const mx=Math.max(S.r1,S.bc);
+  rows.forEach(([l,n],i)=>{ const y=60+i*90; s+=`<text x="20" y="${y}" class="lbl">${l}</text>`;
+    s+=`<rect x="20" y="${y+10}" width="${300*n/mx}" height="38" rx="3" fill="var(--accent)"/><text x="${30+300*n/mx}" y="${y+36}" class="val">${n} trained · 0 scored</text>`; });
+  s+=`<line x1="560" y1="45" x2="560" y2="${H-10}" class="sepl"/>`;
+  s+=`<text x="580" y="26" class="panel">(b)</text><text x="614" y="26" class="ptitle">The new scoring path</text>`;
+  const box=(x,y,w,t1,t2,st)=>{ const c=st==='merged'?'var(--ok)':'var(--wait)';
+    s+=`<rect x="${x}" y="${y}" width="${w}" height="92" rx="8" fill="var(--card)" stroke="${c}" stroke-width="2"/>`;
+    s+=`<text x="${x+12}" y="${y+28}" class="lbl" style="font-weight:600">${t1}</text><text x="${x+12}" y="${y+52}" class="small">${t2}</text>`;
+    s+=`<text x="${x+12}" y="${y+78}" class="small" style="fill:${c};font-weight:700">${st}</text>`; };
+  box(590,70,170,'forwards','GPU slice, once per run','merged');
+  box(800,70,150,'prediction store','on /scratch','merged');
+  box(990,70,160,'metric phase','CPU workers','being built');
+  s+=`<line x1="762" y1="116" x2="796" y2="116" stroke="var(--faint)" stroke-width="2" marker-end="url(#${AID})"/>`;
+  s+=`<line x1="952" y1="116" x2="986" y2="116" stroke="var(--faint)" stroke-width="2" marker-end="url(#${AID})"/>`;
+  s+=`<text x="590" y="200" class="small">The metric code is unchanged, so a score equals the old path's score for the same predictions.</text>`;
+  put('figTrained', svg(W,H,s));
+})();
+
+/* ---- the genome drawing (slides 7 and 9) ---- */
+function genome(highlight){
+  const C=R.chrom, order=Object.keys(C).filter(c=>c!=='chrY'), W=1160, rowh=26, cols=2, per=Math.ceil(order.length/cols);
+  const H=per*rowh+30, LBL=52, PW=(W-2*LBL-40)/cols, mx=Math.max(...order.map(c=>C[c]));
+  const hl=new Set((highlight||[]).map(i=>R.list[i].join(':')));
+  let s='';
+  order.forEach((c,i)=>{ const col=Math.floor(i/per), row=i%per, x0=col*(PW+LBL+40)+LBL, y=16+row*rowh;
+    s+=`<text x="${x0-8}" y="${y+12}" text-anchor="end" class="tick">${c.replace('chr','')}</text>`;
+    s+=`<rect x="${x0}" y="${y+3}" width="${PW*C[c]/mx}" height="11" rx="5" fill="var(--gen)"/>`;
+    R.fit_list.filter(r=>r[0]===c).forEach(r=>{ const x=x0+PW*r[1]*R.bp_unit/mx; s+=`<rect x="${x}" y="${y+1}" width="3" height="15" fill="var(--fit)"/>`; });
+    R.list.filter(r=>r[0]===c).forEach(r=>{ const x=x0+PW*r[1]*R.bp_unit/mx, on=hl.has(r.join(':'));
+      s+= on ? `<rect x="${x-2}" y="${y-3}" width="7" height="23" rx="1" fill="var(--p16)"/>` : `<rect x="${x}" y="${y+1}" width="3" height="15" fill="var(--p256)"/>`; }); });
+  return [W,H,s];
+}
+(function(){
+  const [W,H,s]=genome([]);
+  let leg=`<text x="${W-560}" y="${H-6}" class="small"><tspan fill="var(--p256)">■</tspan> evaluation region  <tspan fill="var(--fit)">■</tspan> fit region  · chromosome bars to scale</text>`;
+  put('figGenome', svg(W,H,s+leg));
+})();
+
+/* ---- (8) what is scored ---- */
+(function(){
+  const W=1160, H=300; let s=mkAR();
+  s+=`<text x="10" y="26" class="panel">(a)</text><text x="44" y="26" class="ptitle">Imputation item</text>`;
+  const tracks=['track A','track B','track C','hidden track'];
+  tracks.forEach((t,i)=>{ const y=56+i*40, hid=i===3;
+    s+=`<text x="20" y="${y+20}" class="small">${t}</text>`;
+    s+=`<rect x="120" y="${y+4}" width="250" height="24" rx="3" fill="${hid?'none':'var(--accent)'}" fill-opacity=".35" stroke="${hid?'var(--ct)':'none'}" stroke-dasharray="5 4"/>`;
+    if(!hid) for(let k=0;k<12;k++){ const hh=4+((k*7+i*5)%17); s+=`<rect x="${126+k*20}" y="${y+28-hh}" width="12" height="${hh}" fill="var(--accent)"/>`; } });
+  s+=`<text x="120" y="${H-30}" class="lbl"><tspan class="val">${E.items}</tspan> items, scored on all ${R.n} regions</text>`;
+  s+=`<line x1="400" y1="45" x2="400" y2="${H-10}" class="sepl"/>`;
+  s+=`<text x="420" y="26" class="panel">(b)</text><text x="454" y="26" class="ptitle">Pair tests: from a source to a target</text>`;
+  const pair=(y,src,tgt,lab,n,sub)=>{ s+=`<rect x="430" y="${y}" width="200" height="44" rx="6" fill="var(--card)" stroke="var(--hair)"/><text x="442" y="${y+27}" class="lbl">${src}</text>`;
+    s+=`<line x1="634" y1="${y+22}" x2="700" y2="${y+22}" stroke="var(--faint)" stroke-width="2" marker-end="url(#${AID})"/><text x="638" y="${y+14}" class="small">model</text>`;
+    s+=`<rect x="704" y="${y}" width="210" height="44" rx="6" fill="var(--card)" stroke="var(--hair)"/><text x="716" y="${y+27}" class="lbl">${tgt}</text>`;
+    s+=`<text x="932" y="${y+18}" class="lbl" style="font-weight:600">${lab}</text><text x="932" y="${y+40}" class="small"><tspan class="val">${n}</tspan> ${sub}</text>`; };
+  pair(62,'view, e.g. single-end','same experiment, paired-end','correction pair',fmt(E.corr),'listed');
+  pair(150,'replicate one','replicate two','replicate pair',fmt(E.rep),'listed');
+  s+=`<text x="430" y="${H-30}" class="lbl">each pair test needs its own forwards on every region it uses</text>`;
+  put('figScored', svg(W,H,s));
+  put('tCross', `<b>Cross-cell replicate pairs get no pair test</b>: <span class="v">${E.cross_cell}</span> of the <span class="v">${E.val_rep}</span> validation replicate pairs join two cells, and the model has no input that names a cell. The variance layers measure that layer from data; <span class="v">${E.rep_jobs}</span> replicate pair tests remain.`);
+  const pairW=Cst.win256-Cst.item_win;
+  put('tShare', `<b>Pair tests are most of the work</b>: with pair tests on all regions, <span class="v">${fmt(pairW)}</span> of the <span class="v">${fmt(Cst.win256)}</span> model forwards of one scoring (<span class="v">${pct(pairW/Cst.win256)}</span>) are pair-test forwards, for <span class="v">${fmt(Cst.pairs)}</span> pair tests.`);
+})();
+
+/* ---- (9) the 256 and the 16 ---- */
+(function(){
+  const P=new Set(DATA.screen.positions), n=R.n, W=1160; let s='';
+  s+=`<text x="10" y="26" class="panel">(a)</text><text x="44" y="26" class="ptitle">Stored order of the ${n}</text>`;
+  const cols=16, cell=21, x0=30, y0=50;
+  for(let i=0;i<n;i++){ const c=i%cols, r=Math.floor(i/cols), x=x0+c*cell, y=y0+r*cell, on=P.has(i);
+    s+=`<rect x="${x}" y="${y}" width="${cell-3}" height="${cell-3}" rx="2" fill="${on?'var(--p16)':'var(--p256)'}" fill-opacity="${on?1:0.35}"/>`;
+    if(i%(n/K.sizes[0])===0) s+=`<circle cx="${x+(cell-3)/2}" cy="${y+(cell-3)/2}" r="3.5" fill="var(--paper)"/>`;
+    if(i%(n/K.sizes[2])===0 && !on) s+=`<circle cx="${x+(cell-3)/2}" cy="${y+(cell-3)/2}" r="2.5" fill="var(--ink)"/>`; }
+  for(let r=0;r<cols;r++) s+=`<text x="${x0-6}" y="${y0+r*cell+14}" text-anchor="end" class="tick">${r*cols}</text>`;
+  const gy=y0+cols*cell+20;
+  s+=`<text x="${x0}" y="${gy}" class="small"><tspan fill="var(--p16)">■</tspan> the ${DATA.screen.n} pair regions · large dot: also in the subset of ${K.sizes[0]}</text>`;
+  s+=`<text x="${x0}" y="${gy+18}" class="small">small dot: added by the subset of ${K.sizes[2]}</text>`;
+  const [GW,GH,gs]=genome(DATA.screen.positions);
+  const sc=0.6, gx=470;
+  s+=`<line x1="${gx-20}" y1="45" x2="${gx-20}" y2="${gy}" class="sepl"/>`;
+  s+=`<text x="${gx}" y="26" class="panel">(b)</text><text x="${gx+34}" y="26" class="ptitle">The ${DATA.screen.n} pair regions on the genome</text>`;
+  s+=`<g transform="translate(${gx},${y0}) scale(${sc})">${gs}</g>`;
+  put('figGrid', svg(W,gy+30,s));
+})();
+
+/* ---- (10) cost of the two tiers ---- */
+(function(){
+  const rows=[
+    ['model forwards per scoring', Cst.win256, Cst.win16, v=>fmt(v), 'counted','m'],
+    ['rung-1 forward time (GPU-slice hours)', Cst.gpu256, Cst.gpu16, v=>v, 'projected from measured speed','p'],
+    ['prediction store per run (GB)', Cst.st256, Cst.st16, v=>v, 'planning estimate','n'],
+    ['metric CPU-hours per scoring', Cst.met256, Cst.met16, v=>v, 'planning estimate','n']];
+  const W=1160, rowh=66, top=50, LBL=330, PW=560, H=top+rows.length*rowh+10; let s='';
+  s+=`<text x="${LBL}" y="28" class="lbl"><tspan fill="var(--p256)">■</tspan> pair tests on ${R.n} regions   <tspan fill="var(--p16)">■</tspan> pair tests on ${DATA.screen.n} regions   (bar length relative within a row)</text>`;
+  rows.forEach(([l,a,b,f,tag,tc],i)=>{ const y=top+i*rowh;
+    s+=`<text x="${LBL-14}" y="${y+20}" text-anchor="end" class="lbl" style="font-weight:600">${l}</text>`;
+    s+=`<text x="${LBL-14}" y="${y+40}" text-anchor="end" class="small" style="fill:${tc==='m'?'var(--ok)':tc==='p'?'var(--wait)':'var(--bad)'}">${tag}</text>`;
+    s+=`<rect x="${LBL}" y="${y+4}" width="${PW}" height="20" fill="var(--p256)"/><text x="${LBL+PW+10}" y="${y+20}" class="val">${f(a)}</text>`;
+    s+=`<rect x="${LBL}" y="${y+28}" width="${PW*b/a}" height="20" fill="var(--p16)"/><text x="${LBL+PW*b/a+10}" y="${y+44}" class="val">${f(b)}  <tspan class="small">(${(a/b).toFixed(1)}× less)</tspan></text>`; });
+  put('figCost', svg(W,H,s));
+  put('tCostHead', `Pair tests are most of a scoring; on ${DATA.screen.n} regions a rung-<span data-src="literal">1</span> scoring needs <span class="v">${(Cst.gpu256/Cst.gpu16).toFixed(0)}</span> times fewer GPU hours`);
+})();
+
+/* ---- (11) nested region counts ---- */
+(function(){
+  const W=560, H=400; let s='';
+  const levels=[[M.r1024,'needs your yes','var(--fit)',true],[M.r512,'on evidence','var(--fit)',true],[R.n,'frozen evaluation set','var(--p256)',false],
+    [K.sizes[2],'pair subset, tested','var(--p16)',false],[K.sizes[1],'screening set, tested','var(--p16)',false],[K.sizes[0],'pair subset, tested','var(--p16)',false]];
+  levels.forEach(([n,l,c,dash],i)=>{ const pad=i*30, x=10+pad, y=10+pad*1.15, w=W-20-2*pad, h=H-20-pad*2.3;
+    s+=`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10" fill="${c}" fill-opacity="${dash?0.06:0.12+i*0.05}" stroke="${c}" stroke-width="2" ${dash?'stroke-dasharray="6 5"':''}/>`;
+    s+=`<text x="${x+12}" y="${y+22}" class="val">${fmt(n)}</text><text x="${x+70}" y="${y+22}" class="small">${l}</text>`; });
+  s+=`<text x="${W/2}" y="${H-30}" text-anchor="middle" class="small">each set lies inside the one around it</text>`;
+  put('figNest', svg(W,H,s));
+})();
+
+/* ---- (12) the principle ---- */
+(function(){
+  const W=1160, H=300; let s=mkAR();
+  s+=`<text x="10" y="26" class="panel">(a)</text><text x="44" y="26" class="ptitle">The paper grows by ship</text>`;
+  const secs=['Background','Methods: data','Methods: evaluation','Methods: model','Results','Discussion','Conclusions'];
+  const ships=['ship 1','ship 2','iteration 2','later'];
+  const fill=[[1,1,1,1],[1,1,1,1],[1,1,1,1],[0,1,1,1],[1,2,3,4],[0,1,2,3],[0,0,1,2]];
+  const x0=190, cw=90, rh=30, y0=56;
+  ships.forEach((sh,j)=>s+=`<text x="${x0+j*cw+cw/2}" y="${y0-10}" text-anchor="middle" class="small">${sh}</text>`);
+  secs.forEach((sec,i)=>{ s+=`<text x="${x0-10}" y="${y0+i*rh+20}" text-anchor="end" class="lbl">${sec}</text>`;
+    ships.forEach((_,j)=>{ const f=fill[i][j], new_=f && (j===0||fill[i][j-1]!==f);
+      s+=`<rect x="${x0+j*cw+3}" y="${y0+i*rh+3}" width="${cw-6}" height="${rh-6}" rx="3" fill="${f?'var(--accent)':'var(--gen)'}" fill-opacity="${f?(new_?0.85:0.3):1}"/>`; }); });
+  s+=`<text x="${x0}" y="${y0+secs.length*rh+22}" class="small">strong: added or grown in that ship · faint: carried over</text>`;
+  s+=`<line x1="580" y1="45" x2="580" y2="${H-10}" class="sepl"/>`;
+  s+=`<text x="600" y="26" class="panel">(b)</text><text x="634" y="26" class="ptitle">One iteration = many paths in parallel</text>`;
+  const lanes=['scorer build','variance layers','baselines','AlphaGenome 2','model scores','rung bases','pair-region check'];
+  lanes.forEach((l,i)=>{ const y=58+i*28, end=i<4?820:930; s+=`<text x="740" y="${y+16}" text-anchor="end" class="small">${l}</text>`;
+    s+=`<rect x="750" y="${y+4}" width="${end-750}" height="16" rx="3" fill="var(--accent)" fill-opacity=".55"/>`; });
+  s+=`<line x1="820" y1="50" x2="820" y2="${58+lanes.length*28}" stroke="var(--p256)" stroke-width="2" stroke-dasharray="4 3"/><text x="820" y="${74+lanes.length*28}" text-anchor="middle" class="small">ship 1</text>`;
+  s+=`<line x1="930" y1="50" x2="930" y2="${58+lanes.length*28}" stroke="var(--p16)" stroke-width="2" stroke-dasharray="4 3"/><text x="930" y="${74+lanes.length*28}" text-anchor="middle" class="small">ship 2</text>`;
+  s+=`<rect x="985" y="${58+5*28+4}" width="150" height="16" rx="3" fill="var(--rep)" fill-opacity=".8"/><text x="1060" y="${58+5*28-4}" text-anchor="middle" class="small">iteration 2: ablations</text>`;
+  s+=`<path d="M932,${58+5*28+12} L980,${58+5*28+12}" stroke="var(--ink)" stroke-width="2" marker-end="url(#${AID})"/>`;
+  s+=`<text x="985" y="${58+5*28+40}" class="small">needs the rung comparison</text>`;
+  put('figPrinciple', svg(W,H,s));
+})();
+
+/* ---- (13) the schedule ---- */
+(function(){
+  const t=(d,h)=>Date.parse(`${d}T${h}:00Z`), T0=t(...SCH.t0), s1=t(...SCH.ship1), s2=t(...SCH.ship2), h2=t(...SCH.hard2), i2=t(...SCH.it2);
+  const end=i2+12*3600e3, W=1160, LBL=300, PW=W-LBL-170, xx=v=>LBL+PW*(v-T0)/(end-T0);
+  const lanes=[['methods: data and evaluation',s1,'p256'],['variance layers',s1,'p256'],['baselines and room for a model',s1,'p256'],['AlphaGenome 2 against the baselines',s1,'p256'],
+    ['fast scorer build (four builders)',s2,'p16'],['scores of the smallest model, eight arms',s2,'p16'],['two new input arms on the smallest model',s2,'p16'],
+    ['rung bases two to six (does context help)',s2,'p16'],['seen against unseen loci',s2,'p16'],['pair-region check on rung four',s2,'p16'],['region selection (lowest priority)',i2,'fit']];
+  const top=58, rh=24, H=top+(lanes.length+2)*rh+40; let s=mkAR();
+  for(let d=new Date(T0); d.getTime()<=end; d=new Date(d.getTime()+12*3600e3)){ const x=xx(d.getTime());
+    s+=`<line x1="${x}" x2="${x}" y1="${top-8}" y2="${H-38}" class="gridl"/><text x="${x}" y="${H-20}" text-anchor="middle" class="tick">${d.toISOString().slice(5,10)} ${d.toISOString().slice(11,16)}</text>`; }
+  lanes.forEach(([l,e,c],i)=>{ const y=top+i*rh; s+=`<text x="${LBL-10}" y="${y+15}" text-anchor="end" class="small" style="fill:var(--ink2)">${l}</text>`;
+    s+=`<rect x="${xx(T0)}" y="${y+3}" width="${xx(e)-xx(T0)}" height="15" rx="3" fill="var(--${c})" fill-opacity=".8"/>`; });
+  const yi=top+lanes.length*rh+6;
+  s+=`<text x="${LBL-10}" y="${yi+15}" text-anchor="end" class="small" style="fill:var(--ink);font-weight:600">iteration 2: ablations, settled selections</text>`;
+  s+=`<rect x="${xx(s2)}" y="${yi+3}" width="${xx(i2)-xx(s2)}" height="15" rx="3" fill="var(--rep)"/>`;
+  s+=`<rect x="${xx(i2)+16}" y="${top}" width="${W-xx(i2)-20}" height="${lanes.length*rh}" rx="6" fill="var(--gen)"/>`;
+  ['later phases','(no dates):','budget curve,','check on the','smallest model,','dataset updates,','other-lab layer,','full ladder,','blind pass'].forEach((w,k)=>s+=`<text x="${xx(i2)+26}" y="${top+20+k*21}" class="small">${w}</text>`);
+  [[s1,'ship 1','p256'],[s2,'ship 2','p16'],[h2,'ship 2 hard limit','bad'],[i2,'iteration 2','rep']].forEach(([v,l,c],k)=>{ const x=xx(v);
+    s+=`<line x1="${x}" x2="${x}" y1="${top-16}" y2="${H-38}" stroke="var(--${c})" stroke-width="2.5" ${k===2?'stroke-dasharray="5 4"':''}/>`;
+    s+=`<text x="${x+(k===2?6:-6)}" y="${top-22-(k===2?0:0)}" text-anchor="${k===2?'start':'end'}" class="lbl" style="fill:var(--${c});font-weight:700">${l}</text>`; });
+  put('figGantt', svg(W,H,s));
+  put('tGantt', `Start of iteration 1 <span class="v">${SCH.t0.join(' ')}</span>. Ship 1 <span class="v">${SCH.ship1.join(' ')}</span> (deck cut <span class="v">${SCH.cut1}</span>). Ship 2 expected <span class="v">${SCH.ship2.join(' ')}</span>, hard limit <span class="v">${SCH.hard2.join(' ')}</span>. Iteration 2 <span class="v">${SCH.it2.join(' ')}</span>. All UTC.`);
+})();
+
+/* navigation and speaker notes, as in the prezit template */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length; let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){
+  cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+}
+const next=()=>show(cur+1), prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;
+document.getElementById('prev').onclick=prev;
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='Home'){show(0);}
+  else if(e.key==='End'){show(tot-1);}
+  else if(e.key==='n'||e.key==='N'){e.preventDefault();document.body.classList.toggle('shownotes');}
+  else if(e.key==='Escape'){document.body.classList.remove('shownotes');}
+});
+show(0);
+</script>
+</body>
+</html>

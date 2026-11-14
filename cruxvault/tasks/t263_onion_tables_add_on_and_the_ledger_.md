@@ -1,15 +1,15 @@
 ---
 id: t263
 type: task
-title: Onion: Tables add-on and the ledger exception
+title: "Onion: Tables add-on and the ledger exception"
 category: implementation
 parent: t152
 blocked_by: t258, t257
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-12T03:06:51
-updated: 2026-11-12T03:06:51
+status: done
+created: "2026-11-12T03:06:51"
+updated: "2026-11-14T02:20:34"
 ---
 
 # t263 — Onion: Tables add-on and the ledger exception
@@ -24,7 +24,7 @@ writes second-experiment rows into add-on tables and makes the dataset check pro
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 7ef4625: add-on tables and ledger exception](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

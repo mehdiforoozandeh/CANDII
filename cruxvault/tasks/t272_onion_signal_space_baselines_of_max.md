@@ -1,15 +1,15 @@
 ---
 id: t272
 type: task
-title: Onion: Signal-space baselines of Max: training mean and closest-5 oracle
+title: "Onion: Signal-space baselines of Max: training mean and closest-5 oracle"
 category: implementation
 parent: t152
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-12T18:39:26
-updated: 2026-11-12T18:39:26
+status: done
+created: "2026-11-12T18:39:26"
+updated: "2026-11-14T02:20:35"
 ---
 
 # t272 — Onion: Signal-space baselines of Max: training mean and closest-5 oracle
@@ -24,7 +24,7 @@ PI task of 2026-11-13 (AlphaGenome 2 as a competitor): Max's two baselines as me
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 707dc6f, d679879: signal-space baselines](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

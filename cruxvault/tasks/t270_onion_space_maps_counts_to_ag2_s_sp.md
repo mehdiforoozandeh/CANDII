@@ -1,15 +1,15 @@
 ---
 id: t270
 type: task
-title: Onion: Space maps: counts to AG2's space, recalibration, peak probability
+title: "Onion: Space maps: counts to AG2's space, recalibration, peak probability"
 category: implementation
 parent: t152
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-12T18:39:25
-updated: 2026-11-12T18:39:25
+status: done
+created: "2026-11-12T18:39:25"
+updated: "2026-11-14T02:20:34"
 ---
 
 # t270 — Onion: Space maps: counts to AG2's space, recalibration, peak probability
@@ -24,7 +24,7 @@ PI task of 2026-11-13 (AlphaGenome 2 as a competitor): maps our counts into AG2'
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged b43b382, 0d664dd: space maps](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

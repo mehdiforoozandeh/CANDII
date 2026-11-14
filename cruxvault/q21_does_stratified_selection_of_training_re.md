@@ -35,5 +35,7 @@ If stratified selection draws nearly the same regions as uniform selection, the 
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-_(no children yet)_
+**0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+
+- `f45` finding (strong) [[f45_class_based_strata_barely_change_what_is|Class-based strata barely change what is sampled at the model's scale; a…]]
 <!-- crux:ledger:end -->

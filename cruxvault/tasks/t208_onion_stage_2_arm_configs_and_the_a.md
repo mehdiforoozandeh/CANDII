@@ -1,15 +1,15 @@
 ---
 id: t208
 type: task
-title: Onion: Stage-2 arm configs and the all-arms integration test
+title: "Onion: Stage-2 arm configs and the all-arms integration test"
 category: implementation
 parent: t152
 blocked_by: t188, t189, t190, t191, t192, t205, t193, t200
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-11T11:20:28
-updated: 2026-11-11T11:20:28
+status: done
+created: "2026-11-11T11:20:28"
+updated: "2026-11-14T02:20:28"
 ---
 
 # t208 — Onion: Stage-2 arm configs and the all-arms integration test
@@ -24,7 +24,7 @@ unblocks the arm smoke and stage 2
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged ad574d7: stage-2 arm configs](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

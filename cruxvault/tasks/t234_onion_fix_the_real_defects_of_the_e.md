@@ -1,15 +1,15 @@
 ---
 id: t234
 type: task
-title: Onion: Fix the real defects of the estimator audit
+title: "Onion: Fix the real defects of the estimator audit"
 category: implementation
 parent: t152
 blocked_by: t233
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-11T23:05:08
-updated: 2026-11-11T23:05:08
+status: done
+created: "2026-11-11T23:05:08"
+updated: "2026-11-14T02:20:29"
 ---
 
 # t234 — Onion: Fix the real defects of the estimator audit
@@ -24,7 +24,7 @@ repairs the real defects that the audit finds, before the ladder starts (launche
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 4cbf0ba, 9f26550, 1b26d34](results/t234/FIXES.md)
 
 ## Evidence
 

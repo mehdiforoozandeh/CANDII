@@ -1,15 +1,15 @@
 ---
 id: t291
 type: task
-title: Onion: Budget curve on rung 1: submit the trainings
+title: "Onion: Budget curve on rung 1: submit the trainings"
 category: implementation
 parent: t152
 blocked_by: t289, t290, t213
 refs: h32
 hypothesis_refs: 
-status: open
-created: 2026-11-13T12:42:52
-updated: 2026-11-13T12:42:52
+status: done
+created: "2026-11-13T12:42:52"
+updated: "2026-11-14T02:20:37"
 ---
 
 # t291 — Onion: Budget curve on rung 1: submit the trainings
@@ -24,7 +24,7 @@ PI questions of 2026-11-13 on region budget and selection (Amendment 7): the 42 
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [42 trainings submitted; 42 of 42 DONE](results/t291/SUBMITTED.md)
 
 ## Evidence
 
