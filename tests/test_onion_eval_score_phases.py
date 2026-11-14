@@ -210,7 +210,7 @@ def test_metric_phase_equals_legacy_for_each_rung(env, tmp_path, r):
     assert s["n_pairs"] > 0 and s["n_replicate_pairs"] > 0
     assert s["predicted_control"]["n_targets"] >= (1 if cfg.get("predict_control") else 0)
     legacy = json.loads((leg / "scores.json").read_text())
-    assert legacy["scorer_version"] == 1 and "scorer_settings" not in legacy
+    assert legacy["scorer_version"] == 1 and legacy["scorer_settings"]["phase"] == "legacy"
 
 
 @pytest.mark.parametrize("r", (1, 5))
