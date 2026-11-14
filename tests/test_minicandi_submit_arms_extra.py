@@ -36,7 +36,7 @@ exit 0
 """
 CLEARED = ("DRY_RUN", "SEEDS", "EXTRA_TRAIN_ARGS", "SCORE_TIME", "SCORE_MEM", "ONION_EXCLUDE",
            "DEVICE", "CLUSTER", "CC_CLUSTER", "EXTRA_SCORE_ARGS", "NICE", "SCORE_CPUS",
-           "SCORE_DEVICE", "SCORE_ONLY", "ONION_STAGE")
+           "SCORE_DEVICE", "SCORE_ONLY", "ONION_STAGE", "TRAIN_TIME", "HOLD")
 
 
 @pytest.fixture()
@@ -245,3 +245,17 @@ def test_score_only_without_squeue_refuses_a_real_submission(env, tmp_path):
     e = {**e, "PATH": f"{tmp / 'bin'}:/usr/bin:/bin"}
     p = run(tmp, e, 1, "base", SCORE_ONLY=1, ok=False)
     assert p.returncode == 2 and not (tmp / "sbatch.log").exists()
+
+
+def test_train_time_and_hold(env):
+    tmp, e = env
+    base = sbatch_lines(run(tmp, e, 2, "base", DRY_RUN=1, SEEDS="0"))
+    tr, sc = sbatch_lines(run(tmp, e, 2, "base", DRY_RUN=1, SEEDS="0", TRAIN_TIME="04:00:00",
+                              HOLD=1))
+    assert _opt(base[0], "time") != "04:00:00" and _opt(tr, "time") == "04:00:00"
+    assert _opt(sc, "time") == _opt(base[1], "time")                # scoring time unchanged
+    assert " --hold " in tr and " --hold " in sc and "--hold" not in " ".join(base)
+    assert tr.replace(" --hold", "").replace("--time=04:00:00", f"--time={_opt(base[0], 'time')}") \
+        == base[0]
+    p = run(tmp, e, 2, "base", DRY_RUN=1, TRAIN_TIME="4h", ok=False)
+    assert p.returncode == 2 and "TRAIN_TIME" in p.stderr

@@ -28,6 +28,9 @@
 #   it skips SCORED and a queued or running scoring job of the run's name, submits a scoring job
 #   with --dependency=afterok on the run's queued or running training job (train.sh), or with no
 #   dependency when DONE exists, else skips; squeue '%o' tells a training from a scoring job).
+# Queue options (chunk TRa; unset = the lines above, byte for byte): TRAIN_TIME=<[d-]hh:mm:ss>
+#   (overrides the training --time of ladder_arms.py plan, whose speeds are Fir's); HOLD=1
+#   (--hold on every line: jobs wait held until `scontrol release`).
 #
 # Idempotent. Per (arm, seed): skip when <run dir>/SCORED exists (training only: DONE), or when a
 # queued or running job of this user is named mc_<run dir name>_s<seed>; when DONE exists but not
@@ -77,6 +80,9 @@ fi
 COMMON=(--account=def-maxwl --parsable)
 [ -z "$EXCLUDE" ] || COMMON+=("--exclude=$EXCLUDE")
 [ -z "${NICE:-}" ] || COMMON+=("--nice=$NICE")
+[ "${HOLD:-0}" != 1 ] || COMMON+=(--hold)
+[ -z "${TRAIN_TIME:-}" ] || [[ "$TRAIN_TIME" =~ ^([0-9]+-)?[0-9]+:[0-9]{2}:[0-9]{2}$ ]] || \
+  { echo "TRAIN_TIME must be [d-]hh:mm:ss" >&2; exit 2; }
 TSV="$ROOT/SUBMITTED.tsv"
 n_sub=0; n_skip=0
 
@@ -98,7 +104,7 @@ for spec in "${ARGS_ARMS[@]}"; do
         --score-time "${SCORE_TIME:-}" --extra "${EXTRA_TRAIN_ARGS:-}")"
     [ -n "${STIME2:-}" ] || { echo "scoring plan (SCORE_DEVICE=$SDEV) failed for $spec" >&2; exit 2; }
   fi
-  SMEM="${SCORE_MEM:-$SMEM}"; SCPUS="${SCORE_CPUS:-$SCPUS}"
+  SMEM="${SCORE_MEM:-$SMEM}"; SCPUS="${SCORE_CPUS:-$SCPUS}"; TTIME="${TRAIN_TIME:-$TTIME}"
   for SEED in "${SEED_LIST[@]}"; do
     RUN="$ARMDIR/seed$SEED"
     JOB="mc_$(basename "$ARMDIR")_s$SEED"
