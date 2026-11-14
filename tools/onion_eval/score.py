@@ -203,6 +203,7 @@ if str(_TOOLS) not in sys.path:
 from onion_eval import metrics as Mx  # noqa: E402
 
 SPACE = "counts_log1p"                               # ruling 13: the selection space, fixed
+SCORER_VERSION = 1                                   # SF0: the legacy single-job path
 REFS = ("marginal_nb", "position_average", "depth_only_scaling", "pseudoreplicate_floor")
 TRAINING_FREE = ("marginal_nb", "position_average", "depth_only_scaling")
 WEIGHTS = {"imputation": 0.5, "correction": 0.25, "uncertainty": 0.25}
@@ -573,6 +574,73 @@ def _drop_cache(path) -> None:
         pass
 
 
+def _pair_key(job) -> str:
+    """The key of a pair job in suffstats.npz (`pair/<key>`) and in pairs_per_region.npz."""
+    return job.get("pair_id") or job["source"] + ">" + job["target"]
+
+
+def pair_metrics_from_records(cor_recs, rep_recs, scorable, n_boot, seed, not_applicable=None) -> dict:
+    """The pair metrics of scores.json from pair records (SF0, pinned interface L): headline 4 with
+    its CRPS blocks and subset pairs, headline 5, and `replicate_pair_gap_closed_vs_depth_only`.
+    `scorable` is the eval set's `scorable` dict. A pure move of the scorer's own aggregation; a rung
+    whose every pair is no pair job (`not_applicable`, Amendment 8 section A) prints Undefined with
+    the reason."""
+    sc = scorable or {}
+    sc_cor = sc.get("correction", [])
+    out = _correction_metrics_of(cor_recs, sc_cor, n_boot, seed)
+    per_rung = {rung: metric([r for r in rep_recs if r["rung"] == rung], _gap_fn, set(
+        (sc.get("layers") or {}).get(rung, [])), n_boot, seed)
+        for rung in sorted({r["rung"] for r in rep_recs})}
+    na = not_applicable or {}
+    for rung in sorted(k for k in na if k != "reasons"):
+        if rung not in per_rung:
+            per_rung[rung] = metric([], _gap_fn, set((sc.get("layers") or {}).get(rung, [])), n_boot,
+                                    seed, undefined_reason="no pair job of this rung: "
+                                    + (na.get("reasons") or {}).get(rung, "not applicable"))
+    out["replicate_pair_gap_closed_vs_depth_only"] = {"per_rung": dict(sorted(per_rung.items()))}
+    return out
+
+
+def _correction_metrics_of(recs, scorable, n_boot, seed) -> dict:
+    nb, sd = n_boot, seed
+    head = [r for r in recs if r["never_trained"] == 1 and r["subset_pair"] == 0]
+    sub = [r for r in recs if r["subset_pair"] == 1]        # pure depth thinning, any pair
+    m = metric(head, _gap_fn, scorable, nb, sd, require_all=True)
+    knobs = defaultdict(list)
+    for r in head:
+        knobs[r.get("knob") or ""].append(r)
+    m["per_knob"] = {k: _j(_gap_fn(rs)) for k, rs in sorted(knobs.items())}
+    m["n_pairs"] = len(head)
+    den = {}
+    for a in sorted(scorable):
+        rs = [r for r in head if r["assay"] == a]
+        b = [r["crps_depth_only"] for r in rs]
+        f = [r["crps_floor"] for r in rs]
+        if rs and not any(_undef(x) for x in b + f) and np.mean(b) > 0:
+            den[a] = float((np.mean(b) - np.mean(f)) / np.mean(b))
+        else:
+            den[a] = None
+    m["denominator_relative_by_assay"] = den
+
+    def law(rs):
+        bad = [r for r in rs if any(_undef(r[k]) for k in ("pred_total", "source_total",
+                                                           "log2_depth_ratio"))]
+        if bad:
+            return Mx.Undefined(f"{len(bad)} of {len(rs)} pairs have an undefined total")
+        return Mx.depth_law_error([r["pred_total"] for r in rs], [r["source_total"] for r in rs],
+                                  [r["log2_depth_ratio"] for r in rs])
+    return {
+        "correction_gap_closed_vs_depth_only_never_trained": m,
+        "correction_crps_model": metric(head, _mean_of("crps_model"), scorable, nb, sd),
+        "correction_crps_model_oracle_scaled": metric(head, _mean_of("crps_model_oracle_scaled"),
+                                                      scorable, nb, sd),
+        "correction_crps_depth_only": metric(head, _mean_of("crps_depth_only"), scorable, nb, sd),
+        "correction_crps_pseudoreplicate_floor": metric(head, _mean_of("crps_floor"), scorable, nb, sd),
+        "subset_pairs_gap_closed": metric(sub, _gap_fn, scorable, nb, sd),
+        "depth_law_abs_log2_error_never_trained": metric(head, law, scorable, nb, sd),
+    }
+
+
 #: SM: (scorer, tasks) of the parent, read by forked workers
 _WORKER = None
 
@@ -594,7 +662,7 @@ def _worker_task(i: int):
     """One task in a forked worker: (records, suffstats items, timing, dump metadata)."""
     sc, tasks = _WORKER
     kind, regime, job = tasks[i]
-    sc.suff, sc.timing, sc._dump_meta = {}, defaultdict(float), {}
+    sc.suff, sc.timing, sc._dump_meta, sc.pair_regional = {}, defaultdict(float), {}, {}
     if kind == "group":
         out = sc._imputation_group(job, regime)
         sc._pa_ctl_rate.clear()                  # bounded memory; a later group refits (same values)
@@ -603,7 +671,7 @@ def _worker_task(i: int):
             sc._pa_cache.clear()
             sc._pa_keep_cells = sc._pair_keep
         out = sc._pair_record(job)
-    return out, list(sc.suff.items()), dict(sc.timing), sc._dump_meta
+    return out, list(sc.suff.items()), dict(sc.timing), sc._dump_meta, list(sc.pair_regional.items())
 
 
 class Scorer:
@@ -632,6 +700,8 @@ class Scorer:
         self.signal_override = signal_override
         self.external = signal_override is not None
         self.n_pairs_not_read_disjoint = 0
+        self.pairs_not_applicable = {}           # SF0: see _pair_not_applicable
+        self.pair_regional = {}                  # SF0: pair key -> per-region sums
         self.C, self.log = C, log
         self.evalset_path = Path(evalset).resolve()
         self.ev = json.loads(self.evalset_path.read_text(encoding="utf-8"))
@@ -693,6 +763,13 @@ class Scorer:
         self.ds = OnionDataset(self.tables, split, cfg, seed=0)
         self.predict_control = bool(self.ds.config.get("predict_control")) and model is not None
         self.regions = [(c, int(s)) for c, s in self.ev["regions"]]
+        #: SF0 (Amendment 8, B.4): positions in `regions` that the pair jobs run on (all by default)
+        pr = self.ev.get("pair_regions")
+        self.pair_region_idx = (list(range(len(self.regions))) if pr is None
+                                else sorted({int(i) for i in pr}))
+        if not self.pair_region_idx or not all(0 <= i < len(self.regions)
+                                               for i in self.pair_region_idx):
+            raise ValueError(f"pair_regions {pr!r}: positions must lie in 0..{len(self.regions) - 1}")
         fr = [(c, int(s)) for c, s in self.ev.get("fit_regions", [])]
         self.fit_on = "fit_regions" if fr else "eval_regions (no fit_regions in the evalset)"
         self.fit_regions = fr or self.regions
@@ -1107,8 +1184,11 @@ class Scorer:
         want_avg_ctl = ((not pair) and "position_average" in names
                         and self._needs_average_control(job))
         want_dump_ctl = (not pair) and self._dump_wants_avg_ctl(job)    # AGd; read by the dump only
-        out = _Vectors(len(self.regions) * self.rb)
+        keep = set(self.pair_region_idx) if pair else None    # SF0: pair jobs on pair_regions
+        out = _Vectors((len(keep) if pair else len(self.regions)) * self.rb)
         for ri, tiles in self._tiles(self.regions):
+            if keep is not None and ri not in keep:
+                continue
             self._set_region(*self.regions[ri])
             for b0 in range(0, len(tiles), self.tile_bs):
                 tl = tiles[b0:b0 + self.tile_bs]
@@ -1658,23 +1738,42 @@ class Scorer:
         y = A["y"]
         out = {k: job.get(k) for k in ("pair_id", "assay", "cell", "knob", "never_trained",
                                        "subset_pair", "rung", "source", "target")}
-        for nm, key in (("main", "crps_model"), ("depth_only_scaling", "crps_depth_only"),
-                        ("pseudoreplicate_floor", "crps_floor")):
+        from candi.bench.distributional import crps_eval, oracle_scale, p_from_mu
+        Rp = len(self.pair_region_idx)
+        nan_rows = np.full(Rp, np.nan)
+        reg = {"bins": np.full(Rp, float(self.rb))}
+        for nm, key, rk in (("main", "crps_model", "crps_sum_model"),
+                            ("depth_only_scaling", "crps_depth_only", "crps_sum_depth_only"),
+                            ("pseudoreplicate_floor", "crps_floor", "crps_sum_floor")):
             n, mu = A[f"{nm}.n"], A[f"{nm}.mu"]
+            reg[rk] = nan_rows
             if np.isfinite(n).all() and np.isfinite(mu).all():
+                # SF0: the per-bin CRPS once, then its mean and its per-region sums. These are the
+                # calls of Mx.crps_split (model: _clean, nb_crps_mean, oracle_scale) and of
+                # nb_crps_mean (references), so every value is the one they return.
                 if nm == "main":       # the oracle split is quoted for the model's CRPS only
-                    c = Mx.crps_split(n, mu, y)
-                    out[key], out[key + "_oracle_scaled"] = c["crps"], c["oracle_scaled"]
+                    d, _, _ = Mx._clean({"n": n, "mu": mu, "y": y}, ("y",), None)
+                    v = crps_eval(None, 0)(d["n"], p_from_mu(d["n"], d["mu"]), d["y"])
+                    out[key] = float(np.mean(v))
+                    out[key + "_oracle_scaled"] = float(oracle_scale(
+                        d["mu"], d["n"], d["y"], crps_approx=None, crps_seed=0)["crps_oracle_scaled"])
                 else:                  # same estimator as crps_split's crps (closed form)
-                    from candi.bench.distributional import nb_crps_mean
-                    out[key] = nb_crps_mean(n, mu, y)
+                    v = crps_eval(None, 0)(n, p_from_mu(n, mu), y)
+                    out[key] = float(np.mean(v))
                     out[key + "_oracle_scaled"] = None
+                if np.size(v) == Rp * self.rb:
+                    reg[rk] = np.asarray(v, np.float64).reshape(Rp, self.rb).sum(axis=1)
+                del v
             else:
                 out[key] = out[key + "_oracle_scaled"] = Mx.Undefined(f"{nm} undefined on this pair")
         mu = A["main.mu"]
         out["pred_total"] = float(mu.sum()) if np.isfinite(mu).all() else float("nan")
         out["source_total"] = float(A["x"].sum())
         out["log2_depth_ratio"] = A["log2r"]
+        reg["pred_total"] = (mu.reshape(Rp, self.rb).sum(axis=1) if np.isfinite(mu).all()
+                             else nan_rows)
+        reg["source_total"] = np.asarray(A["x"], np.float64).reshape(Rp, self.rb).sum(axis=1)
+        self.pair_regional[_pair_key(job)] = reg
         self.suff[f"pair/{job.get('pair_id') or job['source'] + '>' + job['target']}"] = np.array(
             [_j(out["crps_model"]) or np.nan, _j(out["crps_depth_only"]) or np.nan,
              _j(out["crps_floor"]) or np.nan, y.size], np.float64)
@@ -1841,6 +1940,21 @@ class Scorer:
                  f"{info['directories']} measurements to {root} in {info['seconds']} s")
         return info
 
+    def _pair_not_applicable(self, a, b) -> str:
+        """SF0 (Amendment 8, section A): why a replicate pair (a, b) can be no model-side pair job,
+        or ''. The model reads a's half and predicts b's half in one window, and a window holds one
+        cell (`OnionDataset.window`); an evaluation-only row is never a model input (RoleError).
+        Metric 7 per rung, the explained fraction and the layers still read such a pair from the
+        counts."""
+        from minicandi.dataset import EVALONLY
+        ra, rb = self.ds.rows[a], self.ds.rows[b]
+        if ra["cell"] != rb["cell"]:
+            return ("the two members are in different cells (a model window holds one cell; the "
+                    "pair is the cell-type layer, read from the counts by metric 7 and the layers)")
+        if ra.get("in_eic") == EVALONLY:
+            return "the source is an evaluation-only track, never a model input"
+        return ""
+
     def jobs(self):
         meas = self.ds.rows
         imp = [dict(t, kind="imputation") for t in self.ev["imputation_targets"]
@@ -1860,6 +1974,7 @@ class Scorer:
             p.setdefault("assay", meas[p["target"]]["assay"])
             p.setdefault("cell", meas[p["target"]]["cell"])
         rep = []
+        na, na_why = {}, {}
         want = set(self.ev.get("replicate_pairs") or [])
         if want:
             from onion_eval.evalset import read_tsv
@@ -1867,6 +1982,11 @@ class Scorer:
                 if (p["pair_id"] in want and p["split"] == self.split and p["rung"] in REPLICATE_RUNGS
                         and p["a"] != p["b"]
                         and all(has_halves(meas.get(m, {})) for m in (p["a"], p["b"]))):
+                    why = self._pair_not_applicable(p["a"], p["b"])
+                    if why:                    # SF0, Amendment 8 section A: no model-side pair job
+                        na[p["rung"]] = na.get(p["rung"], 0) + 1
+                        na_why.setdefault(p["rung"], set()).add(why)
+                        continue
                     rep.append({"kind": "replicate", "source": p["a"], "target": p["b"],
                                 "pair_id": p["pair_id"], "rung": p["rung"], "assay": p["assay"],
                                 "cell": p["cell"], "never_trained": int(p["never_trained"] or 0),
@@ -1874,6 +1994,10 @@ class Scorer:
                                 "knob": p.get("knobs_differing", "")})
         if self.no_halves or self.external:   # every pair reads halves; a pair is count-space
             cor, rep = [], []
+            na, na_why = {}, {}
+        #: SF0: replicate pairs that are no model task, per rung, with the reasons
+        self.pairs_not_applicable = (dict(sorted(na.items()), reasons={
+            g: "; ".join(sorted(w)) for g, w in sorted(na_why.items())}) if na else {})
         # DT, Log "FOR E7a": a pair whose two sides can share reads is never scored
         self.n_pairs_not_read_disjoint = sum(1 for p in cor if p.get("read_disjoint", 1) == 0)
         cor = [p for p in cor if p.get("read_disjoint", 1) != 0]
@@ -1930,8 +2054,9 @@ class Scorer:
 
     def _merge_result(self, r):
         """Fold one worker result into this scorer, in the serial order; returns its records."""
-        out, suff, timing, dump_meta = r
+        out, suff, timing, dump_meta, regional = r
         self.suff.update(suff)
+        self.pair_regional.update(regional)
         for k, v in timing.items():
             self.timing[k] += v
         for regime, m in dump_meta.items():
@@ -1942,6 +2067,52 @@ class Scorer:
                 else:
                     mine.setdefault(k, {}).update(v)
         return out
+
+    def run_pairs_only(self) -> dict:
+        """SF0 `--pairs-only`: the pair jobs of a full scoring (the same marginal fit, staging, pair
+        regions, workers and pair records), their metrics, and the records; no item is scored."""
+        t0 = time.time()
+        imp, cor, rep, ctl = self.jobs()
+        sc = self.ev.get("scorable", {})
+        if self.stage_dir is not None:
+            self.stage_info = self._stage(imp, cor, rep, ctl)
+        self.marg = self._fit_marginal({j["assay"] for j in imp + ctl})
+        _trim_heap()
+        self._pair_keep = {self.ds.rows[j["target"]]["cell"] for j in cor + rep}
+        self.pair_order = [_pair_key(j) for j in cor + rep]
+        if self.workers > 1:
+            par = self._parallel([], cor + rep)
+            self._pa_cache.clear()
+            self._pa_keep_cells = self._pair_keep
+            try:
+                outs = [self._merge_result(r) for r in par["pairs"]]
+            finally:
+                self._pa_cache.clear()
+                self._pa_keep_cells = None
+        else:
+            self._pa_cache.clear()
+            self._pa_keep_cells = self._pair_keep
+            try:
+                outs = [self._pair_record(j) for j in cor + rep]
+            finally:
+                self._pa_cache.clear()
+                self._pa_keep_cells = None
+        cor_recs, rep_recs = outs[:len(cor)], outs[len(cor):]
+
+        def jrec(r):
+            return {k: (_j(v) if isinstance(v, float) else v) for k, v in r.items()}
+        res = pair_metrics_from_records(cor_recs, rep_recs, sc, self.n_boot, self.seed,
+                                        not_applicable=self.pairs_not_applicable)
+        res.update({"scorer_version": SCORER_VERSION, "pairs_only": True, "predictor": self.main,
+                    "split": self.split, "evalset": str(self.evalset_path),
+                    "evalset_sha256": sha256_file(self.evalset_path),
+                    "tables_sha256": self.tables_sha256, "n_pairs": len(cor_recs),
+                    "n_replicate_pairs": len(rep_recs), "pair_regions_n": len(self.pair_region_idx),
+                    "pair_jobs_not_applicable": self.pairs_not_applicable,
+                    "correction_pair_records": [jrec(r) for r in cor_recs],
+                    "replicate_pair_records": [jrec(r) for r in rep_recs],
+                    "wall_seconds": round(time.time() - t0, 1)})
+        return res
 
     def run(self) -> dict:
         t0 = time.time()
@@ -1969,6 +2140,7 @@ class Scorer:
                     groups[j["assay"]].append(j)
             group_list += [(regime, a, groups[a]) for a in sorted(groups)]
         self._pair_keep = {self.ds.rows[j["target"]]["cell"] for j in cor + rep}
+        self.pair_order = [_pair_key(j) for j in cor + rep]
         par = None
         if self.workers > 1:
             tp = time.perf_counter()
@@ -2031,11 +2203,8 @@ class Scorer:
             self._pa_keep_cells = None
         self.timing["pairs_total"] += time.perf_counter() - tq
         ta = time.perf_counter()
-        scores.update(self._correction_metrics(cor_recs, sc_cor))
-        scores["replicate_pair_gap_closed_vs_depth_only"] = {"per_rung": {
-            rung: metric([r for r in rep_recs if r["rung"] == rung], _gap_fn, set(
-                (sc.get("layers") or {}).get(rung, [])), self.n_boot, self.seed)
-            for rung in sorted({r["rung"] for r in rep_recs})}}
+        scores.update(pair_metrics_from_records(cor_recs, rep_recs, sc, self.n_boot, self.seed,
+                                                not_applicable=self.pairs_not_applicable))
         self.timing["assembly"] += time.perf_counter() - ta
         tg = time.perf_counter()
         scores["copy_leak"] = self._copy_leak()
@@ -2096,6 +2265,12 @@ class Scorer:
                        "infer_batch": self.tile_bs, "region_cache": self.region_cache,
                        "timing_seconds": {k: round(v, 1) for k, v in sorted(self.timing.items())},
                        "torch_threads": torch.get_num_threads(), "device": str(self.device)})
+        # SF0 (Amendment 8): the legacy path is scorer version 1; the other keys only when they apply
+        scores["scorer_version"] = SCORER_VERSION
+        if self.pairs_not_applicable:
+            scores["pair_jobs_not_applicable"] = self.pairs_not_applicable
+        if self.ev.get("pair_regions") is not None:
+            scores["pair_regions_n"] = len(self.pair_region_idx)
         # SC: keys only off the default, so a default scores.json is unchanged
         if self.lambda_source != "auto":
             scores["lambda_source_option"] = self.lambda_source
@@ -2295,43 +2470,7 @@ class Scorer:
         return Mx.uncertainty_gap_closed(arm, marg), float(np.mean(marg))
 
     def _correction_metrics(self, recs, scorable) -> dict:
-        nb, sd = self.n_boot, self.seed
-        head = [r for r in recs if r["never_trained"] == 1 and r["subset_pair"] == 0]
-        sub = [r for r in recs if r["subset_pair"] == 1]        # pure depth thinning, any pair
-        m = metric(head, _gap_fn, scorable, nb, sd, require_all=True)
-        knobs = defaultdict(list)
-        for r in head:
-            knobs[r.get("knob") or ""].append(r)
-        m["per_knob"] = {k: _j(_gap_fn(rs)) for k, rs in sorted(knobs.items())}
-        m["n_pairs"] = len(head)
-        den = {}
-        for a in sorted(scorable):
-            rs = [r for r in head if r["assay"] == a]
-            b = [r["crps_depth_only"] for r in rs]
-            f = [r["crps_floor"] for r in rs]
-            if rs and not any(_undef(x) for x in b + f) and np.mean(b) > 0:
-                den[a] = float((np.mean(b) - np.mean(f)) / np.mean(b))
-            else:
-                den[a] = None
-        m["denominator_relative_by_assay"] = den
-
-        def law(rs):
-            bad = [r for r in rs if any(_undef(r[k]) for k in ("pred_total", "source_total",
-                                                               "log2_depth_ratio"))]
-            if bad:
-                return Mx.Undefined(f"{len(bad)} of {len(rs)} pairs have an undefined total")
-            return Mx.depth_law_error([r["pred_total"] for r in rs], [r["source_total"] for r in rs],
-                                      [r["log2_depth_ratio"] for r in rs])
-        return {
-            "correction_gap_closed_vs_depth_only_never_trained": m,
-            "correction_crps_model": metric(head, _mean_of("crps_model"), scorable, nb, sd),
-            "correction_crps_model_oracle_scaled": metric(head, _mean_of("crps_model_oracle_scaled"),
-                                                          scorable, nb, sd),
-            "correction_crps_depth_only": metric(head, _mean_of("crps_depth_only"), scorable, nb, sd),
-            "correction_crps_pseudoreplicate_floor": metric(head, _mean_of("crps_floor"), scorable, nb, sd),
-            "subset_pairs_gap_closed": metric(sub, _gap_fn, scorable, nb, sd),
-            "depth_law_abs_log2_error_never_trained": metric(head, law, scorable, nb, sd),
-        }
+        return _correction_metrics_of(recs, scorable, self.n_boot, self.seed)
 
 
 FALLBACK_NONE_NEEDED = "none needed: defined, in the imputation term"
@@ -2427,6 +2566,27 @@ def write_outputs(scores: dict, suff: dict, out) -> Path:
     return out / "scores.json"
 
 
+PAIR_REGION_FIELDS = ("crps_sum_model", "crps_sum_depth_only", "crps_sum_floor", "bins",
+                      "pred_total", "source_total")
+
+
+def write_pairs_per_region(sc, out):
+    """`<out>/pairs_per_region.npz` (SF0, pinned interface L): `pair_ids` [P] in the scorer's pair
+    order (correction pairs, then replicate pairs), `region_indices` [Rp] (positions in the eval
+    set's region order), and float64 [P, Rp] per-region sums: the CRPS of the model, of depth-only
+    scaling and of the floor, the bins, the predicted total and the source total. A pair's sums add
+    up to its totals (its CRPS times its bins). Not written when the scoring has no pair job."""
+    keys = [k for k in getattr(sc, "pair_order", []) if k in sc.pair_regional]
+    if not keys:
+        return None
+    p = Path(out) / "pairs_per_region.npz"
+    np.savez_compressed(p, pair_ids=np.array(keys), region_indices=np.asarray(sc.pair_region_idx,
+                                                                                  np.int64),
+                        **{f: np.stack([np.asarray(sc.pair_regional[k][f], np.float64) for k in keys])
+                           for f in PAIR_REGION_FIELDS})
+    return p
+
+
 def write_skipped(out, reason: str) -> Path:
     """`<out>/SKIPPED` (the reason): the job had nothing to score; no scores.json is written."""
     out = Path(out)
@@ -2447,8 +2607,9 @@ def run_tables_sha256(run) -> str:
 
 
 def score(evalset, out, *, run=None, baseline=None, model=None, config=None,
-          repeat_blind_reason=None, signal_override=None, **kw) -> dict:
-    """Score a run dir, an in-memory model, a baseline name, or an external entry; writes the
+          repeat_blind_reason=None, signal_override=None, pairs_only=False, **kw) -> dict:
+    """`pairs_only` (SF0): score the pair jobs only and write `pairs_only.json` and
+    `pairs_per_region.npz`, no scores.json. Score a run dir, an in-memory model, a baseline name, or an external entry; writes the
     output files. `signal_override` (chunk XE): a callable (target row, regions) -> the entry's
     float32 signal (raw units, like the pipeline's signal.h5) per region, either a list of one
     array per region or the regions end to end; it replaces the model's derived signal in the
@@ -2482,6 +2643,19 @@ def score(evalset, out, *, run=None, baseline=None, model=None, config=None,
     if run is not None and kw.get("dump_signal"):
         kw.setdefault("dump_method", str(Path(run).resolve()))
     sc = Scorer(evalset, main=main, model=model, config=config, run_tables_sha256=run_sha, **kw)
+    if pairs_only:
+        if split == "blind":
+            raise ScoreRefused("--pairs-only scores the validation split only")
+        res = sc.run_pairs_only()
+        if run is not None:
+            res["run"] = str(Path(run).resolve())
+        out.mkdir(parents=True, exist_ok=True)
+        write_pairs_per_region(sc, out)
+        tmp = out / "pairs_only.json.tmp"
+        tmp.write_text(json.dumps(res, indent=1, sort_keys=True, allow_nan=False) + "\n",
+                       encoding="utf-8")
+        tmp.replace(out / "pairs_only.json")
+        return res
     if main in PAIR_ONLY:
         _, cor, rep, _ = sc.jobs()
         if not cor and not rep:
@@ -2515,6 +2689,7 @@ def score(evalset, out, *, run=None, baseline=None, model=None, config=None,
     if ledger is not None:
         scores["blind_ledger"] = str(ledger)
     write_outputs(scores, sc.suff, out)
+    write_pairs_per_region(sc, out)
     if ledger is not None:
         ledger_append(ledger, dict(entry, time=_utc(), status="scored"))
     return scores
@@ -2598,10 +2773,14 @@ def main(argv=None) -> int:
     ap.add_argument("--stage-dir", default=None,
                     help="SM: copy the h5 files the scoring reads to this local directory first "
                          "(e.g. $SLURM_TMPDIR/stage); outputs identical; default off")
+    ap.add_argument("--pairs-only", action="store_true",
+                    help="SF0: score the pair jobs only; writes pairs_only.json and "
+                         "pairs_per_region.npz, no scores.json")
     add_dump_arguments(ap)
     a = ap.parse_args(argv)
-    if (Path(a.out) / SCORED).is_file() and not a.force:
-        print(f"skip: {a.out}/{SCORED} exists")
+    done = Path(a.out) / ("pairs_only.json" if a.pairs_only else SCORED)
+    if done.is_file() and not a.force:
+        print(f"skip: {done} exists")
         return 0
     set_threads()
     device = a.device
@@ -2616,10 +2795,15 @@ def main(argv=None) -> int:
                   lambda_source=a.lambda_source, **({"addon": True} if a.addon else {}),
                   **({"workers": a.workers} if a.workers > 1 else {}),
                   **({"stage_dir": a.stage_dir} if a.stage_dir else {}),
+                  **({"pairs_only": True} if a.pairs_only else {}),
                   **dump_kwargs(a))
     except (PermissionError, ScoreRefused) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2
+    if s.get("pairs_only"):
+        print(f"pairs only -> {a.out}/pairs_only.json: {s['n_pairs']} correction pairs, "
+              f"{s['n_replicate_pairs']} replicate pairs, pair regions {s['pair_regions_n']}")
+        return 0
     if "skipped" in s:
         print(f"skipped: {s['skipped']} ({a.out}/{SKIPPED})")
         return 0
