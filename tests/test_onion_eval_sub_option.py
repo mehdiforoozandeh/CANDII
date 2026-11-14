@@ -123,14 +123,18 @@ def digests(root: Path) -> dict:
     return {k: hashlib.sha256(v.encode()).hexdigest()[:16] for k, v in outputs(root).items()}
 
 
-# Computed with the tools at 57f387b (before SP2c) on the same fixture tree.
+# Computed with the tools at 57f387b (before SP2c) on the same fixture tree. OF (ruling 47):
+# compare, table, headline and per-knob now always print `composite_version` (1 here, no oracle
+# reference); with that column or line removed they are byte-identical to the 57f387b digests
+# (compare 0b09fb464ce1e8dd, table 4a350bd3a739f1cc, headline e11331948a27c470, per-knob
+# 32586a3a2aa0b7b1; checked when the column was added).
 BEFORE = {
-    "compare": "0b09fb464ce1e8dd",
-    "table": "4a350bd3a739f1cc",
-    "headline": "e11331948a27c470",
+    "compare": "79aef57ea3a39810",
+    "table": "1554f26f18e143d7",
+    "headline": "9812e758a5e78de2",
     "dev-evals": "f1a4f42508628913",
     "accessibility": "b8f0b34a676269d1",
-    "per-knob": "32586a3a2aa0b7b1",
+    "per-knob": "ebffc55784a191a8",
     "shared-specific": "3bfcb1ba2ba409b2",
 }
 

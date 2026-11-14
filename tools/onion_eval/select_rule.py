@@ -98,8 +98,7 @@ against depth-only scaling with the ORACLE as the top of the scale, (depth-only 
 macro over the correction-scorable assays (all headline pairs). The seed then carries
 `composite_version` 2 and `gap_closed_floor` "oracle" (also in its scorer keys); its denominator
 check reads (depth-only - O) / depth-only, smallest over assays, against CORRECTION_DENOM_REL_TOL.
-The scored half-read term stays as `correction_halfread_superseded` (`table` prints it as
-`correction_gap_closed_halfread_superseded`). A reference found but no per-pair records: the term is
+The scored half-read term stays as `correction_gap_closed_halfread_superseded` (in `table` too). A reference found but no per-pair records: the term is
 undefined with the reason (never the old value). No reference: the seed is read as before
 (version 1). Every command REFUSES a mix of composite versions (arms and baselines alike). Clipping
 to [0, 1] inside the composite is kept: the marginal NB still scores below 0 on the new scale.
@@ -232,7 +231,7 @@ def load_seed(path: Path, oracle="auto") -> dict:
     fields of one scores.json. With an oracle-floor reference (`oracle_floor.find_oracle`, or the
     directory `oracle`; None never uses one) the correction term is the gap closed with the
     oracle floor (PI ruling 47), recomputed from the score's per-pair records, and the seed carries
-    `composite_version` 2; the scored (half-read) term is kept as `correction_halfread_superseded`.
+    `composite_version` 2; the scored (half-read) term is kept as `correction_gap_closed_halfread_superseded`.
     Without one the seed is read as before (`composite_version` 1)."""
     s = json.loads(Path(path).read_text(encoding="utf-8"))
     sel = s.get("selection") or {}
@@ -246,7 +245,7 @@ def load_seed(path: Path, oracle="auto") -> dict:
     t = _oracle_terms(path, s, oracle)
     if t is not None:
         ver = t["composite_version"]
-        extra = {"correction_halfread_superseded": g["correction"], "oracle_block": t["block"],
+        extra = {"correction_gap_closed_halfread_superseded": g["correction"], "oracle_block": t["block"],
                  "oracle_dir": t["oracle_dir"],
                  "denominator_names": {"correction": "correction_depth_only_minus_oracle_relative_min"}}
         g["correction"] = _num(t["value"])
@@ -277,7 +276,10 @@ def _oracle_terms(path, s: dict, oracle):
     if tools not in sys.path:
         sys.path.insert(0, tools)
     from onion_eval import oracle_floor as OF
-    return OF.seed_terms(path, s, oracle)
+    try:
+        return OF.seed_terms(path, s, oracle)
+    except OF.OracleRefused as e:
+        raise Refused(str(e)) from None
 
 
 def check_composite_versions(seeds: list[dict]) -> None:
@@ -617,6 +619,7 @@ def compare(incumbent, challenger, simpler=None, name=None, settlements=None, *,
            "goal_terms_clipped": _fmt_terms(res.get("goal_terms_clipped"))}
     append_settlement(Path(settlements) if settlements else ch_dir.parent / "settlements.tsv", row)
     res["comparison"] = name
+    res["composite_version"] = inc[0].get("composite_version", 1)
     return res
 
 
@@ -666,7 +669,7 @@ def table(runs, prefix: str = "", sub: str = "", oracle="auto") -> list[dict]:
                     a, b = blk.get("all") or {}, blk.get("no_nodedup_side") or {}
                     v2 = {"composite_version": s["composite_version"],
                           "correction_gap_closed_halfread_superseded":
-                              s["correction_halfread_superseded"],
+                              s["correction_gap_closed_halfread_superseded"],
                           "correction_gap_closed_oracle_no_nodedup_side": b.get("gap_closed_oracle"),
                           "correction_numerator": a.get("numerator"),
                           "correction_denominator": a.get("denominator")}
@@ -865,6 +868,7 @@ def done_condition_2(final, baselines, sub: str = "", *, clip: bool | None = Non
     except Refused as e:
         return "REFUSED", [str(e)]
     lines, states = list(skipped), []
+    lines.append(f"  composite_version: {seeds[0].get('composite_version', 1)}")
     try:                       # the final design's seeds are arms; the baselines are references
         check_scorer_keys([(s["path"], s["scorer_keys"]) for s in seeds])
     except Refused as e:
@@ -996,17 +1000,23 @@ def main(argv=None) -> int:
         except Refused as e:
             print(f"REFUSED: {e}")
             return 2
+        print(f"composite_version: {res['composite_version']}")
         print(f"{res['comparison']}: {res['verdict']} ({res['reason']})")
         if res["verdict"] in ESCALATED:
             print(f"ESCALATE: {res['reason']}")
         return 0
     if a.cmd == "table":
         terms = [f"{k}_{v}" for v in ("raw", "clipped") for k in GOALS]
-        rows = table(a.runs, a.prefix, a.sub)
+        try:
+            rows = table(a.runs, a.prefix, a.sub)
+        except Refused as e:
+            print(f"REFUSED: {e}")
+            return 2
         vers = {r["composite_version"] for r in rows if "composite_version" in r}
-        extra = list(TABLE_V2_COLUMNS) if vers else []
-        if vers and (len(vers) > 1 or any("composite_version" not in r for r in rows
-                                          if r["state"] == "done")):
+        # composite_version is always printed (1 or 2); the other v2 columns only with a reference
+        extra = list(TABLE_V2_COLUMNS) if vers else ["composite_version"]
+        done = [r for r in rows if r["state"] == "done"]
+        if len({r.get("composite_version", 1) for r in done}) > 1:
             print("warning: composite versions differ across rows (version 1 rows have no oracle "
                   "reference); never compare them", file=sys.stderr)
         print("\t".join(["arm", "seed", "state", "composite", *terms, "copy_leak_pass",
@@ -1016,8 +1026,8 @@ def main(argv=None) -> int:
             print("\t".join([row["arm"], str(row["seed"]), row["state"], f(row["composite"]),
                              *(f(row[t]) for t in terms), str(row["copy_leak_pass"]),
                              str(row["same_view_copy_gain_flag"]),
-                             *(str(row.get(c, 1)) if c == "composite_version" else f(row.get(c))
-                               for c in extra)]))
+                             *((str(row.get(c, 1)) if row["state"] == "done" or c in row else "")
+                               if c == "composite_version" else f(row.get(c)) for c in extra)]))
         return 0
     if a.cmd == "h1-status":
         print("\t".join(("scores",) + H1_COLUMNS))
@@ -1036,7 +1046,11 @@ def main(argv=None) -> int:
         print(f"rung {a.rung}: all comparisons settled or escalated")
         return 0
     if a.cmd == "check-done":
-        res = check_done(a.runs, a.ladder, a.final, a.baselines, a.blind_baselines)
+        try:
+            res = check_done(a.runs, a.ladder, a.final, a.baselines, a.blind_baselines)
+        except Refused as e:
+            print(f"REFUSED: {e}")
+            return 2
         print(f"D14 condition 1: {res['condition_1']}")
         for p in res["problems_1"]:
             print(f"  {p}")

@@ -163,6 +163,12 @@ def outputs(mod, runs, base, out: Path, base_cols=None) -> dict:
             rows = list(csv.DictReader(text.splitlines(), delimiter="\t"))
             text = "\t".join(base_cols) + "\n" + "".join(
                 "\t".join(r[c] for c in base_cols) + "\n" for r in rows)
+        if cmd == "per-knob":     # OF (ruling 47): the always-printed composite_version column
+            rows = list(csv.DictReader(text.splitlines(), delimiter="\t"))
+            keep = [c for c in rows[0] if c != "composite_version"] if rows else []
+            assert all(r["composite_version"] == "1" for r in rows)
+            text = "\t".join(keep) + "\n" + "".join("\t".join(r[c] for c in keep) + "\n"
+                                                    for r in rows)
         got[cmd] = digest_text(text)
     p = out / "ss.tsv"
     assert mod.main(["shared-specific", "--runs", str(runs), "--baselines", str(base),

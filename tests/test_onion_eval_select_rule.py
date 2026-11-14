@@ -200,8 +200,9 @@ def test_table_states(tmp_path, capsys):
     make_arm(tmp_path, "rung1_g", BASE, flag=True)
     assert R.main(["table", "--runs", str(tmp_path), "--prefix", "rung1_g"]) == 0
     out = capsys.readouterr().out.splitlines()
-    assert out[0].split("\t")[-1] == "same_view_copy_gain_flag"
-    assert out[1].split("\t")[-2:] == ["True", "True"]
+    # OF (ruling 47): composite_version is always the last column (1 without an oracle reference)
+    assert out[0].split("\t")[-2:] == ["same_view_copy_gain_flag", "composite_version"]
+    assert out[1].split("\t")[-3:] == ["True", "True", "1"]
 
 
 def _ladder(tmp_path, comps):

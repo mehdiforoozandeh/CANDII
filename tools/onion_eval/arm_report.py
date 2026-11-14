@@ -97,14 +97,16 @@ thinning) pairs are apart, one row per arm with `pair_kind = subset` from
 `subset_pairs_gap_closed` (score.py writes no per-knob split of them).
 
 Oracle floor (OF, PI ruling 47). When the scores have an oracle-floor reference
-(oracle_floor.find_oracle), `headline` adds `composite_version`, the status of the old column
-(`correction_gap_closed_vs_depth_only_never_trained.status`: superseded) and, for
+(oracle_floor.find_oracle), `headline` adds the old value under the name both tools use,
+`correction_gap_closed_halfread_superseded.{mean,spread,n_defined,status}` (status: superseded), and, for
 `correction_gap_closed_oracle` (all headline pairs) and `correction_gap_closed_oracle_no_nodedup_side`
 (headline pairs with no side that keeps duplicates): `.mean`, `.spread`, `.n_defined`, `.reference`,
 `.reference_source`, the macro `.numerator` and `.denominator` (`.mean`, `.spread`), `.n_pairs` and
 `.reason`; `per-knob` adds rows with `pair_kind` `never_trained_non_subset_oracle` and
 `never_trained_non_subset_no_nodedup_side_oracle`. A mix of scores with and without a reference is
-REFUSED. Without any reference every output is unchanged. The `oracle_floor` directory under
+REFUSED, as is a reference that exists but is unreadable or of another eval set or tables
+(oracle_floor.find_oracle). `headline` and `per-knob` always print `composite_version` (1 without a
+reference, 2 with one). The `oracle_floor` directory under
 --baselines is a reference, not a baseline row.
 
 shared-specific. Each arm's gain in shared and in specific error (error_budget `shared`,
@@ -223,7 +225,10 @@ def load_scores(arm: Path, sub: str = "", oracle=None) -> list[dict]:
             s = json.loads(p.read_text(encoding="utf-8"))
             s["__path__"] = str(p)
             if oracle:
-                s["__oracle__"] = _SR._oracle_terms(p, s, oracle)
+                try:
+                    s["__oracle__"] = _SR._oracle_terms(p, s, oracle)
+                except _SR.Refused as e:
+                    raise Refused(str(e)) from None
             out.append(s)
     return out
 
@@ -345,6 +350,13 @@ def check_composite_versions(groups: dict) -> bool:
 ORACLE_Q = {"all": "correction_gap_closed_oracle",
             "no_nodedup_side": "correction_gap_closed_oracle_no_nodedup_side"}
 OLD_GAP = "correction_gap_closed_vs_depth_only_never_trained"
+#: the old value (half-read floor) under the one name both tools use, beside its status column
+OLD = "correction_gap_closed_halfread_superseded"
+
+
+def _version(seeds: list[dict]):
+    """The composite version of one arm or baseline (1 or 2; None with no scored seed)."""
+    return (seeds[0].get("__oracle__") or {}).get("composite_version", 1) if seeds else None
 
 
 def _oracle_value(s: dict, subset: str, field: str = "gap_closed_oracle"):
@@ -465,8 +477,9 @@ def headline(runs, prefix, baselines, sub="", addon=ADDON, pairs=None, allow_mix
     for c in classes:
         for k in ("upper_bound", "pass_rate", "n_targets"):
             cols += [f"{H7}.by_class.{c}.{k}.{x}" for x in ("mean", "spread", "n_defined")]
+    cols.append("composite_version")             # always: 1 (half-read floor) or 2 (oracle floor)
     if v2:
-        cols += ["composite_version", f"{OLD_GAP}.status"]
+        cols += [f"{OLD}.{x}" for x in ("mean", "spread", "n_defined", "status")]
         for q in ORACLE_Q.values():
             cols += [f"{q}.{x}" for x in ("mean", "spread", "n_defined", "reference",
                                           "reference_source")]
@@ -523,6 +536,7 @@ def headline(runs, prefix, baselines, sub="", addon=ADDON, pairs=None, allow_mix
                     st = stats([h.get((c, k)) for h in hs])
                     r.update({f"{p}.mean": st["mean"], f"{p}.spread": st["spread"],
                               f"{p}.n_defined": st["n_defined"]})
+            r["composite_version"] = _version(seeds)
             if v2:
                 r.update(_oracle_row(seeds, base))
             rows.append(r)
@@ -532,8 +546,9 @@ def headline(runs, prefix, baselines, sub="", addon=ADDON, pairs=None, allow_mix
 def _oracle_row(seeds: list[dict], base: dict) -> dict:
     """OF: the headline columns of the gap closed with the oracle floor, for one arm or baseline."""
     from onion_eval.oracle_floor import SUPERSEDED
-    r = {"composite_version": (seeds[0].get("__oracle__") or {}).get("composite_version", 1)
-         if seeds else None, f"{OLD_GAP}.status": SUPERSEDED}
+    st = stats([_get(s, (OLD_GAP, "macro")) for s in seeds])
+    r = {f"{OLD}.mean": st["mean"], f"{OLD}.spread": st["spread"],
+         f"{OLD}.n_defined": st["n_defined"], f"{OLD}.status": SUPERSEDED}
     for sub, q in ORACLE_Q.items():
         st = stats([_oracle_value(s, sub) for s in seeds])
         r.update({f"{q}.mean": st["mean"], f"{q}.spread": st["spread"],
@@ -677,18 +692,21 @@ def per_knob(runs, prefix, baselines=None, sub="", allow_mix=(), oracle="auto") 
     arms, base = _load_groups(runs, prefix, baselines, sub, allow_mix, oracle)
     check_evalset({**arms, **base})
     v2 = bool(oracle) and check_composite_versions({**arms, **base})
-    cols = ["arm", "kind", "pair_kind", "knob", "n_seeds", "n_defined", "mean", "spread"]
+    cols = ["arm", "kind", "pair_kind", "knob", "n_seeds", "n_defined", "mean", "spread",
+            "composite_version"]
     key = "correction_gap_closed_vs_depth_only_never_trained"
     rows = []
     for kind, group in (("arm", arms), ("baseline", base)):
         for name, seeds in group.items():
+            ver = _version(seeds)
             knobs = sorted({k for s in seeds for k in (_get(s, (key, "per_knob")) or {})})
             for knob, path in [(k, (key, "per_knob", k)) for k in knobs] + [(MACRO, (key, "macro"))]:
                 st = stats([_get(s, path) for s in seeds])
                 rows.append({"arm": name, "kind": kind, "pair_kind": "never_trained_non_subset",
-                             "knob": knob, **st})
+                             "knob": knob, **st, "composite_version": ver})
             st = stats([_get(s, ("subset_pairs_gap_closed", "macro")) for s in seeds])
-            rows.append({"arm": name, "kind": kind, "pair_kind": "subset", "knob": MACRO, **st})
+            rows.append({"arm": name, "kind": kind, "pair_kind": "subset", "knob": MACRO, **st,
+                         "composite_version": ver})
             if not v2:
                 continue
             for sub_, kind_ in (("all", "never_trained_non_subset_oracle"),
@@ -696,9 +714,11 @@ def per_knob(runs, prefix, baselines=None, sub="", allow_mix=(), oracle="auto") 
                 pk = [(_oracle_value(s, sub_, "per_knob") or {}) for s in seeds]
                 for k in sorted({k for d in pk for k in d}):
                     st = stats([(d.get(k) or {}).get("value") for d in pk])
-                    rows.append({"arm": name, "kind": kind, "pair_kind": kind_, "knob": k, **st})
+                    rows.append({"arm": name, "kind": kind, "pair_kind": kind_, "knob": k, **st,
+                                 "composite_version": ver})
                 st = stats([_oracle_value(s, sub_) for s in seeds])
-                rows.append({"arm": name, "kind": kind, "pair_kind": kind_, "knob": MACRO, **st})
+                rows.append({"arm": name, "kind": kind, "pair_kind": kind_, "knob": MACRO, **st,
+                             "composite_version": ver})
     return rows, cols
 
 
