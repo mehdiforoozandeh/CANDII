@@ -3,9 +3,9 @@ type: wiki
 title: Sequence-conditioned epigenome models
 summary: Models that predict epigenomic and transcriptomic signal from DNA sequence (± chromatin accessibility) — Enformer, BPNet, EPCOT, dHICA, TFImpute, DNABERT — and how they differ from tensor-based imputation.
 category: comparison
-sources: raw/avsec-2021-enformer.xml, raw/avsec-2021-bpnet.html, raw/zhang-2023-epcot.xml, raw/wen-2024-discriminative-histone-imputation.pdf, raw/qin-2017-tf-binding-deep-learning-imputation.xml, raw/ji-2021-dnabert.html, raw/schreiber-2023-encode-imputation-challenge.pdf, raw/avsec-2026-alphagenome.xml, raw/aksu-2026-corgi.pdf, raw/linder-2025-borzoi.xml, raw/kelley-2018-basenji.xml, raw/fu-2025-get.xml, raw/javed-2025-epibert.xml, raw/sun-2026-succeed.pdf, raw/hingerl-2025-scooby.xml, raw/gao-2024-epigept.xml, raw/murphy-2024-enformer-celltyping.xml, raw/chen-2022-sei.xml, raw/lal-2025-grelu.xml, raw/barbadilla-martinez-2025.pdf, raw/vafa-2025-steerability.pdf
+sources: raw/avsec-2021-enformer.xml, raw/avsec-2021-bpnet.html, raw/zhang-2023-epcot.xml, raw/wen-2024-discriminative-histone-imputation.pdf, raw/qin-2017-tf-binding-deep-learning-imputation.xml, raw/ji-2021-dnabert.html, raw/schreiber-2023-encode-imputation-challenge.pdf, raw/avsec-2026-alphagenome.xml, raw/aksu-2026-corgi.pdf, raw/linder-2025-borzoi.xml, raw/kelley-2018-basenji.xml, raw/fu-2025-get.xml, raw/javed-2025-epibert.xml, raw/sun-2026-succeed.pdf, raw/hingerl-2025-scooby.xml, raw/gao-2024-epigept.xml, raw/murphy-2024-enformer-celltyping.xml, raw/chen-2022-sei.xml, raw/lal-2025-grelu.xml, raw/barbadilla-martinez-2025.pdf, raw/vafa-2025-steerability.pdf, raw/gayoso-2026-alphagenome2.pdf
 created: 2026-07-31T21:26:00
-updated: 2026-08-01T18:05:24
+updated: 2026-11-12T18:00:00
 ---
 
 # Sequence-conditioned epigenome models
@@ -37,6 +37,8 @@ The two conditioning sources are complementary rather than competing: sequence s
 
 **AlphaGenome** (`raw/avsec-2026-alphagenome.xml`) is the current ceiling: **1 Mb of input** predicting **5,930 human tracks across 11 modalities** — gene expression, transcription initiation, chromatin accessibility, histone modifications, TF binding, contact maps, splice sites/usage/junctions — up to **single-base-pair resolution**, dissolving the length-versus-resolution trade-off that constrained everything before it. It matches or exceeds the strongest external model in 25 of 26 variant-effect evaluations.
 
+**AlphaGenome 2** (`raw/gayoso-2026-alphagenome2.pdf`) replaces AlphaGenome's one-output-per-(cell type, assay) layout with a **condition input**: a learned ontology-indexed embedding, or an embedding computed from scRNA-seq, modulates the trunk by FiLM from the earliest layers, and the heads predict channels shared across conditions. Its ablation finds that conditioning only the decoder or output gives minimal gain over the unconditioned multitask model; conditioning the encoder and transformer gives the main gain (p.4). Because every condition gets every channel, it imputes unmeasured assays. See [[alphagenome-2]].
+
 **NTv3** and **Evo 2** push further on context and self-supervision — see [[genomic-language-models]].
 
 ## Breaking sequence's cell-type invariance
@@ -49,6 +51,7 @@ The models that generalise to **unseen cell types** all add a non-sequence input
 - **Enformer Celltyping** (`raw/murphy-2024-enformer-celltyping.xml`) transfers Enformer to unseen cell types using DNA + accessibility, beating Epitome, and proposes an rQTL-based evaluation. It also reports the sharp caveat that genome-wide performance can look strong simply because the average signal is a good genome-wide predictor — the [[average-activity-baseline]] problem in this literature.
 - **EpiGePT** (`raw/gao-2024-epigept.xml`) conditions on **transcription-factor activity** plus 3D interactions to steer prediction into a new cellular context.
 - **Corgi** (`raw/aksu-2026-corgi.pdf`) conditions on **trans-regulator expression** (TFs, histone modifiers, coactivators, RBPs), and claims a new state of the art for joint cross-sequence and cross-cell-type epigenetic track prediction, approaching experimental accuracy for expression in unseen cell types.
+- **AlphaGenome 2** (`raw/gayoso-2026-alphagenome2.pdf`) takes **scRNA-seq of the target cells**, encoded and averaged into a condition embedding, and was reported to beat models trained on the target cohort without any training on it (p.9). For cell types in its training catalog it needs no extra input at all, only the learned embedding. See [[alphagenome-2]].
 - **SUCCEED** (`raw/sun-2026-succeed.pdf`) takes the supervised-pretraining route: conv + transformer pretrained on **6,389 ENCODE functional tracks**, then transferred to predict cell-type-specific epigenomic profiles, **denoise sparse accessibility signal**, and predict 3-D contacts — evidence that supervised functional pretraining transfers where sequence-only pretraining does not (see [[sequence-model-critiques]]).
 
 ## Conditioned decoders

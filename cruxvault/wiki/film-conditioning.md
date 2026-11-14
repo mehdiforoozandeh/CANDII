@@ -3,9 +3,9 @@ type: wiki
 title: FiLM conditioning
 summary: Feature-wise Linear Modulation: conditioning a network by predicting per-channel scale and shift from side information, applied throughout the network rather than at the input.
 category: method
-sources: raw/perez-2018-film.pdf, raw/peebles-2022-dit-adaln.pdf, raw/ho-2022-cfg.pdf, raw/karras-2019-stylegan2.pdf, raw/dieng-2018-dieng-skip.pdf
+sources: raw/perez-2018-film.pdf, raw/peebles-2022-dit-adaln.pdf, raw/ho-2022-cfg.pdf, raw/karras-2019-stylegan2.pdf, raw/dieng-2018-dieng-skip.pdf, raw/gayoso-2026-alphagenome2.pdf
 created: 2026-07-31T21:26:00
-updated: 2026-07-31T23:27:28
+updated: 2026-11-12T18:00:00
 ---
 
 # FiLM conditioning
@@ -61,6 +61,10 @@ The general lesson: if a conditioning signal writes a per-channel scale and a su
 `raw/dieng-2018-dieng-skip.pdf` addresses the complementary question of *where* conditioning should enter. In the VAE setting it shows that adding **skip connections from the latent to every layer of the decoder** increases the mutual information between the latent and the output, and it proves this raises the dependence rather than merely appearing to. The failure it prevents — the decoder becoming powerful enough to model the data while ignoring the conditioning variable entirely — is the same failure a conditioned decoder faces.
 
 This is direct evidence for conditioning at every layer rather than once, and it cuts against single-injection designs. What it does not settle is per-output-channel conditioning granularity, where the trade-off against parameter sharing is empirical.
+
+## Where FiLM enters, in a genomics model
+
+`raw/gayoso-2026-alphagenome2.pdf` (AlphaGenome 2) is a large-scale genomics use: a 256-d condition vector feeds an independent FiLM layer after every normalisation in the convolutional encoder, transformer tower and decoder. The normalisations carry no static affine parameters, so all per-channel scale and shift come from the condition. Projections start at near-zero weights, so FiLM initially scales activations uniformly by tanh(1) ≈ 0.76 (p.22). Its ablation, with 3 seeds per arm, found that FiLM at the output embedder or the decoder alone gave minimal gain over an unconditioned multitask model, while FiLM in the transformer and encoder gave the main gain (p.4, p.28). This is direct evidence for the "throughout the network rather than at the input" claim in the summary, measured in this domain. See [[alphagenome-2]].
 
 ## Testing whether it worked
 

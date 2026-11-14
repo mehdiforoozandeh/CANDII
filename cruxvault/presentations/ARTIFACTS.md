@@ -17,5 +17,6 @@ This file lists every page published on claude.ai for CANDII, as of 2026-10-25. 
 | Encoder-Decoder Phase 2 (22 slides) | https://claude.ai/artifact/PGZNDxcAgy42NFuuVG5c1m | the symmetric encoder-decoder phase 2 (`t128p2-encdec`): fixed, anchored and 12,000-step arms, [[t132_build_and_run_phase_2_of_the_symmet]] | [DECK.md](t128p2-encdec/DECK.md) |
 | Bigger g, Bigger f (17 slides) | https://claude.ai/artifact/5JfcGnVRdH8NESQeSWp9tp | phase 3 of the pivot study (`t128p3-scale`): a bigger g and a bigger f for old D read through the base, [[t134_build_and_run_phase_3_of_the_pivot_]] | [DECK.md](t128p3-scale/DECK.md) |
 | CAC Testbed Close-out (32 slides) | https://claude.ai/artifact/YPwpootBTpn3pkY1nGVQGB | the whole covariate artifact correction testbed, final experiments included, [[t146_build_and_run_the_final_cac_testbed]] | [DECK.md](testbed-closeout/DECK.md) |
+| Peeling the Variance (18 slides) | https://claude.ai/artifact/H8ShBq8tJ1eMzwpjNpdU87 | how the law of total variance formulates the onion variance decomposition (formal note [[onion total variance]]); simulated checks only, no real-data layers, no model results | [DECK.md](onion-total-variance/DECK.md) |
 
 Not published: the q1 deck (`q1/`).

@@ -1,0 +1,22 @@
+{
+ "rung": 4,
+ "context_bins": 1024,
+ "skip_source": "both",
+ "covariate_injection": "film",
+ "mask_mode": "token",
+ "dna": "own",
+ "scramble_covariates": true,
+ "scramble_all": false,
+ "count_transform": "offset",
+ "qc_on_input": false,
+ "two_step": false,
+ "base_depth": "native",
+ "average_input": false,
+ "control_input": true,
+ "predict_control": true,
+ "param_budget": 1000000.0,
+ "windows_seen": 80000,
+ "lr": 0.001,
+ "batch_size": 8,
+ "simpler_than_base": false
+}

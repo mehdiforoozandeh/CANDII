@@ -3,9 +3,9 @@ type: wiki
 title: Epigenome imputation
 summary: Predicting unperformed epigenomic experiments from the correlation structure of observed ones; the task definition, its history, and why imputed data is often used for denoising.
 category: overview
-sources: raw/ernst-2015-chromimpute.xml, raw/durham-2018-predictd.xml, raw/schreiber-2020-avocado.xml, raw/schreiber-2020-encode3-compendium.xml, raw/hawkins-hooker-2023-edice.xml, raw/schreiber-2023-encode-imputation-challenge.pdf, raw/zhang-2023-epcot.xml, raw/wen-2024-discriminative-histone-imputation.pdf, raw/boix-2021-regulatory-genomic-circuitry.xml, raw/chen-2025-epiagent.pdf, raw/avsec-2026-alphagenome.xml, raw/linder-2025-borzoi.xml
+sources: raw/ernst-2015-chromimpute.xml, raw/durham-2018-predictd.xml, raw/schreiber-2020-avocado.xml, raw/schreiber-2020-encode3-compendium.xml, raw/hawkins-hooker-2023-edice.xml, raw/schreiber-2023-encode-imputation-challenge.pdf, raw/zhang-2023-epcot.xml, raw/wen-2024-discriminative-histone-imputation.pdf, raw/boix-2021-regulatory-genomic-circuitry.xml, raw/chen-2025-epiagent.pdf, raw/avsec-2026-alphagenome.xml, raw/linder-2025-borzoi.xml, raw/gayoso-2026-alphagenome2.pdf
 created: 2026-07-31T21:26:00
-updated: 2026-08-01T18:05:24
+updated: 2026-11-12T18:00:00
 ---
 
 # Epigenome imputation
@@ -24,6 +24,7 @@ Nearly all published methods predict **processed signal**, specifically the −l
 - **[[predictd]]** (2018, `raw/durham-2018-predictd.xml`) — parallel tensor decomposition; imputes all missing entries jointly from one factorisation.
 - **[[avocado]]** (2020, `raw/schreiber-2020-avocado.xml`) — deep tensor factorisation with multi-scale genomic factors; produces a reusable latent representation. Extended to 3,814 ENCODE tracks in `raw/schreiber-2020-encode3-compendium.xml`, which also shows new assays and biosamples can be added to a **pre-trained** model by fitting only the new axis factors.
 - **[[edice]]** (2023, `raw/hawkins-hooker-2023-edice.xml`) — attention over observed tracks; pushes into individual-specific (donor-level) imputation. Its own summary of the lineage is deflationary: the deep methods have outstripped ChromImpute "only on a subset of metrics."
+- **[[alphagenome-2]]** (2026, `raw/gayoso-2026-alphagenome2.pdf`) — the first sequence model to compete on this task directly: a learned per-cell-type embedding plus DNA sequence, with shared output channels, so any channel can be read for any trained cell type. In a held-out-track benchmark it beat a retrained [[avocado]] on 166 of 181 tracks, with the gain concentrated on rare, condition-specific peaks. Its targets are coverage and ChIP fold change over control, not −log10 p-values.
 - **[[sequence-conditioned-epigenome-models]]** — a separate lineage that predicts epigenomic signal from DNA sequence (± chromatin accessibility) rather than from other assays. The hybrids sit between: `raw/zhang-2023-epcot.xml` (EPCOT) and `raw/wen-2024-discriminative-histone-imputation.pdf` (dHICA) both condition on **sequence + chromatin accessibility**, which buys prediction in new cell types from accessibility alone — the same generalisation goal as this page's methods, reached without the compendium.
 
 ## Imputation as denoising
@@ -46,7 +47,9 @@ from the sequence side:
   its stated motivation being that existing methods "involve a trade-off between input sequence
   length and prediction resolution, thereby limiting their modality scope and performance".
 
-Neither is an imputation method in this page's sense — they condition on sequence, not on other
+AlphaGenome 2 (`raw/gayoso-2026-alphagenome2.pdf`) then closed the gap from the sequence side: it is an imputation method in this page's sense for cell types it was trained on, while keeping 1-bp accessibility and 128-bp ChIP output; its imputation benchmark is scored at 32 bp (p.42). See [[alphagenome-2]].
+
+Borzoi and AlphaGenome 1 are not imputation methods in this page's sense — they condition on sequence, not on other
 assays in the same sample (see [[sequence-conditioned-epigenome-models]]). But they establish
 that 25 bp is a convention inherited from the imputation benchmarks, not a technical limit, and
 that a model committing to it is accepting a resolution ceiling the neighbouring lineage has
