@@ -201,13 +201,18 @@ def _scores_path(seed_dir: Path, sub: str) -> Path:
     return seed_dir / sub / "scores.json" if sub else seed_dir / "scores.json"
 
 
-def load_scores(arm: Path, sub: str = "") -> list[dict]:
+def load_scores(arm: Path, sub: str = "", oracle=None) -> list[dict]:
+    """The scores.json of every seed. `oracle` ("auto" or a directory): each score also gets
+    `__oracle__`, its report-time gap closed with the oracle floor (oracle_floor.seed_terms; None
+    when no reference is found)."""
     out = []
     for d in seed_dirs(arm):
         p = _scores_path(d, sub)
         if p.is_file():
             s = json.loads(p.read_text(encoding="utf-8"))
             s["__path__"] = str(p)
+            if oracle:
+                s["__oracle__"] = _SR._oracle_terms(p, s, oracle)
             out.append(s)
     return out
 
@@ -283,13 +288,13 @@ def write_tsv(rows: list[dict], columns: list[str], out) -> None:
     tmp.replace(out)
 
 
-def load_baseline(b: Path, sub: str = "") -> list[dict]:
+def load_baseline(b: Path, sub: str = "", oracle=None) -> list[dict]:
     """The one scores.json of a baseline. With a score subdirectory other than `blind` (interface
     M: `p16`, `p256`), `seed0/<sub>/scores.json` when it exists, else `seed0/scores.json` (a
     baseline of a derived evaluation set lives in its own baselines dir, e.g. baselines_p16)."""
     if sub and sub != "blind" and not any(_scores_path(d, sub).is_file() for d in seed_dirs(b)):
         sub = ""
-    return load_scores(b, sub)[:1]
+    return load_scores(b, sub, oracle)[:1]
 
 
 def check_arm_keys(arms: dict, allow=()) -> None:
@@ -302,11 +307,38 @@ def check_arm_keys(arms: dict, allow=()) -> None:
         raise Refused(str(e)) from None
 
 
-def _load_groups(runs, prefix, baselines, sub, allow_mix=()):
-    arms = {p.name: load_scores(p, sub) for p in find_arms(runs, prefix)}
-    base = {p.name: load_baseline(p, sub) for p in find_baselines(baselines)}
+def _load_groups(runs, prefix, baselines, sub, allow_mix=(), oracle=None):
+    arms = {p.name: load_scores(p, sub, oracle) for p in find_arms(runs, prefix)}
+    base = {p.name: load_baseline(p, sub, oracle) for p in find_baselines(baselines)
+            if p.name != "oracle_floor"}        # the oracle reference is no baseline score
     check_arm_keys(arms, allow_mix)
+    if oracle:
+        check_composite_versions({**arms, **base})
     return arms, base
+
+
+def check_composite_versions(groups: dict) -> bool:
+    """True when every score of `groups` was read with an oracle-floor reference (composite
+    version 2), False when none was; Refused on a mix (arms and baselines alike)."""
+    try:
+        _SR.check_composite_versions([
+            {"path": s["__path__"], "composite_version":
+             (s.get("__oracle__") or {}).get("composite_version", 1)}
+            for seeds in groups.values() for s in seeds])
+    except _SR.Refused as e:
+        raise Refused(str(e)) from None
+    return any(s.get("__oracle__") for seeds in groups.values() for s in seeds)
+
+
+#: OF (PI ruling 47): the gap closed with the oracle floor, per subset of oracle_floor.SUBSETS
+ORACLE_Q = {"all": "correction_gap_closed_oracle",
+            "no_nodedup_side": "correction_gap_closed_oracle_no_nodedup_side"}
+OLD_GAP = "correction_gap_closed_vs_depth_only_never_trained"
+
+
+def _oracle_value(s: dict, subset: str, field: str = "gap_closed_oracle"):
+    t = s.get("__oracle__") or {}
+    return ((t.get("block") or {}).get(subset) or {}).get(field)
 
 
 def _seed_value(s: dict, path: tuple):
@@ -399,9 +431,11 @@ def _h7_seed(x, second: set, cls_of: dict, classes: list) -> dict:
     return out
 
 
-def headline(runs, prefix, baselines, sub="", addon=ADDON, pairs=None, allow_mix=()) -> tuple[list[dict], list[str]]:
-    arms, base = _load_groups(runs, prefix, baselines, sub, allow_mix)
+def headline(runs, prefix, baselines, sub="", addon=ADDON, pairs=None, allow_mix=(),
+             oracle="auto") -> tuple[list[dict], list[str]]:
+    arms, base = _load_groups(runs, prefix, baselines, sub, allow_mix, oracle)
     check_evalset({**arms, **base})
+    v2 = bool(oracle) and check_composite_versions({**arms, **base})
     add = {"arm": {k: load_addon(v, addon) for k, v in arms.items()},
            "baseline": {k: load_addon(v, addon) for k, v in base.items()}}
     _check_addon(add)
@@ -420,6 +454,13 @@ def headline(runs, prefix, baselines, sub="", addon=ADDON, pairs=None, allow_mix
     for c in classes:
         for k in ("upper_bound", "pass_rate", "n_targets"):
             cols += [f"{H7}.by_class.{c}.{k}.{x}" for x in ("mean", "spread", "n_defined")]
+    if v2:
+        cols += ["composite_version", f"{OLD_GAP}.status"]
+        for q in ORACLE_Q.values():
+            cols += [f"{q}.{x}" for x in ("mean", "spread", "n_defined", "reference",
+                                          "reference_source")]
+            cols += [f"{q}.{f}.{x}" for f in ("numerator", "denominator") for x in ("mean", "spread")]
+            cols += [f"{q}.n_pairs", f"{q}.reason"]
     h7_seeds = {kind: {k: [_h7_seed(x, second, cls_of, classes) for x in v] for k, v in g.items()}
                 for kind, g in add.items()}
     pr_path = (H7, "per_rung", "pseudoreplicate", "macro")
@@ -471,8 +512,33 @@ def headline(runs, prefix, baselines, sub="", addon=ADDON, pairs=None, allow_mix
                     st = stats([h.get((c, k)) for h in hs])
                     r.update({f"{p}.mean": st["mean"], f"{p}.spread": st["spread"],
                               f"{p}.n_defined": st["n_defined"]})
+            if v2:
+                r.update(_oracle_row(seeds, base))
             rows.append(r)
     return rows, cols
+
+
+def _oracle_row(seeds: list[dict], base: dict) -> dict:
+    """OF: the headline columns of the gap closed with the oracle floor, for one arm or baseline."""
+    from onion_eval.oracle_floor import SUPERSEDED
+    r = {"composite_version": (seeds[0].get("__oracle__") or {}).get("composite_version", 1)
+         if seeds else None, f"{OLD_GAP}.status": SUPERSEDED}
+    for sub, q in ORACLE_Q.items():
+        st = stats([_oracle_value(s, sub) for s in seeds])
+        r.update({f"{q}.mean": st["mean"], f"{q}.spread": st["spread"],
+                  f"{q}.n_defined": st["n_defined"]})
+        for f in ("numerator", "denominator"):
+            sf = stats([_oracle_value(s, sub, f) for s in seeds])
+            r.update({f"{q}.{f}.mean": sf["mean"], f"{q}.{f}.spread": sf["spread"]})
+        ns = {_oracle_value(s, sub, "n_pairs") for s in seeds}
+        r[f"{q}.n_pairs"] = ns.pop() if len(ns) == 1 else None
+        why = sorted({(s.get("__oracle__") or {}).get("reason") or _oracle_value(s, sub, "reason")
+                      or "" for s in seeds} - {""})
+        r[f"{q}.reason"] = "; ".join(why)
+        r[f"{q}.reference"], r[f"{q}.reference_source"] = _best("high", {
+            b: _num(_oracle_value(ss[0], sub)) if ss else None for b, ss in base.items()
+            if b in TRAINING_FREE})
+    return r
 
 
 # ------------------------------------------------------------------------------------------ explained
@@ -596,9 +662,10 @@ def accessibility(runs, prefix, baselines=None, sub="", allow_mix=()) -> tuple[l
 
 # ------------------------------------------------------------------------------------------ per knob
 
-def per_knob(runs, prefix, baselines=None, sub="", allow_mix=()) -> tuple[list[dict], list[str]]:
-    arms, base = _load_groups(runs, prefix, baselines, sub, allow_mix)
+def per_knob(runs, prefix, baselines=None, sub="", allow_mix=(), oracle="auto") -> tuple[list[dict], list[str]]:
+    arms, base = _load_groups(runs, prefix, baselines, sub, allow_mix, oracle)
     check_evalset({**arms, **base})
+    v2 = bool(oracle) and check_composite_versions({**arms, **base})
     cols = ["arm", "kind", "pair_kind", "knob", "n_seeds", "n_defined", "mean", "spread"]
     key = "correction_gap_closed_vs_depth_only_never_trained"
     rows = []
@@ -611,6 +678,16 @@ def per_knob(runs, prefix, baselines=None, sub="", allow_mix=()) -> tuple[list[d
                              "knob": knob, **st})
             st = stats([_get(s, ("subset_pairs_gap_closed", "macro")) for s in seeds])
             rows.append({"arm": name, "kind": kind, "pair_kind": "subset", "knob": MACRO, **st})
+            if not v2:
+                continue
+            for sub_, kind_ in (("all", "never_trained_non_subset_oracle"),
+                                ("no_nodedup_side", "never_trained_non_subset_no_nodedup_side_oracle")):
+                pk = [(_oracle_value(s, sub_, "per_knob") or {}) for s in seeds]
+                for k in sorted({k for d in pk for k in d}):
+                    st = stats([(d.get(k) or {}).get("value") for d in pk])
+                    rows.append({"arm": name, "kind": kind, "pair_kind": kind_, "knob": k, **st})
+                st = stats([_oracle_value(s, sub_) for s in seeds])
+                rows.append({"arm": name, "kind": kind, "pair_kind": kind_, "knob": MACRO, **st})
     return rows, cols
 
 

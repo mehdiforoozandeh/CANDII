@@ -213,38 +213,78 @@ def _composite(g: dict):
     return None if any(g[k] is None for k in GOALS) else sum(WEIGHTS[k] * g[k] for k in GOALS)
 
 
-def load_seed(path: Path) -> dict:
+def load_seed(path: Path, oracle="auto") -> dict:
     """Goal terms, recomputed composite, copy-leak results, denominators and the comparability
-    fields of one scores.json."""
+    fields of one scores.json. With an oracle-floor reference (`oracle_floor.find_oracle`, or the
+    directory `oracle`; None never uses one) the correction term is the gap closed with the
+    oracle floor (PI ruling 47), recomputed from the score's per-pair records, and the seed carries
+    `composite_version` 2; the scored (half-read) term is kept as `correction_halfread_superseded`.
+    Without one the seed is read as before (`composite_version` 1)."""
     s = json.loads(Path(path).read_text(encoding="utf-8"))
     sel = s.get("selection") or {}
     g = {k: _num(sel.get(GOAL_KEYS[k])) for k in GOALS}
     reasons = {k: sel.get(f"{k}_reason") or "" for k in GOALS}
     cl = s.get("copy_leak") or {}
     den = sel.get("denominators") or {}
-    return {"goals": g, "composite": _composite(g), "copy_leak_pass": cl.get("copy_leak_pass"),
+    dens = {k: _num(den.get(DENOM_KEYS[k][0])) for k in DENOM_KEYS}
+    keys = scorer_keys(s)
+    ver, extra = 1, {}
+    t = _oracle_terms(path, s, oracle)
+    if t is not None:
+        ver = t["composite_version"]
+        extra = {"correction_halfread_superseded": g["correction"], "oracle_block": t["block"],
+                 "oracle_dir": t["oracle_dir"],
+                 "denominator_names": {"correction": "correction_depth_only_minus_oracle_relative_min"}}
+        g["correction"] = _num(t["value"])
+        reasons["correction"] = t["reason"]
+        dens["correction"] = _num(t["denominator_relative_min"])
+        keys.update(composite_version=ver, gap_closed_floor=t["gap_closed_floor"])
+    return {**extra, "composite_version": ver,
+            "goals": g, "composite": _composite(g), "copy_leak_pass": cl.get("copy_leak_pass"),
             "copy_leak_part1": cl.get("part1_wiring_pass"),
             "gate_on_copy_gain": cl.get("gate_on_copy_gain") is True,
             "copy_gain_spread_ok": cl.get("same_view_copy_gain_spread_ok",
                                           cl.get("copy_leak_spread_ok")),
             "copy_gain_flag": cl.get("same_view_copy_gain_flag"),
-            "denominators": {k: _num(den.get(DENOM_KEYS[k][0])) for k in DENOM_KEYS},
+            "denominators": dens,
             "reason": sel.get("reason", ""), "goal_reasons": reasons, "path": str(path),
             "evalset_sha256": s.get("evalset_sha256") or "",
             "tables_sha256": s.get("tables_sha256") or "", "split": s.get("split"),
             "regime": s.get("regime"), "space": sel.get("space"),
             "noise_floor": s.get("noise_floor"), "evalset": s.get("evalset", ""),
-            "scorer_keys": scorer_keys(s)}
+            "scorer_keys": keys}
 
 
-def load_arm(arm, sub: str = "", min_seeds: int = MIN_SEEDS) -> list[dict]:
+def _oracle_terms(path, s: dict, oracle):
+    """oracle_floor.seed_terms (None without a reference); numpy is imported only here."""
+    if not oracle:
+        return None
+    from onion_eval import oracle_floor as OF
+    return OF.seed_terms(path, s, oracle)
+
+
+def check_composite_versions(seeds: list[dict]) -> None:
+    """Refused when the seeds (arms AND baselines) carry composites of more than one version: a
+    version 2 composite has the oracle floor as the top of its correction term (PI ruling 47), a
+    version 1 composite the half-read floor."""
+    vals: dict = {}
+    for s in seeds:
+        vals.setdefault(s.get("composite_version", 1), []).append(s["path"])
+    if len(vals) > 1:
+        raise Refused("composite versions differ (version 2: correction gap closed with the oracle "
+                      "floor; version 1: the half-read floor, superseded): " + "; ".join(
+                          f"version {v}: {len(ps)} scores, e.g. {ps[0]}"
+                          for v, ps in sorted(vals.items())))
+
+
+def load_arm(arm, sub: str = "", min_seeds: int = MIN_SEEDS, oracle="auto") -> list[dict]:
     """Every seed of an arm with a scores.json (under `sub` inside each seed dir) and no CAPPED;
     Missing when fewer than min_seeds."""
     seeds = []
     for d in seed_dirs(Path(arm)):
         p = d / sub / "scores.json" if sub else d / "scores.json"
         if p.is_file() and not (d / CAPPED).exists():      # a capped run never counts as a seed
-            seeds.append(load_seed(p))
+            seeds.append(load_seed(p, oracle))
     if len(seeds) < min_seeds:
         raise Missing(f"{arm}: {len(seeds)} scored seeds; the rule needs at least {min_seeds}")
     return seeds
@@ -306,6 +346,9 @@ def scorer_keys(s: dict) -> dict:
            FRAGLEN_KEY: (s.get("fraglen_table") or {}).get("sha256")}
     refs = s.get("refs") or {}
     out.update({f"refs.{k}": v for k, v in sorted(refs.items()) if k.startswith("sha256_")})
+    t = s.get("__oracle__")             # arm_report: read with an oracle-floor reference (OF)
+    if t:
+        out.update(composite_version=t["composite_version"], gap_closed_floor=t["gap_closed_floor"])
     return out
 
 
@@ -362,6 +405,7 @@ def screen_terms(seeds: list[dict], clip: bool | None = None) -> tuple[list[tupl
             if d is None:
                 problems.append((k, f"{s['path']}: {k} denominator ({key}) not recorded"))
             elif d < tol:
+                key = (s.get("denominator_names") or {}).get(k, key)
                 problems.append((k, f"{s['path']}: {k} denominator {key} = {d:.4g} < tolerance {tol:g}"))
         clipped = {k: _clip(raw[k]) for k in GOALS}
         for k in GOALS:
@@ -413,6 +457,7 @@ def decide(inc: list[dict], ch: list[dict], simpler: str, *, clip: bool | None =
     if len(inc) < MIN_SEEDS or len(ch) < MIN_SEEDS:
         raise Refused(f"seeds: incumbent {len(inc)}, challenger {len(ch)}; D13 needs at least {MIN_SEEDS}")
     check_comparable(inc + ch, "val")
+    check_composite_versions(inc + ch)
     check_scorer_keys([(s["path"], s.get("scorer_keys") or {}) for s in inc + ch], allow_mix)
     clip = CLIP_GOAL_TERMS if clip is None else clip
     out = {"composite_delta": None, "seed_spread": None, "per_goal_deltas": {}, "per_goal_spreads": {},
@@ -584,16 +629,30 @@ def seed_state(d: Path, sub: str = "") -> str:
     return "queued"
 
 
-def table(runs, prefix: str = "", sub: str = "") -> list[dict]:
+def table(runs, prefix: str = "", sub: str = "", oracle="auto") -> list[dict]:
+    """One row per seed. A seed read with an oracle-floor reference (composite version 2) also gets
+    `composite_version`, `correction_gap_closed_halfread_superseded` (the old term, PI ruling 47),
+    `correction_gap_closed_oracle_no_nodedup_side`, `correction_numerator` and
+    `correction_denominator` (macro over assays, all headline pairs)."""
     rows = []
     for arm in sorted(p for p in Path(runs).iterdir() if p.is_dir() and p.name.startswith(prefix)):
         for d in seed_dirs(arm):
             st = seed_state(d, sub)
             comp, cl, flag = None, None, None
             raw = clipped = dict.fromkeys(GOALS)
+            v2 = {}
             sp = d / sub / "scores.json" if sub else d / "scores.json"
             if sp.is_file():
-                s = screen_terms([load_seed(sp)])[1][0]
+                s = screen_terms([load_seed(sp, oracle)])[1][0]
+                if s["composite_version"] != 1:
+                    blk = s.get("oracle_block") or {}
+                    a, b = blk.get("all") or {}, blk.get("no_nodedup_side") or {}
+                    v2 = {"composite_version": s["composite_version"],
+                          "correction_gap_closed_halfread_superseded":
+                              s["correction_halfread_superseded"],
+                          "correction_gap_closed_oracle_no_nodedup_side": b.get("gap_closed_oracle"),
+                          "correction_numerator": a.get("numerator"),
+                          "correction_denominator": a.get("denominator")}
                 g = gate_status([s])            # the gate as select_rule applies it (old scores too)
                 comp, flag = s["composite"], s["copy_gain_flag"]
                 raw, clipped = s["raw_goals"], s["clipped_goals"]
@@ -602,8 +661,14 @@ def table(runs, prefix: str = "", sub: str = "") -> list[dict]:
                          "composite": comp,
                          **{f"{k}_raw": raw[k] for k in GOALS},
                          **{f"{k}_clipped": clipped[k] for k in GOALS},
-                         "copy_leak_pass": cl, "same_view_copy_gain_flag": flag})
+                         "copy_leak_pass": cl, "same_view_copy_gain_flag": flag, **v2})
     return rows
+
+
+#: the extra `table` columns of a seed read with an oracle-floor reference
+TABLE_V2_COLUMNS = ("composite_version", "correction_gap_closed_halfread_superseded",
+                    "correction_gap_closed_oracle_no_nodedup_side", "correction_numerator",
+                    "correction_denominator")
 
 
 H1_COLUMNS = ("assay", "n_targets", "n_targets_with_floor", "floor_exists", "headline1_defined",
@@ -779,6 +844,7 @@ def done_condition_2(final, baselines, sub: str = "", *, clip: bool | None = Non
         base[b] = load_seed(p)
     try:
         check_comparable(seeds + list(base.values()), split)
+        check_composite_versions(seeds + list(base.values()))
     except Refused as e:
         return "REFUSED", [str(e)]
     lines, states = list(skipped), []
@@ -919,13 +985,22 @@ def main(argv=None) -> int:
         return 0
     if a.cmd == "table":
         terms = [f"{k}_{v}" for v in ("raw", "clipped") for k in GOALS]
+        rows = table(a.runs, a.prefix, a.sub)
+        vers = {r["composite_version"] for r in rows if "composite_version" in r}
+        extra = list(TABLE_V2_COLUMNS) if vers else []
+        if vers and (len(vers) > 1 or any("composite_version" not in r for r in rows
+                                          if r["state"] == "done")):
+            print("warning: composite versions differ across rows (version 1 rows have no oracle "
+                  "reference); never compare them", file=sys.stderr)
         print("\t".join(["arm", "seed", "state", "composite", *terms, "copy_leak_pass",
-                         "same_view_copy_gain_flag"]))
+                         "same_view_copy_gain_flag", *extra]))
         f = lambda x: "" if x is None else f"{x:.6g}"          # noqa: E731
-        for row in table(a.runs, a.prefix, a.sub):
+        for row in rows:
             print("\t".join([row["arm"], str(row["seed"]), row["state"], f(row["composite"]),
                              *(f(row[t]) for t in terms), str(row["copy_leak_pass"]),
-                             str(row["same_view_copy_gain_flag"])]))
+                             str(row["same_view_copy_gain_flag"]),
+                             *(str(row.get(c, 1)) if c == "composite_version" else f(row.get(c))
+                               for c in extra)]))
         return 0
     if a.cmd == "h1-status":
         print("\t".join(("scores",) + H1_COLUMNS))
