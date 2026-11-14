@@ -20,7 +20,7 @@
 # GPU form (a 1g.10gb slice is free; rung 1's forward is 44x rung 2's): add
 #   --gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1 --cpus-per-task=1 --mem=24000M (and on Fir
 #   --exclude=fc10713,fc10715) to the sbatch line; score.py's --device auto then runs on the GPU.
-# Torch uses OMP_NUM_THREADS = the allocated CPUs (never the node's cores; F3).
+# Torch and BLAS use OMP_NUM_THREADS = ONION_SCORE_THREADS (default 2; never the node's cores, F3; SM pin below).
 # SM speed (outputs identical either way): ONION_STAGE=1 (default) copies the h5 files the scoring
 #   reads to $SLURM_TMPDIR/stage first (--stage-dir; Nibi NFS opens cost 0.21 s); ONION_STAGE=0 reads
 #   in place. ONION_SCORE_WORKERS=<n> (default: the allocated CPUs) forks n worker processes over
@@ -52,7 +52,7 @@ case "$WHAT" in
   *) echo "$USAGE" >&2; exit 2 ;;
 esac
 [ -f "$EVALSET" ] || { echo "no evalset $EVALSET" >&2; exit 2; }
-SPEED=(--workers "${ONION_SCORE_WORKERS:-${SLURM_CPUS_PER_TASK:-1}}")
+SPEED=(--workers "${ONION_SCORE_WORKERS:-${SLURM_CPUS_PER_TASK:-1}}")   # >1 only for baselines
 if [ "${ONION_STAGE:-1}" = 1 ] && [ -n "${SLURM_TMPDIR:-}" ]; then
   SPEED+=(--stage-dir "$SLURM_TMPDIR/stage")
 fi
@@ -70,11 +70,13 @@ pip install --no-index --find-links "$KIT/wheels" -r "$KIT/requirements-pypi.txt
 cd "$KIT"
 source "$KIT/slurm/_kit_pin.sh"
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1
-export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
-# SM: numpy's BLAS pool is pinned (default 2 threads, the CPU count of the E7a baseline and rung-1
-# scorings): r_spec's Level fit (inv, gemv) sums in an order that depends on it (2.3e-7 between 2
-# and 8 threads on a 32-region subset), so a fixed pool makes scores independent of the job's CPUs.
-export OPENBLAS_NUM_THREADS="${ONION_BLAS_THREADS:-2}" FLEXIBLAS_NUM_THREADS="${ONION_BLAS_THREADS:-2}" \
-  MKL_NUM_THREADS="${ONION_BLAS_THREADS:-2}"
+# SM: the threads per process are pinned (ONION_SCORE_THREADS, default 2, the CPU count of the E7a
+# baseline and rung-1 scorings), not the allocated CPUs: r_spec's Level fit (numpy BLAS: inv, gemv)
+# sums in an order that depends on the thread count (2.3e-7 between 2 and 8 threads on a 32-region
+# subset), so a pinned count makes the scores independent of the job's CPUs; the extra CPUs go to
+# worker processes. PASSIVE: idle OpenMP threads sleep instead of spinning against other workers.
+T="${ONION_SCORE_THREADS:-2}"
+export OMP_NUM_THREADS="$T" OPENBLAS_NUM_THREADS="$T" FLEXIBLAS_NUM_THREADS="$T" MKL_NUM_THREADS="$T" \
+  OMP_WAIT_POLICY=PASSIVE
 "${CMD[@]}"
 echo "=== done $(date -u)"

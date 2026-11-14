@@ -579,13 +579,12 @@ _WORKER = None
 
 def _worker_init() -> None:
     sc, _ = _WORKER
-    # one torch thread per worker: the workers share the job's CPUs (a spinning OpenMP pool of n
-    # threads in each of n workers slowed the windows 70x). Only training-free predictors run in
-    # workers, so no torch kernel whose result depends on the thread count runs here. numpy's BLAS
-    # pool keeps the parent's size: r_spec's Level fit (inv, gemv) sums in an order that depends on
-    # it (2.3e-7 on a 32-region subset, 2 against 8 threads), so a worker equals the serial run of
-    # the same job shape only with the same BLAS threads.
-    torch.set_num_threads(1)
+    # A worker keeps the parent's thread counts (torch and numpy's BLAS, which on the cluster share
+    # one OpenMP pool): r_spec's Level fit (inv, gemv) sums in an order that depends on the BLAS
+    # threads (2.3e-7 on a 32-region subset, 2 against 8 threads), so a worker equals the serial run
+    # only with the same threads. score.sh pins them (2) and sets OMP_WAIT_POLICY=PASSIVE, so n
+    # workers of 2 threads do not spin against each other (8 spinning threads in each of 8 workers
+    # slowed the windows 70x).
     sc._cells_ahead = None                       # the parent counts; a worker clears per group
     sc._pa_cache.clear()
     sc._pa_keep_cells = None
@@ -734,10 +733,6 @@ class Scorer:
             log(f"score: --workers {self.workers} applies to training-free predictors only; "
                 f"scoring the model serially")
             self.workers = 1
-        if self.workers > 1:
-            # the parent forks the workers: it must not start a torch OpenMP pool first (GNU
-            # OpenMP is not fork-safe); it does no torch math for a training-free predictor
-            torch.set_num_threads(1)
         #: SM: copy the files the scoring reads to local disk first (see _stage)
         self.stage_dir = Path(stage_dir) if stage_dir else None
         self.stage_info = None
