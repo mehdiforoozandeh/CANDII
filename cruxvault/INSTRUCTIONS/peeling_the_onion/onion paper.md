@@ -1,10 +1,16 @@
-# onion paper
+# Onion paper
+
+==This note is the growing write-up of the onion run. It grows one section at a time, in the order a paper is written, one iteration after another. Each section names the results files that its numbers come from.==
+
+## Background
+
+==The background and the introduction are the instruction set [[peeling the onion]] (`INSTRUCTIONS/peeling_the_onion/peeling the onion.md`).==
 
 ## Methods
 
-### Methods: Data
+### Data
 
-Every paragraph and table in this section is a draft by the agent, from files that the run recorded. Each number names its source file. Source files are under `cruxvault/results/`; the index of every number is `cruxvault/results/methods_data_eval/sources.md`.
+Every paragraph and table in this section is a draft by the agent, from files that the run recorded. Each number names its source file. Source files are under `cruxvault/results/`; the index of every number is `cruxvault/results/t309/sources.md`.
 
 ==**What we built.** The dataset is called `eic_v1`. It holds the tracks of the ENCODE Imputation Challenge (EIC), i.e. a public benchmark of 363 non-control tracks: 267 training, 45 validation and 51 blind tracks (`cruxvault/results/t273/AG2_LEAKAGE.md`). We rebuilt every track from the reads of its published ENCODE experiment. We did not reuse the challenge's processed files. Seven training DNase-seq tracks had a challenge file from another experiment. We rebuilt these seven from the published experiment's own FASTQs (`cruxvault/results/t170/build_plan.md`). The build list has 1,217 rows in four priorities (104, 292, 99 and 722 rows). `eic_v1` holds priorities 1 to 3, i.e. the validation tracks, the training tracks and the designed counterfactual views (`cruxvault/results/t170/check.txt`).==
 
@@ -12,7 +18,7 @@ Every paragraph and table in this section is a draft by the agent, from files th
 
 ==**Views and halves.** A view is one way to process the reads of a track. The base view pools all reads. Three FASTQ-level views imitate other sequencing runs: `se` keeps mate 1 of a paired-end library, and `crop36` and `crop50` cut reads to 36 and 50 bp. Five alignment-level views change processing: three depth thinnings (`depth0.50`, `depth0.25`, `depth0.125`), no duplicate removal (`nodedup`), and no mapping-quality filter (`mapq0`, not for ATAC-seq) (`cruxvault/results/t170/withheld_design.md`). Each view has two pseudoreplicate halves, `pr1` and `pr2`, i.e. a random read-level split of the view into two disjoint halves. All 43 paired-end training experiments get the `se` view (`cruxvault/results/t170/withheld_design.md`). Among training experiments, `crop36` exists for 3 ATAC-seq, 14 broad-histone and 12 narrow-histone experiments, and `crop50` for 3, 14 and 10. DNase-seq has no crop view, because its training reads are 36 bp or shorter (`cruxvault/results/t170/run_type_coverage.tsv`).==
 
-==**The freeze.** The table build started at 14:32 UTC on 2026-11-13 (Nibi job 27156918). It read 2,740 measurement directories and wrote 2,740 rows: 2,328 training, 334 validation and 78 blind rows. The 78 blind rows are the 7 counterfactual testbed tracks, for evaluation only. It also wrote 15,123 pairs, of which 102 are never-trained designed validation pairs. The `tables_sha256` is `a068a867...b135`. The dataset check printed `check: PASS` with every rule at 0 (`cruxvault/results/t183/DATASET_EIC_V1.md`). Table M1 below counts the tracks per assay (`cruxvault/results/methods_data_eval/dataset_table.tsv`).==
+==**The freeze.** The table build started at 14:32 UTC on 2026-11-13 (Nibi job 27156918). It read 2,740 measurement directories and wrote 2,740 rows: 2,328 training, 334 validation and 78 blind rows. The 78 blind rows are the 7 counterfactual testbed tracks, for evaluation only. It also wrote 15,123 pairs, of which 102 are never-trained designed validation pairs. The `tables_sha256` is `a068a867...b135`. The dataset check printed `check: PASS` with every rule at 0 (`cruxvault/results/t183/DATASET_EIC_V1.md`). Table M1 below counts the tracks per assay (`cruxvault/results/t309/dataset_table.tsv`).==
 
 | role | tracks present in `eic_v1` | of | absent |
 |---|---|---|---|
@@ -27,11 +33,11 @@ Source: `cruxvault/results/t183/DATASET_EIC_V1.md`.
 
 ==**Cost.** PI ruling 3 asked for the alignment cost of the uniform base. Of the 376 experiments of priorities 1 to 3, 330 ran a FASTQ alignment; the other 46 are the redacted-alignment rows. The 330 used 4,511 CPU-h in all, with a median of 6.89 CPU-h per experiment. Slurm allocated 19,894 CPU-h, so the jobs used 4,511 / 19,894 = 23% of what they held. The CPU-h per million reads was 0.198 for chip-seq-pipeline2, 0.136 for dnase-seq-pipeline and 0.310 for atac-seq-pipeline (`cruxvault/results/t183/DATASET_EIC_V1.md`, recomputed from `cruxvault/results/t183/fastq_cost.tsv`). The finished rows ran from 2026-11-11 02:35 to 2026-11-13 08:14 UTC, about 54 h of wall time. The table build itself used 4.32 CPU-h. The working storage on Nibi `/scratch` was 240 GB of measurements, 944 GB of intermediate files and 772 GB of staged FASTQs. The frozen measurements are archived as 55 tar files of 242 GB (`cruxvault/results/t183/compute_and_storage.tsv`).==
 
-==**Covariates and their limits.** The read-derived QC columns are sparse: 16.2% to 19.6% of training rows have NSC, RSC, NRF or PBC values, and no row has FRiP (`cruxvault/results/t183/qc_coverage.tsv`). Of the 249 training tracks present, 73.1% have reads of 36 bp or shorter, and all 7 blind testbed tracks are HiSeq 4000 runs with reads of 76 bp or longer (`cruxvault/results/t183/imbalance.tsv`). Counted from the served FASTQs, 43 of the 267 training experiments are paired-end, i.e. 16.1% (`cruxvault/results/t170/run_type_coverage.tsv`). The blind set is 100% paired-end, 100% HiSeq 4000 and 94% from one lab (`cruxvault/results/t170/withheld_design.md`). The run-type column of `imbalance.tsv` comes from the old store files, which undercount paired-end runs, so we do not quote it. The designed views imitate only two real shifts, paired-end to single-end and long to short reads. They cannot imitate platform, lab or the reverse directions (`cruxvault/results/t170/withheld_design.md`).==
+==**Covariates and their limits.** The read-derived QC columns are sparse: 16.2% to 19.6% of training rows have NSC, RSC, NRF or PBC values, and no row has FRiP (`cruxvault/results/t183/qc_coverage.tsv`). Of the 249 training tracks present, 73.1% have reads of 36 bp or shorter, and all 7 blind testbed tracks are HiSeq 4000 runs with reads of 76 bp or longer (`cruxvault/results/t183/imbalance.tsv`). Run type has two meanings, and we quote both. As processed, 229 of the 249 training tracks are single-end alignments, 12 are paired-end and 8 are mixed (`cruxvault/results/t183/imbalance.tsv`, which reads the `run_type` column of the `eic_v1` tables). As sequenced, the catalog FASTQs of the same 249 tracks are all single-end for 193, all paired-end for 11 and mixed for 14; the other 31 are redacted-alignment tracks, which ENCODE aligned single-end (`cruxvault/results/t309/sources.md`, section Run type). The two counts differ for two reasons. First, a ChIP-seq experiment that mixes single-end and paired-end runs is aligned single-end from mate 1, as ENCODE4 does (`long-horizon notepad.md`, agent call of 2026-11-11). Second, the redacted alignments are single-end. Over all 267 training experiments of the ledger, 43 have paired-end reads, i.e. 16.1% (`cruxvault/results/t170/run_type_coverage.tsv`). Of the 21 training experiments whose FASTQs are all paired-end, 10 are in the absent tail (`cruxvault/results/t309/sources.md`, section Run type). The blind set is 100% paired-end, 100% HiSeq 4000 and 94% from one lab (`cruxvault/results/t170/withheld_design.md`). The designed views imitate only two real shifts, paired-end to single-end and long to short reads. They cannot imitate platform, lab or the reverse directions (`cruxvault/results/t170/withheld_design.md`).==
 
-### Methods: Evaluation
+### Evaluation
 
-The figure of the protocol is `cruxvault/results/methods_data_eval/protocol_figure.svg`.
+The figure of the protocol is `cruxvault/results/t309/protocol_figure.svg`.
 
 ==**Split by tracks.** We use the EIC's own split (PI ruling 2). Models train on training tracks. Every score and every selection uses validation tracks. The blind tracks are read once, at the end (`cruxvault/INSTRUCTIONS/peeling_the_onion/long-horizon notepad.md`, ruling 2).==
 
@@ -59,3 +65,11 @@ The figure of the protocol is `cruxvault/results/methods_data_eval/protocol_figu
 ==**The single blind pass.** The blind set is scored once, at the end, from its own evaluation set `eval/eic_v2/evalset_blind.json`. Each blind pass is written to a ledger, `BLIND_PASSES.tsv`, so a second look is visible and needs a stated reason. The final model for the EIC comparison trains on training plus validation tracks, as the challenge entrants did (PI ruling 21). Iterations 1 to 3 read no blind track.==
 
 ==**Two scoring tiers.** A settled score runs each pair on all 256 regions, or on the smallest of 8, 16 or 32 nested regions that passes a check written before any model was scored (`cruxvault/results/pair_region_check/PAIR_CHECK_PREREGISTRATION.md`). A screening score runs pairs on 16 nested regions, and items keep all 256 regions. Each table states its tier. No selection is settled from a screening score. The baselines of iteration 1 are settled scores.==
+
+### Model
+
+## Results
+
+## Discussion
+
+## Later phases

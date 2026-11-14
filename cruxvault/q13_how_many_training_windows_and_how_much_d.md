@@ -35,8 +35,9 @@ Sets the training budget of a prototype run, and so the speed of the feedback lo
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**2 children** · open 2, leaning 0, settled 0, parked 0
+**3 children** · open 3, leaning 0, settled 0, parked 0
 
 - `h32` [[h32_a_smaller_budget_of_windows_ranks_the_ar|A smaller budget of windows ranks the arms of a rung as 80,000 windows does]] — *open*
 - `h33` [[h33_at_80_000_windows_training_on_r_blocks_o|At 80,000 windows, training on R blocks of U is as good as training on all of U]] — *open*
+- `q25` _(Q)_ [[q25_does_a_run_of_20_000_or_40_000_windows_r|Does a run of 20,000 or 40,000 windows rank the arms as 80,000 does (the prototype budget; core-before-scale)?]] — *open*
 <!-- crux:ledger:end -->
