@@ -48,9 +48,9 @@ Working copies of items 2 and 3 live in the worktree at `.claude/worktrees/onion
 
 **In work (agents)**
 - Metric phase of the scorer (`score.py --phase metrics`).
-- Restart of trainings after the outage: 8 failed first runs resubmitted, 34 held released (rungs 2 to 6, rung-4 `scrambled_covariates`, "evaluation regions excluded", 7 selection arms).
+- Restart of trainings after the outage: all 42 queued or running (8 resubmitted as 27269108-27269121, 34 released) (rungs 2 to 6, rung-4 `scrambled_covariates`, "evaluation regions excluded", 7 selection arms).
 - Two new input arms on rung 1 (`average_input`, `two_step_native`): 6 held trainings, first two released and checked first. Code on `chunk/onion-A1k`, not merged.
-- Baselines: 16-region scorings resubmitted; all four 256-region scorings (27265497 to 27265500) failed in the outage and are being resubmitted.
+- Baselines: 8 scorings run (16 regions: 27269893, 27269898, 27269901, 27269908; 256 regions: 27270400, 27270401, 27270402, 27269910).
 - Variance-layer rerun with pseudoreplicate pairs.
 
 **Next steps, in order**
