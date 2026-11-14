@@ -2563,10 +2563,10 @@ class Scorer:
                 "path": self.fraglen_path, "sha256": sha256_file(self.fraglen_path),
                 "n_rows": len(self.fraglen),
                 "n_dropped": sum(1 for e in self.fraglen.values() if e["drop_reason"]),
-                "rule": (f"a ChIP-seq target or training track with an empty frag_len uses the "
-                         f"table's xcor estimate when {lo} <= estimate <= {hi} bp and the xcor "
-                         f"quality tag is not {self.sig.FRAGLEN_BAD_QUALITY_TAG}; a filled frag_len "
-                         f"is never replaced"),
+                "rule": (f"a ChIP-seq target with an empty frag_len uses the table's estimate "
+                         f"when {lo} <= estimate <= {hi} bp (and, for an xcor estimate, its quality "
+                         f"tag is not {self.sig.FRAGLEN_BAD_QUALITY_TAG}); a filled frag_len is "
+                         f"never replaced"),
                 "per_target_key": "fraglen_source under specific_variance_recovered_above_noise."
                                   "signal_arcsinh.per_target (table | estimated | none)"}
         # SC: keys only off the default, so a default scores.json is unchanged

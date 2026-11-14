@@ -71,13 +71,15 @@ region is one stretch with no flank, so the MACS2 local windows (llocal = 10 kb 
 
 Fragment length of a single-end track (`load_fraglen_table`, `with_fraglen`): the frozen tables leave
 `frag_len` empty for most single-end ChIP-seq tracks, so the ChIP route has no `d`. A caller may give
-a side table of estimated fragment lengths (`qc_fill.py collect --fraglen-out`: the strand
-cross-correlation estimate of the pipeline's xcor task on the measurement's own kept reads).
+a side table of estimated fragment lengths (`qc_fill.py collect --fraglen-out`), first found of:
+the fragment length the pipeline used for the measurement's own `signal.h5` (its provenance.json),
+the rounded mean of its replicates' frozen `frag_len` (a pooled track: chip.wdl's rule), the strand
+cross-correlation estimate of the pipeline's xcor task on the measurement's own kept reads.
 `with_fraglen(row, table)` returns the row unchanged when `frag_len` is filled (source `table`; a
 table value is never replaced), the row with the estimate when it is empty and the side table has
 a plausible estimate (source `estimated`), else the row unchanged (source `none`; the ChIP route
 then stays undefined with "covariates lack ['frag_len']"). Plausible: FRAGLEN_PLAUSIBLE_BP[0] <=
-estimate <= FRAGLEN_PLAUSIBLE_BP[1] and the xcor QualityTag is not -2. Only the treatment's
+estimate <= FRAGLEN_PLAUSIBLE_BP[1], and for an xcor estimate its QualityTag is not -2. Only the treatment's
 `frag_len` is read: the control pileup is extended by the treatment's `d` (MACS2 `--extsize`
 applies to both), so a control row's `frag_len` never matters.
 """
@@ -277,7 +279,8 @@ def fraglen_drop_reason(est: dict) -> str:
     lo, hi = FRAGLEN_PLAUSIBLE_BP
     if not lo <= d <= hi:
         return f"implausible estimate {v} bp (outside {lo}-{hi} bp)"
-    if (est.get("quality_tag") or "").strip() == FRAGLEN_BAD_QUALITY_TAG:
+    if ((est.get("estimate_kind") or "xcor") == "xcor"
+            and (est.get("quality_tag") or "").strip() == FRAGLEN_BAD_QUALITY_TAG):
         return f"xcor quality tag {FRAGLEN_BAD_QUALITY_TAG} (very low)"
     return ""
 
@@ -304,7 +307,8 @@ def with_fraglen(row: dict, table) -> tuple[dict, str, str]:
         return row, "none", "frag_len empty and no estimate in the fragment-length table"
     if est["drop_reason"]:
         return row, "none", f"frag_len empty; {est['drop_reason']}"
-    return dict(row, frag_len=est["frag_len_estimated"].strip()), "estimated", ""
+    return (dict(row, frag_len=est["frag_len_estimated"].strip()), "estimated",
+            f"estimate_kind {est.get('estimate_kind') or 'unknown'}")
 
 
 def _need(cov: dict, *keys):

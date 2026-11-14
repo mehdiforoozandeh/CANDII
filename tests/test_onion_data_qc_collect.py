@@ -99,16 +99,77 @@ def test_collect_fraglen_side_table(tmp_path):
     assert QF.main(["collect", "--tables", str(t), "--out", str(tmp_path / "q.tsv"),
                     "--qc-dir", str(qc), "--fraglen-out", str(fl)]) == 0
     got = _read(fl)
-    assert set(got) == {"se_ok", "se_partial"}                # ok records with a fragment length
+    # ChIP rows with an ok xcor record (se_ok, se_partial) and the row with a frozen value; the
+    # stale and failed records give no xcor estimate
+    assert set(got) == {"se_ok", "se_partial"}
     with open(fl) as f:
         assert next(csv.reader(f, delimiter="\t")) == list(QF.FRAGLEN_COLUMNS)
     r = got["se_ok"]
-    assert (r["frag_len_estimated"], r["nsc"], r["rsc"], r["quality_tag"]) == ("165", "1.59",
-                                                                              "1.34", "1")
+    assert (r["frag_len_estimated"], r["estimate_kind"], r["frag_len_xcor"]) == ("165", "xcor", "165")
+    assert (r["nsc"], r["rsc"], r["quality_tag"]) == ("1.59", "1.34", "1")
     assert (r["xcor_num_reads"], r["phantom_peak"], r["min_corr"]) == ("15000000", "40", "0.225")
     assert r["frag_len_frozen"] == "" and r["run_type"] == "single-ended"
     assert r["source"] == f"{qc / 'se_ok.json'} job 123_4"
     tab = SFC.load_fraglen_table(fl)
     assert tab["se_ok"]["drop_reason"] == ""
-    row, src, _ = SFC.with_fraglen(rows["se_ok"], tab)
-    assert (row["frag_len"], src) == ("165", "estimated")
+    row, src, why = SFC.with_fraglen(rows["se_ok"], tab)
+    assert (row["frag_len"], src, why) == ("165", "estimated", "estimate_kind xcor")
+
+
+def _pooled_setup(tmp_path):
+    """One experiment: br1, br2 with frozen frag_len, a pooled row without, whose provenance.json
+    records the fragment length of its signal.h5; a second experiment's pooled row without
+    provenance; a third with an xcor record only."""
+    t = tmp_path / "tables"
+    t.mkdir()
+    cols = COLS + ["experiment", "unit", "layer", "arm_knob", "arm_value"]
+    md = tmp_path / "m" / "E1.pooled"
+    md.mkdir(parents=True)
+    (md / "provenance.json").write_text(json.dumps({
+        "measurement_id": "E1.pooled", "signal": {"signal.h5": {"spec": {
+            "fraglen": 150, "fraglen_per_rep": [140, 161], "fraglen_source": "chip.xcor outputs"}}}}))
+
+    def r(mid, exp, unit, fl="", cp=""):
+        return _row(mid, experiment=exp, unit=unit, layer="uniform", frag_len=fl, counts_path=cp)
+    rows = [r("E1.br1", "E1", "br1", "140"), r("E1.br2", "E1", "br2", "161"),
+            r("E1.pooled", "E1", "pooled", cp=f"h5:{md}/counts.h5"),
+            r("E2.br1", "E2", "br1", "120"), r("E2.br2", "E2", "br2", "125"),
+            r("E2.pooled", "E2", "pooled", cp="h5:/nonexistent/x/counts.h5"),
+            r("E3.pooled", "E3", "pooled"),
+            dict(r("E4.pooled", "E4", "pooled"), assay_class="control")]
+    with open(t / "measurements.tsv", "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=cols, delimiter="\t", lineterminator="\n")
+        w.writeheader()
+        w.writerows(rows)
+    qc = tmp_path / "qc"
+    qc.mkdir()
+    for mid, v in (("E3.pooled", "175"), ("E1.pooled", "999")):
+        (qc / f"{mid}.json").write_text(json.dumps(_rec(mid, nsc="1", rsc="1", frag_len=v)))
+    return t, qc
+
+
+def test_collect_fraglen_kinds_in_order(tmp_path):
+    from onion_eval import signal_from_counts as SFC
+    t, qc = _pooled_setup(tmp_path)
+    fl = tmp_path / "fl.tsv"
+    assert QF.main(["collect", "--tables", str(t), "--out", str(tmp_path / "q.tsv"),
+                    "--qc-dir", str(qc), "--fraglen-out", str(fl)]) == 0
+    got = _read(fl)
+    # provenance first (150 bp, the value the pipeline used), beside the replicate mean and xcor
+    e1 = got["E1.pooled"]
+    assert (e1["frag_len_estimated"], e1["estimate_kind"]) == ("150", "signal_provenance")
+    assert (e1["frag_len_replicate_mean"], e1["frag_len_xcor"]) == ("150", "999")
+    assert "provenance.json" in e1["source"]
+    # no provenance: the rounded mean of the replicates (122.5 -> 122, Python's round as chip_fraglen)
+    e2 = got["E2.pooled"]
+    assert (e2["frag_len_estimated"], e2["estimate_kind"]) == ("122", "replicate_mean")
+    assert e2["source"] == "replicates E2.br1;E2.br2"
+    e3 = got["E3.pooled"]
+    assert (e3["frag_len_estimated"], e3["estimate_kind"]) == ("175", "xcor")
+    assert "E4.pooled" not in got                              # control rows: no ChIP route
+    # rows with a frozen value are listed only for comparison; with_fraglen never uses them
+    tab = SFC.load_fraglen_table(fl)
+    assert "E1.br1" not in tab
+    # an xcor quality tag -2 drops an xcor estimate, never a provenance value
+    assert SFC.fraglen_drop_reason(dict(e1, quality_tag="-2")) == ""
+    assert SFC.fraglen_drop_reason(dict(e3, quality_tag="-2")).startswith("xcor quality tag")

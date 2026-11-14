@@ -398,24 +398,87 @@ def cmd_run(a) -> int:
 
 
 #: the fields of spp's .cc.qc line (parse_cc_qc), as columns of the fragment-length side table
-CC_QC_FIELDS = ("xcor_num_reads", "frag_len_estimated", "corr_est_frag_len", "phantom_peak",
+CC_QC_FIELDS = ("xcor_num_reads", "frag_len_xcor", "corr_est_frag_len", "phantom_peak",
                 "corr_phantom_peak", "argmin_corr", "min_corr", "nsc", "rsc", "quality_tag")
-FRAGLEN_COLUMNS = ("measurement_id", "frag_len_estimated", "frag_len_frozen", "nsc", "rsc",
-                   "quality_tag", "xcor_num_reads", "corr_est_frag_len", "phantom_peak",
-                   "corr_phantom_peak", "argmin_corr", "min_corr", "run_type", "in_eic",
-                   "assay_class", "source")
+FRAGLEN_COLUMNS = ("measurement_id", "frag_len_estimated", "estimate_kind", "frag_len_frozen",
+                   "frag_len_signal_provenance", "frag_len_replicate_mean", "frag_len_xcor",
+                   "nsc", "rsc", "quality_tag", "xcor_num_reads", "corr_est_frag_len",
+                   "phantom_peak", "corr_phantom_peak", "argmin_corr", "min_corr", "run_type",
+                   "in_eic", "assay_class", "unit", "source")
+#: the order in which a fragment-length estimate is chosen (see fraglen_rows)
+ESTIMATE_KINDS = ("signal_provenance", "replicate_mean", "xcor")
+_CHIP = ("broad_histone", "narrow_histone")
 
 
-def fraglen_row(r: dict, rec: dict, f: Path) -> dict:
-    """One row of the fragment-length side table from an ok record with an xcor result."""
-    cc = (rec.get("xcor") or {}).get("cc_qc", "").rstrip("\n").split("\t")
-    vals = dict(zip(CC_QC_FIELDS, cc[1:11])) if len(cc) >= 11 else {}
-    vals["frag_len_estimated"] = rec["values"].get("frag_len", "")
-    jobs = ";".join(rec.get("slurm_job_ids") or []) or "none"
-    return {**{c: "" for c in FRAGLEN_COLUMNS}, **vals, "measurement_id": r["measurement_id"],
-            "frag_len_frozen": r.get("frag_len", ""), "run_type": r.get("run_type", ""),
-            "in_eic": r.get("in_eic", ""), "assay_class": r.get("assay_class", ""),
-            "source": f"{f} job {jobs}"}
+def signal_provenance_fraglen(row: dict) -> tuple:
+    """(fraglen, source) that the pipeline used for this measurement's own `signal.h5`, from its
+    `provenance.json` (`signal.signal.h5.spec.fraglen`, align_views.chip_fraglen), else ("", "")."""
+    try:
+        f = measurement_dir(row) / "provenance.json"
+    except NoReadset:
+        return "", ""
+    if not f.is_file():
+        return "", ""
+    try:
+        prov = json.loads(f.read_text())
+    except ValueError:
+        return "", ""
+    if prov.get("measurement_id") != row["measurement_id"]:
+        return "", ""
+    spec = (((prov.get("signal") or {}).get("signal.h5") or {}).get("spec") or {})
+    v = spec.get("fraglen")
+    return (str(int(v)), f"{f} signal.h5 spec ({spec.get('fraglen_source', '')})") \
+        if v not in (None, "") else ("", "")
+
+
+def replicate_mean_fraglen(row: dict, rows: list) -> tuple:
+    """(rounded mean of the replicates' frozen frag_len, ids) for a pooled row: chip.wdl's rule
+    for the pooled track (align_views.chip_fraglen). Replicates: unit br<i>, same experiment,
+    layer and arm; ("", "") when none has a frag_len."""
+    if row.get("unit") != "pooled":
+        return "", ""
+    key = (row.get("experiment"), row.get("layer"), row.get("arm_knob"), row.get("arm_value"))
+    reps = [r for r in rows if (r.get("experiment"), r.get("layer"), r.get("arm_knob"),
+                                r.get("arm_value")) == key
+            and (r.get("unit") or "").startswith("br") and (r.get("frag_len") or "").strip()]
+    if not reps:
+        return "", ""
+    vals = [float(r["frag_len"]) for r in reps]
+    return str(int(round(sum(vals) / len(vals)))), ";".join(r["measurement_id"] for r in reps)
+
+
+def fraglen_rows(rows: list, xcor: dict) -> list:
+    """The fragment-length side table: one row per ChIP-seq measurement with at least one
+    estimate. `frag_len_estimated` is the first of ESTIMATE_KINDS that exists: the fragment length
+    the pipeline used for the measurement's own signal track (provenance.json), the rounded mean of
+    the replicates' frozen frag_len (pooled rows), the xcor estimate of the QC fill. `xcor`:
+    measurement_id -> (ok record, record path)."""
+    out = []
+    for r in rows:
+        if r.get("assay_class") not in _CHIP:
+            continue
+        mid = r["measurement_id"]
+        prov, prov_src = signal_provenance_fraglen(r)
+        rep, rep_src = replicate_mean_fraglen(r, rows)
+        vals, x_src = {}, ""
+        if mid in xcor:
+            rec, f = xcor[mid]
+            cc = (rec.get("xcor") or {}).get("cc_qc", "").rstrip("\n").split("\t")
+            vals = dict(zip(CC_QC_FIELDS, cc[1:11])) if len(cc) >= 11 else {}
+            vals["frag_len_xcor"] = rec["values"].get("frag_len", "")
+            x_src = f"{f} job {';'.join(rec.get('slurm_job_ids') or []) or 'none'}"
+        got = {"signal_provenance": (prov, prov_src), "replicate_mean": (rep, f"replicates {rep_src}"),
+               "xcor": (vals.get("frag_len_xcor", ""), x_src)}
+        kind = next((k for k in ESTIMATE_KINDS if got[k][0]), None)
+        if kind is None:
+            continue
+        out.append({**{c: "" for c in FRAGLEN_COLUMNS}, **vals, "measurement_id": mid,
+                    "frag_len_estimated": got[kind][0], "estimate_kind": kind,
+                    "frag_len_frozen": r.get("frag_len", ""), "frag_len_signal_provenance": prov,
+                    "frag_len_replicate_mean": rep, "run_type": r.get("run_type", ""),
+                    "in_eic": r.get("in_eic", ""), "assay_class": r.get("assay_class", ""),
+                    "unit": r.get("unit", ""), "source": got[kind][1]})
+    return out
 
 
 def _write_tsv(out: Path, cols, rows) -> None:
@@ -432,13 +495,13 @@ def cmd_collect(a) -> int:
     """The QC side table, one row per measurement. A cell comes from the measurement's ok record
     when the record has a value there; else it keeps the `measurements.tsv` value, so a value the
     build filled is never blanked (the side table overrides every listed row: dataset.py
-    `_apply_qc_table`). `--fraglen-out` also writes the fragment-length side table: one row per ok
-    record with an xcor fragment length, with the xcor quality fields and the record's path and job."""
+    `_apply_qc_table`). `--fraglen-out` also writes the fragment-length side table
+    (`fraglen_rows`): one row per ChIP-seq measurement with an estimate, its kind and source."""
     _, rows = read_tsv(Path(a.tables) / "measurements.tsv")
     qc_dir = Path(a.qc_dir)
     n = {"rows": len(rows), "filled": 0, "no_record": 0, "stale": 0, "not_ok": 0,
          "kept_build_cells": 0}
-    out_rows, fl_rows = [], []
+    out_rows, xcor = [], {}
     for r in rows:
         mid = r["measurement_id"]
         vals = {c: r.get(c, "") or "" for c in QC_COLUMNS}
@@ -461,7 +524,7 @@ def cmd_collect(a) -> int:
                 vals["frip"] = ""
                 n["filled"] += any(vals[c] for c in INFORMATIVE)
                 if rec["values"].get("frag_len"):
-                    fl_rows.append(fraglen_row(r, rec, f))
+                    xcor[mid] = (rec, f)
         out_rows.append({"measurement_id": mid, **vals})
     out = Path(a.out)
     _write_tsv(out, ["measurement_id", *QC_COLUMNS], out_rows)
@@ -469,8 +532,11 @@ def cmd_collect(a) -> int:
            + "; rows without a usable record keep the measurements.tsv values; pr1/pr2 halves use "
            "their parent's row (approximation); frip empty")
     if a.fraglen_out:
+        fl_rows = fraglen_rows(rows, xcor)
         _write_tsv(Path(a.fraglen_out), FRAGLEN_COLUMNS, fl_rows)
-        msg += f"; fragment lengths {len(fl_rows)} rows -> {a.fraglen_out}"
+        kinds = {k: sum(r["estimate_kind"] == k for r in fl_rows) for k in ESTIMATE_KINDS}
+        msg += (f"; fragment lengths {len(fl_rows)} ChIP-seq rows "
+                + ", ".join(f"{k} {v}" for k, v in kinds.items()) + f" -> {a.fraglen_out}")
     print(msg, flush=True)
     return 0
 
