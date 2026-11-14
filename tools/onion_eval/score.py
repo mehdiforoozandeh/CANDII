@@ -1908,7 +1908,13 @@ class Scorer:
         try:
             ctx = mp.get_context("fork")
             with ctx.Pool(self.workers, initializer=_worker_init) as pool:
-                res = list(pool.imap(_worker_task, range(len(tasks)), chunksize=1))
+                res, t0, ng = [], time.time(), len(group_list)
+                for i, r in enumerate(pool.imap(_worker_task, range(len(tasks)), chunksize=1)):
+                    res.append(r)                # progress: arrivals are in task order
+                    if i + 1 == ng or (i + 1 > ng and (i + 1 - ng) % 200 == 0) or i + 1 == len(tasks):
+                        self.log(f"score: workers done {min(i + 1, ng)}/{ng} groups, "
+                                 f"{max(0, i + 1 - ng)}/{len(tasks) - ng} pairs, "
+                                 f"{time.time() - t0:.0f} s")
         finally:
             _WORKER = None
         return {"groups": res[:len(group_list)], "pairs": res[len(group_list):]}
