@@ -113,6 +113,32 @@ so a default batch is unchanged; every mode emits them (they are inputs, never t
                  drawn from the window's generator after the window is built. Refused with a
                  frozen DNA embedding (dna = precomputed or dna_embedding_h5).
 
+Training regions (pinned interface I, chunk TR; plan Amendment 7). Two optional keys, read in
+train mode only. Without them the sampler, every batch, `meta` and the loss are bit-identical to
+the code before them, and `plan()` draws no extra random number. The two may not be given together.
+  exclude_regions  the path of a JSON with `regions`, `fit_regions`, `region_bins` (an eval set or
+                   a regions file). The sampler is today's, with one change: a drawn start whose
+                   window overlaps any listed region (evaluation or fit) is rejected and drawn
+                   again, inside the loop of tries, which rises from 8 to EXCLUDE_TRIES (64). A
+                   window that overlaps is never returned: if no try is free of the regions, the
+                   draw raises. Every draw comes from the window's generator, so the stream stays
+                   deterministic per seed. `plan()` then also returns `exclude_rejections` (the
+                   starts of this window rejected for overlap), and `meta` holds it.
+  train_regions    the path of a TSV; the text `{seed}` in it is replaced by the dataset seed (the
+                   training seed). Header comment lines `# roles_read=train` (required: a file
+                   without it is refused), `# universe=...`, `# sha256_inputs=...`, then the columns
+                   `chrom, start_bin, n_bins, stratum, sample_weight, loss_weight`
+                   (`onion_data/train_strata.write_list`). A row is drawn with probability in
+                   proportion to `sample_weight`, then a start uniform in
+                   [start_bin, start_bin + n_bins - L] (`n_bins >= L`, else refused). On a failed
+                   mask test a new start is drawn in the same row (8 tries, then the best try), so
+                   the realized share of each row equals its sample weight. `plan()` then also
+                   returns `loss_weight` and `stratum`, `meta` holds `stratum`, and the batch
+                   carries `w_window` float32 [B] (the loss weight of each window; `losses` scales
+                   every per-bin loss of window b by it).
+`region_record()` gives the path and sha256 of the file read ({} without the keys); the train loop
+stores it in run.json and logs the window count per stratum.
+
 Leave-one-cell-out average (`average_input`): with `config["average_h5"]` (built once by
 `build_average_h5`) it reads one per-track sum of training-cell rates and subtracts the window's
 own cell; without it, it reads every other training cell directly (small tables only). The
@@ -201,6 +227,9 @@ FIXED_BASE_LOG2_DEPTH = {"accessibility_dnase": 23.0, "accessibility_atac": 23.0
 LAYER_PREF = {"uniform": 0, "native": 1, "testbed": 2}
 #: aug_revcomp: probability that a training window is read on the other strand
 REVCOMP_PROB = 0.5
+#: interface I: tries of the locus draw under `exclude_regions` (8 without it)
+EXCLUDE_TRIES = 64
+REGION_LIST_COLUMNS = ("chrom", "start_bin", "n_bins", "stratum", "sample_weight", "loss_weight")
 
 
 class RoleError(PermissionError):
@@ -368,6 +397,75 @@ class OnionDataset(IterableDataset):
         if self.dna_emb_path is not None and not self.dna_emb_path.exists():
             raise FileNotFoundError(f"dna_embedding_h5 {self.dna_emb_path}: missing")
         self._init_extras()
+        self._init_regions()
+
+    def _init_regions(self) -> None:
+        """`exclude_regions` / `train_regions` (pinned interface I); train mode only."""
+        cfg = self.config
+        self.excluded = self.regions = None
+        self._exclude_rejections = 0
+        self._region_record: dict = {}
+        ex, tr = cfg.get("exclude_regions"), cfg.get("train_regions")
+        if ex and tr:
+            raise ValueError("exclude_regions and train_regions may not be given together")
+        if self.mode != "train" or not (ex or tr):
+            return
+        path = Path(str(tr).replace("{seed}", str(self.seed))) if tr else Path(ex)
+        raw = path.read_bytes()
+        key = "train_regions" if tr else "exclude_regions"
+        self._region_record = {key: str(path), f"{key}_sha256": hashlib.sha256(raw).hexdigest()}
+        if ex:
+            spec = json.loads(raw.decode("utf-8"))
+            miss = [k for k in ("regions", "fit_regions", "region_bins") if k not in spec]
+            if miss:
+                raise ValueError(f"exclude_regions {path}: lacks {miss}")
+            rb = int(spec["region_bins"])
+            per: dict[str, list] = {}
+            for chrom, start in list(spec["regions"]) + list(spec["fit_regions"]):
+                per.setdefault(str(chrom), []).append(int(start))
+            self.excluded = {}
+            for chrom, starts in per.items():
+                s = np.sort(np.asarray(starts, np.int64))
+                self.excluded[chrom] = (s, np.maximum.accumulate(s + rb))
+            return
+        head, cols, rows = {}, None, []
+        for line in raw.decode("utf-8").splitlines():
+            if line.startswith("#"):
+                k, _, v = line.lstrip("#").strip().partition("=")
+                head[k.strip()] = v.strip()
+            elif cols is None:
+                cols = tuple(line.split("\t"))
+            elif line.strip():
+                rows.append(dict(zip(cols, line.split("\t"))))
+        if head.get("roles_read") != "train":
+            raise RoleError(f"train_regions {path}: no '# roles_read=train' header line; a region "
+                            f"list must be built from training data only")
+        if cols != REGION_LIST_COLUMNS:
+            raise ValueError(f"train_regions {path}: columns {cols}, want {REGION_LIST_COLUMNS}")
+        if not rows:
+            raise ValueError(f"train_regions {path}: no rows")
+        for r in rows:
+            c, s, n = r["chrom"], int(r["start_bin"]), int(r["n_bins"])
+            if c not in self.chroms:
+                raise ValueError(f"train_regions {path}: chrom {c!r} is not a sampled chromosome")
+            if n < self.L:
+                raise ValueError(f"train_regions {path}: row {c}:{s} has n_bins {n} < the window "
+                                 f"length {self.L}")
+            if s < 0 or s + n > self.n_bins[c]:
+                raise ValueError(f"train_regions {path}: row {c}:{s}+{n} leaves the chromosome")
+        sw = np.asarray([float(r["sample_weight"]) for r in rows], np.float64)
+        if (sw < 0).any() or not sw.sum() > 0:
+            raise ValueError(f"train_regions {path}: sample weights must be >= 0 with a positive sum")
+        self.regions = {"chrom": [r["chrom"] for r in rows],
+                        "start": np.asarray([int(r["start_bin"]) for r in rows], np.int64),
+                        "n_bins": np.asarray([int(r["n_bins"]) for r in rows], np.int64),
+                        "stratum": [r["stratum"] for r in rows], "p": sw / sw.sum(),
+                        "loss_weight": np.asarray([float(r["loss_weight"]) for r in rows],
+                                                  np.float64)}
+
+    def region_record(self) -> dict:
+        """The path and sha256 of the region file read ({} without interface I's keys)."""
+        return dict(self._region_record)
 
     def _refuse_addon_tables(self) -> None:
         """Mode train never reads add-on (evaluation-only) tables: RoleError when a row has
@@ -623,13 +721,46 @@ class OnionDataset(IterableDataset):
 
     # ---------------------------------------------------------------- training plan
 
+    def _overlaps_excluded(self, chrom: str, start: int) -> bool:
+        """True when [start, start + L) overlaps a region of `exclude_regions`."""
+        hit = self.excluded.get(chrom)
+        if hit is None:
+            return False
+        starts, end_max = hit
+        i = int(np.searchsorted(starts, start + self.L, side="left")) - 1
+        return i >= 0 and int(end_max[i]) > start
+
+    def _draw_region(self, rng) -> tuple[str, int, int]:
+        """`train_regions`: (chrom, start, row index). A row by sample weight, then a start uniform
+        in the row; a failed mask test redraws the start in the same row (8 tries, then the best)."""
+        self._fresh()
+        reg = self.regions
+        i = int(rng.choice(len(reg["p"]), p=reg["p"]))
+        chrom, s0 = reg["chrom"][i], int(reg["start"][i])
+        span = int(reg["n_bins"][i]) - self.L + 1
+        best = None
+        for _ in range(8):
+            start = s0 + int(rng.integers(0, span))
+            if not self.genome.has_mask:
+                return chrom, start, i
+            frac = float(self.genome.mask(chrom, start, start + self.L).mean())
+            if frac >= self.config["min_valid_frac"]:
+                return chrom, start, i
+            if best is None or frac > best[0]:
+                best = (frac, start)
+        return chrom, best[1], i
+
     def _draw_locus(self, rng) -> tuple[str, int]:
         self._fresh()
         w = np.asarray([self.n_bins[c] - self.L + 1 for c in self.chroms], dtype=np.float64)
         best = None
-        for _ in range(8):
+        excl = self.excluded is not None
+        for _ in range(EXCLUDE_TRIES if excl else 8):
             chrom = self.chroms[int(rng.choice(len(self.chroms), p=w / w.sum()))]
             start = int(rng.integers(0, self.n_bins[chrom] - self.L + 1))
+            if excl and self._overlaps_excluded(chrom, start):
+                self._exclude_rejections += 1  # interface I: rejected, drawn again
+                continue
             if not self.genome.has_mask:
                 return chrom, start
             frac = float(self.genome.mask(chrom, start, start + self.L).mean())
@@ -637,6 +768,9 @@ class OnionDataset(IterableDataset):
                 return chrom, start
             if best is None or frac > best[0]:
                 best = (frac, chrom, start)
+        if best is None:
+            raise RuntimeError(f"exclude_regions: no start of {EXCLUDE_TRIES} tries is free of the "
+                               f"listed regions")
         return best[1], best[2]
 
     def plan(self, rng: np.random.Generator) -> dict:
@@ -644,7 +778,12 @@ class OnionDataset(IterableDataset):
         if self.mode != "train":
             raise RuntimeError("plan() is the training sampler; use window() or iterate")
         cell = self.train_cells[int(rng.integers(len(self.train_cells)))]
-        chrom, start = self._draw_locus(rng)
+        row = None
+        if self.regions is not None:
+            chrom, start, row = self._draw_region(rng)
+        else:
+            self._exclude_rejections = 0
+            chrom, start = self._draw_locus(rng)
         assays = sorted(a for c, a in self.train_tracks if c == cell)
         order = [assays[i] for i in rng.permutation(len(assays))]
         masked = self._masked_set(cell, order, rng)
@@ -662,7 +801,13 @@ class OnionDataset(IterableDataset):
                             else C.KIND_SAME if v_in == v_out else C.KIND_CORRECT)
                     entries.append((a, v_in, v_out, kind))
                     break
-        return {"cell": cell, "chrom": chrom, "start_bin": start, "entries": entries}
+        out = {"cell": cell, "chrom": chrom, "start_bin": start, "entries": entries}
+        if row is not None:
+            out["loss_weight"] = float(self.regions["loss_weight"][row])
+            out["stratum"] = self.regions["stratum"][row]
+        if self.excluded is not None:
+            out["exclude_rejections"] = self._exclude_rejections
+        return out
 
     def _masked_set(self, cell: str, order: list, rng) -> set:
         """The tracks masked whole in one training window (`mask_scheme`). Only which of the
@@ -852,6 +997,11 @@ class OnionDataset(IterableDataset):
         if self.aug_revcomp and rng.random() < REVCOMP_PROB:   # training windows only
             win = revcomp_window(win)
             win["meta"] = dict(win["meta"], revcomp=True)
+        if "loss_weight" in plan:                               # interface I: train_regions
+            win["w_window"] = torch.tensor(plan["loss_weight"], dtype=torch.float32)
+            win["meta"] = dict(win["meta"], stratum=plan["stratum"])
+        if "exclude_rejections" in plan:                        # interface I: exclude_regions
+            win["meta"] = dict(win["meta"], exclude_rejections=plan["exclude_rejections"])
         return win
 
     def _bin_mask(self, rng, shape: str = "random") -> np.ndarray:

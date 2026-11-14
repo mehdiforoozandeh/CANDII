@@ -31,24 +31,39 @@ Each file is `arms/rung4/base.json` plus one key, or no key for `today`. The run
 | `no_eval` | `exclude_regions` | `$O/eval/regions_v1/regions.json` |
 | `today` | none | the ladder's sampler, unchanged |
 
-## `selection20k/` (B.4 selection at a limited budget; 20,000 windows; 8 files)
+## `selection20k/` (B.4 selection at a limited budget; 20,000 windows; 12 files)
 
 Each file is `budget/rung4_base_w20000.json` plus `train_regions`. The run name is `rg_<arm>`.
+Section B.4 was amended on 2026-11-13. The seven arms that run are the two controls
+`tile_uniform` and `terr_r1024_w20k` and the five arms `ccredens_e50_w`, `ccredens_e25_w`,
+`ccredens_e50_u`, `variance_e50_w` and `kcenter`. Five older files stay on disk and are not run.
 
-| arm | `train_regions` |
-|---|---|
-| `blocks_minus_eval_w20k` | `$O/region/lists/blocks_minus_eval.tsv` |
-| `terr_r1024_w20k` | `$O/region/lists/terr_r1024_s{seed}.tsv` |
-| `tile_uniform` | `$O/region/lists/tile_uniform.tsv` |
-| `peakfreq_w`, `peakfreq_u`, `ccre_like_w`, `variance_w`, `kcenter` | `$O/region/lists/<arm>.tsv` |
+| arm | `train_regions` | status |
+|---|---|---|
+| `tile_uniform` | `$O/region/lists/tile_uniform.tsv` | control |
+| `terr_r1024_w20k` | `$O/region/lists/terr_r1024_s{seed}.tsv` | control (the comparator of `kcenter`) |
+| `ccredens_e50_w` | `$O/region/lists/ccredens_e50_w.tsv` | run |
+| `ccredens_e25_w` | `$O/region/lists/ccredens_e25_w.tsv` | run |
+| `ccredens_e50_u` | `$O/region/lists/ccredens_e50_u.tsv` | run (the unweighted control) |
+| `variance_e50_w` | `$O/region/lists/variance_e50_w.tsv` | run |
+| `kcenter` | `$O/region/lists/kcenter.tsv` | run |
+| `blocks_minus_eval_w20k` | `$O/region/lists/blocks_minus_eval.tsv` | not run (near-uniform lists; see STRATA_REAL.md) |
+| `peakfreq_w` | `$O/region/lists/peakfreq_w.tsv` | not run (near-uniform lists; see STRATA_REAL.md) |
+| `peakfreq_u` | `$O/region/lists/peakfreq_u.tsv` | not run (near-uniform lists; see STRATA_REAL.md) |
+| `ccre_like_w` | `$O/region/lists/ccre_like_w.tsv` | not run (near-uniform lists; see STRATA_REAL.md) |
+| `variance_w` | `$O/region/lists/variance_w.tsv` | not run (near-uniform lists; see STRATA_REAL.md) |
 
-The three controls are `blocks_minus_eval_w20k`, `terr_r1024_w20k` and `tile_uniform`. The
-control `tile_uniform` samples the tile universe of the weighted tile arms uniformly, with q in
+The control `tile_uniform` samples the tile universe of the weighted tile arms uniformly, with q in
 proportion to valid bins and w = 1. It has the same window-in-tile edge effect as the tile arms.
+It replaces `blocks_minus_eval_w20k`. The evidence for "near-uniform" is
+`cruxvault/results/t292/STRATA_REAL.md`.
 
-## `confirm80k/` (the conditional confirmation; 80,000 windows; 5 files)
+## `confirm80k/` (the conditional confirmation; 80,000 windows; 9 files)
 
 The file `confirm80k/<arm>_w80k.json` is `arms/rung4/base.json` plus the `train_regions` key of
-the selection arm `<arm>`. There is one file for each of the five selection arms. The folder
-holds no control: the confirmation compares against `region80k/blocks_minus_eval.json`. Chunk RTc runs
-only the best winner of B.4, and only if B.4 names a winner. The run name is `rg_<arm>_w80k`.
+the selection arm `<arm>`. There is one file for each of the five arms that run
+(`ccredens_e50_w`, `ccredens_e25_w`, `ccredens_e50_u`, `variance_e50_w`, `kcenter`). The four
+files of `peakfreq_w`, `peakfreq_u`, `ccre_like_w` and `variance_w` stay on disk and are not run
+(near-uniform lists; see STRATA_REAL.md). The folder holds no control: the confirmation compares
+against `region80k/blocks_minus_eval.json`. Chunk RTc runs only the best winner of B.4, and only
+if B.4 names a winner. The run name is `rg_<arm>_w80k`.

@@ -482,3 +482,57 @@ Agent calls from the same audit (code level; evidence `cruxvault/results/t233/AU
 - **Ruling 40.** Training-region selection uses leak-free strata only. cCRE and ChromHMM strata are not used now; the idea is written down for later, as the PI asked.
 - **Ruling 41.** The evaluation-region count may go to 512 on evidence. A step to 1,024 needs the PI.
 - PI instruction of 2026-11-13: fix the scorer memory (128 GB at 256 regions). Builder at work; scores must stay bit-identical.
+
+## Key facts to keep (written 2026-11-14 at the PI's request, so they survive a loss of context)
+
+Each line gives the fact, then its source. Sources are files in this vault or on Nibi.
+
+**PI directives of 2026-11-13 and 2026-11-14**
+- Scoring must be fast: the scorer exists for a fast feedback loop for architecture optimization (PI, 2026-11-14). The scorer may be re-baselined once to a faster, numerically equivalent version; metric definitions do not change without the PI. Plan: Amendment 8.
+- Fix the scorer memory (done: 16 GB at 256 regions; was 128 GB requested). Source: `cruxvault/results/scorer_memory/NOTES.md`.
+- Region questions (how many training regions, how to select them, is 256 evaluation regions enough): `onion region budget and selection.md`; rulings 39 to 41 above.
+- Keep a run ledger and commit snapshots of the run log: `run_state/` beside this file (`plan.md` with the Log, `live_state.md`, watch scripts).
+
+**State of the run on 2026-11-14 06:30 UTC**
+- Dataset `eic_v1`: frozen 2026-11-13 14:30 UTC; 249 of 267 training tracks, 42 of 45 validation tracks. Tail rows verified since: 46, 52 (validation histone), 388, 390 (DNase-seq training). No update version built yet.
+- Evaluation set on `eic_v1`: 256 regions, 63 imputation items, 1,480 correction pairs, 3,134 replicate pairs; hash starts `b5f7a4cf`. Regions file frozen: `/project/def-maxwl/mforooz/ONION/eval/regions_v1/regions.json`.
+- Trained and unscored: 24 runs of ladder rung 1 (8 arms x 3 seeds) under `/project/def-maxwl/mforooz/ONION/runs/rung1_*`; 42 budget-curve runs under `/project/def-maxwl/mforooz/ONION/runs_region/a1_rung1_*`.
+- Not scored: the 4 baselines, and every model. Two causes: 589 of 619 cross-cell replicate pairs crash the scorer (old code too), and a model scoring takes about 26 hours at 256 regions.
+- AlphaGenome 2: all 8,960 predictions fetched and cached on Nibi; audit done; scorer verified against Max's script (largest difference 4.9e-7).
+- Second experiments: 88 selected; build submitted; 13 rows wait for tail partners. Priority 4 is held.
+
+**Cluster facts learned the hard way (Nibi)**
+- An HDF5 open on `/scratch` (NFS) takes about 0.21 s. Training must stage the count files to the node's local disk: `ONION_STAGE=1` (56.1 GB in under 3 minutes); without it a run is 55 times slower. Source: `cruxvault/results/t213/SUBMITTED.md`.
+- Measured training speed with staging: rung 1 on a GPU slice 0.0423 s per window (about 56 minutes for 80,000 windows); rung 2 on CPU 0.0669 s per window (2.7 times the Fir figure, cause not found); rung 5 on CPU 0.1011.
+- `sacct -S` takes local time (UTC minus 5 hours), not UTC.
+- At most 1,000 queued jobs per user; array tasks count. `scontrol top` is not allowed; `scontrol update Nice=` and `scontrol hold` work on own jobs.
+- Group fair-share is low after the dataset build (CPU about 0.14, GPU about 0.23 on 2026-11-13).
+- Cancelling jobs is the PI's action in this session (the permission check refuses it to agents). The foreman may hold and release its own pending jobs.
+- The code kit `main` on Nibi is stale. Every chunk pushes its own kit name. Dataset rows use kit `KF4` (second experiments: `KX4`).
+
+**Pipeline facts (standard ENCODE pipelines)**
+- DNase-seq paired-end alignment (`bwa sampe`) often needs more than 1 day, with no relation to file size. Every DNase-seq submit uses a 3-day limit.
+- The DNase-seq pipeline's duplicate-marking step has a 12 GB Java heap by default. It failed at 511 M, 753 M and 1,027 M reads. `ONION_MEM=192000M` switches the pipeline's own input to a 58 GB heap. Every DNase-seq submit uses it.
+- Broad paired-end FASTQs with `/1` and `/2` read-name suffixes break mate pairing in the ChIP-seq pipeline; the build strips the suffix in a temporary copy.
+- One ENCODE FASTQ is truncated at the source (ENCFF033XNT); 61% of the pairs are used, and the provenance says so.
+
+**Scorer facts**
+- Old scorer: peak memory came from freed heap that the system library kept, a per-region cache, and one group's vectors. Fixed and merged (commit 1e94d92), outputs identical.
+- Old scorer: the cell-type-specific correlation changed by up to 2.3e-7 with the number of BLAS threads. The scoring job now pins 2 threads.
+- Baseline scoring with the parallel code (unmerged, commit 9cd5f04 on `chunk/onion-SM`): 1 h 21 min on 16 CPUs on same-cell pairs. Time goes to the count-space CRPS oracle search, the expected signal under the Negative Binomial, and the explained fraction per layer.
+
+**Region-selection facts**
+- At the model's window (25.6 kb) nearly every region holds a training peak, so class-based strata are near-uniform. The experiment uses a continuous score with a set tilt strength. The cCRE-like density and the cross-cell variance are anti-correlated across regions (rank correlation -0.51). Source: `cruxvault/results/t292/STRATA_REAL.md`.
+- Training windows may overlap evaluation regions (ruling 39: measure the gap, no protocol change).
+
+**Mistakes of the foreman, so they are not repeated**
+- A forecast from memory was wrong (11 to 13 late DNase-seq tracks; the collect found 18). Rule: recount from the cluster before quoting a count.
+- A watch missed a failed job for 7.5 hours (its accounting query started after the job ended). Rule: a watch must cover every terminal state and every job in the ledger.
+- Rung 1's scoring jobs were submitted before one full scoring had been timed. Rule: time one full job before submitting a batch of that kind.
+
+## PI ruling 42 (2026-11-14): pair tests on fewer regions, by a check
+
+- Question: the scorer ran each of 1,510 covariate-correction pairs on all 256 regions, which is 96% of its model passes. PI's answer: "Smallest of 8/16/32 that passes a check", one tier. Imputation items stay on all 256 regions.
+- My reading, after the cold review (the PI may overrule it): the check must test the quantities that the selection rule uses. The region count is chosen from one scoring of trained rung-1 models at all 256 pair regions. A count passes only if the correction gap, the variance-ratio metric and the selection verdicts agree with the 256-region values. The thresholds are written before that scoring. Until a count is chosen, every scoring that enters a decision uses all 256 pair regions.
+- Code-level calls: (1) cross-cell replicate pairs get no model-side job (a model task holds one cell; the variance layers measure that rung from data); (2) the fast scorer is built as a prediction store, i.e. one model forward per distinct input, plus the existing metrics on parallel CPU workers, so metric values stay identical to the old path; a GPU metrics rewrite is optional and later.
+- Why scoring was slow (planner, from the code): one scoring made 6.4 million model forward passes over 6.6 billion bins, with no pass shared, and the metric arithmetic ran bin by bin on one CPU core.

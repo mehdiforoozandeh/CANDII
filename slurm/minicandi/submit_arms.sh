@@ -18,6 +18,16 @@
 #   128000); ONION_EXCLUDE=<node list> (--exclude on every line; on Fir the nodes of
 #   .orchestrate/exclude_fir); DEVICE=cpu|cuda (overrides the rung's device); CLUSTER=fir|nibi
 #   (default $CC_CLUSTER, else the host name; a GPU job needs it for its CPU count).
+# Scoring and queue options (interface K, chunk SAx; unset = the lines above, byte for byte):
+#   EXTRA_SCORE_ARGS (appended to the score.sh line after "run <run dir>", e.g. "--per-region";
+#   split on spaces); NICE=<n> (--nice=<n> on the training and the scoring line; region runs use
+#   300, below the ladder); SCORE_DEVICE=cpu|gpu (scoring form of ladder_arms.py plan for that
+#   device instead of the rung's: cpu = --gres=none, 2 CPUs, 8000M; gpu = the 1g.10gb slice, the
+#   cluster's slice CPUs, 24000M; SCORE_MEM still overrides the --mem); SCORE_CPUS=<n> (overrides
+#   the scoring --cpus-per-task); SCORE_ONLY=1 (needs an eval set; submits no training: per run
+#   it skips SCORED and a queued or running scoring job of the run's name, submits a scoring job
+#   with --dependency=afterok on the run's queued or running training job (train.sh), or with no
+#   dependency when DONE exists, else skips; squeue '%o' tells a training from a scoring job).
 #
 # Idempotent. Per (arm, seed): skip when <run dir>/SCORED exists (training only: DONE), or when a
 # queued or running job of this user is named mc_<run dir name>_s<seed>; when DONE exists but not
@@ -42,12 +52,22 @@ CL="${CLUSTER:-${CC_CLUSTER:-}}"
 if [ -z "$CL" ]; then
   case "$(hostname)" in *nibi*) CL=nibi ;; *fir*) CL=fir ;; esac
 fi
+SDEV="${SCORE_DEVICE:-}"
+case "$SDEV" in ""|cpu|gpu) ;; *) echo "SCORE_DEVICE must be cpu or gpu" >&2; exit 2 ;; esac
+[ -z "${NICE:-}" ] || [[ "$NICE" =~ ^-?[0-9]+$ ]] || { echo "NICE must be an integer" >&2; exit 2; }
+SONLY="${SCORE_ONLY:-0}"
+[ "$SONLY" != 1 ] || [ -n "$EVALSET" ] || { echo "SCORE_ONLY=1 needs an eval set" >&2; exit 2; }
+read -r -a SCORE_EXTRA <<< "${EXTRA_SCORE_ARGS:-}"
 [ "$#" -gt 0 ] || read -r -a ARGS_ARMS <<< "$("$PY" "$LADDER" arms --rung "$RUNG")"
 [ "$#" -eq 0 ] || ARGS_ARMS=("$@")
 
-# names of this user's queued or running jobs (one per line); none when squeue is absent
+# names of this user's queued or running jobs (one per line); none when squeue is absent.
+# SCORE_ONLY=1 also reads "<id> <name> <command>" lines (LIVEJ).
+LIVEJ=""
 if command -v squeue > /dev/null 2>&1; then
   LIVE="$(squeue -h -u "${USER:-$(id -un)}" -t PENDING,RUNNING,CONFIGURING -o '%j')"
+  [ "$SONLY" != 1 ] || \
+    LIVEJ="$(squeue -h -u "${USER:-$(id -un)}" -t PENDING,RUNNING,CONFIGURING -o '%i %j %o')"
 else
   [ "$DRY" = 1 ] || { echo "squeue not found: cannot check live jobs" >&2; exit 2; }
   echo "note: squeue not found; live jobs not checked (dry run)"
@@ -56,6 +76,7 @@ fi
 
 COMMON=(--account=def-maxwl --parsable)
 [ -z "$EXCLUDE" ] || COMMON+=("--exclude=$EXCLUDE")
+[ -z "${NICE:-}" ] || COMMON+=("--nice=$NICE")
 TSV="$ROOT/SUBMITTED.tsv"
 n_sub=0; n_skip=0
 
@@ -71,7 +92,13 @@ for spec in "${ARGS_ARMS[@]}"; do
       --rung "$RUNG" --config "$CONFIG" --device "${DEVICE:-}" --cluster "$CL" \
       --score-time "${SCORE_TIME:-}" --extra "${EXTRA_TRAIN_ARGS:-}")"
   [ -n "$STIME" ] || { echo "plan failed for $spec" >&2; exit 2; }
-  SMEM="${SCORE_MEM:-$SMEM}"
+  if [ -n "$SDEV" ]; then   # the scoring form of the other device; training fields ignored
+    read -r _ _ _ _ _ _ SGRES SCPUS SMEM STIME2 <<< "$("$PY" "$LADDER" plan \
+        --rung "$RUNG" --config "$CONFIG" --device "${SDEV/gpu/cuda}" --cluster "$CL" \
+        --score-time "${SCORE_TIME:-}" --extra "${EXTRA_TRAIN_ARGS:-}")"
+    [ -n "${STIME2:-}" ] || { echo "scoring plan (SCORE_DEVICE=$SDEV) failed for $spec" >&2; exit 2; }
+  fi
+  SMEM="${SCORE_MEM:-$SMEM}"; SCPUS="${SCORE_CPUS:-$SCPUS}"
   for SEED in "${SEED_LIST[@]}"; do
     RUN="$ARMDIR/seed$SEED"
     JOB="mc_$(basename "$ARMDIR")_s$SEED"
@@ -81,17 +108,34 @@ for spec in "${ARGS_ARMS[@]}"; do
     if [ -z "$EVALSET" ] && [ -f "$RUN/DONE" ]; then
       echo "skip $JOB: $RUN/DONE exists (no eval set)"; n_skip=$((n_skip + 1)); continue
     fi
-    if printf '%s\n' "$LIVE" | grep -qxF "$JOB"; then
+    if [ "$SONLY" != 1 ] && printf '%s\n' "$LIVE" | grep -qxF "$JOB"; then
       echo "skip $JOB: a job of that name is queued or running"; n_skip=$((n_skip + 1)); continue
+    fi
+    TID=""
+    if [ "$SONLY" = 1 ]; then
+      MINE="$(printf '%s\n' "$LIVEJ" | awk -v j="$JOB" '$2 == j')"
+      TID="$(printf '%s\n' "$MINE" | awk '/train\.sh/ {print $1; exit}')"
+      if printf '%s\n' "$MINE" | awk 'NF && !/train\.sh/' | grep -q .; then
+        echo "skip $JOB: a scoring job of that name is queued or running"
+        n_skip=$((n_skip + 1)); continue
+      fi
+      if [ -z "$TID" ] && [ ! -f "$RUN/DONE" ]; then
+        echo "skip $JOB: training neither done nor queued or running"
+        n_skip=$((n_skip + 1)); continue
+      fi
     fi
     TRAIN=(sbatch "${COMMON[@]}" "--job-name=$JOB" "--time=$TTIME" "--cpus-per-task=$CPUS"
            "--mem=${MEM}M" "--gres=$GRES" "--output=$RUN/train_%j.out" --export=ALL
            "$KIT/slurm/minicandi/train.sh" "$KIT" "$CONFIG" "$TABLES" "$SEED" "$RUN" "$MODE")
     SCORE=(sbatch "${COMMON[@]}" "--job-name=$JOB" "--time=$STIME" "--cpus-per-task=$SCPUS"
            "--mem=${SMEM}M" "--gres=$SGRES" "--output=$RUN/score_%j.out"
-           "$KIT/slurm/onion_eval/score.sh" "$KIT" "$EVALSET" "$RUN" run "$RUN")
+           "$KIT/slurm/onion_eval/score.sh" "$KIT" "$EVALSET" "$RUN" run "$RUN"
+           ${SCORE_EXTRA[@]+"${SCORE_EXTRA[@]}"})
     DO_TRAIN=1
     [ -f "$RUN/DONE" ] && DO_TRAIN=0
+    [ "$SONLY" != 1 ] || DO_TRAIN=0
+    DEP=()   # SCORE_ONLY=1 with a live training job: the scoring waits on it
+    [ -z "$TID" ] || DEP=("--dependency=afterok:$TID" --kill-on-invalid-dep=yes)
     # train.sh reads EXTRA_TRAIN_ARGS from the exported environment (--export=ALL)
     TRAIN_EXTRA="--workers $WORKERS${EXTRA_TRAIN_ARGS:+ $EXTRA_TRAIN_ARGS}"
     if [ "$DRY" = 1 ]; then
@@ -99,8 +143,12 @@ for spec in "${ARGS_ARMS[@]}"; do
         echo "EXTRA_TRAIN_ARGS=\"$TRAIN_EXTRA\" ${TRAIN[*]}"
         [ -z "$EVALSET" ] || echo "${SCORE[*]:0:3} --dependency=afterok:<train job> --kill-on-invalid-dep=yes ${SCORE[*]:3}"
       else
-        echo "note $JOB: $RUN/DONE exists; scoring only"
-        echo "${SCORE[*]}"
+        if [ "$SONLY" = 1 ]; then
+          echo "note $JOB: SCORE_ONLY; ${TID:+after training job $TID}${TID:-$RUN/DONE exists}"
+        else
+          echo "note $JOB: $RUN/DONE exists; scoring only"
+        fi
+        echo "${SCORE[*]:0:3}${TID:+ ${DEP[*]}} ${SCORE[*]:3}"
       fi
       n_sub=$((n_sub + 1)); continue
     fi
@@ -113,7 +161,7 @@ for spec in "${ARGS_ARMS[@]}"; do
         SJ="$("${SCORE[@]:0:3}" "--dependency=afterok:$TJ" --kill-on-invalid-dep=yes "${SCORE[@]:3}")"
       fi
     elif [ -n "$EVALSET" ]; then
-      SJ="$("${SCORE[@]}")"
+      SJ="$("${SCORE[@]:0:3}" ${DEP[@]+"${DEP[@]}"} "${SCORE[@]:3}")"
     fi
     SJ="${SJ%%;*}"
     [ -f "$TSV" ] || printf 'arm\tseed\ttrain_job\tscore_job\ttime\n' > "$TSV"
