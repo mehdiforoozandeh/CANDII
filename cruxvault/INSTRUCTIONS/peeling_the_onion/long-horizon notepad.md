@@ -547,3 +547,12 @@ Each line gives the fact, then its source. Sources are files in this vault or on
 
 - PI's words: "from now on, everything that you do, especially these kind of findings and questions and answers ... I want all of them added to CRUX tree and its taskhub. i want these research structure have one data structure in the cruxvault and i want you to continue maintaining it while you're working on it this problem."
 - How it is done: a recorder runs at each milestone, on its own worktree, and writes questions, hypotheses with expectations, findings with evidence, and task states with the crux CLI. The first recorder backfills everything found so far. The rule is written in `crux recording rule.md` beside this file. This notepad and the run log stay as working memory.
+
+## PI rulings 43 to 46 (2026-11-14): the parallel plan
+
+- Source: the proposal `run_state/` snapshot of `.orchestrate/proposal_parallel_iterations.md` (written by an Opus agent at the PI's request).
+- **Ruling 43.** Adopt the two-iteration plan and start now. Iteration 1 runs about ten parallel paths and ships twice: Methods plus model-free Results on 2026-11-15 06:00 UTC; model Results plus a first Discussion on 2026-11-15 18:00 UTC (hard date 2026-11-16 08:00 UTC). All trainings that need no result start now: the base arm of rungs 2 to 6, the average-as-input arm and the two-step correction arm, the seen-versus-unseen arm; region selection at the lowest priority. Iteration 2 holds only the work that needs the first results: ablations of the best rungs and the first settlements, 2026-11-17.
+- **Ruling 44.** Decks may show screening scores, i.e. model scores whose pair tests ran on 16 of the 256 regions, with the label "screening" on every such number. No selection is called settled from a screening score.
+- **Ruling 45.** The check that picks the pair-region count runs on rung-4 models now; the rung-1 version follows in a later phase. This amends the reading of ruling 42.
+- **Ruling 46.** Move the frozen dataset to Fir by Globus, so that Fir takes the CPU work of iteration 2. The PI said "do the globus yourself".
+- Moved to later phases by the plan: the scoring of the budget curve, and the 256-region check on rung 1.
