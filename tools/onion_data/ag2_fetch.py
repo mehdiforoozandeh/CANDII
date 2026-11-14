@@ -45,6 +45,8 @@ renamed. Keys: `condition`, `model`, `outputs`, `window_index` int64[n], `chroms
 values clipped at 6e4; NaN outside the window) and `dnase_<k>` / `atac_<k>` float32 [bins, channels], the 1 bp
 output summed to the 25 bp grid from `acc_start` over the region. A window counts as cached when a part holds
 it with every requested output. `<cache>/calls.tsv` appends `time, condition, window, status, seconds`.
+Channel names are cached as the API returns them, `<condition>_<channel>`; `pack` strips the prefix in
+`bare_channel` and matches the audit's bare channel names (a prefixed audit copy also works).
 
 Exit codes of `fetch`: 0 when no window is missing; 75 when it stopped with windows missing (8 retryable errors
 in a row on one chunk, or `--max-calls` reached): rerun the same command; 1 on a non-retryable API error;
@@ -486,6 +488,21 @@ def regions_sha256(ev: dict) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def bare_channel(name: str, condition: str, *, required: bool = True) -> str:
+    """The channel name without the `<condition>_` prefix. The API names every returned track
+    `<condition>_<channel>` (e.g. `CL:0000047_Histone ChIP-seq-encode-H2BK15ac-single-ended`); the cache keeps
+    that name as returned, and the audit and `prediction_channels.tsv` hold the bare channel (as
+    `ag2_meta.channel_of`). This is the one place where the prefix is handled. `required=False` accepts an
+    already bare name (audit tables; a prefixed audit copy is also accepted)."""
+    prefix = f"{condition}_"
+    name = str(name)
+    if name.startswith(prefix):
+        return name[len(prefix):]
+    if required:
+        raise FetchError(f"cached track name {name!r} does not start with {prefix!r}")
+    return name
+
+
 def _condition_tracks(cache, model, condition, windows, channels):
     """{channel: (float32 [n_regions * region_bins], api label)} for the channels asked, from the cache."""
     idx = cache_index(cache, model, condition, windows)
@@ -506,7 +523,7 @@ def _condition_tracks(cache, model, condition, windows, channels):
                         opened[f] = np.load(f)
                     z = opened[f]
                     for o in outs:
-                        names = z[f"{o}_names"].tolist()
+                        names = [bare_channel(n, condition) for n in z[f"{o}_names"].tolist()]
                         if ch in names:
                             hit = (z, o, names.index(ch), int(np.flatnonzero(z["window_index"] == w["index"])[0]))
                             break
@@ -586,7 +603,8 @@ def pack(cache, evalset, audit, tables, split, out, model="all_folds", chip_bin_
     for items in by_regime.values():
         for _, m, a in items:
             need.setdefault(a["condition"], set()).update(
-                ch for ch in (a.get("matched_channel"), a.get("otherend_channel")) if ch)
+                bare_channel(ch, a["condition"], required=False)
+                for ch in (a.get("matched_channel"), a.get("otherend_channel")) if ch)
     tracks = {c: _condition_tracks(cache, model, c, windows, sorted(chs)) for c, chs in sorted(need.items())}
     base = {"method": "ag2", "kind": "ag2", "evalset_sha256": hashlib.sha256(ev_bytes).hexdigest(),
             "regions_sha256": regions_sha256(ev), "split": split, "region_bins": rb,
@@ -603,7 +621,8 @@ def pack(cache, evalset, audit, tables, split, out, model="all_folds", chip_bin_
         d.mkdir(parents=True, exist_ok=True)
         rows = []
         for mid, m, a in items:
-            cond, mc, oc = a["condition"], a.get("matched_channel", ""), a.get("otherend_channel", "")
+            cond = a["condition"]
+            mc, oc = (bare_channel(a.get(k, ""), cond, required=False) for k in ("matched_channel", "otherend_channel"))
             # plan section A (Max): with no channel of the target's read type, the other one is scored as
             # "matched"; channels.tsv says so (matched_source = otherend_fallback).
             scored = mc or oc

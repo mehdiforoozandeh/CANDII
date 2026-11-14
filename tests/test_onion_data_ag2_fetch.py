@@ -19,9 +19,12 @@ from onion_data import ag2_fetch as F  # noqa: E402
 
 KEY = "SECRETkey-0123456789abcdef"
 PROJECT = "projects/987654321"
-CHIP = ["H3K4me3 single", "H3K4me3 paired", "H3K27ac single"]
+# Bare channel names as in Nibi `ONION/ag2/meta/prediction_channels.tsv`; the API (and so the fake client)
+# returns each one as `<condition>_<channel>`.
+CHIP = ["Histone ChIP-seq-encode-H3K4me3-single-ended", "Histone ChIP-seq-encode-H3K4me3-paired-ended",
+        "Histone ChIP-seq-encode-H3K27ac-single-ended"]
 CHIP_MODES = ["observed", "imputed_supported", "observed"]
-ACC = ["DNASE single", "DNASE paired"]
+ACC = ["DNase-seq-encode-single-ended", "DNase-seq-encode-paired-ended"]
 ACC_MODES = ["imputed_supported", "observed"]
 RB = 64                                     # small regions: 1,600 bp, not on the 128 bp grid
 
@@ -66,12 +69,12 @@ class FakeClient:
             d = {}
             gb = s // F.RES + np.arange(F.W // F.RES)
             d["chip_histone"] = (np.stack([chip_value(gb, j) for j in range(len(CHIP))], 1),
-                                 np.array(CHIP), np.array(CHIP_MODES))
+                                 np.array([f"{condition}_{n}" for n in CHIP]), np.array(CHIP_MODES))
             for o in outputs:
                 if o != "chip_histone":
                     pos = s + np.arange(F.W)
-                    d[o] = (np.stack([acc_value(pos, j) for j in range(len(ACC))], 1), np.array(ACC),
-                            np.array(ACC_MODES))
+                    d[o] = (np.stack([acc_value(pos, j) for j in range(len(ACC))], 1),
+                            np.array([f"{condition}_{n}" for n in ACC]), np.array(ACC_MODES))
             if self.permute and (len(out) + len(self.calls)) % 2:
                 d = {o: (v[:, ::-1], n[::-1], m[::-1]) for o, (v, n, m) in d.items()}
             out.append({o: d[o] for o in outputs})
@@ -490,3 +493,36 @@ def test_status_requires_outputs(tmp_path, keyfile, capsys):
     assert F.main(["status", "--conditions", str(cf), "--evalset", str(ev), "--outputs", "chip_histone,dnase",
                    "--cache", str(cache)]) == 0
     assert "missing: 0" in capsys.readouterr().out
+
+
+def test_pack_matches_prefixed_cache_names_to_bare_audit_names(tmp_path, keyfile):
+    _pack_fixture(tmp_path)
+    rc, cache = _run(tmp_path, FakeClient(), outputs="chip_histone,dnase")
+    assert rc == 0
+    with np.load(F.cond_dir(cache, "all_folds", "EFO:0001") / "part_0.npz") as z:
+        assert z["chip_histone_names"].tolist()[0] == f"EFO:0001_{CHIP[0]}"     # cached as the API names it
+    args = ["--cache", str(cache), "--evalset", str(tmp_path / "ev.json"), "--tables", str(tmp_path / "tables"),
+            "--split", "val"]
+    assert F.main(["pack", *args, "--audit", str(tmp_path / "audit.tsv"), "--out", str(tmp_path / "bare")]) == 0
+    # the prefixed audit copy of the t308 workaround gives the same arrays and bare names in channels.tsv
+    rows = list(csv.DictReader(open(tmp_path / "audit.tsv"), delimiter="\t"))
+    for r in rows:
+        for k in ("matched_channel", "otherend_channel"):
+            if r[k]:
+                r[k] = f"{r['condition']}_{r[k]}"
+    F.write_tsv(tmp_path / "audit_prefixed.tsv", list(rows[0]), rows)
+    assert F.main(["pack", *args, "--audit", str(tmp_path / "audit_prefixed.tsv"), "--out", str(tmp_path / "pre")]) == 0
+    d1, d2 = tmp_path / "bare/leave_one_assay_out", tmp_path / "pre/leave_one_assay_out"
+    assert sorted(p.name for p in d1.glob("*.npy")) == sorted(p.name for p in d2.glob("*.npy"))
+    for p in d1.glob("*.npy"):
+        assert np.array_equal(np.load(p), np.load(d2 / p.name))
+    assert (d1 / "channels.tsv").read_text() == (d2 / "channels.tsv").read_text()
+    ch = list(csv.DictReader(open(d1 / "channels.tsv"), delimiter="\t"))
+    assert ch[0]["matched_channel"] == CHIP[0] and ch[1]["matched_channel"] == ACC[1]
+
+
+def test_bare_channel_rules():
+    assert F.bare_channel("CL:1_DNase-seq-encode-single-ended", "CL:1") == "DNase-seq-encode-single-ended"
+    assert F.bare_channel("DNase-seq-encode-single-ended", "CL:1", required=False) == "DNase-seq-encode-single-ended"
+    with pytest.raises(F.FetchError, match="does not start with"):
+        F.bare_channel("CL:2_DNase-seq-encode-single-ended", "CL:1")
