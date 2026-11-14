@@ -14,7 +14,11 @@ PI DIRECTIVE 2026-11-14: the crux tree and taskhub are the one record of the res
 
 ## Agents running
 | recorder CR1 (opus) | backfill of the vault: findings, questions, task states of the whole run; recording rule file | review, merge; then a recorder per milestone |
-| planning agent (opus) | PI request: re-plan with the fewest iterations and maximum parallel paths per iteration -> .orchestrate/proposal_parallel_iterations.md | give the PI the proposal and his decisions; then the planner turns it into chunks |
+| planner (fable) | Amendment 10: execution sheet of the adopted two-iteration parallel plan (rulings 43-46) | launch SP2a, SP2b, SP2c, SP3, then FWa, MTa, ... in its order |
+| TRa (opus) | trainings now: rungs 2-6 base, rung-4 scrambled_covariates and no_eval, 7 selection arms at 20k (held; one per rung checked first) | log job ids; scoring by FWa/FWb/MTa |
+| A1k (opus) | configs + trainings: average_input (D10), two_step_native (D15) on rung 1 | review code, merge; log job ids |
+| SF0 reviewer (opus) | review of the scorer base (branch chunk/onion-SM at 17f68d5; baselines already submitted from it) | merge if ACCEPT |
+SHIP TIMES (ruling 43): ship 1 = 2026-11-15 06:00 UTC (Methods + model-free Results; deck cut 03:00 UTC); ship 2 = 2026-11-15 18:00 UTC expected, hard 2026-11-16 08:00 UTC; iteration 2 = 2026-11-17 12:00 UTC.
 | I1a (layers rerun with pseudoreplicate pairs), I1e (Methods, merge), AGf (pack fix), SF0 (scorer base) | iteration-1 and scorer work in flight | review, merge |
 | agent | task | on return |
 |---|---|---|
@@ -72,6 +76,7 @@ QUEUE LIMIT: Nibi allows 1000 queued jobs per user, array tasks count. Priority 
 | HEAP RISK (12 G default heap, library-dependent): rows 388, 132, 216, 232, 57, 280, 389 | their running jobs | on 'GC overhead limit exceeded': resubmit with ONION_TIME=3-00:00:00 ONION_MEM=192000M; every new DNase-seq submit uses 192000M |
 | row 113 (train DNase-seq; Java heap after 2 d; rerun 3 d / 192000M, kit KF4) | stage 27246582, build 27246583 | submitted 2026-11-14 05:20 UTC |
 | tail rows COMPLETED since the freeze: 46, 52 (validation histone), 388, 390 (DNase train) | - | first update eic_v1_1 possible (chunk D6u) |
+| BASELINE SCORINGS on the real evaluation set (kit SBa, 16 CPUs, 64000M, 4 h) | 27265497 marginal_nb, 27265498 position_average, 27265499 depth_only_scaling, 27265500 pseudoreplicate_floor | submitted 2026-11-14 ~11:15 UTC; ~1.5 h each once started |
 | WATCHDOG (tail_watch) | 27124200 | pending on afterany of the live tail jobs; files under $O/eic/tail/ |
 | Max's training (not ours) | Fir 3609189 | his |
 
