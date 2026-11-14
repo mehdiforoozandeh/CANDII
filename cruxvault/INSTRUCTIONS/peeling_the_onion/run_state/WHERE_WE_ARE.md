@@ -52,7 +52,8 @@ Working copies of items 2 and 3 live in the worktree at `.claude/worktrees/onion
 - First screening scores exist: rung-1 base, scrambled_covariates, dna_off (8 of 9 scored; results/metrics_screening/first_scores.md). Baselines report done (results/t307/BASELINES.md; vault f55 to f60, q32).
 - Builder: metric jobs for every other store, then the ladder table and the rung-1 arm table (results/metrics_screening/scores_ladder.md, scores_rung1_arms.md).
 - Predict jobs released at 21:25: rung 5 seeds 1 and 2, the other 5 rung-1 arms, the 7 selection arms. All ladder stores of rungs 2, 3, 4, 6 and rung 5 seed 0 are complete.
-- Builder: ship-1 deck and paper note (presentations/onion-ship1-2026-11-15; cut 03:00, ship 06:00 on 2026-11-15). The AlphaGenome 2 slide shows the audit only.
+- SHIP 1 deck done: presentations/onion-ship1-2026-11-15, artifact https://claude.ai/artifact/4RSUdsFwJC3nYcyHb9s2bU (sent to the PI early). AlphaGenome 2 slide shows the audit only.
+- Investigator: oracle floor for the correction metric (0.5 E|half1 - half2|) and the eta split, after the PI question; results/gap_closed_floor/GAP_FLOOR.md.
 - Builder: fragment length for single-end tracks (frag_len is empty for them in the frozen tables, so signal-space metrics are undefined for those tracks; fix = estimated fragment length from the quality-control fill, scoring side only; results/fraglen_single_end/). The AlphaGenome 2 board waits for it.
 - GPU trainings still pending: average_input seed 1 (27273016), two_step_native seed 0 (27272462). Then seeds per results/arms_d10_d15/SUBMITTED.md (kit A1k2).
 - rg_variance_e50_w seed 2 training timed out (27266404): resubmit with a longer limit.
@@ -67,4 +68,3 @@ Working copies of items 2 and 3 live in the worktree at `.claude/worktrees/onion
 
 **Open with the PI**
 - Decision on the scale of the correction metric "gap closed" (options A, B, C; vault question q32).
-- Cancel stuck jobs 27281609 and 27290159.
