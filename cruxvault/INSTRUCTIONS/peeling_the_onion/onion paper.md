@@ -66,10 +66,64 @@ The figure of the protocol is `cruxvault/results/t309/protocol_figure.svg`.
 
 ==**Two scoring tiers.** A settled score runs each pair on all 256 regions, or on the smallest of 8, 16 or 32 nested regions that passes a check written before any model was scored (`cruxvault/results/pair_region_check/PAIR_CHECK_PREREGISTRATION.md`). A screening score runs pairs on 16 nested regions, and items keep all 256 regions. Each table states its tier. No selection is settled from a screening score. The baselines of iteration 1 are settled scores.==
 
+==**Telescoping check of the layers.** Of 2,925 groups of assay, region stratum and scale band, 390 add up exactly, 2,145 are not expected to add up because their rungs hold different cells, and 390 are empty; none is unexplained (`cruxvault/results/t305/LAYERS_REAL.md`).==
+
+==**Region selection for training (interim).** At a training window of 1,024 bins and sampling tiles of 2,048 bins, only 23 of 51,394 tiles hold no training peak, so lists stratified by peak class sample almost uniformly (effective sample size per draw 0.86 to 0.94). The selection arms therefore use a continuous tilt of chosen strength (`cruxvault/results/t292/STRATA_REAL.md`; `onion region budget and selection.md`, interim finding 1).==
+
 ### Model
+
+==Arrives in shipment 2.==
 
 ## Results
 
+The figures of these sections are in the deck of shipment 1, `cruxvault/presentations/onion-ship1-2026-11-15/` (artifact link in its `DECK.md`).
+
+### Results 1: the variance layers on real data
+
+Source: `cruxvault/results/t305/LAYERS_REAL.md` and `layers_by_assay.tsv`, `layers_by_stratum.tsv` of the same folder (the rerun with the pseudoreplicate pairs; the first run is not used). No model is involved.
+
+==We measured three variance layers per assay as differences of pair values on log1p counts in 25 bp bins: the sampling layer (two pseudoreplicate halves of one library, 778 pairs), the replicate layer above sampling (isogenic replicates minus sampling, 219 pairs), and the cell-type layer (pairs of different cell types minus replicates, 2,911 pairs). Each pair is thinned to the assay's common depth, which is now the depth of one pseudoreplicate half, and each increment carries a 95% cluster-bootstrap interval over cells.==
+
+==The sampling layer is the largest layer of every assay at 25 bp. Over all regions it is 76% (DNase-seq) to 97% (ChIP-seq control) of the three layers. The replicate layer above sampling (sequencing, library and biological replicate together) is small: 0.1% to 6% of the three layers, and about 1% for most marks. Its interval excludes 0 for 8 assays (H2AFZ, H3K27ac, H3K27me3, H3K4me1, H3K4me2, H3K4me3, H3K79me2, H3K9ac); for example H3K4me3 0.00040 [0.00015, 0.00065] against a sampling layer of 0.0222 [0.0186, 0.0257]. So at 25 bp, two pseudoreplicate halves of one experiment differ almost as much as two biological replicates.==
+
+==The cell-type layer (mixed with donor and experiment) is 23% for DNase-seq, 20% for H3K27ac and H3K4me3, and 10% for the broad marks H3K27me3, H3K36me3 and H3K9me3; its interval excludes 0 for 8 assays, and the control has none (-0.00007 [-0.0034, 0.0033]). It is the largest layer at the broad scale band (cell-type share 0.60 to 0.91) and leads at the domain band for the narrow marks and DNase-seq. Among region classes it is largest in promoters (DNase-seq 0.51, H3K4me3 0.38, H3K27ac 0.34).==
+
+==The layers hypothesis held in part. For H3K27me3, H3K36me3 and H3K9me3 the sampling layer is 0.88 to 0.89 of the three layers at 25 bp, as expected. The expectation that the cell-type layer leads for the narrow marks and accessibility fails at 25 bp over all regions (sampling 0.76 to 0.85, cell type at most 0.23) and holds at the broad scale and in promoters for DNase-seq.==
+
+==Caveats. The shares are at the depth of one pseudoreplicate half, and on log1p counts the sampling layer shrinks as depth grows, so at full depth its share is smaller. The replicate layer pools three sources, and the cell-type layer holds donor and lab, because the sequencing, technical, anisogenic and other-experiment rungs have no pair. DNase-seq rests on 33 pseudoreplicate, 8 isogenic and 136 other-cell-type pairs, because 18 training DNase-seq tracks are absent from `eic_v1`.==
+
+### Results 2: the training-free baselines
+
+Source: `cruxvault/results/t307/BASELINES.md` and its tables (`baselines_headline.tsv`, `correction_headroom.tsv`, `calibration_baselines.tsv`, `noise_floor_by_assay.tsv`, `validity_checks.tsv`). Tier: settled (pairs on all 256 regions). Interval: 95% cluster-bootstrap over cells.
+
+==The scorer passed its validity checks with exact equality on both tiers: depth-only scaling scored a gap closed of exactly 0 and the half-against-half floor exactly 1 on every assay and knob, and the uncertainty term of the marginal negative binomial was exactly 0. A second computation from the per-pair records reproduced three scorer macros to every printed digit.==
+
+==The four training-free baselines set the reference on the three goals. For imputation, the position average, i.e. the per-position mean of the training cells scaled to the target depth, recovered 0.119 [-0.156, 0.194] of the cell-type-specific variance above the noise floor in counts space; the noise floor itself was 58% to 85% of that specific variance per assay at 25 bp. Its count CRPS was 0.795 (0.775 oracle-scaled + 0.019 scale error), and the marginal negative binomial was worse by 0.216 [0.129, 0.309] (count CRPS 1.011 = 0.845 + 0.166). Signal-space scores were undefined for every baseline, because no baseline predicts a fragment length.==
+
+==For covariate correction, depth-only scaling had a mean CRPS of 0.561 per bin on the 102 never-trained pairs, against 0.519 for the half-against-half floor, a gap of 0.042 [0.019, 0.081] (macro over the 11 scorable assays: 0.572 = 0.561 + 0.011 against 0.533 = 0.523 + 0.010). Over all 1,480 correction pairs the gap depended on the direction of the depth change: it was negative when the target was shallower than the source (depth-only scaling won on every such pure-depth pair) and positive when the target was deeper (0.081 to 0.234 across the depth knobs), because scaling up multiplies the source's sampling noise. The position average, which ignores the source track, went below the floor on the never-trained pairs (macro correction CRPS 0.523 = 0.513 + 0.010) and closed 2.86 [1.85, 6.59] of the gap. The floor is therefore not a lower bound on the correction CRPS, and the reference a model must beat is the position average.==
+
+==How to rescale this metric is open; the PI is deciding which reference defines its 1. The scorer computes the gap closed per assay as a ratio of mean CRPS values and then averages over the 11 assays; the per-assay denominators (depth-only minus floor) are 0.007 to 0.162, so an assay with a small denominator gives a large ratio (H3K27me3 9.63). Until the ruling, every correction score is also quoted as raw CRPS with its split (per-assay values: `cruxvault/results/t307/src/baselines/<name>/seed0/scores.json`).==
+
+==For uncertainty, the position average was closer to calibration than the marginal negative binomial (pooled PIT deviation 0.050 against 0.060; worst stratum 0.074 against 0.185). Both baselines predicted at least the variance between two pseudoreplicate halves in every scorable assay (ratio 1.21 to 16.97 for the position average), and the position average predicted more variance than separates two cell types in 6 of 7 assays. The upper bound of the variance ratio needs a second experiment of the same cell, which `eic_v1` lacks. On these baselines, scoring the pair jobs on 16 instead of 256 regions left the imputation and uncertainty metrics unchanged and moved the correction gap closed by 0.49, inside its interval.==
+
+==The headroom expectation (the gap is largest for the depth and run-type knobs and near 0 for pure subset pairs) is not supported as written: the run-type knob rests on 1 cell, pooled over both directions the largest gaps are crop+mapq (0.116 [0.064, 0.170]) and depth+nodedup (0.107 [0.061, 0.164]), and the subset pairs have a gap of 0.035 [0.021, 0.055], which mixes -0.011 on shallower targets and 0.081 on deeper ones.==
+
+### Results 3: AlphaGenome 2, the training-track audit
+
+Source: `cruxvault/results/t273/AG2_LEAKAGE.md` (audit), `cruxvault/results/t308/SUBMITTED.md` (pack and board status), `cruxvault/results/ag2/AG2_FACTS.md` (what the model predicts). Label: interim, dataset `eic_v1`, validation tracks.
+
+==AlphaGenome 2 takes 1 Mb of DNA and a named condition and predicts every track of that condition; measured tracks of the cell are not an input. It predicts histone ChIP-seq as fold change over control in 128 bp bins and accessibility as a normalized insertion signal at 1 bp, so we compare it with our models in the signal space. Its released model trained on every observed track, and no accession list is public, so we audited each challenge track at the level of condition and mark. Of the 45 validation tracks, AlphaGenome 2 trained on the same condition and mark for 32, on a sibling condition for 1, and never saw 12; of the 51 blind tracks it trained on 36 and never saw 15, all of them H3K27me3 or H3K9me3. Every validation and blind track is queryable.==
+
+==In `eic_v1` the headline regime holds 43 validation targets, because two validation DNase-seq tracks are absent. The packed predictions therefore hold a fair set of 11 tracks in 9 cells that neither AlphaGenome 2 nor our models trained on, and a trained-on set of 31 tracks in 20 cells; the sibling-condition track is set aside. The two sets are scored and reported apart, and only the fair set can carry a claim about unseen tracks.==
+
+==The board of AlphaGenome 2 against the baselines has not run. The oracle-baseline step needs a fragment length to turn counts into a signal track, and the tables leave `frag_len` empty for 35 of 98 validation base tracks and 196 of 555 training ChIP-seq base tracks, so the step failed, and only 10 of the 43 headline targets have a signal-space truth. The board arrives in shipment 2, after that gap is closed.==
+
+### Results 4 onward: the models
+
+==Arrives in shipment 2 (screening scores of the model ladder against the baselines).==
+
 ## Discussion
+
+==Arrives in shipment 2 (first draft).==
 
 ## Later phases
