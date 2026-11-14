@@ -2843,7 +2843,10 @@ def score(evalset, out, *, run=None, baseline=None, model=None, config=None,
     of the two-phase path, which reads the model's predictions from `pred_store` (made for `run`,
     or for an in-memory scoring when `config` and `run_tables_sha256` are given with no run) and
     the pair reference terms from `refs_from` (None: computed in the run, for tests). TF32 is off
-    for matmul and cuDNN on every path that loads a model (foreman decision, Amendment 10)."""
+    for matmul and cuDNN on every path that loads a model (foreman decision, Amendment 10).
+    `workers` > 1 forks: call it from a process that has run no multi-threaded torch work (as
+    score.sh does; the metric phase builds no model). On Linux a GNU OpenMP pool started before
+    the fork hangs the workers (seen on Nibi when a model had run in the same process)."""
     if (run is not None or model is not None) and phase is None:
         tf32_off()
     if phase not in (None, "metrics"):

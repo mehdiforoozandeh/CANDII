@@ -110,9 +110,30 @@ def _store(env, r, d, B=LEGACY_B, shards=1):
 
 
 def _metrics(env, cfg, store, out, **kw):
-    kw = {"refs_from": env["refs"], "workers": 2, **kw}
+    kw = {"refs_from": env["refs"], "workers": 1, **kw}
     return S.score(env["evalset"], out, phase="metrics", pred_store=store, config=cfg,
                    run_tables_sha256=env["sha"], **KW, **kw)
+
+
+def _subprocess(args, code=None):
+    """Run score.py (or `code`) in a fresh interpreter. Forked workers must start from a process
+    that has run no multi-threaded torch work (`Scorer._parallel`): on Linux a GNU OpenMP pool
+    started by a model forward in this pytest process hangs the children (seen on Nibi), so every
+    test with more than one worker runs the scorer the way score.sh does, in its own process."""
+    import subprocess
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(REPO / "src"), str(REPO / "tools")]),
+               OMP_NUM_THREADS="2", OMP_WAIT_POLICY="PASSIVE")
+    cmd = [sys.executable] + (["-c", code] if code else [str(REPO / "tools/onion_eval/score.py")])
+    return subprocess.run(cmd + list(args), env=env, capture_output=True, text=True, timeout=1800)
+
+
+def _save_run(root: Path, r: int, sha: str) -> Path:
+    m, cfg = _model(r)
+    run = root / "runs" / f"rung{r}_base" / "seed0"
+    run.mkdir(parents=True)
+    torch.save({"state_dict": m.state_dict(), "config": cfg, "param_count": m.param_count(),
+                "windows_seen": 0, "tables_sha256": sha, "git_sha": "test"}, run / R.CKPT_NAME)
+    return run
 
 
 def _flat(x, p=""):
@@ -188,11 +209,7 @@ def test_metric_phase_equals_legacy_for_each_rung(env, tmp_path, r):
 def test_cli_round_trip_with_the_predict_command(env, tmp_path, r):
     """A run directory: `predict_store.py run` (SP2a, 2 shards) then `score.py --phase metrics`
     against `score.py --run` (legacy), through the command lines."""
-    m, cfg = _model(r)
-    run = tmp_path / "runs" / f"rung{r}_base" / "seed0"
-    run.mkdir(parents=True)
-    torch.save({"state_dict": m.state_dict(), "config": cfg, "param_count": m.param_count(),
-                "windows_seen": 0, "tables_sha256": env["sha"], "git_sha": "test"}, run / R.CKPT_NAME)
+    run = _save_run(tmp_path, r, env["sha"])
     common = ["--run", str(run), "--evalset", str(env["evalset"])]
     gw = ["--guardrail-windows", str(KW["guardrail_windows"])]
     assert S.main(common + ["--out", str(tmp_path / "legacy"), "--device", "cpu", "--n-boot",
@@ -201,10 +218,11 @@ def test_cli_round_trip_with_the_predict_command(env, tmp_path, r):
     for i in range(2):
         assert P.run(common + ["--pred-store", str(store), "--shard", f"{i}/2", "--device",
                                "cpu"] + gw) == 0
-    assert S.main(common + ["--out", str(tmp_path / "tp"), "--phase", "metrics", "--pred-store",
-                            str(store), "--refs-from", str(env["refs"]), "--workers", "2",
-                            "--stage-dir", str(tmp_path / "stage"), "--n-boot",
-                            str(KW["n_boot"])]) == 0
+    p = _subprocess(common + ["--out", str(tmp_path / "tp"), "--phase", "metrics", "--pred-store",
+                              str(store), "--refs-from", str(env["refs"]), "--workers", "2",
+                              "--stage-dir", str(tmp_path / "stage"), "--n-boot",
+                              str(KW["n_boot"])])
+    assert p.returncode == 0, p.stderr[-2000:]
     assert leaf_differences(tmp_path / "legacy", tmp_path / "tp") == []
     s = json.loads((tmp_path / "tp" / "scores.json").read_text())
     assert s["run"] == str(run.resolve()) and s["scorer_version"] == 2
@@ -237,11 +255,20 @@ def test_reference_terms_read_equal_terms_computed_in_the_run(env, tmp_path):
 def test_workers_and_store_batch_do_not_move_a_value(env, tmp_path):
     """1 against 3 workers give the same outputs; a store at another inference batch is read, and
     its batch is recorded (its floats may differ in the last bits: a property of the store)."""
-    cfg = _store(env, 4, tmp_path / "s4")
-    _store(env, 4, tmp_path / "s16", B=16)
-    _metrics(env, cfg, tmp_path / "s4", tmp_path / "w1", workers=1)
-    _metrics(env, cfg, tmp_path / "s4", tmp_path / "w3", workers=3)
-    s = _metrics(env, cfg, tmp_path / "s16", tmp_path / "b16")
+    run = _save_run(tmp_path, 4, env["sha"])
+    common = ["--run", str(run), "--evalset", str(env["evalset"])]
+    gw = ["--guardrail-windows", str(KW["guardrail_windows"])]
+    for d, b in (("s4", LEGACY_B), ("s16", 16)):
+        assert P.run(common + ["--pred-store", str(tmp_path / d), "--device", "cpu",
+                               "--infer-batch", str(b)] + gw) == 0
+    S.score(env["evalset"], tmp_path / "w1", run=run, phase="metrics", pred_store=tmp_path / "s4",
+            refs_from=env["refs"], workers=1, **KW)
+    p = _subprocess(common + ["--out", str(tmp_path / "w3"), "--phase", "metrics", "--pred-store",
+                              str(tmp_path / "s4"), "--refs-from", str(env["refs"]), "--workers",
+                              "3", "--n-boot", str(KW["n_boot"])])
+    assert p.returncode == 0, p.stderr[-2000:]
+    s = S.score(env["evalset"], tmp_path / "b16", run=run, phase="metrics",
+                pred_store=tmp_path / "s16", refs_from=env["refs"], **KW)
     assert leaf_differences(tmp_path / "w1", tmp_path / "w3") == []
     assert s["infer_batch"] == 16 and s["scorer_settings"]["infer_batch"] == 16
 
@@ -392,20 +419,27 @@ def test_tf32_off_in_the_legacy_model_path_and_the_metric_phase(env, store1, tmp
 
 # ------------------------------------------------------------------------------- review items (SF0)
 
-def _die_on_second(i):
-    if i == 1:
-        os._exit(3)
-    return _ORIG_TASK(i)
-
-
-_ORIG_TASK = S._worker_task
-
-
-def test_a_killed_worker_raises(env, tmp_path, monkeypatch):
-    from concurrent.futures.process import BrokenProcessPool
-    monkeypatch.setattr(S, "_worker_task", _die_on_second)
-    with pytest.raises(BrokenProcessPool):
-        S.score(env["evalset"], tmp_path / "out", baseline="marginal_nb", workers=2, **KW)
+def test_a_killed_worker_raises(env):
+    """A worker that dies raises BrokenProcessPool in the parent at once (in a fresh process)."""
+    code = (
+        "import os, sys\n"
+        "from concurrent.futures.process import BrokenProcessPool\n"
+        "from onion_eval import score as S\n"
+        "orig = S._worker_task\n"
+        "def die(i):\n"
+        "    if i == 1:\n"
+        "        os._exit(3)\n"
+        "    return orig(i)\n"
+        "S._worker_task = die\n"
+        "try:\n"
+        "    S.score(sys.argv[1], sys.argv[2], baseline='marginal_nb', workers=2, n_boot=0,\n"
+        "            log=lambda *a: None)\n"
+        "except BrokenProcessPool:\n"
+        "    print('BROKEN')\n")
+    out = env["root"] / "killed"
+    p = _subprocess([str(env["evalset"]), str(out)], code=code)
+    assert p.returncode == 0 and "BROKEN" in p.stdout, p.stderr[-2000:]
+    assert not (out / "scores.json").exists()
 
 
 def test_pairs_only_refuses_a_scored_directory(env, tmp_path):
