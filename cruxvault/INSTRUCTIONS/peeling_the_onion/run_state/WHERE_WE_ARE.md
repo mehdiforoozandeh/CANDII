@@ -2,7 +2,7 @@
 title: where we are (peeling the onion run)
 kind: live status page, maintained by the foreman agent
 parent: "[[peeling the onion]]"
-updated: 2026-11-14T10:55Z
+updated: 2026-11-14T10:21Z
 ---
 
 # Where we are
@@ -34,7 +34,7 @@ Working copies of items 2 and 3 live in the worktree at `.claude/worktrees/onion
 | Ship 2 | Model Results on screening scores and a first Discussion; one deck | 2026-11-15 18:00 (hard limit 2026-11-16 08:00) |
 | Iteration 2 | 16 versus 256 region check, budget curve, dataset update, CPU work on Fir | 2026-11-17 12:00 |
 
-## State on 2026-11-14 10:55
+## State on 2026-11-14 10:25
 
 **Done**
 - Dataset `eic_v1` frozen (249 of 267 training tracks, 42 of 45 validation, 37 of 40 controls).
@@ -43,14 +43,14 @@ Working copies of items 2 and 3 live in the worktree at `.claude/worktrees/onion
 - AlphaGenome 2: 8,960 predictions cached, training-track audit done, scorer matches Max's script.
 - Rung 1: 24 runs trained, unscored. Budget curve: 42 runs trained, unscored.
 - Fast scorer merged on the umbrella: prediction store, predict command, job scripts, score comparison. The metric phase is not merged.
-- Nibi file limit (500K files on /project) hit at 09:40 and fixed at 10:35: 68 unused code snapshots archived to `/scratch/mforooz/onion/kit_archive` and deleted (PI approved). Now 372K of 500K.
-- Globus: two transfers Nibi to Fir started at about 10:20 (scratch `measurements`, `aux`; project `aux`, `eval`, `genome`, `region`, `runs`, `runs_region`, `tables`).
+- Nibi file limit (500K files on /project) hit at 09:40 and fixed at about 10:10: 68 unused code snapshots archived to `/scratch/mforooz/onion/kit_archive` and deleted (PI approved). Now 372K of 500K.
+- Globus: two transfers Nibi to Fir started at about 09:50 (scratch `measurements`, `aux`; project `aux`, `eval`, `genome`, `region`, `runs`, `runs_region`, `tables`).
 
 **In work (agents)**
 - Metric phase of the scorer (`score.py --phase metrics`).
 - Restart of trainings after the outage: 8 failed first runs resubmitted, 34 held released (rungs 2 to 6, rung-4 `scrambled_covariates`, "evaluation regions excluded", 7 selection arms).
 - Two new input arms on rung 1 (`average_input`, `two_step_native`): 6 held trainings, first two released and checked first. Code on `chunk/onion-A1k`, not merged.
-- Baselines: 16-region scorings resubmitted; 256-region scorings 27265497 to 27265499 run; 27265500 failed in the outage.
+- Baselines: 16-region scorings resubmitted; all four 256-region scorings (27265497 to 27265500) failed in the outage and are being resubmitted.
 - Variance-layer rerun with pseudoreplicate pairs.
 
 **Next steps, in order**
