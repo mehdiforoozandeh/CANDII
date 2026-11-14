@@ -2,7 +2,7 @@
 title: where we are (peeling the onion run)
 kind: live status page, maintained by the foreman agent
 parent: "[[peeling the onion]]"
-updated: 2026-11-14T10:21Z
+updated: 2026-11-14T11:53Z
 ---
 
 # Where we are
@@ -48,10 +48,11 @@ Working copies of items 2 and 3 live in the worktree at `.claude/worktrees/onion
 - Status deck 2026-11-14: `cruxvault/presentations/onion-status-2026-11-14/`, artifact https://claude.ai/artifact/FwKjytRr1UuhT3xhTpWDrL (private).
 
 **In work (agents)**
-- Metric phase of the scorer (`score.py --phase metrics`).
+- Metric phase of the scorer: built, old path against new path gave 0 differences on 3 models (results/two_phase_metrics/TWO_PHASE.md); in review, not merged.
+- Predict jobs of rung 1 on the screening set: builder running (one job timed first; results/forwards_rung1/).
 - Restart of trainings after the outage: all 42 queued or running (8 resubmitted as 27269108-27269121, 34 released) (rungs 2 to 6, rung-4 `scrambled_covariates`, "evaluation regions excluded", 7 selection arms).
 - Two new input arms on rung 1 (`average_input`, `two_step_native`): 6 held trainings, first two released and checked first. Code on `chunk/onion-A1k`, not merged.
-- Baselines: 8 scorings run (16 regions: 27269893, 27269898, 27269901, 27269908; 256 regions: 27270400, 27270401, 27270402, 27269910).
+- Baselines: the 4 on 16 regions are SCORED (eval/eic_v1/baselines_p16); the 4 on 256 regions run (27270400, 27270401, 27270402, 27269910).
 
 **Next steps, in order**
 1. Collect the three restart slips; log the new job ids.
