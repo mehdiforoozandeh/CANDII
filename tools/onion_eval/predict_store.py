@@ -486,7 +486,13 @@ def _bench_device(a, device, log) -> dict:
             torch.cuda.reset_peak_memory_stats()
         tm = defaultdict(float)
         t0 = time.perf_counter()
-        predict(sc, reqs, d, B, run=a.run, guardrail=False, timing=tm, log=log)
+        try:
+            predict(sc, reqs, d, B, run=a.run, guardrail=False, timing=tm, log=log)
+        except torch.cuda.OutOfMemoryError:
+            res["batches"][B] = {"fits": False, "peak_reserved": int(torch.cuda.max_memory_reserved())}
+            log(f"bench: {device} batch {B}: out of memory")
+            torch.cuda.empty_cache()
+            break
         wall = time.perf_counter() - t0
         row = {"wall_seconds": round(wall, 3), **{k: (round(v, 3) if isinstance(v, float) else v)
                                                   for k, v in tm.items()},
@@ -500,6 +506,7 @@ def _bench_device(a, device, log) -> dict:
         log(f"bench: {device} batch {B}: {row['windows_per_second_end_to_end']:.1f} windows/s end "
             f"to end, {row['windows_per_second_forward_only']:.1f} forward only")
     base = Path(a.store_root) / device.replace(":", "") / f"b{batches[0]}"
+    batches = [B for B in batches if res["batches"].get(B, {}).get("fits", True) and B in res["batches"]]
     for B in batches[1:]:
         res["batches"][B]["max_rel_diff_vs_first"] = _store_diff(
             Path(a.store_root) / device.replace(":", "") / f"b{B}", base, reqs)
