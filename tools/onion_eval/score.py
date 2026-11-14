@@ -1773,6 +1773,12 @@ class Scorer:
         reg["pred_total"] = (mu.reshape(Rp, self.rb).sum(axis=1) if np.isfinite(mu).all()
                              else nan_rows)
         reg["source_total"] = np.asarray(A["x"], np.float64).reshape(Rp, self.rb).sum(axis=1)
+        # the pair's metadata, so that a reader (pair_regions_check) can rebuild the pair records
+        reg["log2_depth_ratio"] = float(out["log2_depth_ratio"])
+        for k in PAIR_META_STR:
+            reg[k] = "" if out.get(k) is None else str(out.get(k))
+        for k in PAIR_META_INT:
+            reg[k] = int(out.get(k) or 0)
         self.pair_regional[_pair_key(job)] = reg
         self.suff[f"pair/{job.get('pair_id') or job['source'] + '>' + job['target']}"] = np.array(
             [_j(out["crps_model"]) or np.nan, _j(out["crps_depth_only"]) or np.nan,
@@ -2568,6 +2574,9 @@ def write_outputs(scores: dict, suff: dict, out) -> Path:
 
 PAIR_REGION_FIELDS = ("crps_sum_model", "crps_sum_depth_only", "crps_sum_floor", "bins",
                       "pred_total", "source_total")
+#: per-pair metadata of pairs_per_region.npz (the names `pair_regions_check.py` reads)
+PAIR_META_STR = ("assay", "cell", "rung", "knob", "source", "target")
+PAIR_META_INT = ("never_trained", "subset_pair")
 
 
 def write_pairs_per_region(sc, out):
@@ -2575,13 +2584,21 @@ def write_pairs_per_region(sc, out):
     order (correction pairs, then replicate pairs), `region_indices` [Rp] (positions in the eval
     set's region order), and float64 [P, Rp] per-region sums: the CRPS of the model, of depth-only
     scaling and of the floor, the bins, the predicted total and the source total. A pair's sums add
-    up to its totals (its CRPS times its bins). Not written when the scoring has no pair job."""
+    up to its totals (its CRPS times its bins). Per pair also `log2_depth_ratio` [P] (float64; headline
+    5 needs it), the strings `assay`, `cell`, `rung` ('' for a correction pair), `knob`, `source`,
+    `target` and the ints `never_trained`, `subset_pair` [P]. Not written when the scoring has no pair
+    job."""
     keys = [k for k in getattr(sc, "pair_order", []) if k in sc.pair_regional]
     if not keys:
         return None
     p = Path(out) / "pairs_per_region.npz"
     np.savez_compressed(p, pair_ids=np.array(keys), region_indices=np.asarray(sc.pair_region_idx,
                                                                                   np.int64),
+                        log2_depth_ratio=np.array([sc.pair_regional[k]["log2_depth_ratio"]
+                                                   for k in keys], np.float64),
+                        **{f: np.array([sc.pair_regional[k][f] for k in keys]) for f in PAIR_META_STR},
+                        **{f: np.array([sc.pair_regional[k][f] for k in keys], np.int64)
+                           for f in PAIR_META_INT},
                         **{f: np.stack([np.asarray(sc.pair_regional[k][f], np.float64) for k in keys])
                            for f in PAIR_REGION_FIELDS})
     return p

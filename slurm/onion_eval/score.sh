@@ -6,7 +6,10 @@
 #   sbatch --output=<logs>/%x_%j.out $KIT/slurm/onion_eval/score.sh \
 #       <kit_dir> <evalset.json> <out_dir> run <run_dir> [extra score.py args]
 #   sbatch ... score.sh <kit_dir> <evalset.json> <out_dir> baseline <name> [extra score.py args]
-#   -> <out_dir>/{scores.json,suffstats.npz,SCORED}
+#   -> <out_dir>/{scores.json,suffstats.npz,SCORED} and, when the eval set has pair jobs,
+#      pairs_per_region.npz (SF0: per-region pair sums). Extra arg --pairs-only (SF0): the pair jobs
+#      only, -> pairs_only.json + pairs_per_region.npz (give it its own <out_dir>). The pair jobs run
+#      on the eval set's `pair_regions` (all regions when absent).
 # A run is scored into its own seed dir (<out_dir> = <run_dir>); a baseline into
 # /project/def-maxwl/mforooz/ONION/eval/<tables>/baselines/<name>/seed0. Blind scoring (gate G4
 # only) needs "--split blind --allow-blind" in the extra args, the blind eval set

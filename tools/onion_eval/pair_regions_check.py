@@ -87,10 +87,11 @@ def thresholds() -> dict:
 
 # ------------------------------------------------------------------ regions
 def pair_region_positions(n_regions: int, p: int) -> list[int]:
-    """Section B.4: the positions 0, R/p, 2R/p, ... of the region order (p must divide R)."""
-    if p <= 0 or n_regions % p:
-        raise ValueError(f"p = {p} does not divide the {n_regions} regions")
-    return list(range(0, n_regions, n_regions // p))
+    """Section B.4: the positions 0, R/p, 2R/p, ... of the region order (p must divide R). SF0: the
+    one implementation is `evalset.pair_positions`, which `evalset.py derive` uses; the scorer
+    reads the derived eval set's `pair_regions`."""
+    from onion_eval.evalset import pair_positions
+    return pair_positions(n_regions, p)
 
 
 def clusters(regions, region_bins: int) -> np.ndarray:

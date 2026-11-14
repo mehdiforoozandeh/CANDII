@@ -230,3 +230,42 @@ def test_pairs_only_equals_full_scoring(runs, tmp_path):
         assert sorted(a.files) == sorted(b.files)
         for k in a.files:
             np.testing.assert_array_equal(a[k], b[k])
+
+
+def test_one_subset_rule_for_derive_scorer_and_check_tool(runs, tmp_path):
+    """The positions of a pair-region subset come from one function (`evalset.pair_positions`):
+    `evalset.py derive`, the scorer's `pair_regions` and the check tool agree on a toy eval set."""
+    from onion_eval import pair_regions_check as PC
+    env = runs["planted"]
+    out = tmp_path / "eval" / "z" / "evalset_p2.json"
+    out.parent.mkdir(parents=True)
+    E.derive(env["evalset"], out, pair_regions=2)
+    d = json.loads(out.read_text())
+    want = E.pair_positions(N_REGIONS, 2)
+    assert d["pair_regions"] == want == PC.pair_region_positions(N_REGIONS, 2) == [0, 2]
+    d["tables_dir"] = str(env["tables"])
+    out.write_text(json.dumps(d))
+    sc = S.Scorer(out, main="marginal_nb", config=dict(T.CFG), **KW)
+    assert sc.pair_region_idx == want
+
+
+def test_check_tool_reads_the_pair_file(runs):
+    """pairs_per_region.npz carries what `pair_regions_check.Run` needs (log2_depth_ratio and the
+    per-pair metadata), and the records it rebuilds from all regions give the scorer's pair keys."""
+    from onion_eval import pair_regions_check as PC
+    ev = json.loads(runs["planted"]["evalset"].read_text())
+    r = PC.Run(runs["out_planted"], ev)
+    with np.load(runs["out_planted"] / "pairs_per_region.npz") as z:
+        for k in ("log2_depth_ratio",) + S.PAIR_META_STR + S.PAIR_META_INT:
+            assert k in z.files and len(z[k]) == len(r.pair_ids)
+    full = PC.values(_load(runs["out_planted"]))
+    got = PC.values(PC._agg(r, np.ones(len(r.region_indices)), S.pair_metrics_from_records,
+                            ev["scorable"]))
+
+    def close(a, b):
+        return (a is None and b is None) or (a is not None and b is not None
+                                             and a == pytest.approx(b, rel=1e-9, abs=1e-12))
+    assert close(got["h4"], full["h4"]) and close(got["h5"], full["h5"])
+    assert set(got["h4_assay"]) == set(full["h4_assay"])
+    assert all(close(got["h4_assay"][a], full["h4_assay"][a]) for a in got["h4_assay"])
+    assert got["rep"] and all(close(v, full["rep"][g]) for g, v in got["rep"].items())
