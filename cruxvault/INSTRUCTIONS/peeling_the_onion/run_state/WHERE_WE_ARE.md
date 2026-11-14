@@ -39,19 +39,19 @@ Working copies of items 2 and 3 live in the worktree at `.claude/worktrees/onion
 **Done**
 - Dataset `eic_v1` frozen (249 of 267 training tracks, 42 of 45 validation, 37 of 40 controls).
 - Evaluation set frozen (256 regions); screening set `evalset_p16.json` with 16 pair regions derived (sha a82cdfd1).
-- Real-data variance layers measured (sampling layer missing; rerun in work).
+- Real-data variance layers measured with the sampling layer (results/t305/LAYERS_REAL.md): sampling 76 to 97 percent at 25 bp, replicate about 1 percent, cell type 10 to 23 percent (up to 91 percent at broad scale). Recorded in the vault (f51 to f54, q31).
 - AlphaGenome 2: 8,960 predictions cached, training-track audit done, scorer matches Max's script.
 - Rung 1: 24 runs trained, unscored. Budget curve: 42 runs trained, unscored.
 - Fast scorer merged on the umbrella: prediction store, predict command, job scripts, score comparison. The metric phase is not merged.
 - Nibi file limit (500K files on /project) hit at 09:40 and fixed at about 10:10: 68 unused code snapshots archived to `/scratch/mforooz/onion/kit_archive` and deleted (PI approved). Now 372K of 500K.
 - Globus: two transfers Nibi to Fir started at about 09:50 (scratch `measurements`, `aux`; project `aux`, `eval`, `genome`, `region`, `runs`, `runs_region`, `tables`).
+- Status deck 2026-11-14: `cruxvault/presentations/onion-status-2026-11-14/`, artifact https://claude.ai/artifact/FwKjytRr1UuhT3xhTpWDrL (private).
 
 **In work (agents)**
 - Metric phase of the scorer (`score.py --phase metrics`).
 - Restart of trainings after the outage: all 42 queued or running (8 resubmitted as 27269108-27269121, 34 released) (rungs 2 to 6, rung-4 `scrambled_covariates`, "evaluation regions excluded", 7 selection arms).
 - Two new input arms on rung 1 (`average_input`, `two_step_native`): 6 held trainings, first two released and checked first. Code on `chunk/onion-A1k`, not merged.
 - Baselines: 8 scorings run (16 regions: 27269893, 27269898, 27269901, 27269908; 256 regions: 27270400, 27270401, 27270402, 27269910).
-- Variance-layer rerun with pseudoreplicate pairs.
 
 **Next steps, in order**
 1. Collect the three restart slips; log the new job ids.
