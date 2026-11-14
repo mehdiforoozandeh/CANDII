@@ -8,6 +8,20 @@
         --out <dir> [--k 8192]
     python tools/onion_data/train_strata.py region-classes --tile-table <tsv> --evalset <json>
         --tables <dir> --peaks <dir> --peak-files <tsv> --out <tsv>
+        [--by peakfreq|ccre_density_tercile] [--genome <dir>]
+    python tools/onion_data/train_strata.py tilt --tile-table <tsv> --score ccre_density|variance
+        --target-ess <x in (0, 1]> --name <name> [--unweighted] --out <dir>
+
+STt2 (amended B.4). `tiles` also writes the column `ccre_density`: the mean over the training tracks
+of DNase-seq, ATAC-seq, H3K4me3 and H3K27ac (role train peak files only) of the fraction of the
+tile's valid bins that are peak bins. No other column and no list changes. `tilt` writes one
+`train_regions` list over every tile of the tile table: q_i proportional to valid bins x
+max(s_i, floor)^alpha, floor = the 1st percentile of the positive scores, alpha >= 0 found by
+bisection so that the ESS per draw (1 / sum of q w^2, w = g / q, g = valid-bin share) is the target
+within 0.01; w = g / q, or 1 with `--unweighted`; stratum = the score decile (d01 to d10). It
+appends alpha, the ESS, the floor, the w range and the mass per score decile to `<out>/STRATA.md`.
+`region-classes --by ccre_density_tercile` writes the terciles (t1_low, t2_mid, t3_high, by rank
+over the evaluation regions) of each evaluation region's `ccre_density`.
 
 Every list is a `train_regions` file of pinned interface I: header comment lines
 `# roles_read=train`, `# universe=<text>`, `# sha256_inputs=<sha>`, then the columns
@@ -108,7 +122,14 @@ PROMOTER_MARK = "H3K4me3"
 VARIANCE_TOP_DECILES = 3
 VARIANCE_TOP_FACTOR = 2.0
 LIST_COLUMNS = ("chrom", "start_bin", "n_bins", "stratum", "sample_weight", "loss_weight")
-TILE_COLUMNS = ("chrom", "start_bin", "valid_bins", "peak_fraction", "ccre_like_class", "variance")
+TILE_COLUMNS = ("chrom", "start_bin", "valid_bins", "peak_fraction", "ccre_like_class", "variance",
+                "ccre_density")
+#: STt2: the assays of the cCRE recipe whose training peaks make `ccre_density`
+CCRE_DENSITY_ASSAYS = ("DNase-seq", "ATAC-seq", "H3K4me3", "H3K27ac")
+TILT_SCORES = ("ccre_density", "variance")
+TILT_FLOOR_PERCENTILE = 1.0
+TILT_ESS_TOL = 0.01
+TERCILE_NAMES = ("t1_low", "t2_mid", "t3_high")
 ROLES = ("train", "val", "blind")
 EMBEDDING_SOURCE = "ntv2"
 FULL_HASH_BYTES = 64 << 20
@@ -675,6 +696,157 @@ def arm_summary(name: str, rows: list, tile_peak: dict, tile_valid: dict, note: 
     return lines
 
 
+def ccre_density(tracks: list, units: list, n: int, genome: Path) -> np.ndarray:
+    """STt2. Per unit [chrom, start_bin] of n bins: the mean over the training tracks of the four
+    cCRE-recipe assays (DNase-seq, ATAC-seq, H3K4me3, H3K27ac; `tracks` from `peak_tracks`, so
+    training peak files only) of the fraction of the unit's valid bins that are peak bins (a bin
+    overlapped by a peak by >= 1 bp). A mean over tracks, not a union: a bin under the peaks of
+    many tracks counts more."""
+    import h5py
+    sel = [t for t in tracks if t[2] in CCRE_DENSITY_ASSAYS]
+    if not sel:
+        raise ValueError(f"no training peak file of {CCRE_DENSITY_ASSAYS}")
+    bc = _by_chrom(units)
+    with h5py.File(Path(genome) / "mask.h5", "r") as mf:
+        masks = {c: np.asarray(mf[c][:], bool) for c in bc}
+    starts = {c: np.array([s for _, s in v], np.int64) for c, v in bc.items()}
+    idx = {c: np.array([i for i, _ in v], np.int64) for c, v in bc.items()}
+
+    def window_sums(x, c):
+        cs = np.concatenate([[0], np.cumsum(x, dtype=np.int64)])
+        lo = np.clip(starts[c], 0, len(x))
+        hi = np.clip(starts[c] + n, 0, len(x))
+        return cs[hi] - cs[lo]
+    valid = np.zeros(len(units), np.float64)
+    for c in bc:
+        valid[idx[c]] = window_sums(masks[c], c)
+    acc = np.zeros(len(units), np.float64)
+    for _, _, _, path in sel:
+        peaks = read_peaks(path)
+        for c in bc:
+            if c not in peaks:
+                continue
+            nb = len(masks[c])
+            s, e = peaks[c]
+            keep = e > s
+            lo = np.clip(s[keep] // RES, 0, nb)
+            hi = np.clip((e[keep] - 1) // RES + 1, 0, nb)
+            ok = hi > lo
+            diff = np.zeros(nb + 1, np.int64)
+            np.add.at(diff, lo[ok], 1)
+            np.add.at(diff, hi[ok], -1)
+            pb = (np.cumsum(diff[:nb]) > 0) & masks[c]
+            acc[idx[c]] += window_sums(pb, c)
+    return acc / (len(sel) * np.maximum(valid, 1.0))
+
+
+def read_tile_table(path) -> tuple[dict, list]:
+    """(header dict, rows) of `tile_table.tsv`; refuses a table without `# roles_read=train`."""
+    head, rows, cols = {}, [], None
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        if line.startswith("# "):
+            k, _, v = line[2:].partition("=")
+            head[k] = v
+        elif cols is None:
+            cols = line.split("\t")
+        elif line:
+            rows.append(dict(zip(cols, line.split("\t"))))
+    if head.get("roles_read") != "train":
+        raise LeakError(f"{path}: no '# roles_read=train' line; not a training-only tile table")
+    return head, rows
+
+
+def tilt_q(v: np.ndarray, s: np.ndarray, alpha: float) -> np.ndarray:
+    """q_i proportional to v_i x s_i^alpha (s already floored, > 0)."""
+    lw = np.log(v) + alpha * np.log(s)
+    q = np.exp(lw - lw.max())
+    return q / q.sum()
+
+
+def tilt_ess(g: np.ndarray, q: np.ndarray) -> float:
+    """1 / sum of q w^2 with w = g / q, i.e. 1 / sum of g^2 / q."""
+    return float(1.0 / np.sum(g * g / q))
+
+
+def solve_alpha(v: np.ndarray, s: np.ndarray, target: float, tol: float = 1e-6) -> float:
+    """alpha >= 0 with ESS(alpha) = target, by bisection (ESS falls as alpha grows: the sum of
+    g^2 / q is the product of the g-means of s^alpha and s^-alpha, which grows with alpha)."""
+    if not 0.0 < target <= 1.0:
+        raise ValueError(f"target ESS {target} is outside (0, 1]")
+    g = v / v.sum()
+    if target >= 1.0:
+        return 0.0
+    hi = 1.0
+    while tilt_ess(g, tilt_q(v, s, hi)) > target:
+        hi *= 2.0
+        if hi > 1e4:
+            raise ValueError(f"no alpha up to 1e4 reaches ESS {target}")
+    lo = 0.0
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        if tilt_ess(g, tilt_q(v, s, mid)) > target:
+            lo = mid
+        else:
+            hi = mid
+        if hi - lo < tol * max(hi, 1.0):
+            break
+    return 0.5 * (lo + hi)
+
+
+def run_tilt(tile_table, score: str, target_ess: float, name: str, out,
+             unweighted: bool = False) -> dict:
+    """STt2: `<out>/<name>.tsv`, q_i ~ v_i x max(s_i, floor)^alpha, alpha solved for the target
+    ESS per draw; w_i = g_i / q_i (1 with `unweighted`); stratum = the score decile."""
+    if score not in TILT_SCORES:
+        raise ValueError(f"--score {score!r} not in {TILT_SCORES}")
+    if not 0.0 < float(target_ess) <= 1.0:
+        raise ValueError(f"--target-ess {target_ess} is outside (0, 1]")
+    head, rows = read_tile_table(tile_table)
+    if not rows or score not in rows[0]:
+        raise ValueError(f"{tile_table}: no column {score!r}")
+    out = Path(out)
+    out.mkdir(parents=True, exist_ok=True)
+    v = np.array([float(r["valid_bins"]) for r in rows])
+    raw = np.array([float(r[score]) for r in rows])
+    pos = raw[raw > 0]
+    if not len(pos):
+        raise ValueError(f"{tile_table}: no positive {score}")
+    floor = float(np.percentile(pos, TILT_FLOOR_PERCENTILE))
+    sc = np.maximum(raw, floor)
+    alpha = solve_alpha(v, sc, float(target_ess))
+    q = tilt_q(v, sc, alpha)
+    g = v / v.sum()
+    ess = tilt_ess(g, q)
+    if abs(ess - float(target_ess)) > TILT_ESS_TOL:
+        raise ValueError(f"ESS {ess} misses the target {target_ess} by more than {TILT_ESS_TOL}")
+    w = np.ones_like(q) if unweighted else g / q
+    dec = decile_strata(raw)
+    sha = hashlib.sha256((file_digest(tile_table) + head.get("sha256_inputs", "")).encode()).hexdigest()
+    lrows = [{"chrom": r["chrom"], "start_bin": int(r["start_bin"]), "n_bins": TILE_BINS,
+              "stratum": d, "sample_weight": float(qi), "loss_weight": float(wi)}
+             for r, d, qi, wi in zip(rows, dec, q, w)]
+    write_list(out / f"{name}.tsv", lrows,
+               f"{name}: tilt of {score} on the tiles of {Path(tile_table).name} "
+               f"({len(rows)} tiles), q ~ valid bins x max(score, floor)^alpha, alpha "
+               f"{alpha:.6g}, target ESS {float(target_ess):g}"
+               f"{', unweighted (w = 1)' if unweighted else ', w = g / q'}", sha)
+    share = defaultdict(float)
+    for d, qi in zip(dec, q):
+        share[d] += float(qi)
+    md = [f"## {name} (tilt)", "",
+          f"Score `{score}`; q_i proportional to valid bins x max(score, floor)^alpha; "
+          f"{'w = 1 (unweighted)' if unweighted else 'w_i = g_i / q_i'}. Target ESS per draw "
+          f"{float(target_ess):g}; alpha found {alpha:.6g}; realized ESS {ess:.4f}; floor "
+          f"{floor:.6g} (the {TILT_FLOOR_PERCENTILE:g}st percentile of the positive scores); "
+          f"w from {float(w.min()):.6g} to {float(w.max()):.6g}.", "",
+          "Share of the sampling mass per score decile: " + ", ".join(
+              f"{d} {share[d]:.4f}" for d in sorted(share)) + ".", ""]
+    with open(out / "STRATA.md", "a", encoding="utf-8") as fh:
+        fh.write("\n".join(md) + "\n")
+    return {"name": name, "alpha": alpha, "ess": ess, "floor": floor, "w_min": float(w.min()),
+            "w_max": float(w.max()), "top_decile_share": share.get("d10", 0.0)}
+
+
 def edge_coverage(n: int, L: int = WINDOW_BINS) -> tuple[float, float]:
     """A window of L bins drawn with a uniform start inside a row of n bins: (coverage of the
     row's first bin relative to its middle bin, share of the row's bins covered at less than half
@@ -714,14 +886,15 @@ def run_tiles(tables, peaks, peak_files, average, embedding, genome, evalset, ou
     ccre_n: dict = {}
     ccre = ccre_like(tracks, hits, ccre_n)
     var = tile_variance(tables, tiles, genome)
+    cdens = ccre_density(tracks, tiles, TILE_BINS, genome)
     with open(out / "tile_table.tsv", "w", encoding="utf-8") as fh:
         fh.write("# roles_read=train\n")
         fh.write(f"# peak_denominator={len(tracks)}\n")
         fh.write(f"# peak_tracks_sha256={tracks_sha(tracks)}\n")
         fh.write(f"# sha256_inputs={sha}\n")
         fh.write("\t".join(TILE_COLUMNS) + "\n")
-        for (c, s), v, f_, cl, va in zip(tiles, valid, frac, ccre, var):
-            fh.write(f"{c}\t{s}\t{int(v)}\t{_fmt(f_)}\t{cl}\t{_fmt(va)}\n")
+        for (c, s), v, f_, cl, va, cd in zip(tiles, valid, frac, ccre, var, cdens):
+            fh.write(f"{c}\t{s}\t{int(v)}\t{_fmt(f_)}\t{cl}\t{_fmt(va)}\t{_fmt(cd)}\n")
     uni = (f"tiles of U: {len(tiles)} tiles of {TILE_BINS} bins (mask valid >= {MIN_VALID}) in "
            f"{len(U)} blocks of {rb} bins minus {len(ev['regions'])} evaluation and "
            f"{len(ev['fit_regions'])} fit regions")
@@ -809,7 +982,8 @@ def run_tiles(tables, peaks, peak_files, average, embedding, genome, evalset, ou
 
 # ------------------------------------------------------------------------------------ classes
 
-def run_region_classes(tile_table, evalset, tables, peaks, peak_files, out) -> list:
+def run_region_classes(tile_table, evalset, tables, peaks, peak_files, out, by: str = "peakfreq",
+                       genome=None) -> list:
     head = {}
     for line in Path(tile_table).read_text(encoding="utf-8").splitlines():
         if not line.startswith("# "):
@@ -822,6 +996,20 @@ def run_region_classes(tile_table, evalset, tables, peaks, peak_files, out) -> l
     ev = load_evalset(evalset)
     rb = ev["region_bins"]
     E = list(ev["regions"])
+    if by == "ccre_density_tercile":
+        from onion_eval.evalset import genome_dir
+        dens = ccre_density(tracks, E, rb, Path(genome) if genome else genome_dir(Path(tables)))
+        rank = np.searchsorted(np.sort(dens), dens, side="left")
+        cls = [TERCILE_NAMES[int(k)] for k in (rank * 3) // len(E)]
+        rows = [{"chrom": c, "start_bin": s, "class": k, "ccre_density": d}
+                for (c, s), k, d in zip(E, cls, dens)]
+        with open(out, "w", encoding="utf-8") as fh:
+            fh.write("chrom\tstart_bin\tclass\tccre_density\n")
+            for r in rows:
+                fh.write(f"{r['chrom']}\t{r['start_bin']}\t{r['class']}\t{_fmt(r['ccre_density'])}\n")
+        return rows
+    if by != "peakfreq":
+        raise ValueError(f"--by {by!r} not in (peakfreq, ccre_density_tercile)")
     tiles = tiles_of(E, rb)
     frac = peak_matrix(tracks, tiles).mean(axis=0).reshape(len(E), rb // TILE_BINS).mean(axis=1)
     cls = peakfreq_class(frac)
@@ -852,6 +1040,15 @@ def main(argv=None) -> int:
     r = sub.add_parser("region-classes")
     for k in ("tile-table", "evalset", "tables", "peaks", "peak-files", "out"):
         r.add_argument(f"--{k}", required=True)
+    r.add_argument("--by", default="peakfreq", choices=("peakfreq", "ccre_density_tercile"))
+    r.add_argument("--genome", default=None, help="default: <tables>/../../genome")
+    ti = sub.add_parser("tilt")
+    ti.add_argument("--tile-table", required=True)
+    ti.add_argument("--score", required=True, choices=TILT_SCORES)
+    ti.add_argument("--target-ess", required=True, type=float)
+    ti.add_argument("--name", required=True)
+    ti.add_argument("--unweighted", action="store_true")
+    ti.add_argument("--out", required=True)
     a = ap.parse_args(argv)
     if a.cmd == "universe":
         res = run_universe(a.evalset, a.genome, [int(s) for s in a.seeds.split(",") if s],
@@ -859,9 +1056,11 @@ def main(argv=None) -> int:
     elif a.cmd == "tiles":
         res = run_tiles(a.tables, a.peaks, a.peak_files, a.average, a.dna_embedding, a.genome,
                         a.evalset, a.out, k=a.k)
+    elif a.cmd == "tilt":
+        res = run_tilt(a.tile_table, a.score, a.target_ess, a.name, a.out, a.unweighted)
     else:
         res = {"regions": len(run_region_classes(a.tile_table, a.evalset, a.tables, a.peaks,
-                                                 a.peak_files, a.out))}
+                                                 a.peak_files, a.out, by=a.by, genome=a.genome))}
     print(json.dumps(res, sort_keys=True))
     return 0
 
