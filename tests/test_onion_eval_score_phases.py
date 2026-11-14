@@ -1,8 +1,9 @@
 """SP2b (plan t152, Amendment 10, pinned interface M): the metric phase of the two-phase scorer.
 
 Pins, on synthetic tables and a small perturbed model of each of the six rungs:
-  - round trip: a store written by `predict_store` (the predict command's code) is read back by
-    `score(..., phase="metrics")`, and every numeric leaf of scores.json (apart from the version,
+  - round trip: a store written by `predict_store.predict` (all six rungs) and by the merged SP2a
+    command `predict_store.py run` (a saved run, rungs 1 and 5, through both command lines) is read
+    back by the metric phase, and every numeric leaf of scores.json (apart from the version,
     settings, refs and timing keys), every suffstats.npz array, pairs_per_region.npz and every
     dumped method track file equal the legacy single-job output at the legacy batch;
   - the pair reference terms read from the baselines (`refs_from`) equal the terms the legacy path
@@ -181,6 +182,38 @@ def test_metric_phase_equals_legacy_for_each_rung(env, tmp_path, r):
     assert s["predicted_control"]["n_targets"] >= (1 if cfg.get("predict_control") else 0)
     legacy = json.loads((leg / "scores.json").read_text())
     assert legacy["scorer_version"] == 1 and "scorer_settings" not in legacy
+
+
+@pytest.mark.parametrize("r", (1, 5))
+def test_cli_round_trip_with_the_predict_command(env, tmp_path, r):
+    """A run directory: `predict_store.py run` (SP2a, 2 shards) then `score.py --phase metrics`
+    against `score.py --run` (legacy), through the command lines."""
+    m, cfg = _model(r)
+    run = tmp_path / "runs" / f"rung{r}_base" / "seed0"
+    run.mkdir(parents=True)
+    torch.save({"state_dict": m.state_dict(), "config": cfg, "param_count": m.param_count(),
+                "windows_seen": 0, "tables_sha256": env["sha"], "git_sha": "test"}, run / R.CKPT_NAME)
+    common = ["--run", str(run), "--evalset", str(env["evalset"])]
+    gw = ["--guardrail-windows", str(KW["guardrail_windows"])]
+    assert S.main(common + ["--out", str(tmp_path / "legacy"), "--device", "cpu", "--n-boot",
+                            str(KW["n_boot"])] + gw) == 0
+    store = tmp_path / "store"
+    for i in range(2):
+        assert P.run(common + ["--pred-store", str(store), "--shard", f"{i}/2", "--device",
+                               "cpu"] + gw) == 0
+    assert S.main(common + ["--out", str(tmp_path / "tp"), "--phase", "metrics", "--pred-store",
+                            str(store), "--refs-from", str(env["refs"]), "--workers", "2",
+                            "--stage-dir", str(tmp_path / "stage"), "--n-boot",
+                            str(KW["n_boot"])]) == 0
+    assert leaf_differences(tmp_path / "legacy", tmp_path / "tp") == []
+    s = json.loads((tmp_path / "tp" / "scores.json").read_text())
+    assert s["run"] == str(run.resolve()) and s["scorer_version"] == 2
+    # the command line refuses a metric phase without its inputs, and the inputs without the phase
+    with pytest.raises(SystemExit):
+        S.main(common + ["--out", str(tmp_path / "x"), "--phase", "metrics", "--pred-store",
+                         str(store)])
+    with pytest.raises(SystemExit):
+        S.main(common + ["--out", str(tmp_path / "x"), "--refs-from", str(env["refs"])])
 
 
 def test_reference_terms_read_equal_terms_computed_in_the_run(env, tmp_path):
