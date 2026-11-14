@@ -68,6 +68,18 @@ caller's `predicted_control` (the model's control mean over the same bins) is us
 region is one stretch with no flank, so the MACS2 local windows (llocal = 10 kb = 400 bins, slocal
 = 1 kb) and the hotspot2 150 bp window are truncated at both ends of every 2^14-bin region; about
 2 x 200 of 16384 bins per region (2.4%) see a shortened llocal window. Logged, not corrected.
+
+Fragment length of a single-end track (`load_fraglen_table`, `with_fraglen`): the frozen tables leave
+`frag_len` empty for most single-end ChIP-seq tracks, so the ChIP route has no `d`. A caller may give
+a side table of estimated fragment lengths (`qc_fill.py collect --fraglen-out`: the strand
+cross-correlation estimate of the pipeline's xcor task on the measurement's own kept reads).
+`with_fraglen(row, table)` returns the row unchanged when `frag_len` is filled (source `table`; a
+table value is never replaced), the row with the estimate when it is empty and the side table has
+a plausible estimate (source `estimated`), else the row unchanged (source `none`; the ChIP route
+then stays undefined with "covariates lack ['frag_len']"). Plausible: FRAGLEN_PLAUSIBLE_BP[0] <=
+estimate <= FRAGLEN_PLAUSIBLE_BP[1] and the xcor QualityTag is not -2. Only the treatment's
+`frag_len` is read: the control pileup is extended by the treatment's `d` (MACS2 `--extsize`
+applies to both), so a control row's `frag_len` never matters.
 """
 from __future__ import annotations
 
@@ -244,6 +256,55 @@ def hotspot2_normalized_density(mu, *, read_length: float, depth_reads: float) -
     w[0] = w[-1] = half - (reach - 0.5)
     tags = np.convolve(x, w, mode="same")
     return tags * HOTSPOT2_SCALE / float(depth_reads)
+
+
+#: plausible estimated fragment length, bp (inclusive); outside it the estimate is not used
+FRAGLEN_PLAUSIBLE_BP = (80, 400)
+#: spp QualityTag of "very low" cross-correlation quality; such an estimate is not used
+FRAGLEN_BAD_QUALITY_TAG = "-2"
+FRAGLEN_SOURCES = ("table", "estimated", "none")
+
+
+def fraglen_drop_reason(est: dict) -> str:
+    """'' when a side-table row's estimate may be used, else why not."""
+    v = (est.get("frag_len_estimated") or "").strip()
+    if not v:
+        return "no estimate"
+    try:
+        d = float(v)
+    except ValueError:
+        return f"estimate {v!r} is not a number"
+    lo, hi = FRAGLEN_PLAUSIBLE_BP
+    if not lo <= d <= hi:
+        return f"implausible estimate {v} bp (outside {lo}-{hi} bp)"
+    if (est.get("quality_tag") or "").strip() == FRAGLEN_BAD_QUALITY_TAG:
+        return f"xcor quality tag {FRAGLEN_BAD_QUALITY_TAG} (very low)"
+    return ""
+
+
+def load_fraglen_table(path) -> dict:
+    """measurement_id -> side-table row (`qc_fill.py collect --fraglen-out`), with `drop_reason`."""
+    import csv
+    with open(path, newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f, delimiter="\t"))
+    if rows and ("measurement_id" not in rows[0] or "frag_len_estimated" not in rows[0]):
+        raise ValueError(f"{path}: needs columns measurement_id and frag_len_estimated")
+    return {r["measurement_id"]: dict(r, drop_reason=fraglen_drop_reason(r)) for r in rows}
+
+
+def with_fraglen(row: dict, table) -> tuple[dict, str, str]:
+    """(row to use, fraglen source, reason). The row is returned unchanged (the same object) unless
+    its `frag_len` is empty and `table` holds a usable estimate; then a copy carries the estimate."""
+    if (row.get("frag_len") or "").strip():
+        return row, "table", ""
+    if table is None:
+        return row, "none", "frag_len empty and no fragment-length table given"
+    est = table.get(row.get("measurement_id"))
+    if est is None:
+        return row, "none", "frag_len empty and no estimate in the fragment-length table"
+    if est["drop_reason"]:
+        return row, "none", f"frag_len empty; {est['drop_reason']}"
+    return dict(row, frag_len=est["frag_len_estimated"].strip()), "estimated", ""
 
 
 def _need(cov: dict, *keys):

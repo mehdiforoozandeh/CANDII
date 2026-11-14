@@ -729,7 +729,7 @@ class Scorer:
                  log=print, region_cache=True, infer_batch=None, lambda_source="auto",
                  signal_override=None, addon=False, dump_signal=None, dump_targets=None,
                  dump_method=None, workers=1, stage_dir=None, pred_store=None, store_run=None,
-                 refs_from=None):
+                 refs_from=None, fraglen_table=None):
         from minicandi import contract as C
         from minicandi.dataset import OnionDataset, tables_sha256
         from onion_eval.evalset import tables_dir_of
@@ -846,6 +846,13 @@ class Scorer:
                 raise ValueError(f"dnase_route {self.dnase_route!r} not in {self.sig.DNASE_ROUTES}")
         else:
             self.dnase_route = dnase_route
+        # FL: estimated fragment lengths for tracks whose frag_len is empty (None: today's path)
+        self.fraglen_path = str(Path(fraglen_table).resolve()) if fraglen_table else None
+        self.fraglen = None
+        if fraglen_table:
+            if self.sig is None:
+                raise ValueError(f"--fraglen-table needs the signal module: {self.sig_reason}")
+            self.fraglen = self.sig.load_fraglen_table(fraglen_table)
         self._pa_cache: dict = {}
         #: SM: cells whose own per-cell means a cached position-average fit keeps (None = all);
         #: set per imputation group to the group's target cells, the only cells it predicts for
@@ -920,17 +927,31 @@ class Scorer:
         m = self._dump_meta.setdefault(regime, {"targets": [], "left_out": {}, "lambda_sources": {},
                                                 "signal_pc_left_out": {}, "native_left_out": {},
                                                 "peakprob_left_out": {},
-                                                "signal_pc_same_as_signal": []})
+                                                "signal_pc_same_as_signal": [], "truth_only": [],
+                                                "fraglen_sources": {}})
         if mid in self.flagged:
             m["left_out"][mid] = FLAGGED_REASON
             return
         rec = sig["record"]
+        want = (len(self.regions) * self.rb,)
+        if rec.get("fraglen_source") is not None:
+            m["fraglen_sources"][mid] = rec["fraglen_source"]
         pred = sig.get(f"{SIGNAL_PREFIX['expectation']}pred")
         if pred is None:
             m["left_out"][mid] = rec.get("lambda_reason") or "no signal prediction for this target"
+            # FL (review point c): the truth does not depend on the prediction's signal; a target
+            # whose pipeline signal tracks exist gets its truth.npy, listed under `truth_only`
+            truth = None if self.external else sig.get(f"{SIGNAL_PREFIX['expectation']}truth")
+            if truth is not None:
+                a = np.asarray(truth, np.float32)
+                if a.shape != want:
+                    raise ValueError(f"dump {mid}.truth: shape {a.shape}, want {want}")
+                d = self.dump_dir / regime
+                d.mkdir(parents=True, exist_ok=True)
+                np.save(d / f"{mid}.truth.npy", a)
+                m["truth_only"].append(mid)
             return
-        row = self._row(mid)
-        want = (len(self.regions) * self.rb,)
+        row = self._sig_row(self._row(mid))[0]
         arrays = {"signal": pred}
         src = {"signal": rec.get("lambda_source")}
         if not self.external:
@@ -999,7 +1020,12 @@ class Scorer:
                     "space": "signal_arcsinh", "dnase_route": self.dnase_route,
                     "left_out": m["left_out"],
                     "dump_targets_given": self.dump_targets is not None,
-                    "evalset": str(self.evalset_path)}
+                    "evalset": str(self.evalset_path),
+                    # FL: targets with a truth.npy but no signal.npy (not in `targets`)
+                    "truth_only": m.get("truth_only", [])}
+            if self.fraglen is not None:
+                meta["fraglen_table"] = self.fraglen_path
+                meta["fraglen_source"] = dict(sorted(m.get("fraglen_sources", {}).items()))
             # per track, the lambda source actually used, as signal_from_nb (or the scorer) reports
             # it: `lambda_source` for signal.npy, `lambda_source_predicted_control` for signal_pc.npy
             def by(arr):
@@ -1083,6 +1109,21 @@ class Scorer:
 
     def _row(self, mid):
         return self.ds.check_row(mid)
+
+    def _sig_row(self, row):
+        """FL: (row for the signal routes, fraglen source or None, reason). Without
+        --fraglen-table the row is returned unchanged and nothing is recorded. With it, a ChIP-seq
+        row with an empty frag_len takes the side table's plausible estimate (`with_fraglen`); a
+        row with a frag_len is never changed. Non-ChIP rows read no frag_len: source None."""
+        if self.fraglen is None:
+            return row, None, ""
+        try:
+            route = self.sig.route_of(row["assay_class"] or row["assay"])
+        except ValueError:
+            return row, None, ""
+        if route != "chip":
+            return row, None, ""
+        return self.sig.with_fraglen(row, self.fraglen)
 
     def _encoder_depth(self, row, scale=1.0):
         return self.ds.encoder.c_out(row, scale)
@@ -1694,7 +1735,7 @@ class Scorer:
             return {"record": rec}
         if self.sig is None:
             return undef(self.sig_reason)
-        row = self._row(job["target"])
+        row, fl_src, fl_why = self._sig_row(self._row(job["target"]))
         ps_files, why = self._signal_files(row)
         if ps_files is None:
             return undef(why)
@@ -1710,6 +1751,9 @@ class Scorer:
         N = Mx.noise_floor(h1, h2, ts, 2.0)
         kw = dict(ds=self.ds, regions=self.regions, rb=self.rb, dnase_route=self.dnase_route)
         rec = {"lambda_source": None, "lambda_reason": ""}
+        if fl_src is not None:
+            rec.update(fraglen_source=fl_src, fraglen_reason=fl_why,
+                       fraglen_bp=row.get("frag_len") or "")
         out = {}
         variants = [(mode, pre, row) for mode, pre in SIGNAL_PREFIX.items()]
         if pc:    # the predicted-control route: the observed control is ignored (SC)
@@ -2512,6 +2556,19 @@ class Scorer:
             scores["pair_jobs_not_applicable"] = self.pairs_not_applicable
         if self.ev.get("pair_regions") is not None:
             scores["pair_regions_n"] = len(self.pair_region_idx)
+        # FL: keys only with --fraglen-table, so a default scores.json is unchanged
+        if self.fraglen is not None:
+            lo, hi = self.sig.FRAGLEN_PLAUSIBLE_BP
+            scores["fraglen_table"] = {
+                "path": self.fraglen_path, "sha256": sha256_file(self.fraglen_path),
+                "n_rows": len(self.fraglen),
+                "n_dropped": sum(1 for e in self.fraglen.values() if e["drop_reason"]),
+                "rule": (f"a ChIP-seq target or training track with an empty frag_len uses the "
+                         f"table's xcor estimate when {lo} <= estimate <= {hi} bp and the xcor "
+                         f"quality tag is not {self.sig.FRAGLEN_BAD_QUALITY_TAG}; a filled frag_len "
+                         f"is never replaced"),
+                "per_target_key": "fraglen_source under specific_variance_recovered_above_noise."
+                                  "signal_arcsinh.per_target (table | estimated | none)"}
         # SC: keys only off the default, so a default scores.json is unchanged
         if self.lambda_source != "auto":
             scores["lambda_source_option"] = self.lambda_source
@@ -2563,8 +2620,16 @@ class Scorer:
                                            "lambda_reason": r.get("lambda_reason", ""),
                                            **({"lambda_source_training_average":
                                                r["lambda_source_training_average"]}
-                                              if "lambda_source_training_average" in r else {})}
+                                              if "lambda_source_training_average" in r else {}),
+                                           **({k: r[k] for k in ("fraglen_source", "fraglen_bp",
+                                                                 "fraglen_reason")}
+                                              if "fraglen_source" in r else {})}
                              for r in recs}
+        if self.fraglen is not None:      # FL: only with --fraglen-table
+            srcs = {r["target"]: r["fraglen_source"] for r in recs if "fraglen_source" in r}
+            h1s["fraglen_source_counts"] = {k: sum(v == k for v in srcs.values())
+                                            for k in self.sig.FRAGLEN_SOURCES}
+            h1s["fraglen_estimated_targets"] = sorted(t for t, v in srcs.items() if v == "estimated")
         h1s["dnase_route"] = self.dnase_route
         h1s["signal_mode"] = "expectation"
         h1p = metric(recs, recovered_fn(SIGNAL_PREFIX["plug_in"]), scorable, nb, sd, require_all=ra)
@@ -3130,6 +3195,9 @@ def main(argv=None) -> int:
                     help="SP2b: directory with depth_only_scaling/seed0 and "
                          "pseudoreplicate_floor/seed0 scored on the same eval set")
     add_dump_arguments(ap)
+    ap.add_argument("--fraglen-table", default=None, metavar="TSV",
+                    help="FL: estimated fragment lengths (qc_fill.py collect --fraglen-out) for "
+                         "ChIP-seq tracks whose frag_len is empty; default none (today's path)")
     a = ap.parse_args(argv)
     if a.phase == "metrics" and not (a.run and a.pred_store and a.refs_from):
         ap.error("--phase metrics needs --run, --pred-store and --refs-from")
@@ -3162,7 +3230,8 @@ def main(argv=None) -> int:
                   **({"workers": a.workers} if a.workers > 1 else {}),
                   **({"stage_dir": a.stage_dir} if a.stage_dir else {}),
                   **({"pairs_only": True} if a.pairs_only else {}),
-                  **phase_kw, **dump_kwargs(a))
+                  **phase_kw, **dump_kwargs(a),
+                  **({"fraglen_table": a.fraglen_table} if a.fraglen_table else {}))
     except (PermissionError, ScoreRefused) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2

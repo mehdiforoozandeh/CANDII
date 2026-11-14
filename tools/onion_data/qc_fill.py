@@ -40,6 +40,7 @@ Fixed facts and approximations (logged in every record):
     python qc_fill.py coverage --tables DIR [--qc-table TSV] [--missing-rows]
     python qc_fill.py run --tables DIR --rows 0-9,12 --work W --out /scratch/mforooz/onion/qc/
     python qc_fill.py collect --tables DIR --out $O/tables/eic_v1_qc.tsv [--qc-dir DIR]
+        [--fraglen-out $O/tables/eic_v1_fraglen.tsv]
 
 Row indices are 0-based data rows of `measurements.tsv` (the `run --rows` spec and the
 `coverage --missing-rows` spec use the same index).
@@ -396,14 +397,51 @@ def cmd_run(a) -> int:
     return 1 if bad else 0
 
 
+#: the fields of spp's .cc.qc line (parse_cc_qc), as columns of the fragment-length side table
+CC_QC_FIELDS = ("xcor_num_reads", "frag_len_estimated", "corr_est_frag_len", "phantom_peak",
+                "corr_phantom_peak", "argmin_corr", "min_corr", "nsc", "rsc", "quality_tag")
+FRAGLEN_COLUMNS = ("measurement_id", "frag_len_estimated", "frag_len_frozen", "nsc", "rsc",
+                   "quality_tag", "xcor_num_reads", "corr_est_frag_len", "phantom_peak",
+                   "corr_phantom_peak", "argmin_corr", "min_corr", "run_type", "in_eic",
+                   "assay_class", "source")
+
+
+def fraglen_row(r: dict, rec: dict, f: Path) -> dict:
+    """One row of the fragment-length side table from an ok record with an xcor result."""
+    cc = (rec.get("xcor") or {}).get("cc_qc", "").rstrip("\n").split("\t")
+    vals = dict(zip(CC_QC_FIELDS, cc[1:11])) if len(cc) >= 11 else {}
+    vals["frag_len_estimated"] = rec["values"].get("frag_len", "")
+    jobs = ";".join(rec.get("slurm_job_ids") or []) or "none"
+    return {**{c: "" for c in FRAGLEN_COLUMNS}, **vals, "measurement_id": r["measurement_id"],
+            "frag_len_frozen": r.get("frag_len", ""), "run_type": r.get("run_type", ""),
+            "in_eic": r.get("in_eic", ""), "assay_class": r.get("assay_class", ""),
+            "source": f"{f} job {jobs}"}
+
+
+def _write_tsv(out: Path, cols, rows) -> None:
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_name(f".{out.name}.partial")
+    with open(tmp, "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(cols), delimiter="\t", lineterminator="\n")
+        w.writeheader()
+        w.writerows(rows)
+    os.replace(tmp, out)
+
+
 def cmd_collect(a) -> int:
+    """The QC side table, one row per measurement. A cell comes from the measurement's ok record
+    when the record has a value there; else it keeps the `measurements.tsv` value, so a value the
+    build filled is never blanked (the side table overrides every listed row: dataset.py
+    `_apply_qc_table`). `--fraglen-out` also writes the fragment-length side table: one row per ok
+    record with an xcor fragment length, with the xcor quality fields and the record's path and job."""
     _, rows = read_tsv(Path(a.tables) / "measurements.tsv")
     qc_dir = Path(a.qc_dir)
-    n = {"rows": len(rows), "filled": 0, "no_record": 0, "stale": 0, "not_ok": 0}
-    out_rows = []
+    n = {"rows": len(rows), "filled": 0, "no_record": 0, "stale": 0, "not_ok": 0,
+         "kept_build_cells": 0}
+    out_rows, fl_rows = [], []
     for r in rows:
         mid = r["measurement_id"]
-        vals = {c: "" for c in QC_COLUMNS}
+        vals = {c: r.get(c, "") or "" for c in QC_COLUMNS}
         f = qc_dir / f"{mid}.json"
         if not f.is_file():
             n["no_record"] += 1
@@ -414,21 +452,26 @@ def cmd_collect(a) -> int:
             elif r.get("sha256") and rec.get("counts_sha256") != r["sha256"]:
                 n["stale"] += 1
             else:
-                vals.update({c: rec["values"].get(c, "") for c in QC_COLUMNS})
+                for c in QC_COLUMNS:
+                    v = rec["values"].get(c, "") or ""
+                    if v:
+                        vals[c] = v
+                    elif vals[c]:
+                        n["kept_build_cells"] += 1
                 vals["frip"] = ""
                 n["filled"] += any(vals[c] for c in INFORMATIVE)
+                if rec["values"].get("frag_len"):
+                    fl_rows.append(fraglen_row(r, rec, f))
         out_rows.append({"measurement_id": mid, **vals})
     out = Path(a.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    tmp = out.with_name(f".{out.name}.partial")
-    with open(tmp, "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=["measurement_id", *QC_COLUMNS], delimiter="\t",
-                           lineterminator="\n")
-        w.writeheader()
-        w.writerows(out_rows)
-    os.replace(tmp, out)
-    print(f"[qc_fill] collect {out}: " + ", ".join(f"{k} {v}" for k, v in n.items())
-          + "; pr1/pr2 halves use their parent's row (approximation); frip empty", flush=True)
+    _write_tsv(out, ["measurement_id", *QC_COLUMNS], out_rows)
+    msg = (f"[qc_fill] collect {out}: " + ", ".join(f"{k} {v}" for k, v in n.items())
+           + "; rows without a usable record keep the measurements.tsv values; pr1/pr2 halves use "
+           "their parent's row (approximation); frip empty")
+    if a.fraglen_out:
+        _write_tsv(Path(a.fraglen_out), FRAGLEN_COLUMNS, fl_rows)
+        msg += f"; fragment lengths {len(fl_rows)} rows -> {a.fraglen_out}"
+    print(msg, flush=True)
     return 0
 
 
@@ -451,6 +494,9 @@ def main(argv=None) -> int:
     k.add_argument("--tables", required=True)
     k.add_argument("--out", required=True)
     k.add_argument("--qc-dir", default=OUT_DEFAULT)
+    k.add_argument("--fraglen-out", default=None,
+                   help="also write the fragment-length side table (signal_from_counts "
+                        "load_fraglen_table reads it)")
     a = ap.parse_args(argv)
     return {"coverage": cmd_coverage, "run": cmd_run, "collect": cmd_collect}[a.cmd](a)
 
