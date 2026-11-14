@@ -8,7 +8,10 @@ EIC build -> collect (D6b) -> freeze eic_v1 (D6f) -> evaluation set (E7a/E7b), r
 -> single blind pass (with the AlphaGenome 2 trained-on comparison) -> /prezit deck + 12-page /storify.
 PI priorities: imputation, covariate artifact correction, calibrated uncertainty.
 
+PI DIRECTIVE 2026-11-14: results and insights in 3-4 days; iterative deployment in paper-section order (principle `iterative-deployment`). The 18-day ladder order is superseded by Amendment 9 (being written). NOTE: the Bash tool's cwd is the MAIN checkout now: use absolute paths to the onion worktree.
+
 ## Agents running
+| planner (fable) | Amendment 9: three iterations in 3-4 days, deliverables per iteration, later phases | cold review; PI decisions; launch iteration 1 |
 | agent | task | on return |
 |---|---|---|
 | (E7a returned) | eval set on eic_v1 (sha b5f7a4cf), check OK, average table done; baseline scorings resubmitted at 128000M: 27179565-27179568; layers 27164943 running; job watch -> E7b (collect: scorer validity, scoring cost AND memory), then gate G2, L1a, RCa, BRa. Ladder scoring memory: 128000M until measured | - |
