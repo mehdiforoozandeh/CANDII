@@ -2,13 +2,15 @@
 
     python tools/minicandi/stage2_arms.py write --incumbent <settled config json> --out <dir>
         [--average-h5 P] [--qc-table P] [--flashzoi-emb P] [--gnlm-emb P]
-        [--dna-embedding-dim 128]
+        [--dna-embedding-dim 128] [--arms a,b]
 
 Each arm is one change from the incumbent (the design that the ladder, the mix-and-match step and
 the evolution step give), with `simpler_than_base` set from `SIMPLER` (null when not listed).
 `write` puts `<arm>.json` in `--out` for every arm that applies, and `arms.tsv` with one row per
 arm (`ARMS_TSV_COLUMNS`). `two_step_fixed` is compared with `two_step_native`; every other arm
-with the incumbent.
+with the incumbent. `--arms` (comma-separated names of `ARMS`) writes those arms only, and
+`arms.tsv` then holds their rows only; without it every arm is written (chunk A1k: the D10 and
+D15 arms on rung 1's base, `configs/arms/stage2_rung1/`).
 
 An arm gets no json, and its `status` column gives the reason, when (1) building it through
 `registry.build_model` raises `NotApplicable` (e.g. a two-step arm on an incumbent with
@@ -177,15 +179,30 @@ def status(incumbent: dict, arm: str, cfg: dict, build_check=_build_check) -> st
     return "write"
 
 
+def _select(arms) -> list[str]:
+    """`arms` (None: all of `ARMS`, in table order) checked against `ARMS`."""
+    if arms is None:
+        return list(ARMS)
+    bad = [a for a in arms if a not in ARMS]
+    if bad:
+        raise ValueError(f"unknown arms {bad}; known: {list(ARMS)}")
+    return [a for a in ARMS if a in set(arms)]
+
+
 def plan(incumbent: dict, paths: dict | None = None,
-         dna_embedding_dim: int = DNA_EMBEDDING_DIM, build_check=_build_check) -> list[dict]:
-    """One row per arm (ARMS_TSV_COLUMNS) plus `config` (None when no json is written)."""
+         dna_embedding_dim: int = DNA_EMBEDDING_DIM, build_check=_build_check,
+         arms=None) -> list[dict]:
+    """One row per arm (ARMS_TSV_COLUMNS) plus `config` (None when no json is written).
+    `arms` limits the rows to those arms (None: every arm)."""
     rows, statuses = [], {}
+    keep = set(_select(arms))
     for arm, (group, _) in ARMS.items():
+        if arm not in keep:
+            continue
         cfg = arm_config(incumbent, arm, paths, dna_embedding_dim)
         st = statuses[arm] = status(incumbent, arm, cfg, build_check)
         comp = COMPARISON.get(arm, "incumbent")
-        if comp != "incumbent" and statuses.get(comp, "write").startswith("no_change"):
+        if comp != "incumbent" and comp in keep and statuses[comp].startswith("no_change"):
             comp = "incumbent"      # the incumbent already is that arm
         keys = changed_keys(incumbent, cfg)
         need = NEEDS.get(arm, "")
@@ -207,10 +224,11 @@ def plan(incumbent: dict, paths: dict | None = None,
 
 
 def write(incumbent: dict, out, paths: dict | None = None,
-          dna_embedding_dim: int = DNA_EMBEDDING_DIM, build_check=_build_check) -> list[dict]:
+          dna_embedding_dim: int = DNA_EMBEDDING_DIM, build_check=_build_check,
+          arms=None) -> list[dict]:
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    rows = plan(incumbent, paths, dna_embedding_dim, build_check)
+    rows = plan(incumbent, paths, dna_embedding_dim, build_check, arms)
     for r in rows:
         stale = out / f"{r['arm']}.json"
         if r["config"] is not None:
@@ -235,11 +253,13 @@ def main(argv=None) -> int:
     w.add_argument("--flashzoi-emb", default=None)
     w.add_argument("--gnlm-emb", default=None)
     w.add_argument("--dna-embedding-dim", type=int, default=DNA_EMBEDDING_DIM)
+    w.add_argument("--arms", default=None, help="comma-separated arms (default: all)")
     args = ap.parse_args(argv)
     inc = json.loads(Path(args.incumbent).read_text(encoding="utf-8"))
     paths = {"average_h5": args.average_h5, "qc_table": args.qc_table,
              "flashzoi_emb": args.flashzoi_emb, "gnlm_emb": args.gnlm_emb}
-    rows = write(inc, args.out, paths, args.dna_embedding_dim)
+    arms = [a for a in args.arms.split(",") if a] if args.arms else None
+    rows = write(inc, args.out, paths, args.dna_embedding_dim, arms=arms)
     n = sum(r["config"] is not None for r in rows)
     print(f"wrote {n} arm configs and arms.tsv ({len(rows)} rows) under {args.out}")
     for r in rows:
