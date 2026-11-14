@@ -11,6 +11,12 @@ Pins, on synthetic tables and a small perturbed model of each of the six rungs:
   - refusals: a refs directory of another eval set, other tables, another lambda source or other pair
     regions; an incomplete store; a store with another `git_sha` and equal identity is accepted;
   - TF32 is off for matmul and cuDNN inside the legacy model path and the metric phase;
+  - review fixes of SP2b: the store records the checkpoint's sha256 and the metric phase refuses a
+    store of another checkpoint (a store of an older kit without the hash is accepted with a warning
+    and recorded as null; shards of mixed kits do not refuse each other); the legacy model path
+    writes `scorer_settings`; workers are refused after a model forward in the process; the metric
+    phase refuses the predict-phase options and runs the previous-eval-set guard; a CRPS of 0.0
+    stays 0.0 in suffstats;
   - review items of the scorer base (SF0): a killed worker raises; `--pairs-only` refuses a directory
     that holds SCORED; a staged copy whose size matches but whose mtime differs is copied fresh; a
     strict-subset rebuild from pairs_per_region.npz equals a direct scoring on that subset; the
@@ -45,6 +51,8 @@ VAL = ((0, "H3K4me3"), (1, "H3K4me3"), (3, "H3K27ac"), (6, "H3K27me3"), (7, "chi
 L, RB, LEGACY_B = 64, 256, 4
 KW = dict(n_boot=10, guardrail_windows=8, log=lambda *a: None)
 #: keys that differ between the legacy and the two-phase output by design (or are timings)
+#: the metric phase's keyword arguments (no guardrail_windows: the predict phase owns it)
+MKW = {k: v for k, v in KW.items() if k != "guardrail_windows"}
 VOLATILE = ("wall_seconds", "timing_seconds", "torch_threads", "scorer_version", "scorer_settings",
             "refs", "pred_store", "pair_regions_n")
 
@@ -112,7 +120,7 @@ def _store(env, r, d, B=LEGACY_B, shards=1):
 def _metrics(env, cfg, store, out, **kw):
     kw = {"refs_from": env["refs"], "workers": 1, **kw}
     return S.score(env["evalset"], out, phase="metrics", pred_store=store, config=cfg,
-                   run_tables_sha256=env["sha"], **KW, **kw)
+                   run_tables_sha256=env["sha"], **MKW, **kw)
 
 
 def _subprocess(args, code=None):
@@ -202,7 +210,7 @@ def test_metric_phase_equals_legacy_for_each_rung(env, tmp_path, r):
     assert s["n_pairs"] > 0 and s["n_replicate_pairs"] > 0
     assert s["predicted_control"]["n_targets"] >= (1 if cfg.get("predict_control") else 0)
     legacy = json.loads((leg / "scores.json").read_text())
-    assert legacy["scorer_version"] == 1 and "scorer_settings" not in legacy
+    assert legacy["scorer_version"] == 1 and legacy["scorer_settings"]["phase"] == "legacy"
 
 
 @pytest.mark.parametrize("r", (1, 5))
@@ -262,13 +270,13 @@ def test_workers_and_store_batch_do_not_move_a_value(env, tmp_path):
         assert P.run(common + ["--pred-store", str(tmp_path / d), "--device", "cpu",
                                "--infer-batch", str(b)] + gw) == 0
     S.score(env["evalset"], tmp_path / "w1", run=run, phase="metrics", pred_store=tmp_path / "s4",
-            refs_from=env["refs"], workers=1, **KW)
+            refs_from=env["refs"], workers=1, **MKW)
     p = _subprocess(common + ["--out", str(tmp_path / "w3"), "--phase", "metrics", "--pred-store",
                               str(tmp_path / "s4"), "--refs-from", str(env["refs"]), "--workers",
                               "3", "--n-boot", str(KW["n_boot"])])
     assert p.returncode == 0, p.stderr[-2000:]
     s = S.score(env["evalset"], tmp_path / "b16", run=run, phase="metrics",
-                pred_store=tmp_path / "s16", refs_from=env["refs"], **KW)
+                pred_store=tmp_path / "s16", refs_from=env["refs"], **MKW)
     assert leaf_differences(tmp_path / "w1", tmp_path / "w3") == []
     assert s["infer_batch"] == 16 and s["scorer_settings"]["infer_batch"] == 16
 
@@ -367,7 +375,7 @@ def test_store_of_another_scoring_is_refused(env, store1, tmp_path):
     other.write_text(json.dumps(dict(json.loads(env["evalset"].read_text()), note="other")))
     with pytest.raises(S.ScoreRefused, match="another scoring"):
         S.score(other, tmp_path / "out", phase="metrics", pred_store=store, config=cfg,
-                run_tables_sha256=env["sha"], **KW)
+                run_tables_sha256=env["sha"], **MKW)
 
 
 def test_store_with_another_git_sha_is_accepted(env, tmp_path):
@@ -533,6 +541,7 @@ ARMS_NEW_KEYS = {
     "/predicted_over_replicate_variance/per_rung",
     "/predicted_over_replicate_variance/per_target",
     "/predicted_over_replicate_variance/upper_bound_rung",
+    "/scorer_settings",
     "/scorer_version",
     "/specific_variance_recovered_above_noise/counts_log1p/per_target/ENCSR000003.pooled.uniform.base/N_log1p_bias_sim",
     "/specific_variance_recovered_above_noise/counts_log1p/per_target/ENCSR000003.pooled.uniform.base/depth_reads",
@@ -553,3 +562,113 @@ def test_arms_before_after_new_keys_are_the_expected_set(tmp_path_factory):
     A.IGNORED_NEW_KEYS.clear()
     A.test_before_after_bit_identical(env, A.default_model.__wrapped__(env), tmp_path_factory)
     assert A.IGNORED_NEW_KEYS == ARMS_NEW_KEYS
+
+
+# ------------------------------------------------------------------------------- review fixes (SP2b)
+
+def _predict_run(env, run, store, shards=1):
+    gw = ["--guardrail-windows", str(KW["guardrail_windows"])]
+    for i in range(shards):
+        assert P.run(["--run", str(run), "--evalset", str(env["evalset"]), "--pred-store",
+                      str(store), "--shard", f"{i}/{shards}", "--device", "cpu"] + gw) == 0
+
+
+def _metrics_run(env, run, store, out, log=None):
+    kw = dict(MKW, log=log) if log else MKW
+    return S.score(env["evalset"], out, run=run, phase="metrics", pred_store=store,
+                   refs_from=env["refs"], **kw)
+
+
+def test_store_records_the_checkpoint_and_the_metric_phase_checks_it(env, tmp_path):
+    run = _save_run(tmp_path, 1, env["sha"])
+    sha = P.ckpt_sha256(run)
+    _predict_run(env, run, tmp_path / "store")
+    assert json.loads((tmp_path / "store" / "STORE.json").read_text())[P.CKPT_KEY] == sha
+    s = _metrics_run(env, run, tmp_path / "store", tmp_path / "ok")
+    assert s["pred_store"]["ckpt_sha256"] == sha
+    # the run's checkpoint changed after the store was made: refused, nothing scored
+    ck = torch.load(run / R.CKPT_NAME, weights_only=False)
+    with torch.no_grad():
+        ck["state_dict"] = {k: v + 1e-3 if v.is_floating_point() else v
+                            for k, v in ck["state_dict"].items()}
+    torch.save(ck, run / R.CKPT_NAME)
+    with pytest.raises(S.ScoreRefused, match="another checkpoint"):
+        _metrics_run(env, run, tmp_path / "store", tmp_path / "stale")
+    assert not (tmp_path / "stale" / S.SCORED).exists()
+
+
+def test_store_of_an_older_kit_is_accepted_with_a_warning(env, tmp_path):
+    run = _save_run(tmp_path, 1, env["sha"])
+    _predict_run(env, run, tmp_path / "store")
+    for f in [tmp_path / "store" / "STORE.json", *(tmp_path / "store").glob("PREDICTED_*.json")]:
+        d = json.loads(f.read_text())
+        d.pop(P.CKPT_KEY)
+        f.write_text(json.dumps(d))
+    lines = []
+    s = _metrics_run(env, run, tmp_path / "store", tmp_path / "out", log=lines.append)
+    assert s["pred_store"]["ckpt_sha256"] is None
+    assert sum("WARNING" in str(x) and "checkpoint hash" in str(x) for x in lines) == 1
+
+
+def test_shards_of_mixed_kits_do_not_refuse_each_other(env, tmp_path):
+    head = {"format": 1, "run": "/r", "n_shards": 2}
+    d = tmp_path / "a"
+    d.mkdir()
+    P._claim_store(d, head)                                   # an older kit: no hash
+    P._claim_store(d, dict(head, **{P.CKPT_KEY: "a" * 64}))   # a newer kit: accepted
+    e = tmp_path / "b"
+    e.mkdir()
+    P._claim_store(e, dict(head, **{P.CKPT_KEY: "a" * 64}))
+    P._claim_store(e, head)                                   # the other order: accepted
+    with pytest.raises(S.ScoreRefused, match=P.CKPT_KEY):     # two different hashes: refused
+        P._claim_store(e, dict(head, **{P.CKPT_KEY: "b" * 64}))
+
+
+def test_legacy_model_path_writes_scorer_settings_and_a_baseline_does_not(env, tmp_path):
+    m, cfg = _model(1)
+    s = S.score(env["evalset"], tmp_path / "m", model=m, config=cfg, run_tables_sha256=env["sha"],
+                **KW)
+    assert s["scorer_settings"] == {"device": "cpu", "infer_batch": LEGACY_B, "tf32": False,
+                                    "amp": False, "phase": "legacy"}
+    assert s["scorer_version"] == 1
+    b = S.score(env["evalset"], tmp_path / "b", baseline="marginal_nb", **KW)
+    assert "scorer_settings" not in b
+
+
+def test_workers_refused_after_a_model_forward(env, tmp_path, monkeypatch):
+    monkeypatch.setattr(S, "_MODEL_RAN", False)
+    m, cfg = _model(1)
+    sc = S.Scorer(env["evalset"], main="model", model=m, config=cfg, run_tables_sha256=env["sha"],
+                  **KW)
+    req = P.requests(sc)[0]
+    P.request_arrays(sc, dict(req, region_indices=req["region_indices"][:1]), LEGACY_B)
+    assert S._MODEL_RAN is True
+    with pytest.raises(RuntimeError, match="model forward"):
+        S.score(env["evalset"], tmp_path / "out", baseline="marginal_nb", workers=2, **KW)
+
+
+def test_metric_phase_refuses_predict_phase_options_and_runs_the_evalset_guard(env, store1,
+                                                                               tmp_path,
+                                                                               monkeypatch):
+    cfg, store = store1
+    for k, v in (("infer_batch", 8), ("guardrail_windows", 8)):
+        with pytest.raises(ValueError, match="predict phase"):
+            S.score(env["evalset"], tmp_path / "x", phase="metrics", pred_store=store, config=cfg,
+                    run_tables_sha256=env["sha"], refs_from=env["refs"], **{k: v}, **MKW)
+    run = _save_run(tmp_path, 1, env["sha"])
+    base = ["--run", str(run), "--evalset", str(env["evalset"]), "--out", str(tmp_path / "y"),
+            "--phase", "metrics", "--pred-store", str(store), "--refs-from", str(env["refs"])]
+    for extra in (["--infer-batch", "8"], ["--guardrail-windows", "8"]):
+        with pytest.raises(SystemExit):
+            S.main(base + extra)
+    seen = []
+    monkeypatch.setattr(S, "_guard_previous_evalset", lambda out, ev, kw: seen.append(out))
+    _metrics(env, cfg, store, tmp_path / "z")
+    assert seen == [tmp_path / "z"]
+
+
+def test_a_crps_of_exactly_zero_is_kept_in_suffstats():
+    assert S._nan_if_none(0.0) == 0.0
+    assert np.isnan(S._nan_if_none(S.Mx.Undefined("undefined")))
+    assert np.isnan(S._nan_if_none(None))
+    assert S._nan_if_none(1.5) == 1.5

@@ -297,6 +297,13 @@ class ScoreRefused(Exception):
 
 # ------------------------------------------------------------------------------------------ helpers
 
+def _nan_if_none(x) -> float:
+    """SP2b: a suffstats entry: the value, NaN only when it is undefined (a CRPS of exactly 0.0 is
+    a value; `_j(x) or np.nan` turned it into NaN)."""
+    v = _j(x)
+    return np.nan if v is None else v
+
+
 def _undef(x) -> bool:
     return x is None or not np.isfinite(float(x))
 
@@ -493,11 +500,17 @@ def _signal_module():
 
 # ------------------------------------------------------------------------------------------ predictors
 
+#: SP2b: set once a model forward has run in this process (forked workers would hang after it)
+_MODEL_RAN = False
+
+
 class ModelPredictor:
     def __init__(self, model, device="cpu"):
         self.model, self.device = model.to(device).eval(), device
 
     def __call__(self, batch):
+        global _MODEL_RAN
+        _MODEL_RAN = True
         b = {k: (v.to(self.device) if torch.is_tensor(v) else v) for k, v in batch.items()}
         with torch.no_grad():
             o = self.model(b)
@@ -1535,8 +1548,8 @@ class Scorer:
                            "n": n, "mu": mu, "y": y, "target": job["target"], **sig})
             recs.append(r)
             self.suff[f"crps/{regime}/{job['target']}"] = np.array(
-                [_j(m_c["crps"]) or np.nan, _j(m_c["oracle_scaled"]) or np.nan,
-                 _j(pa_c["crps"]) or np.nan, y.size], np.float64)
+                [_nan_if_none(m_c["crps"]), _nan_if_none(m_c["oracle_scaled"]),
+                 _nan_if_none(pa_c["crps"]), y.size], np.float64)
             # SM: drop this target's other vectors before the next target's are built
             del A, a_s, sig
             _trim_heap()
@@ -1860,8 +1873,8 @@ class Scorer:
             reg[k] = int(out.get(k) or 0)
         self.pair_regional[_pair_key(job)] = reg
         self.suff[f"pair/{job.get('pair_id') or job['source'] + '>' + job['target']}"] = np.array(
-            [_j(out["crps_model"]) or np.nan, _j(out["crps_depth_only"]) or np.nan,
-             _j(out["crps_floor"]) or np.nan, y.size], np.float64)
+            [_nan_if_none(out["crps_model"]), _nan_if_none(out["crps_depth_only"]),
+             _nan_if_none(out["crps_floor"]), y.size], np.float64)
         del A, y, mu
         _trim_heap()
         return out
@@ -1884,6 +1897,8 @@ class Scorer:
                     "part1_wiring_pass": None,
                     "reason": "not applicable: a training-free baseline reads no hidden input"}
         from onion_eval import guardrail as G
+        global _MODEL_RAN
+        _MODEL_RAN = True                        # SP2b: the guardrail runs the model
         GAIN_THRESHOLD, gate_on = G.GAIN_THRESHOLD, bool(G.GATE_ON_COPY_GAIN)
         per_seed, n_win, n_pool, n_targets = [], 0, 0, []
         for s in self.guardrail_seeds:
@@ -2048,6 +2063,18 @@ class Scorer:
         if int(info.get("region_bins", -1)) != self.rb:
             raise ScoreRefused(f"{self.pred_store_dir}: region_bins {info.get('region_bins')} != "
                                f"{self.rb}")
+        # SP2b: the checkpoint the store was predicted from. A store of an older kit has no hash:
+        # accepted with a warning (recorded as null); a hash that differs from the run's is refused
+        have = info.get(P.CKPT_KEY)
+        want = P.ckpt_sha256(self.store_run)
+        if have is None:
+            self.log(f"score: WARNING: {self.pred_store_dir} records no checkpoint hash (a store of "
+                     f"an older kit); not checked against the run's checkpoint")
+        elif want is not None and have != want:
+            raise ScoreRefused(f"{self.pred_store_dir}: the prediction store was made from another "
+                               f"checkpoint (ckpt_sha256 {have[:12]} != {want[:12]} of "
+                               f"{self.store_run}); predict again")
+        self.store_ckpt_sha256 = have
         self.store, self.store_info = st, info
         self._store_regions = {r["key"]: {ri: k for k, ri in enumerate(r["region_indices"])}
                                for r in reqs}
@@ -2198,6 +2225,10 @@ class Scorer:
         import multiprocessing as mp
         from concurrent.futures import ProcessPoolExecutor
         global _WORKER
+        if _MODEL_RAN:     # SP2b: GNU OpenMP state from a model forward hangs forked workers
+            raise RuntimeError("--workers > 1 after a model forward ran in this process: forked "
+                               "workers would hang (OpenMP); run the scoring in a fresh process "
+                               "(score.py, as score.sh does) or with workers=1")
         self._rung_pairs("", "")                 # build the index once, before the fork
         self.ds._close_all()                     # no h5 handle crosses the fork
         self._region, self._rc = None, {}
@@ -2301,8 +2332,13 @@ class Scorer:
 
     def _two_phase_keys(self, scores: dict) -> None:
         """SP2b (pinned interface M): the keys of a metric-phase output; the predictions' device
-        and inference batch are the store's."""
+        and inference batch are the store's. On the legacy model path: `scorer_settings` only (the
+        device and batch of the forwards; TF32 off), so the comparability keys see the device. A
+        baseline (no model) writes neither."""
         if self.store is None:
+            if isinstance(self.model_pred, ModelPredictor):
+                scores["scorer_settings"] = {"device": str(self.device), "infer_batch": self.tile_bs,
+                                             "tf32": False, "amp": False, "phase": "legacy"}
             return
         info = self.store_info
         scores["scorer_version"] = SCORER_VERSION_TWO_PHASE
@@ -2311,7 +2347,8 @@ class Scorer:
         scores["pair_regions_n"] = len(self.pair_region_idx)
         scores["refs"] = (dict(self.refs) if self.refs is not None else
                           {"dir": None, "computed_in_run": True})
-        scores["pred_store"] = str(self.pred_store_dir.resolve())
+        scores["pred_store"] = {"dir": str(self.pred_store_dir.resolve()),
+                                "ckpt_sha256": self.store_ckpt_sha256}
         if "device" in scores:
             scores["device"] = info.get("device")
         if "infer_batch" in scores:
@@ -2861,6 +2898,13 @@ def score(evalset, out, *, run=None, baseline=None, model=None, config=None,
                              "config and run_tables_sha256), no model or baseline")
         if (Path(out) / SCORED).is_file() and pairs_only:
             raise ScoreRefused(f"--pairs-only: {out} holds a full scoring ({SCORED})")
+        bad = [k for k in ("infer_batch", "guardrail_windows") if kw.get(k) is not None]
+        if bad:
+            raise ValueError(f"the metric phase reads its forwards and the guardrail from the store: "
+                             f"{', '.join(bad)} belong(s) to the predict phase (predict_store.py run)")
+        kw.pop("infer_batch", None)
+        kw.pop("guardrail_windows", None)
+        _guard_previous_evalset(Path(out), evalset, kw)
         tf32_off()
         sha = kw.pop("run_tables_sha256", None)
         if run is not None:
@@ -2873,6 +2917,17 @@ def score(evalset, out, *, run=None, baseline=None, model=None, config=None,
     return _score_legacy(evalset, out, run=run, baseline=baseline, model=model, config=config,
                          repeat_blind_reason=repeat_blind_reason, signal_override=signal_override,
                          pairs_only=pairs_only, **kw)
+
+
+def _guard_previous_evalset(out: Path, evalset, kw) -> None:
+    """OXe: an add-on score never goes over a scores.json of another eval set (both paths)."""
+    if kw.get("addon"):
+        prev = Path(out) / "scores.json"
+        if prev.is_file():
+            old = json.loads(prev.read_text(encoding="utf-8")).get("evalset_sha256")
+            if old != sha256_file(evalset):
+                raise ScoreRefused(f"{prev} holds a score of another eval set (evalset_sha256 "
+                                   f"{str(old)[:12]}); an add-on score goes to <seed dir>/ox")
 
 
 def _score_with(sc, out: Path, *, run, pairs_only) -> dict:
@@ -2915,13 +2970,7 @@ def _score_legacy(evalset, out, *, run=None, baseline=None, model=None, config=N
     if (split == "blind") != (out.name == "blind"):
         raise ScoreRefused(f"--out {out}: a blind pass writes into a dir named 'blind' "
                            f"(<seed dir>/blind), and only a blind pass does")
-    if kw.get("addon"):     # OXe: never over a scores.json of another eval set
-        prev = out / "scores.json"
-        if prev.is_file():
-            old = json.loads(prev.read_text(encoding="utf-8")).get("evalset_sha256")
-            if old != sha256_file(evalset):
-                raise ScoreRefused(f"{prev} holds a score of another eval set (evalset_sha256 "
-                                   f"{str(old)[:12]}); an add-on score goes to <seed dir>/ox")
+    _guard_previous_evalset(out, evalset, kw)
     run_sha = kw.pop("run_tables_sha256", None)
     if run is not None:
         run_sha = run_tables_sha256(run)
@@ -3052,7 +3101,8 @@ def main(argv=None) -> int:
     ap.add_argument("--device", default="auto",
                     help="auto (default: cuda when a GPU is visible, else cpu), cpu or cuda")
     ap.add_argument("--n-boot", type=int, default=200)
-    ap.add_argument("--guardrail-windows", type=int, default=256)
+    ap.add_argument("--guardrail-windows", type=int, default=None,
+                    help="default 256; the legacy path only (the predict phase runs the guardrail)")
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--infer-batch", type=int, default=None,
                     help="windows per forward pass while scoring targets (default: the run's "
@@ -3085,6 +3135,9 @@ def main(argv=None) -> int:
         ap.error("--phase metrics needs --run, --pred-store and --refs-from")
     if a.phase is None and (a.pred_store or a.refs_from):
         ap.error("--pred-store and --refs-from go with --phase metrics")
+    if a.phase == "metrics" and (a.guardrail_windows is not None or a.infer_batch is not None):
+        ap.error("--guardrail-windows and --infer-batch belong to the predict phase "
+                 "(predict_store.py run); the metric phase reads both from the store")
     for k in ("pred_store", "refs_from", "stage_dir"):     # "$SLURM_TMPDIR/..." works
         if getattr(a, k):
             setattr(a, k, os.path.expandvars(getattr(a, k)))
@@ -3101,7 +3154,8 @@ def main(argv=None) -> int:
     try:
         s = score(a.evalset, a.out, run=a.run, baseline=a.baseline, split=a.split,
                   allow_blind=a.allow_blind, device=device, n_boot=a.n_boot,
-                  guardrail_windows=a.guardrail_windows, no_halves=a.no_halves,
+                  **({} if a.phase else {"guardrail_windows": 256 if a.guardrail_windows is None
+                                          else a.guardrail_windows}), no_halves=a.no_halves,
                   dnase_route=a.dnase_route, repeat_blind_reason=a.repeat_blind_reason,
                   infer_batch=a.infer_batch, region_cache=not a.no_region_cache,
                   lambda_source=a.lambda_source, **({"addon": True} if a.addon else {}),

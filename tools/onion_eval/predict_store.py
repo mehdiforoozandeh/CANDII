@@ -134,6 +134,20 @@ def requests_sha256(reqs) -> str:
     return hashlib.sha256(body.encode("utf-8")).hexdigest()
 
 
+#: SP2b: STORE.json and PREDICTED_*.json key of the checkpoint's sha256 (absent in stores of older
+#: kits, and for an in-memory model); compared by the metric phase, never between shards
+CKPT_KEY = "ckpt_sha256"
+
+
+def ckpt_sha256(run):
+    """sha256 of `<run>/ckpt.pt`, or None without a run directory or checkpoint."""
+    if run is None:
+        return None
+    from minicandi.registry import CKPT_NAME
+    p = Path(run) / CKPT_NAME
+    return S.sha256_file(p) if p.is_file() else None
+
+
 def identity(scorer, run=None) -> dict:
     return {"run": str(Path(run).resolve()) if run is not None else None,
             "run_tables_sha256": scorer.run_tables_sha256,
@@ -255,7 +269,10 @@ def _claim_store(out_dir: Path, head: dict) -> None:
                 time.sleep(_CLAIM_WAIT)
     if not isinstance(old, dict):
         raise S.ScoreRefused(f"{p}: unreadable after {_CLAIM_TRIES} tries; use another --pred-store")
-    diff = sorted(k for k in set(old) | set(head) if old.get(k) != head.get(k))
+    # SP2b: shards of one store from kits with and without the checkpoint hash do not refuse each
+    # other on that key alone; two different hashes do
+    diff = sorted(k for k in set(old) | set(head) if old.get(k) != head.get(k)
+                  and not (k == CKPT_KEY and (old.get(k) is None or head.get(k) is None)))
     if diff:
         raise S.ScoreRefused(f"{out_dir}: a prediction store of another scoring ({', '.join(diff)}"
                              f" differ); use another --pred-store")
@@ -285,9 +302,11 @@ def predict(scorer, reqs, out_dir, infer_batch, shard=(0, 1), *, run=None, guard
     out_dir.mkdir(parents=True, exist_ok=True)
     ident = identity(scorer, run)
     settings = {"device": str(scorer.device), "infer_batch": B, "tf32": False, "amp": False}
+    ck = ckpt_sha256(run)
+    ck_head = {CKPT_KEY: ck} if ck is not None else {}
     _claim_store(out_dir, {"format": STORE_FORMAT, **ident, **settings, "n_shards": N,
                            "region_bins": scorer.rb, "n_requests_total": len(reqs),
-                           "requests_sha256": requests_sha256(reqs)})
+                           "requests_sha256": requests_sha256(reqs), **ck_head})
     mine = [r for j, r in enumerate(reqs) if j % N == i]
     tm = timing if timing is not None else defaultdict(float)
     old = tf32_flags()
@@ -318,7 +337,7 @@ def predict(scorer, reqs, out_dir, infer_batch, shard=(0, 1), *, run=None, guard
         torch.backends.cuda.matmul.allow_tf32, torch.backends.cudnn.allow_tf32 = old
     tm["wall_seconds"] += time.perf_counter() - t_all
     _write_json(out_dir / f"PREDICTED_{i}of{N}.json",
-                {**ident, "git_sha": S.git_sha(), **settings, "n_requests": len(mine)})
+                {**ident, "git_sha": S.git_sha(), **settings, "n_requests": len(mine), **ck_head})
     return {"stored": stored, "skipped": skipped, "n_requests": len(mine), "timing": dict(tm)}
 
 
