@@ -423,6 +423,8 @@ def main(argv=None) -> int:
     r = sp.add_parser("report")
     r.add_argument("scores", nargs="+")
     r.add_argument("--oracle", default="auto")
+    r.add_argument("--pairs-out", default=None,
+                   help="also write every score's correction pair records joined with the oracle")
     a = ap.parse_args(argv)
     if a.cmd == "compute":
         info = compute(a.evalset, a.out, a.tables)
@@ -430,23 +432,43 @@ def main(argv=None) -> int:
                                                "n_headline_pairs", "n_headline_pairs_no_nodedup_side",
                                                "pair_regions_n")}))
         return 0
+    from onion_eval import select_rule as R
     f = lambda x: "" if x is None else f"{x:.6g}"          # noqa: E731
     print("\t".join(("scores", "subset", "n_pairs", "gap_closed_oracle", "ci_lo", "ci_hi",
-                     "numerator", "denominator", "gap_closed_halfread_superseded", "excess_macro",
-                     "crps_model_macro", "oracle_macro", "reason")))
+                     "numerator", "denominator", "denominator_relative_min",
+                     "gap_closed_halfread_superseded", "excess_macro", "crps_model_macro",
+                     "oracle_macro", "n_pairs_below_oracle", "composite_v1", "composite_v2",
+                     "reason")))
+    pf = open(a.pairs_out, "w", encoding="utf-8") if a.pairs_out else None
+    cols = ("pair_id", "assay", "cell", "knob", "never_trained", "subset_pair", "nodedup_side",
+            "crps_model", "crps_depth_only", "crps_floor", "oracle")
+    if pf:
+        pf.write("scores\t" + "\t".join(cols) + "\n")
     for p in a.scores:
         s = json.loads(Path(p).read_text(encoding="utf-8"))
         t = seed_terms(p, s, a.oracle)
+        c1 = R.screen_terms([R.load_seed(p, None)])[1][0]["composite"]
+        c2 = R.screen_terms([R.load_seed(p, a.oracle)])[1][0]["composite"]
         if t is None or t["block"] is None:
-            print("\t".join((p, "", "", "", "", "", "", "", "", "", "", "",
+            print("\t".join((p, "", "", "", "", "", "", "", "", "", "", "", "", "", f(c1), "",
                              "no oracle reference found" if t is None else t["reason"])))
             continue
         for name in SUBSETS:
             b = t["block"][name]
             print("\t".join((p, name, str(b["n_pairs"]), f(b["gap_closed_oracle"]), f(b["ci"][0]),
                              f(b["ci"][1]), f(b["numerator"]), f(b["denominator"]),
+                             f(b["denominator_relative_min"]),
                              f(b["gap_closed_halfread_superseded"]), f(b["excess_macro"]),
-                             f(b["crps_model_macro"]), f(b["oracle_macro"]), b["reason"])))
+                             f(b["crps_model_macro"]), f(b["oracle_macro"]),
+                             str(b["n_pairs_below_oracle"]), f(c1),
+                             f(c2) if name == "all" else "", b["reason"])))
+        if pf:
+            recs, _ = pair_records(Path(p).parent, load_oracle(t["oracle_dir"]))
+            for r in recs or []:
+                pf.write(p + "\t" + "\t".join(f"{r[c]:.10g}" if isinstance(r[c], float)
+                                               else str(r[c]) for c in cols) + "\n")
+    if pf:
+        pf.close()
     return 0
 
 

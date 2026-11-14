@@ -210,3 +210,14 @@ def test_arm_report_headline_adds_oracle_columns(env, oracle, tmp_path):
     assert r["correction_gap_closed_oracle.n_defined"] == 1 or r["composite_version"] == 2
     krows, kcols = AR.per_knob(runs, "", env["bdir"])
     assert any(x["pair_kind"] == "never_trained_non_subset_oracle" for x in krows)
+
+
+def test_report_cli_prints_both_subsets_and_composites(env, oracle, tmp_path, capsys):
+    p = env["bdir"] / "pseudoreplicate_floor" / "seed0" / "scores.json"
+    po = tmp_path / "pairs.tsv"
+    assert OF.main(["report", str(p), "--pairs-out", str(po)]) == 0
+    out = capsys.readouterr().out.strip().splitlines()
+    assert out[0].startswith("scores\tsubset") and len(out) == 3
+    assert {ln.split("\t")[1] for ln in out[1:]} == {"all", "no_nodedup_side"}
+    rows = po.read_text().strip().splitlines()
+    assert len(rows) == 1 + len(env["ev"]["correction_pairs"])
