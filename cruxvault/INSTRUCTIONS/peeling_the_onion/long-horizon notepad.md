@@ -522,7 +522,7 @@ Each line gives the fact, then its source. Sources are files in this vault or on
 - Baseline scoring with the parallel code (unmerged, commit 9cd5f04 on `chunk/onion-SM`): 1 h 21 min on 16 CPUs on same-cell pairs. Time goes to the count-space CRPS oracle search, the expected signal under the Negative Binomial, and the explained fraction per layer.
 
 **Region-selection facts**
-- At the model's window (25.6 kb) nearly every region holds a training peak, so class-based strata are near-uniform. The experiment uses a continuous score with a set tilt strength. The cCRE-like density and the cross-cell variance are anti-correlated across regions (rank correlation -0.51). Source: `cruxvault/results/t292/STRATA_REAL.md`.
+- At the sampling tile size (51.2 kb; the model's window is 25.6 kb) nearly every tile holds a training peak, so class-based strata are near-uniform. The experiment uses a continuous score with a set tilt strength. The cCRE-like density and the cross-cell variance are anti-correlated across regions (rank correlation -0.51). Source: `cruxvault/results/t292/STRATA_REAL.md`.
 - Training windows may overlap evaluation regions (ruling 39: measure the gap, no protocol change).
 
 **Mistakes of the foreman, so they are not repeated**
