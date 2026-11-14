@@ -1,15 +1,15 @@
 ---
 id: t240
 type: task
-title: Onion: Probe: are the read sets there, and what does a recount cost
+title: "Onion: Probe: are the read sets there, and what does a recount cost"
 category: data-acquisition
 parent: t152
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-11T23:05:09
-updated: 2026-11-11T23:05:09
+status: done
+created: "2026-11-11T23:05:09"
+updated: "2026-11-14T02:20:30"
 ---
 
 # t240 — Onion: Probe: are the read sets there, and what does a recount cost
@@ -24,7 +24,7 @@ says whether the read sets for the 1 bp recount are still on disk and what the r
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Read sets probed](results/t240/READSETS.md)
 
 ## Evidence
 

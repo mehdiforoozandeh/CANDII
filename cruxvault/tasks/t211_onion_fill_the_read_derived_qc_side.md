@@ -20,6 +20,10 @@ Refs:: _(none)_
 
 unblocks the stage-2 QC arms (chunks QCa and QCb)
 
+## Decisions and runs
+
+- Partly done: QC fill batch 1 (job 27164529) COMPLETED 400 of 400; batch 2 submitted as 27235942 (nice 500); batches 3 to 6 paused by Amendment 9. Notes: results/t211/SUBMITTED.md.
+
 ## Output
 
 <!-- required before `done`, and the engine checks it resolves. Either form:

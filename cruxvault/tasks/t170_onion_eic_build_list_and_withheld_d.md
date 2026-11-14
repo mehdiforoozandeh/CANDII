@@ -1,15 +1,15 @@
 ---
 id: t170
 type: task
-title: Onion: EIC build list and withheld design
+title: "Onion: EIC build list and withheld design"
 category: data-acquisition
 parent: t152
 blocked_by: t156, t158
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-10T22:47:25
-updated: 2026-11-10T22:47:25
+status: done
+created: "2026-11-10T22:47:25"
+updated: "2026-11-14T02:20:21"
 ---
 
 # t170 — Onion: EIC build list and withheld design
@@ -24,7 +24,7 @@ fixes what the EIC build makes and which covariate combinations stay never-train
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged b2ae530](results/t170/build_plan.md)
 
 ## Evidence
 

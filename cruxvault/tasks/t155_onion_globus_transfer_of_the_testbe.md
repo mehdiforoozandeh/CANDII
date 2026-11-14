@@ -1,15 +1,15 @@
 ---
 id: t155
 type: task
-title: Onion: Globus transfer of the testbed scratch tree, Nibi to Fir
+title: "Onion: Globus transfer of the testbed scratch tree, Nibi to Fir"
 category: data-acquisition
 parent: t152
 blocked_by: t153, t154
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-10T22:47:22
-updated: 2026-11-10T22:47:22
+status: done
+created: "2026-11-10T22:47:22"
+updated: "2026-11-14T02:20:17"
 ---
 
 # t155 — Onion: Globus transfer of the testbed scratch tree, Nibi to Fir
@@ -24,7 +24,7 @@ saves the counterfactual testbed scratch tree before the Nibi scratch purge
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 9d476ff: no authenticated Globus route; transfer dropped](results/t155/NO_ROUTE.md)
 
 ## Evidence
 

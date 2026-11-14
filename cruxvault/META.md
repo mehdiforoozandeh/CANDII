@@ -52,30 +52,34 @@ Root: [[candii]]
   - ○ `h32` [H] [[h32_a_smaller_budget_of_windows_ranks_the_ar|A smaller budget of windows ranks the arms of a rung as 80,000 windows does]] — *open*
   - ○ `h33` [H] [[h33_at_80_000_windows_training_on_r_blocks_o|At 80,000 windows, training on R blocks of U is as good as training on all of U]] — *open*
   - ○ `q25` [Q] [[q25_does_a_run_of_20_000_or_40_000_windows_r|**Does a run of 20,000 or 40,000 windows rank the arms as 80,000 does (the prototype budget; core-before-scale)?**]] — *open*
-- ○ `q14` [Q] [[q14_how_should_training_regions_be_selected_|**How should training regions be selected under a limited budget?**]] — *open*
+- ◐ `q14` [Q] [[q14_how_should_training_regions_be_selected_|**How should training regions be selected under a limited budget?**]] — *leaning* · weak
   - ○ `h34` [H] [[h34_at_a_limited_budget_20_000_windows_a_wei|At a limited budget (20,000 windows), a weighted stratified draw beats the uniform draw]] — *open*
-  - ○ `q21` [Q] [[q21_does_stratified_selection_of_training_re|**Does stratified selection of training regions change what is sampled?**]] — *open*
+  - ● `q21` [Q] [[q21_does_stratified_selection_of_training_re|**Does stratified selection of training regions change what is sampled?**]] — *settled* · strong
+  - ○ `q29` [Q] [[q29_do_training_regions_stratified_by_ccre_c|**Do training regions stratified by cCRE class or by ChromHMM state beat the uniform draw, once the annotation is free of EIC validation and blind cells?**]] — *open*
+  - ○ `q30` [Q] [[q30_does_a_per_bin_loss_weight_from_annotati|**Does a per-bin loss weight from annotation or peak density, applied inside the window at 25 bp, improve the model as a stage-3 loss arm?**]] — *open*
 - ○ `q15` [Q] [[q15_are_256_evaluation_regions_enough|**Are 256 evaluation regions enough?**]] — *open*
   - ○ `h35` [H] [[h35_256_evaluation_regions_are_enough|256 evaluation regions are enough]] — *open*
 - ○ `q16` [Q] [[q16_does_the_validation_score_depend_on_havi|**Does the validation score depend on having seen the evaluation loci?**]] — *open*
   - ○ `h36` [H] [[h36_seeing_the_evaluation_loci_in_training_d|Seeing the evaluation loci in training does not raise the score]] — *open*
-- ○ `q17` [Q] [[q17_what_is_the_dataset_and_what_did_it_cost|**What is the dataset, and what did it cost to build from FASTQ?**]] — *open*
-- ○ `q18` [Q] [[q18_how_large_is_each_layer_of_the_variance_|**How large is each layer of the variance of a track on real data (sampling, technical, biological replicate, cell type), per assay?**]] — *open*
-  - ○ `h37` [H] [[h37_on_real_data_the_cell_type_layer_is_the_|On real data the cell-type layer is the largest layer for the narrow marks and for accessibility, and the sampling layer is the largest at 25 bp for the broad marks]] — *open*
+- ◐ `q17` [Q] [[q17_what_is_the_dataset_and_what_did_it_cost|**What is the dataset, and what did it cost to build from FASTQ?**]] — *leaning* · moderate
+- ◐ `q18` [Q] [[q18_how_large_is_each_layer_of_the_variance_|**How large is each layer of the variance of a track on real data (sampling, technical, biological replicate, cell type), per assay?**]] — *leaning* · weak
+  - ◐ `h37` [H] [[h37_on_real_data_the_cell_type_layer_is_the_|On real data the cell-type layer is the largest layer for the narrow marks and for accessibility, and the sampling layer is the largest at 25 bp for the broad marks]] — *leaning* · weak · mixed
   - ○ `q24` [Q] [[q24_how_much_of_each_variance_layer_does_the|**How much of each variance layer does the model explain (the explained fraction per layer, beside the data layers of iteration 1)?**]] — *open*
 - ○ `q19` [Q] [[q19_what_do_the_training_free_baselines_reac|**What do the training-free baselines reach on the three goals, i.e. where does a model have room: imputation (the position average against the marginal NB and the noise floor), covariate correction (the gap between depth-only scaling and the half-against-half floor, per covariate knob: the size of the artifact that a model could remove), calibration (PIT and the variance ratio of the baselines)?**]] — *open*
   - ○ `h38` [H] [[h38_the_gap_between_depth_only_scaling_and_t|The gap between depth-only scaling and the floor is largest for the depth and run-type knobs and near 0 for pure subset pairs]] — *open*
-- ○ `q20` [Q] [[q20_which_eic_tracks_did_alphagenome_2_train|**Which EIC tracks did AlphaGenome 2 train on, and how does it do against the baselines on the tracks that are fair?**]] — *open*
+- ◐ `q20` [Q] [[q20_which_eic_tracks_did_alphagenome_2_train|**Which EIC tracks did AlphaGenome 2 train on, and how does it do against the baselines on the tracks that are fair?**]] — *leaning* · moderate
   - ○ `q26` [Q] [[q26_alphagenome_2_against_minicandi_rung_1_a|**AlphaGenome 2 against miniCANDI rung 1 and the baselines on the fair validation tracks.**]] — *open*
     - ○ `h41` [H] [[h41_on_the_12_unseen_validation_tracks_alpha|On the 12 unseen validation tracks AlphaGenome 2 is ahead of rung 1 base in rspec_cal]] — *open*
 - ○ `q22` [Q] [[q22_does_the_smallest_model_beat_the_baselin|**Does the smallest model beat the baselines on imputation, covariate correction and calibrated uncertainty, and by how much against the seed spread?**]] — *open*
   - ○ `h39` [H] [[h39_rung_1_base_beats_the_position_average_o|Rung 1 base beats the position average on imputation by more than 2 seed spreads on the composite's imputation term and closes part of the correction gap]] — *open*
 - ○ `q23` [Q] [[q23_is_the_model_wired_as_designed_does_scra|**Is the model wired as designed: does scrambling the covariates, switching the DNA off, another injection form, a mask token, or matched compute move the scores (the wiring checks of rung 1)?**]] — *open*
   - ○ `h40` [H] [[h40_scrambled_covariates_lowers_the_correcti|scrambled_covariates lowers the correction term by more than 2 seed spreads and leaves imputation within 2; dna_off lowers imputation]] — *open*
+- ◐ `q27` [Q] [[q27_are_the_onion_run_s_estimators_scorers_a|**Are the onion run's estimators, scorers and training pipeline correct, fast and reproducible on the clusters?**]] — *leaning* · moderate
+- ● `q28` [Q] [[q28_did_flashzoi_train_on_eic_blind_tracks_o|**Did Flashzoi train on EIC blind tracks or on the genomic loci of the blind scoring?**]] — *settled* · strong
 
 ## Dashboard
 
-- **Questions** (26): open 14 · leaning 7 · settled 5 · parked 0
-- **Hypotheses** (40): open 16 · leaning 12 · settled 6 · parked 6
-- **Confidence**: weak 11 · moderate 8 · strong 11
-- **Findings**: 33
+- **Questions** (30): open 11 · leaning 12 · settled 7 · parked 0
+- **Hypotheses** (40): open 15 · leaning 13 · settled 6 · parked 6
+- **Confidence**: weak 14 · moderate 11 · strong 13
+- **Findings**: 48

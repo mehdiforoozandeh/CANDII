@@ -1,15 +1,15 @@
 ---
 id: t242
 type: task
-title: Onion: Variance-by-scale tool
+title: "Onion: Variance-by-scale tool"
 category: implementation
 parent: t152
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-11T23:05:09
-updated: 2026-11-11T23:05:09
+status: done
+created: "2026-11-11T23:05:09"
+updated: "2026-11-14T02:20:31"
 ---
 
 # t242 — Onion: Variance-by-scale tool
@@ -24,7 +24,7 @@ unblocks the analysis of variance lost below 25 bp
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 6ca0f9e: variance-by-scale tool](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

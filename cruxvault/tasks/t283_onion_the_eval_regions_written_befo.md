@@ -1,15 +1,15 @@
 ---
 id: t283
 type: task
-title: Onion: The eval regions, written before the tables exist
+title: "Onion: The eval regions, written before the tables exist"
 category: implementation
 parent: t152
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-13T01:31:42
-updated: 2026-11-13T01:31:42
+status: done
+created: "2026-11-13T01:31:42"
+updated: "2026-11-14T02:20:36"
 ---
 
 # t283 — Onion: The eval regions, written before the tables exist
@@ -24,7 +24,7 @@ PI ruling 38 (2026-11-13, freeze eic_v1 at a fixed time, then versioned updates)
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Regions file written; Nibi job 27124259](results/t283/REGIONS.md)
 
 ## Evidence
 

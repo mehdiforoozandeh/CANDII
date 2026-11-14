@@ -1,15 +1,15 @@
 ---
 id: t267
 type: task
-title: Onion: The AG2 metadata tables and the remaining API facts
+title: "Onion: The AG2 metadata tables and the remaining API facts"
 category: data-acquisition
 parent: t152
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-12T18:39:25
-updated: 2026-11-12T18:39:25
+status: done
+created: "2026-11-12T18:39:25"
+updated: "2026-11-14T02:20:34"
 ---
 
 # t267 — Onion: The AG2 metadata tables and the remaining API facts
@@ -24,7 +24,7 @@ PI task of 2026-11-13 (AlphaGenome 2 as a competitor): writes the AG2 metadata t
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 39b9053, a469bf4](results/t267/API_SMOKE.md)
 
 ## Evidence
 

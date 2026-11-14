@@ -1,15 +1,15 @@
 ---
 id: t188
 type: task
-title: Onion: Two-step correction, loss arms, model wrappers
+title: "Onion: Two-step correction, loss arms, model wrappers"
 category: implementation
 parent: t152
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-11T11:20:25
-updated: 2026-11-11T11:20:25
+status: done
+created: "2026-11-11T11:20:25"
+updated: "2026-11-14T02:20:25"
 ---
 
 # t188 — Onion: Two-step correction, loss arms, model wrappers
@@ -24,7 +24,7 @@ unblocks the stage-2 correction and loss arms and the model_file wrapper
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 790e0d2: two-step correction, loss arms](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

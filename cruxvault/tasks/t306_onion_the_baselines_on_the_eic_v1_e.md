@@ -20,6 +20,10 @@ Refs:: [[h38_the_gap_between_depth_only_scaling_and_t\|h38]], [[q19_what_do_the_
 
 Iteration 1 of Amendment 9 (ships 2026-11-15 09:00 UTC): the 4 baselines and retrieval at 256 pair regions; waits on scorer chunk SF0 of Amendment 8, which has no task
 
+## Decisions and runs
+
+- Not submitted yet. The legacy scorer of the fast-scoring work (SF0, kit 5d64dab) finished a full marginal_nb scoring on the real evaluation set in 1:30:27 on 16 CPUs (job 27256987), with the 589 cross-cell pairs marked not applicable (results/scorer_memory/NOTES.md).
+
 ## Output
 
 <!-- required before `done`, and the engine checks it resolves. Either form:

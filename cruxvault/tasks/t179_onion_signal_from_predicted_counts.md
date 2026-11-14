@@ -1,15 +1,15 @@
 ---
 id: t179
 type: task
-title: Onion: Signal from predicted counts
+title: "Onion: Signal from predicted counts"
 category: implementation
 parent: t152
 blocked_by: t153
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-10T22:47:26
-updated: 2026-11-10T22:47:26
+status: done
+created: "2026-11-10T22:47:26"
+updated: "2026-11-14T02:20:23"
 ---
 
 # t179 — Onion: Signal from predicted counts
@@ -24,7 +24,7 @@ derives the signal track from the predicted NB for the signal-space metric
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged cdb1058](results/t179/ROUTES.md)
 
 ## Evidence
 

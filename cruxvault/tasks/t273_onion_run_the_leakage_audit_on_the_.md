@@ -1,15 +1,15 @@
 ---
 id: t273
 type: task
-title: Onion: Run the leakage audit on the EIC ledger
+title: "Onion: Run the leakage audit on the EIC ledger"
 category: data-acquisition
 parent: t152
 blocked_by: t267, t269
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-12T18:39:33
-updated: 2026-11-12T18:39:33
+status: done
+created: "2026-11-12T18:39:33"
+updated: "2026-11-14T02:20:35"
 ---
 
 # t273 — Onion: Run the leakage audit on the EIC ledger
@@ -24,7 +24,7 @@ PI task of 2026-11-13 (AlphaGenome 2 as a competitor): states which EIC tracks A
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Audit run; Nibi job 27085861](results/t273/AG2_LEAKAGE.md)
 
 ## Evidence
 

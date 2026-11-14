@@ -35,8 +35,11 @@ Decides whether a leak-free stratified draw can replace the uniform draw when th
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**2 children** · open 2, leaning 0, settled 0, parked 0
+**4 children** · open 3, leaning 0, settled 1, parked 0 · 1 finding(s) on this question
 
 - `h34` [[h34_at_a_limited_budget_20_000_windows_a_wei|At a limited budget (20,000 windows), a weighted stratified draw beats the uniform draw]] — *open*
-- `q21` _(Q)_ [[q21_does_stratified_selection_of_training_re|Does stratified selection of training regions change what is sampled?]] — *open*
+- `q21` _(Q)_ [[q21_does_stratified_selection_of_training_re|Does stratified selection of training regions change what is sampled?]] — *settled · strong*
+- `q29` _(Q)_ [[q29_do_training_regions_stratified_by_ccre_c|Do training regions stratified by cCRE class or by ChromHMM state beat the uniform draw, once the annotation is free of EIC validation and blind cells?]] — *open*
+- `q30` _(Q)_ [[q30_does_a_per_bin_loss_weight_from_annotati|Does a per-bin loss weight from annotation or peak density, applied inside the window at 25 bp, improve the model as a stage-3 loss arm?]] — *open*
+- `f46` finding (weak) [[f46_literature_and_code_before_any_selection|Literature and code, before any selection experiment: every large sequence…]]
 <!-- crux:ledger:end -->
