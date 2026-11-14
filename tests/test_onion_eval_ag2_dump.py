@@ -124,6 +124,7 @@ def scores_digest(out: Path, root: Path) -> str:
     for k in VOLATILE:
         s.pop(k, None)
     s.pop("scorer_version", None)   # SF0 (Amendment 8): the one key added after the pinned base
+    s.pop("scorer_settings", None)  # SP2b: written on the legacy model path since 2026-11-14
     return hashlib.sha256(_normalize(json.dumps(s, indent=1, sort_keys=True, allow_nan=False),
                                      root).encode()).hexdigest()
 
