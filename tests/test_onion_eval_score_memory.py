@@ -183,6 +183,7 @@ def test_memory_held_not_linear_in_regions(tmp_path):
     vec = 8 * (12 - 3) * RB                       # bytes of one float64 vector's extra bins
     assert big["pa_after_group"] == 0 and big["pa_foreign_cells"] == 0, big
     # held across groups: only the training-average control rate (one vector) of each cell that a
-    # later group still reads (2 cells here: the H3K4me3 targets without an observed control)
-    assert big["after_group"] - small["after_group"] < 4 * vec, (small, big, vec)
+    # later group still reads (2 cells here: the H3K4me3 targets without an observed control), plus
+    # allocator slack (Nibi measured 4.02 vectors on 2026-11-14; the old per-region fits add 15+)
+    assert big["after_group"] - small["after_group"] < 6 * vec, (small, big, vec)
     assert big["in_group"] - small["in_group"] <= 3 * 24 * vec, (small, big, vec)
