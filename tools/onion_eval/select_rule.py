@@ -273,6 +273,9 @@ def _oracle_terms(path, s: dict, oracle):
     """oracle_floor.seed_terms (None without a reference); numpy is imported only here."""
     if not oracle:
         return None
+    tools = str(Path(__file__).resolve().parents[1])      # run as a script: tools/ is not on the path
+    if tools not in sys.path:
+        sys.path.insert(0, tools)
     from onion_eval import oracle_floor as OF
     return OF.seed_terms(path, s, oracle)
 

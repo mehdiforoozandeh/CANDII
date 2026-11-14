@@ -221,3 +221,17 @@ def test_report_cli_prints_both_subsets_and_composites(env, oracle, tmp_path, ca
     assert {ln.split("\t")[1] for ln in out[1:]} == {"all", "no_nodedup_side"}
     rows = po.read_text().strip().splitlines()
     assert len(rows) == 1 + len(env["ev"]["correction_pairs"])
+
+
+def test_select_rule_table_runs_as_a_script(env, oracle, tmp_path):
+    import subprocess
+    runs = tmp_path / "runs"
+    d = runs / "rung1_base" / "seed0"
+    d.mkdir(parents=True)
+    for f in ("scores.json", "pairs_per_region.npz", "SCORED"):
+        shutil.copy(env["bdir"] / "position_average" / "seed0" / f, d / f)
+    r = subprocess.run([sys.executable, str(REPO / "tools" / "onion_eval" / "select_rule.py"),
+                        "table", "--runs", str(runs)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    head = r.stdout.splitlines()[0].split("\t")
+    assert "correction_gap_closed_halfread_superseded" in head and "composite_version" in head
