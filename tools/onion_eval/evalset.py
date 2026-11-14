@@ -5,6 +5,8 @@
         [--inputs-roles train|train,val] [--pair-splits train,val] [--regions-bed <bed>
         [--regions-exclude]] [--regions-file <json>] --out <evalset.json>
     python tools/onion_eval/evalset.py superset --base <evalset.json> --n-regions N --out <json>
+    python tools/onion_eval/evalset.py derive --base <evalset.json> (--pair-regions p |
+        --pair-regions-nested-in <derived evalset_p<p>.json>) --out <..._p<p>.json>
     python tools/onion_eval/evalset.py check --evalset <json> [--tables <dir>] [--allow-blind]
     python tools/onion_eval/evalset.py addon --base <frozen evalset.json> --tables <add-on tables>
         --out <json>
@@ -73,6 +75,15 @@ to one built before SC; a non-default option adds its own keys and changes no ex
 Superset (`superset`, ERx). A regions file with the base eval set's regions, its fit regions
 unchanged, and the next blocks of the base's seeded candidate order that are in neither list, up
 to --n-regions; so a larger eval set built from it keeps the old regions as a subset.
+
+Derived eval set (`derive`, EVd, Amendment 8 B.4, PI ruling 42). The base eval set verbatim (the
+base file is never changed), plus `pair_regions` (sorted indices into `regions`: the pair jobs run
+on those regions only), `pair_regions_p`, `pair_regions_rule` and `derived_from` (path, sha256,
+seed of the base). `--pair-regions p` takes indices 0, R/p, 2R/p, ... (p divides R), so p = 8, 16,
+32 of 256 are nested. `--pair-regions-nested-in D` (base = a superset eval set of D's regions)
+takes D's pair-region blocks plus every (R_D/p)-th of the base's other regions in their own order,
+and records `pair_regions_nested_in`. The output name ends in `_p<p>.json`; a base with
+`pair_regions` is refused; the blind naming rule of `build` applies.
 
 Second experiments (OXe, Amendment 4, PI ruling 33). Add-on tables (`eic_v1x`, `eic_v2x`) hold
 second experiments: rows with `in_eic = evalonly` (training and validation tracks) and the blind
@@ -681,6 +692,8 @@ def check(evalset, tables=None, allow_blind=False) -> list[str]:
             bad.append(f"region {c}:{s} is not aligned to {rb} bins")
     if set(map(tuple, ev["regions"])) & set(map(tuple, ev.get("fit_regions", []))):
         bad.append("fit regions overlap eval regions")
+    if "pair_regions" in ev:                  # EVd: a derived eval set
+        bad += pair_regions_problems(ev)
     n_imp = defaultdict(int)
     for t in ev["imputation_targets"]:
         if t["regime"] == "leave_one_assay_out":
@@ -698,6 +711,101 @@ def check(evalset, tables=None, allow_blind=False) -> list[str]:
     for b in bad[:50]:
         print(f"  {b}")
     return bad
+
+
+# --------------------------------------------------------------------------------------- derive
+
+PAIR_REGIONS_NAME_RE = re.compile(r".*_p([1-9][0-9]*)\.json")
+PAIR_REGIONS_RULE = ("pair_regions = the indices 0, R/p, 2R/p, ... of the region order (`regions` "
+                     "as stored); nested for p = 8, 16, 32 of R = 256 (PI ruling 42, Amendment 8 B.4)")
+PAIR_REGIONS_NESTED_RULE = ("pair_regions = the nested base's pair-region blocks, plus every "
+                            "(R_base/p)-th of this eval set's other regions in their own region "
+                            "order, starting at the first (Amendment 8 B.4)")
+
+
+def pair_positions(n_regions: int, p: int) -> list[int]:
+    """Indices 0, R/p, 2R/p, ... of a region order of length R; p must divide R."""
+    if p <= 0 or n_regions % p:
+        raise ValueError(f"--pair-regions {p} must be positive and divide the {n_regions} regions")
+    step = n_regions // p
+    return list(range(0, n_regions, step))
+
+
+def pair_regions_problems(ev: dict) -> list[str]:
+    """Problems of the `pair_regions` keys of a derived eval set (empty list = passes)."""
+    bad, pr, n = [], ev["pair_regions"], len(ev["regions"])
+    if not isinstance(pr, list) or not pr or not all(isinstance(i, int) for i in pr):
+        return ["pair_regions is not a non-empty list of region indices"]
+    if pr != sorted(set(pr)):
+        bad.append("pair_regions is not strictly increasing")
+    if pr[0] < 0 or pr[-1] >= n:
+        bad.append(f"pair_regions index out of range of the {n} regions")
+    df = ev.get("derived_from")
+    if not isinstance(df, dict) or not df.get("path") or not df.get("sha256"):
+        bad.append("pair_regions without derived_from (path, sha256)")
+    elif Path(df["path"]).is_file() and sha256_file(df["path"]) != df["sha256"]:
+        bad.append(f"derived_from {df['path']}: sha256 differs (the base changed)")
+    return bad
+
+
+def derive(base, out, *, pair_regions=None, nested_in=None) -> dict:
+    """The base eval set plus `pair_regions` and `derived_from` (EVd); every other key verbatim.
+    `pair_regions=p`: indices 0, R/p, ... of the region order. `nested_in=<derived eval set>`: the
+    base is a superset of that eval set's regions; its pair regions are that eval set's pair-region
+    blocks plus every (R_nested/p)-th of the base's other regions in their own order."""
+    base, out = Path(base), Path(out)
+    if (pair_regions is None) == (nested_in is None):
+        raise ValueError("give exactly one of --pair-regions and --pair-regions-nested-in")
+    if out.resolve() == base.resolve():
+        raise ValueError(f"{out}: the base eval set is never overwritten")
+    raw = base.read_bytes()
+    bev = json.loads(raw.decode("utf-8"))
+    if "pair_regions" in bev:
+        raise ValueError(f"{base}: already has pair_regions (derive from the underived eval set)")
+    if bool(bev.get("include_blind")) != is_blind_evalset_name(out.name):
+        raise ValueError(f"a blind eval set derives only into a file named "
+                         f"{BLIND_EVALSET_NAME[:-5]}_<tag>.json, and only then (got "
+                         f"include_blind={bool(bev.get('include_blind'))}, {out.name})")
+    regions = [tuple(b) for b in bev["regions"]]
+    nested = None
+    if nested_in is None:
+        p = int(pair_regions)
+        idx = pair_positions(len(regions), p)
+        rule = PAIR_REGIONS_RULE
+    else:
+        nraw = Path(nested_in).read_bytes()
+        nev = json.loads(nraw.decode("utf-8"))
+        if "pair_regions" not in nev or "pair_regions_p" not in nev:
+            raise ValueError(f"{nested_in}: not a derived eval set (no pair_regions)")
+        if int(nev["region_bins"]) != int(bev["region_bins"]) or \
+                nev["fit_regions"] != bev["fit_regions"]:
+            raise ValueError(f"{nested_in}: region_bins or fit_regions differ from {base}'s")
+        pos = {b: i for i, b in enumerate(regions)}
+        nreg = [tuple(b) for b in nev["regions"]]
+        missing = [b for b in nreg if b not in pos]
+        if missing:
+            raise ValueError(f"{base}: not a superset of {nested_in} ({len(missing)} regions "
+                             f"missing, e.g. {missing[0][0]}:{missing[0][1]})")
+        p = int(nev["pair_regions_p"])
+        step = len(nreg) // p
+        old = set(nreg)
+        others = [i for i, b in enumerate(regions) if b not in old]
+        idx = sorted({pos[nreg[i]] for i in nev["pair_regions"]} | set(others[::step]))
+        rule = PAIR_REGIONS_NESTED_RULE
+        nested = {"path": str(Path(nested_in).resolve()),
+                  "sha256": hashlib.sha256(nraw).hexdigest()}
+    m = PAIR_REGIONS_NAME_RE.fullmatch(out.name)
+    if not m or int(m.group(1)) != p:
+        raise ValueError(f"{out.name}: a derived eval set's name ends in _p{p}.json")
+    ev = dict(bev)
+    ev.update(pair_regions=idx, pair_regions_p=p, pair_regions_rule=rule,
+              derived_from={"path": str(base.resolve()), "sha256": hashlib.sha256(raw).hexdigest(),
+                            "seed": bev.get("seed")})
+    if nested is not None:
+        ev["pair_regions_nested_in"] = nested
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(ev, indent=1), encoding="utf-8")
+    return ev
 
 
 # --------------------------------------------------------------------------------------- add-on
@@ -816,7 +924,18 @@ def main(argv=None) -> int:
     u.add_argument("--base", required=True)
     u.add_argument("--n-regions", type=int, required=True)
     u.add_argument("--out", required=True)
+    d = sub.add_parser("derive")
+    d.add_argument("--base", required=True)
+    g = d.add_mutually_exclusive_group(required=True)
+    g.add_argument("--pair-regions", type=int, default=None)
+    g.add_argument("--pair-regions-nested-in", default=None)
+    d.add_argument("--out", required=True)
     a = ap.parse_args(argv)
+    if a.cmd == "derive":
+        ev = derive(a.base, a.out, pair_regions=a.pair_regions, nested_in=a.pair_regions_nested_in)
+        print(f"derived evalset: {len(ev['pair_regions'])} of {len(ev['regions'])} regions are pair "
+              f"regions (p = {ev['pair_regions_p']}) -> {a.out}")
+        return 0
     if a.cmd == "superset":
         res = superset(a.base, a.n_regions, a.out)
         print(f"regions file: {len(res['regions'])} regions ({len(res['added_regions'])} added), "
