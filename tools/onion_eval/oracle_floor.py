@@ -147,7 +147,7 @@ def compute(evalset, out, tables=None, log=print) -> dict:
     head = [x for x in lab if x["rung"] == "" and x["never_trained"] == 1 and x["subset_pair"] == 0]
     info = {"definition": DEFINITION, "evalset": str(sc.evalset_path),
             "evalset_sha256": _sha256(sc.evalset_path), "tables": str(sc.tables),
-            "tables_sha256": sc.tables_sha256, "git_sha": S.git_sha(),
+            "tables_sha256": sc.tables_sha256, "git_sha": _code_sha(S),
             "npz_sha256": _sha256(out / ORACLE_NPZ), "n_pairs": len(keys),
             "n_correction_pairs": len(cor), "n_replicate_pairs": len(rep),
             "n_targets": len(per_target),
@@ -162,6 +162,15 @@ def compute(evalset, out, tables=None, log=print) -> dict:
     tmp.write_text(json.dumps(info, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     tmp.replace(out / ORACLE_JSON)
     return info
+
+
+def _code_sha(S) -> str:
+    """The git sha of the code; in a cluster kit (no .git) the push stamp `.kit_stamp`."""
+    g = S.git_sha()
+    k = _TOOLS.parent / ".kit_stamp"
+    if g == "unknown" and k.is_file():
+        return "kit: " + k.read_text(encoding="utf-8").strip()
+    return g
 
 
 # ------------------------------------------------------------------------------------------ reading
