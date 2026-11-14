@@ -35,7 +35,7 @@ Every miniCANDI number of the onion run is only as good as the tools that produc
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**0 children** · open 0, leaning 0, settled 0, parked 0 · 6 finding(s) on this question
+**0 children** · open 0, leaning 0, settled 0, parked 0 · 7 finding(s) on this question
 
 - `f39` finding (moderate) [[f39_the_alphagenome_2_side_is_sound_our_ag2_|The AlphaGenome 2 side is sound. Our AG2 scorer reproduces Max's score_f1.py…]]
 - `f40` finding (moderate) [[f40_our_eic_scorer_reproduces_the_published_|Our EIC scorer reproduces the published board against the corrected truth:…]]
@@ -43,4 +43,5 @@ _(optional: the pre-registered rules — endpoints, thresholds, scope — locked
 - `f42` finding (moderate) [[f42_scorer_the_old_scorer_s_cell_type_specif|Scorer: the old scorer's cell-type-specific correlation (r_spec) depended on…]]
 - `f43` finding (moderate) [[f43_variance_estimators_a_simulation_audit_o|Variance estimators: a simulation audit of the layer estimators found 10…]]
 - `f44` finding (moderate) [[f44_frozen_dna_embeddings_exist_genome_wide_|Frozen DNA embeddings exist genome-wide for both sources and verify (23…]]
+- `f55` finding (moderate) [[f55_scorer_validity_on_the_training_free_bas|Scorer validity on the training-free baselines: the scorer (version 1,…]]
 <!-- crux:ledger:end -->

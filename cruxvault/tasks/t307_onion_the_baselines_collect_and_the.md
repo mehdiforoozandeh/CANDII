@@ -1,15 +1,15 @@
 ---
 id: t307
 type: task
-title: Onion: The baselines: collect, and the room for a model
+title: "Onion: The baselines: collect, and the room for a model"
 category: implementation
 parent: t152
 blocked_by: t306
 refs: h38, q19
 hypothesis_refs: 
-status: open
-created: 2026-11-14T00:35:53
-updated: 2026-11-14T00:35:53
+status: done
+created: "2026-11-14T00:35:53"
+updated: "2026-11-14T06:08:51"
 ---
 
 # t307 — Onion: The baselines: collect, and the room for a model
@@ -24,7 +24,7 @@ Iteration 1 of Amendment 9 (ships 2026-11-15 09:00 UTC): what the training-free 
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Baselines on the frozen evaluation set](results/t307/BASELINES.md)
 
 ## Evidence
 

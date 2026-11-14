@@ -35,7 +35,11 @@ Fixes the reference every model result is compared with, and shows on which goal
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**1 children** · open 1, leaning 0, settled 0, parked 0
+**2 children** · open 1, leaning 1, settled 0, parked 0 · 3 finding(s) on this question
 
-- `h38` [[h38_the_gap_between_depth_only_scaling_and_t|The gap between depth-only scaling and the floor is largest for the depth and run-type knobs and near 0 for pure subset pairs]] — *open*
+- `h38` [[h38_the_gap_between_depth_only_scaling_and_t|The gap between depth-only scaling and the floor is largest for the depth and run-type knobs and near 0 for pure subset pairs]] — *leaning · moderate*
+- `q32` _(Q)_ [[q32_which_reference_should_define_the_1_of_t|Which reference should define the 1 of the correction gap-closed scale (headline metric 4), given that the position average goes below the half-against-half floor?]] — *open*
+- `f57` finding (moderate) [[f57_covariate_correction_headline_metric_4_o|Covariate correction (headline metric 4 of the evaluation protocol, gap…]]
+- `f58` finding (moderate) [[f58_imputation_reference_the_position_averag|Imputation reference: the position average recovered 0.119 [-0.156, 0.194]…]]
+- `f59` finding (moderate) [[f59_calibration_reference_both_baselines_pas|Calibration reference: both baselines passed the pseudoreplicate lower…]]
 <!-- crux:ledger:end -->
