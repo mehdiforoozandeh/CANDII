@@ -2,7 +2,7 @@
 title: where we are (peeling the onion run)
 kind: live status page, maintained by the foreman agent
 parent: "[[peeling the onion]]"
-updated: 2026-11-14T21:26Z
+updated: 2026-11-14T22:42Z
 ---
 
 # Where we are
@@ -67,5 +67,7 @@ Working copies of items 2 and 3 live in the worktree at `.claude/worktrees/onion
 5. Verify the Globus copies on Fir; move new code snapshots to /scratch.
 6. RULE: never open a question dialog to the PI while held jobs or timed releases are owed (a dialog blocked the foreman for 7 hours on 2026-11-14).
 
+**Ruling 47 (2026-11-14, PI "yes")**: gap closed uses the oracle floor (half the mean absolute difference of the target's two read halves) as the top of scale; in the composite from ship 2 on; old value shown once as superseded. Builder OF implements it (worktree onion-OF; tools/onion_eval/oracle_floor.py; results/oracle_floor/ORACLE_FLOOR.md). Evidence: results/gap_closed_floor/GAP_FLOOR.md.
+
 **Open with the PI**
-- Decision on the scale of the correction metric "gap closed" (options A, B, C; vault question q32).
+- None. Owed to the PI: one combined answer on the eta question when results/eta_space/LAYERS_ETA.md returns (THEORY, MODEL_DESIGN, LITERATURE are back).
