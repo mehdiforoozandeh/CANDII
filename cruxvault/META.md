@@ -62,9 +62,10 @@ Root: [[candii]]
 - ○ `q16` [Q] [[q16_does_the_validation_score_depend_on_havi|**Does the validation score depend on having seen the evaluation loci?**]] — *open*
   - ○ `h36` [H] [[h36_seeing_the_evaluation_loci_in_training_d|Seeing the evaluation loci in training does not raise the score]] — *open*
 - ◐ `q17` [Q] [[q17_what_is_the_dataset_and_what_did_it_cost|**What is the dataset, and what did it cost to build from FASTQ?**]] — *leaning* · moderate
-- ◐ `q18` [Q] [[q18_how_large_is_each_layer_of_the_variance_|**How large is each layer of the variance of a track on real data (sampling, technical, biological replicate, cell type), per assay?**]] — *leaning* · weak
-  - ◐ `h37` [H] [[h37_on_real_data_the_cell_type_layer_is_the_|On real data the cell-type layer is the largest layer for the narrow marks and for accessibility, and the sampling layer is the largest at 25 bp for the broad marks]] — *leaning* · weak · mixed
+- ◐ `q18` [Q] [[q18_how_large_is_each_layer_of_the_variance_|**How large is each layer of the variance of a track on real data (sampling, technical, biological replicate, cell type), per assay?**]] — *leaning* · moderate
+  - ◐ `h37` [H] [[h37_on_real_data_the_cell_type_layer_is_the_|On real data the cell-type layer is the largest layer for the narrow marks and for accessibility, and the sampling layer is the largest at 25 bp for the broad marks]] — *leaning* · moderate · mixed
   - ○ `q24` [Q] [[q24_how_much_of_each_variance_layer_does_the|**How much of each variance layer does the model explain (the explained fraction per layer, beside the data layers of iteration 1)?**]] — *open*
+  - ○ `q31` [Q] [[q31_how_do_the_variance_layer_shares_change_|**How do the variance layer shares change at each assay's full depth and on a variance-stabilized scale, instead of log1p counts at pseudoreplicate-half depth?**]] — *open*
 - ○ `q19` [Q] [[q19_what_do_the_training_free_baselines_reac|**What do the training-free baselines reach on the three goals, i.e. where does a model have room: imputation (the position average against the marginal NB and the noise floor), covariate correction (the gap between depth-only scaling and the half-against-half floor, per covariate knob: the size of the artifact that a model could remove), calibration (PIT and the variance ratio of the baselines)?**]] — *open*
   - ○ `h38` [H] [[h38_the_gap_between_depth_only_scaling_and_t|The gap between depth-only scaling and the floor is largest for the depth and run-type knobs and near 0 for pure subset pairs]] — *open*
 - ◐ `q20` [Q] [[q20_which_eic_tracks_did_alphagenome_2_train|**Which EIC tracks did AlphaGenome 2 train on, and how does it do against the baselines on the tracks that are fair?**]] — *leaning* · moderate
@@ -79,7 +80,7 @@ Root: [[candii]]
 
 ## Dashboard
 
-- **Questions** (30): open 11 · leaning 12 · settled 7 · parked 0
+- **Questions** (31): open 12 · leaning 12 · settled 7 · parked 0
 - **Hypotheses** (40): open 15 · leaning 13 · settled 6 · parked 6
-- **Confidence**: weak 14 · moderate 11 · strong 13
-- **Findings**: 48
+- **Confidence**: weak 12 · moderate 13 · strong 13
+- **Findings**: 52

@@ -1,15 +1,15 @@
 ---
 id: t305
 type: task
-title: Onion: The variance layers on real data
+title: "Onion: The variance layers on real data"
 category: implementation
 parent: t152
 blocked_by: None
 refs: h37, q18
 hypothesis_refs: 
-status: open
-created: 2026-11-14T00:35:53
-updated: 2026-11-14T00:35:53
+status: done
+created: "2026-11-14T00:35:53"
+updated: "2026-11-14T03:35:55"
 ---
 
 # t305 — Onion: The variance layers on real data
@@ -28,7 +28,7 @@ Iteration 1 of Amendment 9 (ships 2026-11-15 09:00 UTC): collect the layers job 
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Variance layers on real data, with the sampling layer](results/t305/LAYERS_REAL.md)
 
 ## Evidence
 

@@ -35,9 +35,13 @@ Sets, per assay, how much variance imputation must explain (the cell-type layer)
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**2 children** · open 1, leaning 1, settled 0, parked 0 · 1 finding(s) on this question
+**3 children** · open 2, leaning 1, settled 0, parked 0 · 4 finding(s) on this question
 
-- `h37` [[h37_on_real_data_the_cell_type_layer_is_the_|On real data the cell-type layer is the largest layer for the narrow marks and for accessibility, and the sampling layer is the largest at 25 bp for the broad marks]] — *leaning · weak*
+- `h37` [[h37_on_real_data_the_cell_type_layer_is_the_|On real data the cell-type layer is the largest layer for the narrow marks and for accessibility, and the sampling layer is the largest at 25 bp for the broad marks]] — *leaning · moderate*
 - `q24` _(Q)_ [[q24_how_much_of_each_variance_layer_does_the|How much of each variance layer does the model explain (the explained fraction per layer, beside the data layers of iteration 1)?]] — *open*
+- `q31` _(Q)_ [[q31_how_do_the_variance_layer_shares_change_|How do the variance layer shares change at each assay's full depth and on a variance-stabilized scale, instead of log1p counts at pseudoreplicate-half depth?]] — *open*
 - `f35` finding (weak) [[f35_partial_answer_on_eic_v1_no_model_involv|Partial answer on eic_v1 (no model involved): only two layers resolve, a…]]
+- `f51` finding (moderate) [[f51_read_from_the_rerun_with_the_pseudorepli|Read from the rerun with the pseudoreplicate pairs added (Nibi job…]]
+- `f52` finding (moderate) [[f52_read_from_layers_by_assay_tsv_of_the_rer|Read from layers_by_assay.tsv of the rerun (job 27265045); moderate because…]]
+- `f53` finding (moderate) [[f53_read_from_layers_by_assay_tsv_and_layers|Read from layers_by_assay.tsv and layers_by_stratum.tsv of the rerun (job…]]
 <!-- crux:ledger:end -->
