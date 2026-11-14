@@ -17,7 +17,7 @@ PI priorities: imputation, covariate artifact correction, calibrated uncertainty
 WAITING ON THE PI: nothing (PI cancelled the slow rung-1 jobs, 2026-11-13).
 | SM builder (opus) | scorer TIME: full scoring of eic_v1 in ~2 h, identical outputs (memory part done: commit 1e94d92, 16000M) | review; merge; resubmit the 4 baseline scorings and the 24 rung-1 scorings with the new scorer and job shape |
 | SM reviewer (opus) | review of 1e94d92 (memory change, bit identity) | merge if ACCEPT |
-WAITING ON THE PI: cancel the 28 old-scorer jobs (4 baseline scorings 27179565-27179568 + 24 pending rung-1 scoring jobs); training jobs stay.
+WAITING ON THE PI: nothing (PI cancelled the 28 old-scorer jobs, 2026-11-14). TODO: resubmit the 4 baseline scorings and the 24 rung-1 scorings with the fast scorer (submit_arms.sh SCORE_ONLY=1) after SM's time work is merged.
 | (region experiments: tools, configs and all lists ready; TR, SAx, STt2, RBk2 merged) | running: RB1a (budget-curve trainings on rung 1, trainings only). Waiting: RTa (36+ region runs on rung 4; needs the ladder version), PRg (--per-region; after SM's time work), ECa | - |
 | (deck done) | law-of-total-variance deck: cruxvault/presentations/onion-total-variance/; artifact H8ShBq8tJ1eMzwpjNpdU87 | - |
 | (OXa returned) | second experiments submitted (jobs 27184156-27204216; notes results/t264); OXc collect when they end; 13 rows wait for their tail partners (with D6u). D6c (priority 4) HELD until rung 1 is through (fair-share) | - |
@@ -59,6 +59,9 @@ QUEUE LIMIT: Nibi allows 1000 queued jobs per user, array tasks count. Priority 
 | row 337 (train DNase-seq, 3 d, 192000M, kit KF4) | stage 27150097, build 27150100 | submitted 13:20 UTC |
 | nine 1-day DNase-seq rows, all rerunning at 3 d / 192000M from KF4 | builds 27150100 (337), 27161195 (381), 27165180 (387), 27165188 (384), 27165190 (385), 27165192 (390), 27165194 (391), 27167692 (394), 27167694 (395) | submitted 13:20-16:20 UTC |
 | original 3-day rows 57, 113, 280, 389 (old kit; 12 G Java heap risk for 389 and 57) | 26853270_57, 26855582_113/280/389 | limits end 2026-11-14 ~16:30 UTC; on failure: `ONION_TIME=3-00:00:00 ONION_MEM=192000M` resubmit from KF4 (add the row to resub_dnase_tail.sh: it checks array 26855580 only, so resubmit these by hand) |
+| row 211 (train DNase-seq; timed out at 1 d; rerun 3 d / 192000M, kit KF4) | stage 27226297, build 27226298 | submitted 2026-11-14 01:17 UTC |
+| second-experiment row 2028 (DNase-seq, Java heap; rerun 3 d / 192000M, kit KX4) | stage 27232990, build 27232991 | submitted 2026-11-14 02:40 UTC |
+| HEAP RISK (12 G default heap, library-dependent): rows 388, 132, 216, 232, 57, 280, 389 | their running jobs | on 'GC overhead limit exceeded': resubmit with ONION_TIME=3-00:00:00 ONION_MEM=192000M; every new DNase-seq submit uses 192000M |
 | WATCHDOG (tail_watch) | 27124200 | pending on afterany of the live tail jobs; files under $O/eic/tail/ |
 | Max's training (not ours) | Fir 3609189 | his |
 
