@@ -215,6 +215,9 @@ if str(_TOOLS) not in sys.path:
 
 from onion_eval import metrics as Mx  # noqa: E402
 
+#: FL: estimate kinds in scores.json (the side table's `estimate_kind`, signal_provenance renamed)
+FRAGLEN_KIND_NAMES = {"signal_provenance": "provenance"}
+FRAGLEN_KINDS = ("provenance", "replicate_mean", "xcor")
 SPACE = "counts_log1p"                               # ruling 13: the selection space, fixed
 SCORER_VERSION = 1                                   # SF0: the legacy single-job path
 SCORER_VERSION_TWO_PHASE = 2                         # SP2b: the metric phase of the two-phase path
@@ -853,6 +856,13 @@ class Scorer:
             if self.sig is None:
                 raise ValueError(f"--fraglen-table needs the signal module: {self.sig_reason}")
             self.fraglen = self.sig.load_fraglen_table(fraglen_table)
+            # FL review fix 2: the signal routes read frag_len from the FROZEN measurements.tsv
+            # row; a run's config qc_table (dataset._apply_qc_table) overwrites the dataset row's
+            # frag_len, which would hide the side table's estimate behind an xcor value
+            import csv as _csv
+            with open(Path(self.tables) / "measurements.tsv", newline="", encoding="utf-8") as fh:
+                self._frozen_fraglen = {r["measurement_id"]: (r.get("frag_len") or "")
+                                        for r in _csv.DictReader(fh, delimiter="\t")}
         self._pa_cache: dict = {}
         #: SM: cells whose own per-cell means a cached position-average fit keeps (None = all);
         #: set per imputation group to the group's target cells, the only cells it predicts for
@@ -936,6 +946,8 @@ class Scorer:
         want = (len(self.regions) * self.rb,)
         if rec.get("fraglen_source") is not None:
             m["fraglen_sources"][mid] = rec["fraglen_source"]
+            if rec.get("fraglen_kind"):
+                m.setdefault("fraglen_kinds", {})[mid] = rec["fraglen_kind"]
         pred = sig.get(f"{SIGNAL_PREFIX['expectation']}pred")
         if pred is None:
             m["left_out"][mid] = rec.get("lambda_reason") or "no signal prediction for this target"
@@ -1026,6 +1038,7 @@ class Scorer:
             if self.fraglen is not None:
                 meta["fraglen_table"] = self.fraglen_path
                 meta["fraglen_source"] = dict(sorted(m.get("fraglen_sources", {}).items()))
+                meta["fraglen_kind"] = dict(sorted(m.get("fraglen_kinds", {}).items()))
             # per track, the lambda source actually used, as signal_from_nb (or the scorer) reports
             # it: `lambda_source` for signal.npy, `lambda_source_predicted_control` for signal_pc.npy
             def by(arr):
@@ -1123,7 +1136,17 @@ class Scorer:
             return row, None, ""
         if route != "chip":
             return row, None, ""
+        frozen = self._frozen_fraglen.get(row["measurement_id"], row.get("frag_len") or "")
+        if frozen != (row.get("frag_len") or ""):
+            row = dict(row, frag_len=frozen)
         return self.sig.with_fraglen(row, self.fraglen)
+
+    def _fraglen_kind(self, mid, source) -> str:
+        """FL: the kind of an estimate (FRAGLEN_KINDS), '' unless the source is `estimated`."""
+        if source != "estimated":
+            return ""
+        k = self.fraglen[mid].get("estimate_kind") or "xcor"
+        return FRAGLEN_KIND_NAMES.get(k, k)
 
     def _encoder_depth(self, row, scale=1.0):
         return self.ds.encoder.c_out(row, scale)
@@ -1753,7 +1776,8 @@ class Scorer:
         rec = {"lambda_source": None, "lambda_reason": ""}
         if fl_src is not None:
             rec.update(fraglen_source=fl_src, fraglen_reason=fl_why,
-                       fraglen_bp=row.get("frag_len") or "")
+                       fraglen_bp=row.get("frag_len") or "",
+                       fraglen_kind=self._fraglen_kind(row["measurement_id"], fl_src))
         out = {}
         variants = [(mode, pre, row) for mode, pre in SIGNAL_PREFIX.items()]
         if pc:    # the predicted-control route: the observed control is ignored (SC)
@@ -2622,7 +2646,7 @@ class Scorer:
                                                r["lambda_source_training_average"]}
                                               if "lambda_source_training_average" in r else {}),
                                            **({k: r[k] for k in ("fraglen_source", "fraglen_bp",
-                                                                 "fraglen_reason")}
+                                                                 "fraglen_reason", "fraglen_kind")}
                                               if "fraglen_source" in r else {})}
                              for r in recs}
         if self.fraglen is not None:      # FL: only with --fraglen-table
@@ -2630,6 +2654,8 @@ class Scorer:
             h1s["fraglen_source_counts"] = {k: sum(v == k for v in srcs.values())
                                             for k in self.sig.FRAGLEN_SOURCES}
             h1s["fraglen_estimated_targets"] = sorted(t for t, v in srcs.items() if v == "estimated")
+            kinds = [r.get("fraglen_kind") for r in recs if r.get("fraglen_source") == "estimated"]
+            h1s["fraglen_kind_counts"] = {k: kinds.count(k) for k in FRAGLEN_KINDS}
         h1s["dnase_route"] = self.dnase_route
         h1s["signal_mode"] = "expectation"
         h1p = metric(recs, recovered_fn(SIGNAL_PREFIX["plug_in"]), scorable, nb, sd, require_all=ra)

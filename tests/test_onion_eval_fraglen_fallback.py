@@ -37,7 +37,7 @@ KW = dict(n_boot=10, guardrail_windows=4, log=lambda *a: None)
 RB = 256
 SIG = "signal_arcsinh"
 H1 = "specific_variance_recovered_above_noise"
-FL_COLS = ["measurement_id", "frag_len_estimated", "quality_tag"]
+FL_COLS = ["measurement_id", "frag_len_estimated", "quality_tag", "estimate_kind"]
 
 
 def _tsv(p):
@@ -121,9 +121,10 @@ def _env(root: Path, blank=()) -> dict:
             "rows": {r["measurement_id"]: r for r in rows}, "base": base}
 
 
-def _fl_table(env, path, value="200", roles=("val", "train")) -> Path:
+def _fl_table(env, path, value="200", roles=("val", "train"), kind="signal_provenance") -> Path:
     """An estimate for EVERY ChIP base row of `roles` (also rows with a table value)."""
-    rows = [{"measurement_id": r["measurement_id"], "frag_len_estimated": value, "quality_tag": "1"}
+    rows = [{"measurement_id": r["measurement_id"], "frag_len_estimated": value, "quality_tag": "1",
+             "estimate_kind": kind}
             for r in env["rows"].values() if r["arm_knob"] == "" and r["in_eic"] in roles
             and r["assay"] == "H3K4me3"]
     _write_tsv(path, rows, FL_COLS)
@@ -140,6 +141,7 @@ def _strip(obj, root):
     drop = {"wall_seconds", "timing_seconds", "torch_threads", "evalset_sha256", "tables_sha256",
             "scorer_version", "scorer_settings", "fraglen_table", "fraglen_source", "fraglen_bp",
             "fraglen_reason", "fraglen_source_counts", "fraglen_estimated_targets", "evalset",
+            "fraglen_kind", "fraglen_kind_counts",
             "tables"}
     if isinstance(obj, dict):
         return {k: _strip(v, root) for k, v in obj.items() if k not in drop}
@@ -168,6 +170,17 @@ def scored(tmp_path_factory):
                              fraglen_table=_fl_table(blank, blank["root"] / "fl200.tsv", "200"))
     out["blank_bad"] = _score(blank, blank["root"] / "o_bad",
                               fraglen_table=_fl_table(blank, blank["root"] / "fl50.tsv", "50"))
+    # review fix 2: a config qc_table overwrites the dataset row's frag_len (here 150 bp on every
+    # ChIP base row, as an xcor value would); the signal routes must still read the frozen row
+    qc = blank["root"] / "qc_table.tsv"
+    qc_rows = [{"measurement_id": r["measurement_id"], "frag_len": "150"}
+               for r in blank["rows"].values() if r["arm_knob"] == "" and r["assay"] == "H3K4me3"]
+    _write_tsv(qc, qc_rows, ["measurement_id", "nsc", "rsc", "nrf", "pbc1", "pbc2", "frip",
+                             "frag_len"])
+    out["blank_qc_fl"] = _score(blank, blank["root"] / "o_qc_fl", config={"qc_table": str(qc)},
+                                fraglen_table=blank["root"] / "fl200.tsv")
+    out["blank_qc_plain"] = _score(blank, blank["root"] / "o_qc_plain",
+                                   config={"qc_table": str(qc)})
     return {"full": full, "blank": blank, **out}
 
 
@@ -208,9 +221,32 @@ def test_estimate_equal_to_the_blanked_value_restores_the_scores(scored):
     assert all(pt[t]["fraglen_source"] == "estimated" and pt[t]["fraglen_bp"] == "200"
                for t in blanked)
     assert fl[H1][SIG]["fraglen_source_counts"]["estimated"] == 2
+    # review fix 3: the kind of each estimate, per target and in total
+    assert all(pt[t]["fraglen_kind"] == "provenance" for t in blanked)
+    assert all(v["fraglen_kind"] == "" for t, v in pt.items()
+               if v.get("fraglen_source") == "table")
+    assert fl[H1][SIG]["fraglen_kind_counts"] == {"provenance": 2, "replicate_mean": 0, "xcor": 0}
     meta = json.loads((scored["blank"]["root"] / "d_fl" / "leave_one_assay_out" /
                        "tracks.json").read_text())
     assert {t for t, v in meta["fraglen_source"].items() if v == "estimated"} == set(blanked)
+    assert meta["fraglen_kind"] == {t: "provenance" for t in blanked}
+
+
+def test_qc_table_does_not_hide_the_side_table(scored):
+    """Review fix 2: with a config qc_table, the blanked targets read their frozen (empty)
+    frag_len, take the side table's estimate (200, provenance), and score as the original tables;
+    targets with a frozen frag_len keep it (200), not the qc_table's 150."""
+    a, b = scored["blank_fl"], scored["blank_qc_fl"]
+    pa, pb = _per_target(a), _per_target(b)
+    for t, v in pa.items():
+        if "fraglen_source" in v:
+            assert {k: pb[t][k] for k in ("fraglen_source", "fraglen_bp", "fraglen_kind")} == \
+                   {k: v[k] for k in ("fraglen_source", "fraglen_bp", "fraglen_kind")}
+            assert pb[t]["level"] == v["level"] and pb[t]["N"] == v["N"]
+    assert a[H1][SIG]["macro"] == b[H1][SIG]["macro"]
+    # without the option, today's path is unchanged: the qc_table value reaches the signal route
+    pc = _per_target(scored["blank_qc_plain"])
+    assert all("fraglen_source" not in v for v in pc.values())
 
 
 def test_implausible_estimate_is_not_used(scored):
@@ -284,6 +320,9 @@ def test_ag2_baselines_training_fallback(scored, tmp_path):
     m3 = json.loads((o3 / AB.MEAN / "leave_one_assay_out" / "tracks.json").read_text())
     assert not set(tr_blank) & set(m2["training_tracks_left_out"])
     assert {m2["training_tracks_fraglen_source"][t] for t in tr_blank} == {"estimated"}
+    import hashlib
+    assert m2["fraglen_table_sha256"] == hashlib.sha256(
+        (blank["root"] / "fl200.tsv").read_bytes()).hexdigest()               # review fix 4
     assert "training_tracks_fraglen_source" not in m1
     assert m2["n_training_tracks"] == m3["n_training_tracks"]
     for mid in m3["targets"]:

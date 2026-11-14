@@ -24,9 +24,10 @@ layout). Only scores.json files are read. A seed directory without scores.json i
 Comparability. Every scores.json one command reads (arms and baselines) must carry the same
 non-empty `evalset_sha256`; otherwise the command REFUSES: it prints the reason, writes no file and
 exits 2. Every ARM score must also share the scorer keys of select_rule (`tables_sha256`,
-`scorer_version`, `scorer_settings.device`, `scorer_settings.infer_batch`, `refs.sha256_*`), else
-REFUSED; baselines are references and are exempt (a scorer_version 1 baseline is comparable with
-version 2 runs). `--allow-mix <key>` exempts the device or the batch only.
+`scorer_version`, `scorer_settings.device`, `scorer_settings.infer_batch`, `refs.sha256_*`,
+`fraglen_table.sha256`), else REFUSED; baselines are references and are exempt (a scorer_version 1
+baseline is comparable with version 2 runs). `--allow-mix <key>` exempts the device, the batch or
+the fragment-length table (signal-space values then differ; a warning says so).
 
 Statistics over the seeds of one arm, for one quantity (a JSON number, or null when the scorer
 marked it undefined): `n_seeds` = scored seeds, `n_defined` = seeds where it is defined, `mean`

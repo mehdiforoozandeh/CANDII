@@ -348,6 +348,7 @@ def run(tables, evalset, truth_from, out, *, split="val", allow_blind=False,
                 m["n_training_tracks"] = n_cands
                 if fl is not None:
                     m["fraglen_table"] = str(Path(fraglen_table).resolve())
+                    m["fraglen_table_sha256"] = E.sha256_file(Path(fraglen_table))
                     m["training_tracks_fraglen_source"] = dict(sorted(fl_src.items()))
             _write_dir(out / method / regime, m, arrays[method])
         with open(out / ORACLE / regime / "picks.tsv", "w", newline="", encoding="utf-8") as fh:
