@@ -14,10 +14,13 @@ PI DIRECTIVE 2026-11-14: the crux tree and taskhub are the one record of the res
 
 ## Agents running
 | recorder CR1 (opus) | backfill of the vault: findings, questions, task states of the whole run; recording rule file | review, merge; then a recorder per milestone |
-| planner (fable) | Amendment 10: execution sheet of the adopted two-iteration parallel plan (rulings 43-46) | launch SP2a, SP2b, SP2c, SP3, then FWa, MTa, ... in its order |
-| TRa (opus) | trainings now: rungs 2-6 base, rung-4 scrambled_covariates and no_eval, 7 selection arms at 20k (held; one per rung checked first) | log job ids; scoring by FWa/FWb/MTa |
-| A1k (opus) | configs + trainings: average_input (D10), two_step_native (D15) on rung 1 | review code, merge; log job ids |
-| SF0 reviewer (opus) | review of the scorer base (branch chunk/onion-SM at 17f68d5; baselines already submitted from it) | merge if ACCEPT |
+| SP2a, SP2c, SP2b, SP3 (opus) | FAST SCORER, four builders in parallel (Amendment 10): predict command + predict.sh; compare_scores + comparability keys + --sub; metric phase in score.py; job scripts (SCORE_SUBDIR, PREDICT_ONLY, METRICS_ONLY, HOLD) | review each, merge, push one kit; time ONE rung-1 predict shard, then release FWa groups; then FWb, MTa, SRa (rung 4) |
+| I2a (opus) | screening evaluation set (16 nested pair regions) + its baselines | I1c baseline report; MTa references |
+| TRa (opus) | trainings now: rungs 2-6 base, rung-4 scrambled_covariates and no_eval (region route), 7 selection arms at 20k | log job ids |
+| A1k (opus) | configs + trainings: average_input (D10), two_step_native (D15) on rung 1 | review, merge; log job ids |
+| I1a (opus) | layers rerun with the sampling layer | real-data layers figures for ship 1 |
+DONE today: recorder CR1 merged (vault backfill); scorer base SF0 merged (d9e37c6); Methods merged; AG2 pack done.
+WAITING ON THE PI: the Globus web transfer Nibi -> Fir (paths given 2026-11-14): /scratch/mforooz/onion/measurements/, /scratch/mforooz/onion/aux/, /project/def-maxwl/mforooz/ONION/{tables,eval,region,genome,aux,runs,runs_region}.
 SHIP TIMES (ruling 43): ship 1 = 2026-11-15 06:00 UTC (Methods + model-free Results; deck cut 03:00 UTC); ship 2 = 2026-11-15 18:00 UTC expected, hard 2026-11-16 08:00 UTC; iteration 2 = 2026-11-17 12:00 UTC.
 | I1a (layers rerun with pseudoreplicate pairs), I1e (Methods, merge), AGf (pack fix), SF0 (scorer base) | iteration-1 and scorer work in flight | review, merge |
 | agent | task | on return |
