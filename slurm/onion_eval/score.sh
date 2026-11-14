@@ -59,7 +59,23 @@ SPEED=(--workers "${ONION_SCORE_WORKERS:-${SLURM_CPUS_PER_TASK:-1}}")   # >1 onl
 if [ "${ONION_STAGE:-1}" = 1 ] && [ -n "${SLURM_TMPDIR:-}" ]; then
   SPEED+=(--stage-dir "$SLURM_TMPDIR/stage")
 fi
-CMD=(python3 "$KIT/tools/onion_eval/score.py" "${SRC[@]}" --evalset "$EVALSET" --out "$OUT" "${SPEED[@]}" "$@")
+# SP3 (interface M, metric phase): ONION_SCORE_PHASE=metrics scores a run from its prediction
+# store (ONION_PRED_STORE, written by slurm/onion_eval/predict.sh) with the reference terms of
+# ONION_REFS_FROM (a baselines dir); unset = the legacy single-job call, unchanged. After SCORED
+# exists the metric phase removes the store, unless ONION_KEEP_PRED_STORE=1.
+PHASE="${ONION_SCORE_PHASE:-}"
+PHASE_ARGS=()
+case "$PHASE" in
+  "") ;;
+  metrics)
+    [ "$WHAT" = run ] || { echo "ONION_SCORE_PHASE=metrics scores a run, not a baseline" >&2; exit 2; }
+    [ -n "${ONION_PRED_STORE:-}" ] || { echo "ONION_SCORE_PHASE=metrics needs ONION_PRED_STORE" >&2; exit 2; }
+    [ -n "${ONION_REFS_FROM:-}" ] || { echo "ONION_SCORE_PHASE=metrics needs ONION_REFS_FROM" >&2; exit 2; }
+    PHASE_ARGS=(--phase metrics --pred-store "$ONION_PRED_STORE" --refs-from "$ONION_REFS_FROM") ;;
+  *) echo "ONION_SCORE_PHASE must be metrics or unset" >&2; exit 2 ;;
+esac
+CMD=(python3 "$KIT/tools/onion_eval/score.py" "${SRC[@]}" --evalset "$EVALSET" --out "$OUT" "${SPEED[@]}"
+     ${PHASE_ARGS[@]+"${PHASE_ARGS[@]}"} "$@")
 if [ "${DRY_RUN:-0}" = 1 ]; then echo "${CMD[*]}"; exit 0; fi
 if [ -f "$OUT/SCORED" ]; then echo "skip: $OUT/SCORED exists"; exit 0; fi
 echo "=== onion score job ${SLURM_JOB_ID:-local} host=$(hostname) $(date -u)"
@@ -82,4 +98,22 @@ T="${ONION_SCORE_THREADS:-2}"
 export OMP_NUM_THREADS="$T" OPENBLAS_NUM_THREADS="$T" FLEXIBLAS_NUM_THREADS="$T" MKL_NUM_THREADS="$T" \
   OMP_WAIT_POLICY=PASSIVE
 "${CMD[@]}"
+if [ "$PHASE" = metrics ] && [ "${ONION_KEEP_PRED_STORE:-0}" != 1 ] && [ -f "$OUT/SCORED" ] \
+   && [ -f "$ONION_PRED_STORE/STORE.json" ]; then
+  # store guard begin (tests run this block alone): never / or a short path; the store dir is
+  # named seed<s> or the score subdir name (the basename of <out_dir> when it is not the run dir)
+  STORE_P="${ONION_PRED_STORE%/}"; STORE_B="$(basename "$STORE_P")"
+  IFS=/ read -r -a STORE_PARTS <<< "${STORE_P#/}"
+  SUBNAME=""; [ "${OUT%/}" = "${WHO%/}" ] || SUBNAME="$(basename "$OUT")"
+  STORE_NAME_OK=0
+  case "$STORE_B" in seed*) STORE_NAME_OK=1 ;; esac
+  [ -z "$SUBNAME" ] || [ "$STORE_B" != "$SUBNAME" ] || STORE_NAME_OK=1
+  if [ -n "$STORE_P" ] && [ "$STORE_P" != / ] && [ "${#STORE_PARTS[@]}" -ge 4 ] && [ "$STORE_NAME_OK" = 1 ]; then
+    rm -rf -- "$STORE_P"
+    echo "removed the prediction store $STORE_P (KEEP_PRED_STORE unset)"
+  else
+    echo "kept the prediction store $ONION_PRED_STORE: refused to remove it (needs 4+ path parts and a basename seed* or the score subdir name)"
+  fi
+  # store guard end
+fi
 echo "=== done $(date -u)"

@@ -2,7 +2,8 @@
 
     python tools/onion_eval/select_rule.py compare --incumbent <arm dir> --challenger <arm dir>
         [--simpler incumbent|challenger|none] [--name <comparison>] [--settlements <tsv>]
-    python tools/onion_eval/select_rule.py table --runs <dir> [--prefix p]
+        [--sub SUB] [--allow-mix scorer_settings.device|scorer_settings.infer_batch ...]
+    python tools/onion_eval/select_rule.py table --runs <dir> [--prefix p] [--sub SUB]
         (columns: arm, seed, state, composite (from the clipped terms while CLIP_GOAL_TERMS),
         <goal>_raw and <goal>_clipped for each goal, copy_leak_pass (the gate as applied below:
         True, False or unreliable), same_view_copy_gain_flag)
@@ -26,6 +27,12 @@ carry the same non-empty `evalset_sha256` and `tables_sha256`, `regime == leave_
 `selection.space == counts_log1p`, `noise_floor == pseudoreplicate_halves` (a pilot scored with
 `score.py --no-halves` is refused), and `split == val` (`split == blind` for the blind pass).
 Otherwise the command REFUSES (exit 2, no row written).
+Scorer keys (Amendment 10, interface M): every seed of the compared ARMS (both arms of `compare`, the
+final design of `check-done`) must also share `scorer_version` (absent = 1), `scorer_settings.device`,
+`scorer_settings.infer_batch` and each `refs.sha256_*` (absent = None); a mix is REFUSED. Baselines
+are references, not arms: a scorer_version 1 baseline is comparable with version 2 runs.
+`--allow-mix <key>` exempts the device or the batch only. `--sub SUB` (compare, table) reads
+`<arm>/seed<k>/<SUB>/scores.json` (`SCORE_SUBDIR`); table then reads SCORED and SKIPPED there.
 
 D13 (`compare`). Seed spread of a quantity = max - min over seeds, the larger of the two arms
 (ruling 7); each arm needs >= 3 seeds, else REFUSED. A spread of exactly 0 (composite or a goal)
@@ -226,7 +233,8 @@ def load_seed(path: Path) -> dict:
             "evalset_sha256": s.get("evalset_sha256") or "",
             "tables_sha256": s.get("tables_sha256") or "", "split": s.get("split"),
             "regime": s.get("regime"), "space": sel.get("space"),
-            "noise_floor": s.get("noise_floor"), "evalset": s.get("evalset", "")}
+            "noise_floor": s.get("noise_floor"), "evalset": s.get("evalset", ""),
+            "scorer_keys": scorer_keys(s)}
 
 
 def load_arm(arm, sub: str = "", min_seeds: int = MIN_SEEDS) -> list[dict]:
@@ -267,6 +275,58 @@ def check_comparable(seeds: list[dict], split: str = "val") -> None:
     if bad:
         raise Refused("scores not comparable: " + "; ".join(bad[:6])
                       + (f"; ... {len(bad) - 6} more" if len(bad) > 6 else ""))
+
+
+# Comparability keys (Amendment 10, pinned interface M; SP2c). Every compared ARM score must carry
+# one value of each key; a key absent from a score is the value None, and `scorer_version` absent is
+# 1 (the legacy scorer). Reference directories (baselines) are not arms: they are checked by
+# check_comparable only, so a scorer_version 1 baseline is a valid reference for version 2 runs.
+SCORER_KEYS = ("evalset_sha256", "tables_sha256", "scorer_version", "scorer_settings.device",
+               "scorer_settings.infer_batch", "refs.sha256_*")
+#: the keys `--allow-mix` may exempt (a cross-rung comparison of a GPU and a CPU forward)
+MIXABLE = ("scorer_settings.device", "scorer_settings.infer_batch")
+SUB_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+
+
+def scorer_keys(s: dict) -> dict:
+    """{key: value} of the comparability keys of one scores.json (SCORER_KEYS)."""
+    st = s.get("scorer_settings") or {}
+    out = {"evalset_sha256": s.get("evalset_sha256") or "",
+           "tables_sha256": s.get("tables_sha256") or "",
+           "scorer_version": s.get("scorer_version", 1),
+           "scorer_settings.device": st.get("device"),
+           "scorer_settings.infer_batch": st.get("infer_batch")}
+    refs = s.get("refs") or {}
+    out.update({f"refs.{k}": v for k, v in sorted(refs.items()) if k.startswith("sha256_")})
+    return out
+
+
+def check_scorer_keys(items, allow=()) -> None:
+    """Refused unless every arm score in `items` ([(path, scorer_keys dict)]) has one value of each
+    comparability key, apart from the keys in `allow` (a subset of MIXABLE)."""
+    bad_allow = [k for k in allow if k not in MIXABLE]
+    if bad_allow:
+        raise Refused(f"--allow-mix {bad_allow}: only {', '.join(MIXABLE)} may be mixed")
+    keys = sorted({k for _, kv in items for k in kv})
+    bad = []
+    for k in keys:
+        if k in allow:
+            continue
+        vals: dict = {}
+        for p, kv in items:
+            vals.setdefault(json.dumps(kv.get(k)), []).append(str(p))
+        if len(vals) > 1:
+            bad.append(f"{k} differs across the compared arms: " + "; ".join(
+                f"{v[:24]} ({len(ps)} scores, e.g. {ps[0]})" for v, ps in sorted(vals.items())))
+    if bad:
+        raise Refused("scorer settings not comparable: " + "; ".join(bad))
+
+
+def sub_name(v: str) -> str:
+    """argparse type of `--sub`: one directory name, no path ('' = the seed dir itself)."""
+    if v and not SUB_RE.match(v):
+        raise argparse.ArgumentTypeError(f"--sub {v!r}: one directory name ([A-Za-z0-9_.-])")
+    return v
 
 
 def _clip(v):
@@ -332,7 +392,8 @@ def gate_status(seeds: list[dict]) -> str:
     return "pass" if all(v is True for v in ok) else "fail"
 
 
-def decide(inc: list[dict], ch: list[dict], simpler: str, *, clip: bool | None = None) -> dict:
+def decide(inc: list[dict], ch: list[dict], simpler: str, *, clip: bool | None = None,
+           allow_mix=()) -> dict:
     """D13 on two arms' seed lists. Returns {verdict, reason, composite_delta, seed_spread,
     per_goal_deltas, per_goal_spreads, copy_leak}. Raises Refused when the rule may not run."""
     if simpler not in ("incumbent", "challenger", "none"):
@@ -340,6 +401,7 @@ def decide(inc: list[dict], ch: list[dict], simpler: str, *, clip: bool | None =
     if len(inc) < MIN_SEEDS or len(ch) < MIN_SEEDS:
         raise Refused(f"seeds: incumbent {len(inc)}, challenger {len(ch)}; D13 needs at least {MIN_SEEDS}")
     check_comparable(inc + ch, "val")
+    check_scorer_keys([(s["path"], s.get("scorer_keys") or {}) for s in inc + ch], allow_mix)
     clip = CLIP_GOAL_TERMS if clip is None else clip
     out = {"composite_delta": None, "seed_spread": None, "per_goal_deltas": {}, "per_goal_spreads": {},
            "clip_goal_terms": bool(clip)}
@@ -459,16 +521,17 @@ def _utc() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="microseconds")
 
 
-def compare(incumbent, challenger, simpler=None, name=None, settlements=None, *, clip=None) -> dict:
+def compare(incumbent, challenger, simpler=None, name=None, settlements=None, *, clip=None,
+            sub: str = "", allow_mix=()) -> dict:
     inc_dir, ch_dir = Path(incumbent), Path(challenger)
     if simpler is None:
         if not is_own_rung_base(inc_dir.name, ch_dir.name):
             raise Refused(f"{inc_dir.name} is not the rung base of {ch_dir.name}: simpler_than_base "
                           f"is relative to the challenger's own rung base, so pass --simpler")
         simpler = simpler_from_config(ch_dir)
-    inc = load_arm(inc_dir)
-    ch = load_arm(ch_dir)
-    res = decide(inc, ch, simpler, clip=clip)
+    inc = load_arm(inc_dir, sub)
+    ch = load_arm(ch_dir, sub)
+    res = decide(inc, ch, simpler, clip=clip, allow_mix=allow_mix)
     name = name or f"{inc_dir.name}__vs__{ch_dir.name}"
     row = {"comparison": name, "incumbent": inc_dir.name, "challenger": ch_dir.name,
            "simpler": simpler, "composite_delta": _fmt(res["composite_delta"]),
@@ -485,36 +548,40 @@ def compare(incumbent, challenger, simpler=None, name=None, settlements=None, *,
 
 # ------------------------------------------------------------------------------------------ table
 
-def seed_state(d: Path) -> str:
+def seed_state(d: Path, sub: str = "") -> str:
     """capped | failed | done (scored: SCORED and scores.json) | skipped | running | queued.
     `capped`: train.py wrote CAPPED (stopped at --max-windows short of the budget); checked first,
     so a capped run is never `done`, whatever else it holds (t209 ASf). Training's DONE
     alone means trained, not scored, so the seed is still `running` (finding 3). A run that has
     started (train.py's log.jsonl or train_state.pt, a checkpoint, or a job log `*.out`) is
     `running` before its first run.json or DONE exists. `skipped`: score.py wrote SKIPPED (a
-    pair-only baseline on an eval set with no pair); it has no scores and never counts as done."""
+    pair-only baseline on an eval set with no pair); it has no scores and never counts as done.
+    With `sub` (a score subdirectory, interface M) `done`, `skipped` and a score's FAILED are read
+    in `<d>/<sub>`; the training states are read in `d` as without it."""
+    s = d / sub if sub else d
     if (d / CAPPED).exists():
         return "capped"
-    if (d / "FAILED").exists():
+    if (d / "FAILED").exists() or (s / "FAILED").exists():
         return "failed"
-    if (d / "SCORED").exists() and (d / "scores.json").is_file():
+    if (s / "SCORED").exists() and (s / "scores.json").is_file():
         return "done"
-    if (d / SKIPPED).is_file():
+    if (s / SKIPPED).is_file():
         return "skipped"
     if any((d / f).exists() for f in STARTED_FILES) or any(d.glob("*.out")):
         return "running"
     return "queued"
 
 
-def table(runs, prefix: str = "") -> list[dict]:
+def table(runs, prefix: str = "", sub: str = "") -> list[dict]:
     rows = []
     for arm in sorted(p for p in Path(runs).iterdir() if p.is_dir() and p.name.startswith(prefix)):
         for d in seed_dirs(arm):
-            st = seed_state(d)
+            st = seed_state(d, sub)
             comp, cl, flag = None, None, None
             raw = clipped = dict.fromkeys(GOALS)
-            if (d / "scores.json").is_file():
-                s = screen_terms([load_seed(d / "scores.json")])[1][0]
+            sp = d / sub / "scores.json" if sub else d / "scores.json"
+            if sp.is_file():
+                s = screen_terms([load_seed(sp)])[1][0]
                 g = gate_status([s])            # the gate as select_rule applies it (old scores too)
                 comp, flag = s["composite"], s["copy_gain_flag"]
                 raw, clipped = s["raw_goals"], s["clipped_goals"]
@@ -703,6 +770,10 @@ def done_condition_2(final, baselines, sub: str = "", *, clip: bool | None = Non
     except Refused as e:
         return "REFUSED", [str(e)]
     lines, states = list(skipped), []
+    try:                       # the final design's seeds are arms; the baselines are references
+        check_scorer_keys([(s["path"], s["scorer_keys"]) for s in seeds])
+    except Refused as e:
+        return "REFUSED", [str(e)]
     p_f, seeds = screen_terms(seeds, clip)
     p_b, bl = screen_terms(list(base.values()), clip)
     base = dict(zip(base, bl))
@@ -792,9 +863,14 @@ def main(argv=None) -> int:
     c.add_argument("--simpler", choices=("incumbent", "challenger", "none"))
     c.add_argument("--name")
     c.add_argument("--settlements")
+    c.add_argument("--sub", default="", type=sub_name,
+                   help="read <arm>/seed<s>/<SUB>/scores.json (interface M)")
+    c.add_argument("--allow-mix", action="append", default=[], choices=MIXABLE,
+                   help="accept a mix of this scorer setting across the two arms")
     t = sub.add_parser("table")
     t.add_argument("--runs", required=True)
     t.add_argument("--prefix", default="")
+    t.add_argument("--sub", default="", type=sub_name)
     r = sub.add_parser("check-rung")
     r.add_argument("--runs", required=True)
     r.add_argument("--rung", type=int, required=True)
@@ -820,7 +896,8 @@ def main(argv=None) -> int:
 
     if a.cmd == "compare":
         try:
-            res = compare(a.incumbent, a.challenger, a.simpler, a.name, a.settlements)
+            res = compare(a.incumbent, a.challenger, a.simpler, a.name, a.settlements, sub=a.sub,
+                          allow_mix=tuple(a.allow_mix))
         except Refused as e:
             print(f"REFUSED: {e}")
             return 2
@@ -833,7 +910,7 @@ def main(argv=None) -> int:
         print("\t".join(["arm", "seed", "state", "composite", *terms, "copy_leak_pass",
                          "same_view_copy_gain_flag"]))
         f = lambda x: "" if x is None else f"{x:.6g}"          # noqa: E731
-        for row in table(a.runs, a.prefix):
+        for row in table(a.runs, a.prefix, a.sub):
             print("\t".join([row["arm"], str(row["seed"]), row["state"], f(row["composite"]),
                              *(f(row[t]) for t in terms), str(row["copy_leak_pass"]),
                              str(row["same_view_copy_gain_flag"])]))
