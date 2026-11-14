@@ -734,6 +734,10 @@ class Scorer:
             log(f"score: --workers {self.workers} applies to training-free predictors only; "
                 f"scoring the model serially")
             self.workers = 1
+        if self.workers > 1:
+            # the parent forks the workers: it must not start a torch OpenMP pool first (GNU
+            # OpenMP is not fork-safe); it does no torch math for a training-free predictor
+            torch.set_num_threads(1)
         #: SM: copy the files the scoring reads to local disk first (see _stage)
         self.stage_dir = Path(stage_dir) if stage_dir else None
         self.stage_info = None
@@ -1896,7 +1900,9 @@ class Scorer:
         returns its records and the suffstats, timing and dump-metadata entries it wrote; run()
         merges them in the serial order, so scores.json, suffstats.npz and tracks.json are the
         serial ones. Each task is the serial code on the same inputs (numpy only for a baseline;
-        a model keeps the parent's torch thread count), so every float is the serial one."""
+        only training-free predictors run here), so every float is the serial one. Call it from a
+        process that has not run multi-threaded torch work before (score.py's command line): forked
+        workers inherit a started GNU OpenMP pool and can hang in it."""
         import multiprocessing as mp
         global _WORKER
         self._rung_pairs("", "")                 # build the index once, before the fork
