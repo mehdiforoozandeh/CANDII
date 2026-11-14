@@ -1918,6 +1918,14 @@ class Scorer:
                                  f"{time.time() - t0:.0f} s")
         finally:
             _WORKER = None
+        try:                                     # resident peaks (Linux ru_maxrss is in KiB)
+            import resource
+            kib = 2 ** 20 if sys.platform.startswith("linux") else 2 ** 30
+            self.log(f"score: peak resident memory: parent "
+                     f"{resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / kib:.2f} GiB, largest "
+                     f"worker {resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / kib:.2f} GiB")
+        except (ImportError, OSError):
+            pass
         return {"groups": res[:len(group_list)], "pairs": res[len(group_list):]}
 
     def _merge_result(self, r):
