@@ -2,6 +2,7 @@
 
     ag2_baselines.py run --tables <dir> --evalset <json> --truth-from <method track dir>
         --split val|blind [--allow-blind] [--repeat-blind-reason "<text>"] --out <dir>
+        [--fraglen-table <tsv>]
 
 Writes three directories of pinned interface F (plan, Amendment 5) under `<out>`:
 
@@ -19,13 +20,17 @@ Writes three directories of pinned interface F (plan, Amendment 5) under `<out>`
 A training track has no `signal.h5` (`build_list.py:54`), so its signal is
 `signal_from_counts.signal_track(observed counts, mode="plug_in")` with its own observed control and
 covariates, per eval region (as `signal_from_nb`), then asinh. A ChIP-seq training track with no
-control is left out and counted. Candidates are the base views (`evalset.base_views`) of training
+control is left out and counted. A ChIP-seq training track with an empty `frag_len` takes the
+estimate of `--fraglen-table` when there is a plausible one (`signal_from_counts.with_fraglen`; a
+filled `frag_len` is never replaced); a track that still has no fragment length is left out and
+counted, like a track with no control. Candidates are the base views (`evalset.base_views`) of training
 rows (`in_eic = train`) after every second experiment (`evalset.second_experiment_ids`) is removed;
 a second experiment never enters the average or the oracle.
 
 The truth comes from `--truth-from` (a `run` or `baseline` directory of chunk AGd: `<dir>/<regime>/`
 with `tracks.json` and `<mid>.truth.npy`, or one such regime directory), never from a target file
-read by this tool. The two halves of `pseudoreplicate_half` are the only target files it reads. The
+read by this tool. The targets of a regime are its `targets` and its `truth_only` targets (a truth
+with no signal of the dumping predictor). The two halves of `pseudoreplicate_half` are the only target files it reads. The
 targets of each regime are the ones that `--truth-from` lists; each must be an imputation target of
 the eval set on `--split` and that regime.
 
@@ -149,6 +154,8 @@ def training_signal(row: dict, rows_by_id: dict, regions, rb: int):
         crow = rows_by_id.get(cid) if cid else None
         if crow is None or _h5_path(crow) is None:
             return None, "ChIP-seq training track with no observed control"
+        if not (row.get("frag_len") or "").strip():
+            return None, "ChIP-seq training track with no fragment length"
         cov.update(control_depth_reads=crow["depth_reads"],
                    control_read_length=crow["read_length"], control_is_predicted=False)
         ctl = _read_h5(_h5_path(crow), regions, rb, np.float64)
@@ -187,6 +194,13 @@ def _truth_regimes(truth_from: Path) -> dict:
     return out
 
 
+def _truth_targets(meta: dict) -> list:
+    """The targets of a --truth-from regime: `targets`, then `truth_only` (a truth.npy and no
+    signal of the dumping predictor, score.py FL)."""
+    t = list(meta.get("targets", []))
+    return t + [m for m in meta.get("truth_only", []) if m not in set(t)]
+
+
 def _write_dir(d: Path, meta: dict, arrays: dict) -> None:
     d.mkdir(parents=True, exist_ok=True)
     for name, a in arrays.items():
@@ -202,7 +216,7 @@ def _utc() -> str:
 # ---------------------------------------------------------------------------------------- run
 
 def run(tables, evalset, truth_from, out, *, split="val", allow_blind=False,
-        repeat_blind_reason=None, log=print) -> dict:
+        repeat_blind_reason=None, log=print, fraglen_table=None) -> dict:
     if split not in ("val", "blind"):
         raise ValueError(f"split {split!r} not in (val, blind)")
     if split == "blind" and not allow_blind:
@@ -228,7 +242,7 @@ def run(tables, evalset, truth_from, out, *, split="val", allow_blind=False,
             raise Refused(f"{d}: split {meta.get('split')!r}, not {split!r}")
         if meta.get("evalset_sha256") != esha:
             raise Refused(f"{d}: evalset_sha256 differs from {evalset}")
-        stray = sorted(set(meta.get("targets", [])) - targets_of.get(regime, set()))
+        stray = sorted(set(_truth_targets(meta)) - targets_of.get(regime, set()))
         if stray:
             raise Refused(f"{d}: {len(stray)} target(s) are not {split} imputation targets of "
                           f"regime {regime} in the eval set, e.g. {stray[0]}")
@@ -259,10 +273,14 @@ def run(tables, evalset, truth_from, out, *, split="val", allow_blind=False,
     sig_cache: dict = {}
     left_out = {HALF: {}, MEAN: {}, ORACLE: {}}
     summary = {}
+    fl = SFC.load_fraglen_table(fraglen_table) if fraglen_table else None
+    fl_src: dict = {}
 
     def cand_signal(r):
         mid = r["measurement_id"]
         if mid not in sig_cache:
+            if fl is not None and SFC.route_of(r["assay_class"] or r["assay"]) == "chip":
+                r, fl_src[mid], _ = SFC.with_fraglen(r, fl)
             sig_cache[mid] = training_signal(r, by_id, regions, rb)
         return sig_cache[mid]
 
@@ -272,7 +290,7 @@ def run(tables, evalset, truth_from, out, *, split="val", allow_blind=False,
         picks = []
         cand_left = {}
         n_cands = {}
-        for mid in meta.get("targets", []):
+        for mid in _truth_targets(meta):
             row = by_id.get(mid)
             if row is None:
                 raise Refused(f"{mid}: not in {tables / 'measurements.tsv'}")
@@ -324,10 +342,13 @@ def run(tables, evalset, truth_from, out, *, split="val", allow_blind=False,
                  "n_regions": len(regions), "lambda_source": LAMBDA_SOURCE[method],
                  "targets": done[method], "truth_from": str(d.resolve()),
                  "left_out": {k: v for k, v in left_out[method].items()
-                              if k in meta.get("targets", [])}}
+                              if k in _truth_targets(meta)}}
             if method != HALF:
                 m["training_tracks_left_out"] = dict(sorted(cand_left.items()))
                 m["n_training_tracks"] = n_cands
+                if fl is not None:
+                    m["fraglen_table"] = str(Path(fraglen_table).resolve())
+                    m["training_tracks_fraglen_source"] = dict(sorted(fl_src.items()))
             _write_dir(out / method / regime, m, arrays[method])
         with open(out / ORACLE / regime / "picks.tsv", "w", newline="", encoding="utf-8") as fh:
             w = csv.DictWriter(fh, fieldnames=["target", "region", "block", "start", "end",
@@ -356,10 +377,13 @@ def main(argv=None) -> int:
     r.add_argument("--allow-blind", action="store_true")
     r.add_argument("--repeat-blind-reason", default=None)
     r.add_argument("--out", required=True)
+    r.add_argument("--fraglen-table", default=None, metavar="TSV",
+                   help="estimated fragment lengths for ChIP-seq training tracks whose frag_len is "
+                        "empty (qc_fill.py collect --fraglen-out); default none")
     a = ap.parse_args(argv)
     try:
         run(a.tables, a.evalset, a.truth_from, a.out, split=a.split, allow_blind=a.allow_blind,
-            repeat_blind_reason=a.repeat_blind_reason)
+            repeat_blind_reason=a.repeat_blind_reason, fraglen_table=a.fraglen_table)
     except (Refused, PermissionError) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2
