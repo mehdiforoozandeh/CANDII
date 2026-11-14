@@ -31,6 +31,11 @@ the largest batch a request can fill is its own window count.
 `<out_dir>/STORE.json` (written before the first array) holds the identity and settings of the
 store; a predict call with another identity or settings refuses to write into it.
 
+Predict command (chunk SP2a; `run` below; job script slurm/onion_eval/predict.sh):
+
+    python tools/onion_eval/predict_store.py run --run <run dir> --evalset <json>
+        --pred-store <dir> --shard i/N --infer-batch B --device cuda|cpu [--stage-dir <dir>]
+
 Measurement (chunk SP1, results/<task>/FORWARD_SPEED.md):
 
     python tools/onion_eval/predict_store.py bench --run <run dir> --evalset <json> --out <json>
@@ -582,8 +587,84 @@ def bench(argv=None) -> int:
     return 0
 
 
+# ------------------------------------------------------------------------------------ run
+
+def run(argv=None) -> int:
+    """Predict command (chunk SP2a; Amendment 10, pinned interface M):
+
+        python tools/onion_eval/predict_store.py run --run <run dir> --evalset <json>
+            --pred-store <dir> [--shard i/N] [--infer-batch B] [--device auto|cuda|cpu]
+            [--stage-dir <dir>] [--guardrail-windows 256]
+
+    Builds the scorer of the run as `score.py --run` does (the same evaluation-set and tables
+    checks; score.py's defaults), calls `requests` and `predict` for shard i of N, and exits 0 once
+    the shard is stored; 2 with `refused: <reason>` when the scorer or the store refuses.
+    `--infer-batch` defaults to the run's batch_size (the legacy batch). `--stage-dir` copies the
+    h5 files the shard reads to local disk first (byte copies: the same values)."""
+    ap = argparse.ArgumentParser(prog="predict_store.py run", description="forwards of one run "
+                                 "into a prediction store")
+    ap.add_argument("--run", required=True)
+    ap.add_argument("--evalset", required=True)
+    ap.add_argument("--pred-store", required=True)
+    ap.add_argument("--shard", default="0/1", help="i/N: request j belongs to shard j mod N")
+    ap.add_argument("--infer-batch", type=int, default=None)
+    ap.add_argument("--device", default="auto", help="auto (cuda when a GPU is visible), cuda, cpu")
+    ap.add_argument("--stage-dir", default=None)
+    ap.add_argument("--guardrail-windows", type=int, default=256)
+    a = ap.parse_args(argv)
+    for k in ("run", "evalset", "pred_store", "stage_dir"):            # "$SLURM_TMPDIR/..." works
+        if getattr(a, k):
+            setattr(a, k, os.path.expandvars(getattr(a, k)))
+    try:
+        i, N = (int(x) for x in a.shard.split("/"))
+    except ValueError:
+        raise SystemExit(f"--shard {a.shard!r}: want i/N")
+    threads = S.set_threads()
+    device = a.device
+    if device == "auto":
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    def log(*m):
+        print(*m, flush=True)
+    phases = {}
+    t0 = time.perf_counter()
+    try:
+        run_sha = S.run_tables_sha256(a.run)
+        from minicandi.registry import load_run          # lazy, as score.py
+        model, config = load_run(a.run)
+        sc = S.Scorer(a.evalset, main="model", model=model, config=config, device=device,
+                      run_tables_sha256=run_sha, guardrail_windows=a.guardrail_windows, log=log)
+        phases["build_seconds"] = time.perf_counter() - t0
+        t1 = time.perf_counter()
+        reqs = requests(sc)
+        phases["requests_seconds"] = time.perf_counter() - t1
+        B = int(a.infer_batch or sc.tile_bs)
+        if a.stage_dir:
+            t1 = time.perf_counter()
+            _stage(sc, [r for j, r in enumerate(reqs) if j % N == i], Path(a.stage_dir), log)
+            phases["stage_seconds"] = time.perf_counter() - t1
+        log(f"predict: run {a.run}; shard {i}/{N}; device {device}; infer_batch {B}; torch threads "
+            f"{threads}; {len(reqs)} requests in all")
+        res = predict(sc, reqs, a.pred_store, B, (i, N), run=a.run, log=log)
+    except (PermissionError, S.ScoreRefused) as e:
+        print(f"refused: {e}", file=sys.stderr)
+        return 2
+    tm = res["timing"]
+    phases.update({k: tm.get(k, 0.0) for k in ("windows_seconds", "forward_seconds",
+                                                 "control_forward_seconds", "guardrail_seconds",
+                                                 "wall_seconds")})
+    phases["total_seconds"] = time.perf_counter() - t0
+    log("timing by phase: " + ", ".join(f"{k} {v:.1f}" for k, v in phases.items())
+        + f"; windows {int(tm.get('windows', 0))}")
+    log(f"predict: shard {i}/{N} stored: {res['stored']} new, {res['skipped']} already stored, "
+        f"{res['n_requests']} requests -> {a.pred_store}")
+    return 0
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "bench":
         sys.exit(bench(sys.argv[2:]))
+    if len(sys.argv) > 1 and sys.argv[1] == "run":
+        sys.exit(run(sys.argv[2:]))
     print(__doc__)
     sys.exit(2)
