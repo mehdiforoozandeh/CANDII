@@ -538,6 +538,9 @@ def bench(argv=None) -> int:
     ap.add_argument("--stage-dir", default=None)
     ap.add_argument("--allow-other-tables", action="store_true")
     a = ap.parse_args(argv)
+    for k in ("run", "evalset", "out", "store_root", "stage_dir"):     # "$SLURM_TMPDIR/..." works
+        if getattr(a, k):
+            setattr(a, k, os.path.expandvars(getattr(a, k)))
     a.batches = [int(x) for x in a.batches.split(",")]
     a.probe = [int(x) for x in a.probe.split(",") if x]
     S.set_threads()
