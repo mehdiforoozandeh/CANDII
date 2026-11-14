@@ -96,6 +96,17 @@ knob) with `pair_kind = never_trained_non_subset`, then `knob = __macro__`; the 
 thinning) pairs are apart, one row per arm with `pair_kind = subset` from
 `subset_pairs_gap_closed` (score.py writes no per-knob split of them).
 
+Oracle floor (OF, PI ruling 47). When the scores have an oracle-floor reference
+(oracle_floor.find_oracle), `headline` adds `composite_version`, the status of the old column
+(`correction_gap_closed_vs_depth_only_never_trained.status`: superseded) and, for
+`correction_gap_closed_oracle` (all headline pairs) and `correction_gap_closed_oracle_no_nodedup_side`
+(headline pairs with no side that keeps duplicates): `.mean`, `.spread`, `.n_defined`, `.reference`,
+`.reference_source`, the macro `.numerator` and `.denominator` (`.mean`, `.spread`), `.n_pairs` and
+`.reason`; `per-knob` adds rows with `pair_kind` `never_trained_non_subset_oracle` and
+`never_trained_non_subset_no_nodedup_side_oracle`. A mix of scores with and without a reference is
+REFUSED. Without any reference every output is unchanged. The `oracle_floor` directory under
+--baselines is a reference, not a baseline row.
+
 shared-specific. Each arm's gain in shared and in specific error (error_budget `shared`,
 `specific`: error energies, lower is better) against the first arm of `--arms`: gain = reference
 mean minus arm mean, so a positive gain is less error. `gain_spread` is the larger of the two arms'

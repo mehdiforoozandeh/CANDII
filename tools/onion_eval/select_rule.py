@@ -90,6 +90,20 @@ denominator is under its tolerance escalates: the marginal-NB PIT deviation (unc
 (depth-only CRPS - floor CRPS) / depth-only CRPS, the smallest over scorable assays (correction);
 score.py writes both under `selection.denominators`.
 
+Oracle floor (OF, PI ruling 47 of 2026-11-14; tools/onion_eval/oracle_floor.py). When a score has an
+oracle-floor reference (`oracle_floor/seed0` beside its baselines, same evalset and tables sha256),
+its correction term is recomputed at report time from its `pairs_per_region.npz`: the gap closed
+against depth-only scaling with the ORACLE as the top of the scale, (depth-only - method) /
+(depth-only - O), O = 0.5 x mean |pr1 - pr2| of the target view; per assay a ratio of pair means,
+macro over the correction-scorable assays (all headline pairs). The seed then carries
+`composite_version` 2 and `gap_closed_floor` "oracle" (also in its scorer keys); its denominator
+check reads (depth-only - O) / depth-only, smallest over assays, against CORRECTION_DENOM_REL_TOL.
+The scored half-read term stays as `correction_halfread_superseded` (`table` prints it as
+`correction_gap_closed_halfread_superseded`). A reference found but no per-pair records: the term is
+undefined with the reason (never the old value). No reference: the seed is read as before
+(version 1). Every command REFUSES a mix of composite versions (arms and baselines alike). Clipping
+to [0, 1] inside the composite is kept: the marginal NB still scores below 0 on the new scale.
+
 Arm naming and the ladder (pinned). An arm of the ladder is named `rung<k>_<arm>` (k = 1..6; arm
 in [a-z0-9_], the rung base is `rung<k>_base`); `_rung_of` reads k from the incumbent.
 `ladder.json` schema:
