@@ -1,15 +1,15 @@
 ---
 id: t181
 type: task
-title: Onion: Pilot: all six rungs on pilot_eic (submit)
+title: "Onion: Pilot: all six rungs on pilot_eic (submit)"
 category: implementation
 parent: t152
 blocked_by: t173, t174, t175, t176, t177, t178, t172, t165
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-10T22:47:26
-updated: 2026-11-10T22:47:26
+status: done
+created: "2026-11-10T22:47:26"
+updated: "2026-11-14T02:20:24"
 ---
 
 # t181 — Onion: Pilot: all six rungs on pilot_eic (submit)
@@ -24,7 +24,7 @@ runs all six rungs end to end on the pilot tables
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 2e48606](results/t181/SUBMITTED.md)
 
 ## Evidence
 

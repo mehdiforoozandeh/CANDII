@@ -1,15 +1,15 @@
 ---
 id: t156
 type: task
-title: Onion: ENCODE catalog and replicate-ladder census
+title: "Onion: ENCODE catalog and replicate-ladder census"
 category: data-acquisition
 parent: t152
 blocked_by: t153, t154
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-10T22:47:22
-updated: 2026-11-10T22:47:22
+status: done
+created: "2026-11-10T22:47:22"
+updated: "2026-11-14T02:20:17"
 ---
 
 # t156 — Onion: ENCODE catalog and replicate-ladder census
@@ -24,7 +24,7 @@ feeds the EIC build list and the extended-dataset census for the post-ladder gat
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 4438087](results/t156/CENSUS.md)
 
 ## Evidence
 

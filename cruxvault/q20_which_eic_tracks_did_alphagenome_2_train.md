@@ -35,7 +35,8 @@ Says which external comparison is fair, and how far a strong pretrained sequence
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**1 children** · open 1, leaning 0, settled 0, parked 0
+**1 children** · open 1, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
 
 - `q26` _(Q)_ [[q26_alphagenome_2_against_minicandi_rung_1_a|AlphaGenome 2 against miniCANDI rung 1 and the baselines on the fair validation tracks.]] — *open*
+- `f36` finding (moderate) [[f36_first_half_answered_leakage_audit_at_con|First half answered (leakage audit at condition-and-channel level, Nibi job…]]
 <!-- crux:ledger:end -->

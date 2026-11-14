@@ -1,15 +1,15 @@
 ---
 id: t173
 type: task
-title: Onion: Train loop, registry, rung 1 (pointwise set model)
+title: "Onion: Train loop, registry, rung 1 (pointwise set model)"
 category: implementation
 parent: t152
 blocked_by: t164
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-10T22:47:25
-updated: 2026-11-10T22:47:25
+status: done
+created: "2026-11-10T22:47:25"
+updated: "2026-11-14T02:20:22"
 ---
 
 # t173 — Onion: Train loop, registry, rung 1 (pointwise set model)
@@ -24,7 +24,7 @@ gives the train loop, the model registry and rung 1
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 8853068: train loop, registry, rung 1](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

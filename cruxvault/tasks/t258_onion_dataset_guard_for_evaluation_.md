@@ -1,15 +1,15 @@
 ---
 id: t258
 type: task
-title: Onion: Dataset guard for evaluation-only second experiments
+title: "Onion: Dataset guard for evaluation-only second experiments"
 category: implementation
 parent: t152
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-12T03:06:50
-updated: 2026-11-12T03:06:50
+status: done
+created: "2026-11-12T03:06:50"
+updated: "2026-11-14T02:20:32"
 ---
 
 # t258 — Onion: Dataset guard for evaluation-only second experiments
@@ -24,7 +24,7 @@ lets the dataset read second experiments for evaluation while it refuses to trai
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 83bf752: dataset guard](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

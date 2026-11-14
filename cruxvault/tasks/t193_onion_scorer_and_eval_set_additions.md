@@ -1,15 +1,15 @@
 ---
 id: t193
 type: task
-title: Onion: Scorer and eval-set additions
+title: "Onion: Scorer and eval-set additions"
 category: implementation
 parent: t152
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-11T11:20:26
-updated: 2026-11-11T11:20:26
+status: done
+created: "2026-11-11T11:20:26"
+updated: "2026-11-14T02:20:25"
 ---
 
 # t193 — Onion: Scorer and eval-set additions
@@ -24,7 +24,7 @@ makes the eval-set builder final before eic_v1 eval sets and external entries
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 2c66183: scorer and eval-set additions](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

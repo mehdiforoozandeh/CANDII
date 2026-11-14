@@ -1,15 +1,15 @@
 ---
 id: t197
 type: task
-title: Onion: Crossed mixed-model cross-check
+title: "Onion: Crossed mixed-model cross-check"
 category: implementation
 parent: t152
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-11T11:20:26
-updated: 2026-11-11T11:20:26
+status: done
+created: "2026-11-11T11:20:26"
+updated: "2026-11-14T02:20:26"
 ---
 
 # t197 — Onion: Crossed mixed-model cross-check
@@ -24,7 +24,7 @@ unblocks the mixed-model cross-check in the onion layers report
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged e08e8ab: crossed mixed model](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

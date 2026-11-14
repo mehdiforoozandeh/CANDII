@@ -1,15 +1,15 @@
 ---
 id: t271
 type: task
-title: Onion: Peaks: ENCODE peak files, tiles, consensus AUPRC
+title: "Onion: Peaks: ENCODE peak files, tiles, consensus AUPRC"
 category: implementation
 parent: t152
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-12T18:39:25
-updated: 2026-11-12T18:39:25
+status: done
+created: "2026-11-12T18:39:25"
+updated: "2026-11-14T02:20:35"
 ---
 
 # t271 — Onion: Peaks: ENCODE peak files, tiles, consensus AUPRC
@@ -24,7 +24,7 @@ PI task of 2026-11-13 (AlphaGenome 2 as a competitor): the peak side of the AG2 
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged bb2c338, 2e9d7fe, a0fb349, 2f79ec4: peaks](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

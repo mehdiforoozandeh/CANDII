@@ -1,15 +1,15 @@
 ---
 id: t288
 type: task
-title: Onion: Strata and region-list tool, from training data only
+title: "Onion: Strata and region-list tool, from training data only"
 category: implementation
 parent: t152
 blocked_by: None
 refs: h33, h34, h36
 hypothesis_refs: 
-status: open
-created: 2026-11-13T12:42:52
-updated: 2026-11-13T12:42:52
+status: done
+created: "2026-11-13T12:42:52"
+updated: "2026-11-14T02:20:37"
 ---
 
 # t288 — Onion: Strata and region-list tool, from training data only
@@ -24,7 +24,7 @@ PI questions of 2026-11-13 on region budget and selection (Amendment 7): the tra
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 2cfbb50: strata tool](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

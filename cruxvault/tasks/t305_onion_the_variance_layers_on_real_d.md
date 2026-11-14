@@ -20,6 +20,10 @@ Refs:: [[h37_on_real_data_the_cell_type_layer_is_the_\|h37]], [[q18_how_large_is
 
 Iteration 1 of Amendment 9 (ships 2026-11-15 09:00 UTC): collect the layers job 27164943 into the first Results
 
+## Decisions and runs
+
+- Partly done (first slip, 2026-11-14): results/t305/LAYERS_REAL.md gives two layers per assay (replicate and cell type) and the telescoping check (0 unexplained of 2,775 groups). The pseudoreplicate pairs were dropped by evalset.py:581 (a != b), so the sampling layer is missing; the builder reruns the layers on a derived pair list with the training and validation pseudoreplicate pairs.
+
 ## Output
 
 <!-- required before `done`, and the engine checks it resolves. Either form:

@@ -1,15 +1,15 @@
 ---
 id: t203
 type: task
-title: Onion: Proxy scorer for the evolution step
+title: "Onion: Proxy scorer for the evolution step"
 category: implementation
 parent: t152
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-11T11:20:27
-updated: 2026-11-11T11:20:27
+status: done
+created: "2026-11-11T11:20:27"
+updated: "2026-11-14T02:20:27"
 ---
 
 # t203 — Onion: Proxy scorer for the evolution step
@@ -24,7 +24,7 @@ unblocks the evolution autopilot runs
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 6300098, aa2f1b4: proxy scorer](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

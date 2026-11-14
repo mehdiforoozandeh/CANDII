@@ -1,15 +1,15 @@
 ---
 id: t292
 type: task
-title: Onion: Strata tables and region lists: submit (Nibi)
+title: "Onion: Strata tables and region lists: submit (Nibi)"
 category: data-acquisition
 parent: t152
 blocked_by: t288, t185, t207
 refs: h33, h34, h36
 hypothesis_refs: 
-status: open
-created: 2026-11-13T12:42:52
-updated: 2026-11-13T12:42:52
+status: done
+created: "2026-11-13T12:42:52"
+updated: "2026-11-14T02:20:38"
 ---
 
 # t292 — Onion: Strata tables and region lists: submit (Nibi)
@@ -24,7 +24,7 @@ PI questions of 2026-11-13 on region budget and selection (Amendment 7): the job
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Job 27217156 COMPLETED](results/t292/STRATA_REAL.md)
 
 ## Evidence
 

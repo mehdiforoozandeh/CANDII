@@ -1,15 +1,15 @@
 ---
 id: t245
 type: task
-title: Onion: Fetch and bin the RNA-seq inputs (Nibi)
+title: "Onion: Fetch and bin the RNA-seq inputs (Nibi)"
 category: data-acquisition
 parent: t152
 blocked_by: t237
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-11T23:05:10
-updated: 2026-11-11T23:05:10
+status: done
+created: "2026-11-11T23:05:10"
+updated: "2026-11-14T02:20:31"
 ---
 
 # t245 — Onion: Fetch and bin the RNA-seq inputs (Nibi)
@@ -24,7 +24,7 @@ produces the RNA-seq tracks and expression table that the stage-3 RNA-seq arms n
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [RNA-seq inputs on Nibi; merged 9602b6b](results/t245/RNA_INPUTS.md)
 
 ## Evidence
 

@@ -1,15 +1,15 @@
 ---
 id: t241
 type: task
-title: Onion: Recount tool at 1 bp with the point rule
+title: "Onion: Recount tool at 1 bp with the point rule"
 category: implementation
 parent: t152
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-11T23:05:09
-updated: 2026-11-11T23:05:09
+status: done
+created: "2026-11-11T23:05:09"
+updated: "2026-11-14T02:20:30"
 ---
 
 # t241 — Onion: Recount tool at 1 bp with the point rule
@@ -24,7 +24,7 @@ unblocks the 1 bp region store for the resolution work
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged f768f65: recount tool](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

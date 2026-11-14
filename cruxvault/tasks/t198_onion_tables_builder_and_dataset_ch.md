@@ -1,15 +1,15 @@
 ---
 id: t198
 type: task
-title: Onion: Tables builder and dataset check
+title: "Onion: Tables builder and dataset check"
 category: implementation
 parent: t152
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-11T11:20:27
-updated: 2026-11-11T11:20:27
+status: done
+created: "2026-11-11T11:20:27"
+updated: "2026-11-14T02:20:26"
 ---
 
 # t198 — Onion: Tables builder and dataset check
@@ -24,7 +24,7 @@ unblocks the eic_v1 and eic_v2 table builds
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 60dcbf0: tables builder and dataset check](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

@@ -1,15 +1,15 @@
 ---
 id: t177
 type: task
-title: Onion: Rung 5: axial transformer
+title: "Onion: Rung 5: axial transformer"
 category: implementation
 parent: t152
 blocked_by: t164
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-10T22:47:26
-updated: 2026-11-10T22:47:26
+status: done
+created: "2026-11-10T22:47:26"
+updated: "2026-11-14T02:20:23"
 ---
 
 # t177 — Onion: Rung 5: axial transformer
@@ -24,7 +24,7 @@ adds rung 5 of the miniCANDI ladder
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged e96472d: rung 5](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

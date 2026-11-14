@@ -1,15 +1,15 @@
 ---
 id: t274
 type: task
-title: Onion: The same-track scorer and the ag2_board table
+title: "Onion: The same-track scorer and the ag2_board table"
 category: implementation
 parent: t152
 blocked_by: t270, t271
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-12T18:39:34
-updated: 2026-11-12T18:39:34
+status: done
+created: "2026-11-12T18:39:34"
+updated: "2026-11-14T02:20:35"
 ---
 
 # t274 — Onion: The same-track scorer and the ag2_board table
@@ -24,7 +24,7 @@ PI task of 2026-11-13 (AlphaGenome 2 as a competitor): scores AG2 and every othe
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 8e35b59, 12a31af, ab2dd00: same-track scorer](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 
