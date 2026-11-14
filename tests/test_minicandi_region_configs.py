@@ -1,8 +1,9 @@
 """Configs of the region experiments (Amendment 7, chunk RBk) under
 tools/minicandi/configs/region/: each file differs from its ladder source in the stated keys only,
-every list path is under $O/region/lists/, and the file counts are 30 budget files, 8 + 8 region
-files (the plan's 7 plus the control `tile_uniform`, a foreman decision) and 5 confirmation
-files. Stdlib only (no torch import)."""
+every list path is under $O/region/lists/, and the file counts are 30 budget files, 8 + 12 region
+files and 9 confirmation files (section B.4 as amended on 2026-11-13: seven selection arms run;
+five older selection files stay on disk, marked not run in the README). One test loads a new
+config through the trainer's config parser (no training)."""
 from __future__ import annotations
 
 import json
@@ -22,7 +23,13 @@ ARMS_DIR = _ROOT / "tools/minicandi/configs/arms"
 O = "/project/def-maxwl/mforooz/ONION"
 LISTS = f"{O}/region/lists/"
 EXCLUDE = f"{O}/eval/regions_v1/regions.json"
-SELECTION = ("peakfreq_w", "peakfreq_u", "ccre_like_w", "variance_w", "kcenter")
+# arms with a list of their own and a confirmation file; the first four are not run (amended B.4)
+NOT_RUN_SELECTION = ("peakfreq_w", "peakfreq_u", "ccre_like_w", "variance_w")
+TILT = ("ccredens_e50_w", "ccredens_e25_w", "ccredens_e50_u", "variance_e50_w")
+SELECTION = (*NOT_RUN_SELECTION, *TILT, "kcenter")
+RUN_20K = ("tile_uniform", "terr_r1024_w20k", *TILT, "kcenter")
+NOT_RUN_20K = (*NOT_RUN_SELECTION, "blocks_minus_eval_w20k")
+NOT_RUN_MARK = "not run (near-uniform lists; see STRATA_REAL.md)"
 MODEL_LOSS_KEYS = ("rung", "context_bins", "param_budget", "lr", "batch_size", "skip_source",
                    "covariate_injection", "mask_mode", "dna", "count_transform", "two_step")
 
@@ -67,7 +74,7 @@ def test_counts():
     def n(sub):
         return len(list((REGION / sub).glob("*.json")))
     assert len(_equal_budget_arms(1)) == 7 and len(_equal_budget_arms(4)) == 8
-    assert (n("budget"), n("region80k"), n("selection20k"), n("confirm80k")) == (30, 8, 8, 5)
+    assert (n("budget"), n("region80k"), n("selection20k"), n("confirm80k")) == (30, 8, 12, 9)
     assert sorted(p.name for p in REGION.iterdir() if p.is_file()) == ["README.md"]
     assert sorted(p.name for p in REGION.iterdir() if p.is_dir()) == \
         ["budget", "confirm80k", "region80k", "selection20k"]
@@ -126,7 +133,7 @@ def test_file_sets_are_exact():
 
 def test_paths_and_invariants_over_every_file():
     files = sorted(REGION.glob("*/*.json"))
-    assert len(files) == 51
+    assert len(files) == 59
     base4 = _ladder(4, "base")
     for p in files:
         cfg = _load(p)
@@ -141,3 +148,26 @@ def test_paths_and_invariants_over_every_file():
         for k in MODEL_LOSS_KEYS:
             assert cfg.get(k, "<absent>") == src.get(k, "<absent>"), (p, k)
         assert p.read_text(encoding="utf-8") == LA.render(cfg), f"{p} is not in render() form"
+
+
+def test_amended_selection_arms():
+    assert set(RUN_20K) | set(NOT_RUN_20K) == set(SELECTION20K)
+    assert not set(RUN_20K) & set(NOT_RUN_20K) and len(RUN_20K) == 7
+    for a in TILT:
+        assert SELECTION20K[a] == f"{LISTS}{a}.tsv"
+    readme = (REGION / "README.md").read_text(encoding="utf-8")
+    rows = {line.split("|")[1].strip().strip("`"): line for line in readme.splitlines()
+            if line.startswith("| `")}
+    for a in NOT_RUN_20K:
+        assert NOT_RUN_MARK in rows[a], a
+    for a in RUN_20K:
+        assert "not run" not in rows[a], a
+
+
+def test_new_config_loads_through_the_trainer_parser():
+    from minicandi import train as T
+    cfg = _load(REGION / "selection20k" / "ccredens_e50_w.json")
+    full = T.full_config(cfg)
+    assert full["train_regions"] == f"{LISTS}ccredens_e50_w.tsv"
+    assert full["windows_seen"] == 20000 and full["rung"] == 4
+    assert {k: full[k] for k in cfg} == cfg
