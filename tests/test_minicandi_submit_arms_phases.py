@@ -355,5 +355,68 @@ def test_score_sh_removes_the_store_only_after_scored_and_without_keep():
     i = text.index('"${CMD[@]}"\nif [ "$PHASE" = metrics ]')
     block = text[i:text.index("=== done", i)]
     for part in ('"${ONION_KEEP_PRED_STORE:-0}" != 1', '-f "$OUT/SCORED"',
-                 '-f "$ONION_PRED_STORE/STORE.json"', 'rm -rf -- "$ONION_PRED_STORE"'):
+                 '-f "$ONION_PRED_STORE/STORE.json"', 'rm -rf -- "$STORE_P"'):
         assert part in block
+
+
+def _guard(tmp, store: str, out: str, who: str):
+    """Run score.sh's store-removal guard block alone on a real directory."""
+    text = SCORE_SH.read_text()
+    block = text[text.index("  # store guard begin"):text.index("  # store guard end")]
+    script = (f"set -euo pipefail\nONION_PRED_STORE={store!r}\nOUT={out!r}\nWHO={who!r}\n"
+              + block)
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+
+
+@pytest.mark.parametrize("rel,out_rel,removed", [
+    ("ps/runs/rung1_base/seed0", "runs/rung1_base/seed0", True),
+    ("ps/runs/rung1_base/seed0/p16", "runs/rung1_base/seed0/p16", True),
+    ("ps/runs/rung1_base/seed0/p16/", "runs/rung1_base/seed0/p16", True),
+    ("ps/runs/rung1_base/other", "runs/rung1_base/seed0/p16", False),
+    ("ps/runs/rung1_base/p16", "runs/rung1_base/seed0", False),   # p16 is not the SUB here
+])
+def test_score_sh_store_guard(tmp_path, rel, out_rel, removed):
+    store = tmp_path / rel
+    store.mkdir(parents=True)
+    (store / "STORE.json").write_text("{}")
+    p = _guard(tmp_path, f"{tmp_path}/{rel}", f"{tmp_path}/{out_rel}",
+               f"{tmp_path}/runs/rung1_base/seed0")
+    assert p.returncode == 0, p.stderr
+    assert store.exists() is (not removed)
+    assert ("removed the prediction store" in p.stdout) is removed
+    assert ("kept the prediction store" in p.stdout) is (not removed)
+
+
+@pytest.mark.parametrize("store", ["/", "", "/seed0", "/a/seed0", "a/b/seed0"])
+def test_score_sh_store_guard_refuses_short_paths(tmp_path, store):
+    p = _guard(tmp_path, store, "/x/runs/r/seed0", "/x/runs/r/seed0")
+    assert p.returncode == 0, p.stderr
+    assert "kept the prediction store" in p.stdout and "removed" not in p.stdout
+
+
+# ---- a store that is already complete ---------------------------------------------------------
+
+def test_complete_store_gets_no_predict_job(env):
+    tmp, e = env
+    _done(tmp, 0)
+    _store(tmp, 2, 2, sub="p16")
+    out = run(tmp, e, 1, "base", DRY_RUN=1, SCORE_SHARDS=2, SCORE_SUBDIR="p16")
+    (me,) = sbatch_lines(out)
+    assert "ONION_SCORE_PHASE=metrics" in me and "--dependency" not in me
+    assert "is complete; no predict job" in out
+    assert [j[-2:] for j in job_lines(out)] == [["metrics", "-"]]
+    out = run(tmp, e, 1, "base", SCORE_SHARDS=2, SCORE_SUBDIR="p16")    # a real submission
+    log = (tmp / "sbatch.log").read_text().splitlines()
+    assert len(log) == 1 and "score.sh" in log[0] and "--dependency" not in log[0]
+    out = run(tmp, e, 1, "base", DRY_RUN=1, SCORE_SUBDIR="p16", PREDICT_ONLY=1)
+    assert not sbatch_lines(out) and "PREDICT_ONLY and the store" in out
+
+
+def test_complete_store_ignores_pred_jobs(env):
+    tmp, e = env
+    _done(tmp, 0)
+    _store(tmp, 2, 2)
+    out = run(tmp, e, 1, "base", METRICS_ONLY=1, PRED_JOBS="701:702")
+    log = (tmp / "sbatch.log").read_text().splitlines()
+    assert len(log) == 1 and "score.sh" in log[0] and "--dependency" not in log[0]
+    assert job_lines(out) == [["1001", "rung1_base", "0", "metrics", "-"]]

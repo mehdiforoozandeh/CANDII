@@ -100,7 +100,20 @@ export OMP_NUM_THREADS="$T" OPENBLAS_NUM_THREADS="$T" FLEXIBLAS_NUM_THREADS="$T"
 "${CMD[@]}"
 if [ "$PHASE" = metrics ] && [ "${ONION_KEEP_PRED_STORE:-0}" != 1 ] && [ -f "$OUT/SCORED" ] \
    && [ -f "$ONION_PRED_STORE/STORE.json" ]; then
-  rm -rf -- "$ONION_PRED_STORE"
-  echo "removed the prediction store $ONION_PRED_STORE (KEEP_PRED_STORE unset)"
+  # store guard begin (tests run this block alone): never / or a short path; the store dir is
+  # named seed<s> or the score subdir name (the basename of <out_dir> when it is not the run dir)
+  STORE_P="${ONION_PRED_STORE%/}"; STORE_B="$(basename "$STORE_P")"
+  IFS=/ read -r -a STORE_PARTS <<< "${STORE_P#/}"
+  SUBNAME=""; [ "${OUT%/}" = "${WHO%/}" ] || SUBNAME="$(basename "$OUT")"
+  STORE_NAME_OK=0
+  case "$STORE_B" in seed*) STORE_NAME_OK=1 ;; esac
+  [ -z "$SUBNAME" ] || [ "$STORE_B" != "$SUBNAME" ] || STORE_NAME_OK=1
+  if [ -n "$STORE_P" ] && [ "$STORE_P" != / ] && [ "${#STORE_PARTS[@]}" -ge 4 ] && [ "$STORE_NAME_OK" = 1 ]; then
+    rm -rf -- "$STORE_P"
+    echo "removed the prediction store $STORE_P (KEEP_PRED_STORE unset)"
+  else
+    echo "kept the prediction store $ONION_PRED_STORE: refused to remove it (needs 4+ path parts and a basename seed* or the score subdir name)"
+  fi
+  # store guard end
 fi
 echo "=== done $(date -u)"

@@ -36,6 +36,11 @@
 #   SCORE_PRED_DEVICE=cuda|cpu (default: the rung's scoring device); cuda = the 1g.10gb slice,
 #   4 CPUs, 16000M, 02:00:00, batch 32; cpu = --gres=none, 8 CPUs, 32000M, 06:00:00, batch 8;
 #   SCORE_PRED_CPUS, SCORE_PRED_MEM (MB), SCORE_PRED_TIME, SCORE_INFER_BATCH override them.
+#   The batch (32 or 8, or SCORE_INFER_BATCH) is always passed as ONION_INFER_BATCH, so
+#   predict.sh's own default is never used: infer_batch is a comparability key of the store, so
+#   every run of one comparison must use one batch. A store that is already complete
+#   (STORE.json and every PREDICTED_<i>of<N>.json) gets no predict job; its metrics job waits on
+#   nothing (PRED_JOBS ignored), and PREDICT_ONLY=1 skips the run.
 #   Metrics: --gres=none, SCORE_CPUS (default 16), SCORE_MEM (default 64000), SCORE_TIME (default
 #   03:00:00); REFS_FROM=<baselines dir> is required. KEEP_PRED_STORE=1 keeps the store after
 #   SCORED (else the metrics job removes it). SCORE_SUBDIR=<SUB> scores to <run dir>/<SUB> (also
@@ -218,10 +223,18 @@ for spec in "${ARGS_ARMS[@]}"; do
     if [ "$PHASES" = 1 ]; then   # SP3: training (as above), predict jobs, one metrics job
       RNAME="$(basename "$ARMDIR")"
       STORE="$PS_ROOT/$(basename "$ROOT")/$RNAME/seed$SEED${SUB:+/$SUB}"
-      if [ "$MONLY" = 1 ] && [ "${#PRED_IDS[@]}" = 0 ] && ! store_complete "$STORE"; then
+      COMPLETE=0; store_complete "$STORE" && COMPLETE=1
+      if [ "$MONLY" = 1 ] && [ "${#PRED_IDS[@]}" = 0 ] && [ "$COMPLETE" != 1 ]; then
         echo "skip $JOB: METRICS_ONLY and the store $STORE is not complete (set PRED_JOBS)"
         n_skip=$((n_skip + 1)); continue
       fi
+      if [ "$PONLY" = 1 ] && [ "$COMPLETE" = 1 ]; then
+        echo "skip $JOB: PREDICT_ONLY and the store $STORE is complete"
+        n_skip=$((n_skip + 1)); continue
+      fi
+      # a complete store: no predict job, and the metrics job waits on nothing (PRED_JOBS ignored:
+      # a finished predict job has left the scheduler and sbatch would refuse its afterok)
+      [ "$COMPLETE" != 1 ] || echo "note $JOB: the store $STORE is complete; no predict job, the metrics job waits on none"
       [ "$DRY" = 1 ] || mkdir -p "$SOUT"
       TJ="-"; PIDS=(); MJ="-"
       if [ "$DO_TRAIN" = 1 ]; then
@@ -234,7 +247,9 @@ for spec in "${ARGS_ARMS[@]}"; do
         echo "$TJ $RNAME $SEED train -"
         DEP=("--dependency=afterok:$TJ" --kill-on-invalid-dep=yes)
       fi
-      if [ "$MONLY" != 1 ]; then
+      if [ "$COMPLETE" = 1 ]; then
+        PIDS=()
+      elif [ "$MONLY" != 1 ]; then
         for ((i = 0; i < NSH; i++)); do
           PENV=("ONION_SHARD=$i/$NSH" "ONION_INFER_BATCH=$PB" "ONION_DEVICE=$PD")
           PRED=(sbatch "${COMMON[@]}" "--job-name=$JOB" "--time=$PTIME" "--cpus-per-task=$PCPUS"
