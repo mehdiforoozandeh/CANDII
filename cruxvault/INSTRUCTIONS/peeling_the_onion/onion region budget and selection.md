@@ -69,4 +69,15 @@ The PI added these questions to the goals of the analysis on 2026-11-13. The PI'
 
 ## Answers
 
+### Interim finding 1 (2026-11-14): window-level stratification by peaks is nearly uniform at this window size
+
+==Source: `cruxvault/results/t292/STRATA_REAL.md` (region lists computed on the frozen dataset `eic_v1`; Nibi job 27217156). This is a property of the data, measured before any training run. It is not a result on model accuracy.==
+
+- ==A training window is 1,024 bins (25.6 kb), and the sampling tiles are 2,048 bins (51.2 kb). With 267 training tracks in 51 cells, 23 of 51,394 tiles hold no training peak, i.e. 0.04% of the genome share.==
+- ==The effective sample size per draw (1.0 means uniform sampling) was 0.94 for the peak-frequency classes, 0.86 for the cCRE-like classes built from training peaks (promoter-like tiles are 69.6% of the genome share at this tile size), and 0.91 for the variance classes.==
+- ==The three class lists put their extra mass on different tiles (rank correlation of the sampling probability at most 0.23).==
+- ==Consequence for the experiment: class-based strata were replaced by a continuous score with a tilt of chosen strength (target effective sample size 0.50 and 0.25), for the density of cCRE-like peak bins and for the cross-cell variance.==
+- ==Idea kept for later: at 25 bp resolution, annotation-based selection can act inside the window as a per-bin loss weight. That changes the objective, so it is a candidate loss arm for stage 3, not part of this experiment.==
+
+
 ==None yet. Results go to `cruxvault/results/` and are cited here.==
