@@ -97,6 +97,7 @@ def scores_digest(path, root) -> str:
     s = json.loads(Path(path).read_text(encoding="utf-8"))
     for k in VOLATILE:
         s.pop(k, None)
+    s.pop("scorer_version", None)   # SF0 (Amendment 8): the one key added after the pinned base
     text = json.dumps(s, indent=1, sort_keys=True, allow_nan=False)
     return hashlib.sha256(_normalize(text, root).encode()).hexdigest()
 
