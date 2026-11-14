@@ -12,13 +12,14 @@ PI priorities: imputation, covariate artifact correction, calibrated uncertainty
 | agent | task | on return |
 |---|---|---|
 | (E7a returned) | eval set on eic_v1 (sha b5f7a4cf), check OK, average table done; baseline scorings resubmitted at 128000M: 27179565-27179568; layers 27164943 running; job watch -> E7b (collect: scorer validity, scoring cost AND memory), then gate G2, L1a, RCa, BRa. Ladder scoring memory: 128000M until measured | - |
-| (QCa returned) | QC fill batch 1 = job 27164529 (400 rows); batches 2-6 by the foreman when the queue has room (commands in results/t211/SUBMITTED.md); QCb must fix `collect` | - |
+| (QC fill) | batch 1 done (400/400 ok); batch 2 = job 27235942 (nice 500); batches 3-6 one at a time, specs in results/t211/SUBMITTED.md; QCb must fix `collect` | - |
 | (L1a returned) | RUNG 1 RUNNING with the staging fix (kit L1fix; ONION_STAGE=1 for every later ladder submit): training 27197516-27197676, 24 runs, ~56 min each, scoring behind each at 128000M; a name watch fires when no mc_rung1 job is left -> L1b (collect and settle), with E7b's baseline validity. Open: rung 2 CPU speed is 2.7x the Fir figure | - |
 WAITING ON THE PI: nothing (PI cancelled the slow rung-1 jobs, 2026-11-13).
-| SM builder (opus) | scorer TIME: full scoring of eic_v1 in ~2 h, identical outputs (memory part done: commit 1e94d92, 16000M) | review; merge; resubmit the 4 baseline scorings and the 24 rung-1 scorings with the new scorer and job shape |
+| planner (fable) | Amendment 8: scoring on eic_v1: cross-cell replicate pairs crash the scorer (old code too); model scoring ~26 h per run at 256 regions | PI decisions if Methods-level; then the SM builder implements; then resubmit 4 baselines + 24 rung-1 + 42 budget-curve scorings |
+| (SM builder returned) | commit 9cd5f04 on chunk/onion-SM (workers, staging, 2-thread pin; baseline scoring 1:21 h on 16 CPUs): NOT merged yet (review after Amendment 8 fixes land) | - |
 | SM reviewer (opus) | review of 1e94d92 (memory change, bit identity) | merge if ACCEPT |
 WAITING ON THE PI: nothing (PI cancelled the 28 old-scorer jobs, 2026-11-14). TODO: resubmit the 4 baseline scorings and the 24 rung-1 scorings with the fast scorer (submit_arms.sh SCORE_ONLY=1) after SM's time work is merged.
-| (region experiments: tools, configs and all lists ready; TR, SAx, STt2, RBk2 merged) | running: RB1a (budget-curve trainings on rung 1, trainings only). Waiting: RTa (36+ region runs on rung 4; needs the ladder version), PRg (--per-region; after SM's time work), ECa | - |
+| (region experiments: tools, configs and all lists ready; TR, SAx, STt2, RBk2 merged) | DONE: RB1a (42 budget-curve trainings on rung 1, all complete 2026-11-14 02:41 UTC; scoring = RB1s, waits for the fast scorer). Waiting: RTa (36+ region runs on rung 4; needs the ladder version), PRg (--per-region; after SM's time work), ECa | - |
 | (deck done) | law-of-total-variance deck: cruxvault/presentations/onion-total-variance/; artifact H8ShBq8tJ1eMzwpjNpdU87 | - |
 | (OXa returned) | second experiments submitted (jobs 27184156-27204216; notes results/t264); OXc collect when they end; 13 rows wait for their tail partners (with D6u). D6c (priority 4) HELD until rung 1 is through (fair-share) | - |
 
@@ -62,6 +63,8 @@ QUEUE LIMIT: Nibi allows 1000 queued jobs per user, array tasks count. Priority 
 | row 211 (train DNase-seq; timed out at 1 d; rerun 3 d / 192000M, kit KF4) | stage 27226297, build 27226298 | submitted 2026-11-14 01:17 UTC |
 | second-experiment row 2028 (DNase-seq, Java heap; rerun 3 d / 192000M, kit KX4) | stage 27232990, build 27232991 | submitted 2026-11-14 02:40 UTC |
 | HEAP RISK (12 G default heap, library-dependent): rows 388, 132, 216, 232, 57, 280, 389 | their running jobs | on 'GC overhead limit exceeded': resubmit with ONION_TIME=3-00:00:00 ONION_MEM=192000M; every new DNase-seq submit uses 192000M |
+| row 113 (train DNase-seq; Java heap after 2 d; rerun 3 d / 192000M, kit KF4) | stage 27246582, build 27246583 | submitted 2026-11-14 05:20 UTC |
+| tail rows COMPLETED since the freeze: 46, 52 (validation histone), 388, 390 (DNase train) | - | first update eic_v1_1 possible (chunk D6u) |
 | WATCHDOG (tail_watch) | 27124200 | pending on afterany of the live tail jobs; files under $O/eic/tail/ |
 | Max's training (not ours) | Fir 3609189 | his |
 
