@@ -136,6 +136,41 @@ def test_another_evalset_is_refused_with_the_store_message(env, tmp_path, capsys
     assert len(list(d.glob("*.npz"))) == n                         # nothing written
 
 
+def test_loser_of_the_store_claim_race(tmp_path):
+    import threading
+    head = {"format": 1, "run": "/r", "infer_batch": 4}
+    body = json.dumps(head, indent=1, sort_keys=True) + "\n"
+    # STORE.json present and complete: the same scoring is accepted, another is refused
+    d = tmp_path / "complete"
+    d.mkdir()
+    (d / P.STORE_FILE).write_text(body)
+    P._claim_store(d, head)
+    with pytest.raises(S.ScoreRefused, match="infer_batch"):
+        P._claim_store(d, dict(head, infer_batch=8))
+    # STORE.json present and empty at the first read: the loser retries until the winner's write
+    d = tmp_path / "empty"
+    d.mkdir()
+    (d / P.STORE_FILE).write_text("")
+    timer = threading.Timer(0.3, lambda: (d / P.STORE_FILE).write_text(body))
+    timer.start()
+    try:
+        P._claim_store(d, head)
+    finally:
+        timer.join()
+    # an empty file that stays empty is refused, never a JSONDecodeError
+    (d / P.STORE_FILE).write_text("")
+    with pytest.raises(S.ScoreRefused, match="unreadable"):
+        P._claim_store(d, head)
+    # the winner leaves STORE.json and no .part file
+    d = tmp_path / "winner"
+    d.mkdir()
+    P._claim_store(d, head)
+    assert sorted(f.name for f in d.iterdir()) == [P.STORE_FILE]
+    assert json.loads((d / P.STORE_FILE).read_text()) == head
+    for d in (tmp_path / "complete", tmp_path / "empty"):
+        assert sorted(f.name for f in d.iterdir()) == [P.STORE_FILE]
+
+
 def _dry(tmp_path, **envv):
     e = {k: v for k, v in os.environ.items()
          if not k.startswith(("ONION_", "SLURM_")) and k != "CUDA_VISIBLE_DEVICES"}
