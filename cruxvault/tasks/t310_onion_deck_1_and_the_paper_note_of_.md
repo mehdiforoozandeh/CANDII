@@ -1,15 +1,15 @@
 ---
 id: t310
 type: task
-title: Onion: Deck 1 and the paper note of iteration 1
+title: "Onion: Deck 1 and the paper note of iteration 1"
 category: manuscript
 parent: t152
 blocked_by: t305, t309
 refs: q17, q18, q19, q20, q21
 hypothesis_refs: 
-status: open
-created: 2026-11-14T00:35:54
-updated: 2026-11-14T00:35:54
+status: done
+created: "2026-11-14T00:35:54"
+updated: "2026-11-14T16:39:24"
 ---
 
 # t310 — Onion: Deck 1 and the paper note of iteration 1
@@ -24,7 +24,7 @@ Iteration 1 of Amendment 9 (ships 2026-11-15 09:00 UTC): ship iteration 1 (I1c a
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Ship-1 deck](presentations/onion-ship1-2026-11-15/DECK.md)
 
 ## Evidence
 

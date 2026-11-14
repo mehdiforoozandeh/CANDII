@@ -35,7 +35,7 @@ Decides whether the validation score of an arm reflects genomic positions seen i
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**1 children** · open 1, leaning 0, settled 0, parked 0
+**1 children** · open 0, leaning 1, settled 0, parked 0
 
-- `h36` [[h36_seeing_the_evaluation_loci_in_training_d|Seeing the evaluation loci in training does not raise the score]] — *open*
+- `h36` [[h36_seeing_the_evaluation_loci_in_training_d|Seeing the evaluation loci in training does not raise the score]] — *leaning · weak*
 <!-- crux:ledger:end -->

@@ -22,7 +22,7 @@ _(one paragraph: what this asks, and what would settle it)_
 
 ## Question
 
-The floor's mean is one pseudoreplicate half and carries its sampling noise, so a smooth predictor scores above 1 (position average 2.86 [1.85, 6.59] on eic_v1, results/t307/BASELINES.md). Candidates include the floor as now, the position average, or a noise-free floor. The PI has been asked to decide; no decision is recorded.
+The floor's mean is one pseudoreplicate half and carries its sampling noise, so a smooth predictor scores above 1 (position average 2.86 [1.85, 6.59] on eic_v1, results/t307/BASELINES.md). Candidates include the floor as now, the position average, or a noise-free floor. The PI ruled on 2026-11-14 (ruling 47): the oracle floor, i.e. half the mean absolute difference between the two read halves of the target view.
 
 ## Bears on
 
@@ -35,5 +35,7 @@ Sets the scale on which correction room is read, so it decides how much room for
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-_(no children yet)_
+**0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+
+- `f68` finding (strong) [[f68_settled_by_pi_ruling_47_on_the_evidence_|Settled by PI ruling 47 on the evidence of the investigation: no further…]]
 <!-- crux:ledger:end -->

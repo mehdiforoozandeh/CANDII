@@ -35,9 +35,10 @@ Defines the data on which every miniCANDI result of the onion run is measured, a
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**0 children** · open 0, leaning 0, settled 0, parked 0 · 3 finding(s) on this question
+**0 children** · open 0, leaning 0, settled 0, parked 0 · 4 finding(s) on this question
 
 - `f48` finding (moderate) [[f48_the_frozen_dataset_eic_v1_as_of_2026_11_|The frozen dataset eic_v1 (as-of 2026-11-13 14:32:03 UTC; tables_sha256…]]
 - `f49` finding (moderate) [[f49_building_from_fastq_with_the_standard_en|Building from FASTQ with the standard ENCODE pipelines hit four…]]
 - `f50` finding (moderate) [[f50_the_eic_blind_split_differs_from_trainin|The EIC blind split differs from training in its sequencing covariates, and…]]
+- `f74` finding (moderate) [[f74_counted_with_two_loaders_the_builder_s_s|Counted with two loaders (the builder's script and the scorer's own) and…]]
 <!-- crux:ledger:end -->

@@ -35,5 +35,7 @@ Says whether the sampling layer's 76% to 97% share at 25 bp is a property of the
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-_(no children yet)_
+**0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+
+- `f66` finding (moderate) [[f66_answers_the_depth_half_of_the_question_o|Answers the depth half of the question on real data by thinning and by an…]]
 <!-- crux:ledger:end -->

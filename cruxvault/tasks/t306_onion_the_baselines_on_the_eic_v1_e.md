@@ -1,15 +1,15 @@
 ---
 id: t306
 type: task
-title: Onion: The baselines on the eic_v1 evaluation set (submit)
+title: "Onion: The baselines on the eic_v1 evaluation set (submit)"
 category: implementation
 parent: t152
 blocked_by: None
 refs: h38, q19
 hypothesis_refs: 
-status: open
-created: 2026-11-14T00:35:53
-updated: 2026-11-14T00:35:53
+status: done
+created: "2026-11-14T00:35:53"
+updated: "2026-11-14T16:39:23"
 ---
 
 # t306 — Onion: The baselines on the eic_v1 evaluation set (submit)
@@ -28,7 +28,7 @@ Iteration 1 of Amendment 9 (ships 2026-11-15 09:00 UTC): the 4 baselines and ret
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Baselines on the eic_v1 evaluation set, with job ids](results/t307/BASELINES.md)
 
 ## Evidence
 

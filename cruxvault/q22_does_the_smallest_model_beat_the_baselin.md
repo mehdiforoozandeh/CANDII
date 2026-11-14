@@ -35,7 +35,8 @@ Says whether a learned model adds anything over the training-free baselines on e
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**1 children** · open 1, leaning 0, settled 0, parked 0
+**2 children** · open 0, leaning 2, settled 0, parked 0
 
-- `h39` [[h39_rung_1_base_beats_the_position_average_o|Rung 1 base beats the position average on imputation by more than 2 seed spreads on the composite's imputation term and closes part of the correction gap]] — *open*
+- `h39` [[h39_rung_1_base_beats_the_position_average_o|Rung 1 base beats the position average on imputation by more than 2 seed spreads on the composite's imputation term and closes part of the correction gap]] — *leaning · moderate*
+- `q39` _(Q)_ [[q39_do_the_context_rungs_2_to_6_convolution_|Do the context rungs 2 to 6 (convolution, attention, U-Net, axial, Perceiver) beat the pointwise rung 1 and the baselines on each goal at equal training windows?]] — *leaning · moderate*
 <!-- crux:ledger:end -->
