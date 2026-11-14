@@ -10,6 +10,19 @@
        `pseudoreplicate_floor`) on an eval set with no correction or replicate pair on the split
        writes only <out>/SKIPPED (the reason) and exits 0 (F3, DEFECTS item 4).
 
+Metric phase of the two-phase path (SP2b, plan Amendment 10, pinned interface M):
+
+    python tools/onion_eval/score.py --run <run dir> --evalset <json> --out <dir> --phase metrics
+        --pred-store <dir> --workers N --refs-from <baselines dir> [--stage-dir <dir>]
+        [--dump-signal <dir>] [--pairs-only]
+    reads the model's `n`, `mu` (and `ctl_mu`) per request from a complete prediction store
+    (`predict_store.py`) where the legacy path calls the model, the copy-leak block from the store's
+    `guardrail.json`, and the pair reference terms (depth-only scaling, the floor) from
+    `<refs-from>/{depth_only_scaling,pseudoreplicate_floor}/seed0`; the rest is the legacy code, in
+    forked CPU workers. No model is built. scores.json gets `scorer_version` 2, `scorer_settings`,
+    `pair_regions_n` and `refs`. Without `--phase` the legacy single-job path runs (version 1).
+    Every path that loads a model turns TF32 off for matmul and cuDNN.
+
 Cost (F3). Each tile read inside the current evalset region is a slice of one whole-region read
 per (measurement, file) and of one region of DNA (`--no-region-cache` restores tile reads; the
 scores are identical). `--infer-batch` sets the windows per forward pass while scoring targets.
@@ -204,6 +217,10 @@ from onion_eval import metrics as Mx  # noqa: E402
 
 SPACE = "counts_log1p"                               # ruling 13: the selection space, fixed
 SCORER_VERSION = 1                                   # SF0: the legacy single-job path
+SCORER_VERSION_TWO_PHASE = 2                         # SP2b: the metric phase of the two-phase path
+#: SP2b: the reference directories of `--refs-from` (pinned interface M)
+REFS_FROM_DIRS = {"depth_only_scaling": "depth_only_scaling/seed0",
+                  "pseudoreplicate_floor": "pseudoreplicate_floor/seed0"}
 REFS = ("marginal_nb", "position_average", "depth_only_scaling", "pseudoreplicate_floor")
 TRAINING_FREE = ("marginal_nb", "position_average", "depth_only_scaling")
 WEIGHTS = {"imputation": 0.5, "correction": 0.25, "uncertainty": 0.25}
@@ -487,6 +504,24 @@ class ModelPredictor:
         return {k: o[k].detach().cpu().double().numpy() for k in ("n", "mu")}
 
 
+class _StorePredictor:
+    """SP2b: the model's place in the metric phase. Not None (so the jobs and the requests are the
+    model's), but never called: every prediction is read from the prediction store."""
+
+    def __call__(self, batch):
+        raise RuntimeError("the metric phase reads predictions from the store; no model forward")
+
+
+#: SP2b: marks the main predictor whose arrays come from the prediction store (in `_job_arrays`)
+_FROM_STORE = object()
+
+
+def tf32_off() -> None:
+    """Foreman decision (Amendment 10): TF32 off for matmul and cuDNN wherever a model is scored."""
+    torch.backends.cuda.matmul.allow_tf32 = False
+    torch.backends.cudnn.allow_tf32 = False
+
+
 class _VectorBuffer:
     """One vector filled piece by piece into a buffer of its final length (SM): the same values as
     `np.concatenate(pieces)` (dtype promoted as concatenate would), without holding the pieces and
@@ -680,7 +715,8 @@ class Scorer:
                  device="cpu", no_halves=False, dnase_route=None, run_tables_sha256=None,
                  log=print, region_cache=True, infer_batch=None, lambda_source="auto",
                  signal_override=None, addon=False, dump_signal=None, dump_targets=None,
-                 dump_method=None, workers=1, stage_dir=None):
+                 dump_method=None, workers=1, stage_dir=None, pred_store=None, store_run=None,
+                 refs_from=None):
         from minicandi import contract as C
         from minicandi.dataset import OnionDataset, tables_sha256
         from onion_eval.evalset import tables_dir_of
@@ -694,8 +730,20 @@ class Scorer:
             raise ValueError(f"main {EXTERNAL!r} goes with a signal_override, and only it")
         if signal_override is not None and model is not None:
             raise ValueError("signal_override replaces the model: give no model")
-        if main not in REFS and model is None and main != EXTERNAL:
+        #: SP2b: the metric phase reads the model's predictions from a prediction store
+        self.pred_store_dir = Path(pred_store) if pred_store is not None else None
+        if self.pred_store_dir is not None and (model is not None or main != "model"):
+            raise ValueError("pred_store replaces the model: give main='model' and no model")
+        has_model = model is not None or self.pred_store_dir is not None
+        if main not in REFS and not has_model and main != EXTERNAL:
             raise ValueError(f"main {main!r}: give a model or one of {REFS}")
+        self.store_run = store_run
+        self.store, self.store_info = None, None
+        #: SP2b: directory of the pair reference terms (`--refs-from`), read in run()
+        self.refs_from = Path(refs_from) if refs_from is not None else None
+        if self.refs_from is not None and self.pred_store_dir is None:
+            raise ValueError("refs_from goes with the metric phase (pred_store)")
+        self.refs, self._ref_terms = None, None
         self.lambda_source = lambda_source
         self.signal_override = signal_override
         self.external = signal_override is not None
@@ -736,7 +784,7 @@ class Scorer:
         self.flagged = {t["target"] for t in self.ev["imputation_targets"]
                         if t.get("evaluation_only")} if self.addon else set()
         want_run = self.addon_of_tables_sha256 if self.addon else self.tables_sha256
-        if model is not None and split == "val" and run_tables_sha256 != want_run:
+        if has_model and split == "val" and run_tables_sha256 != want_run:
             raise ScoreRefused(f"the run was trained on tables sha256 {str(run_tables_sha256)[:12]}, "
                                + (f"the add-on tables extend {want_run[:12]} "
                                   f"(build_info.json::addon_of_tables_sha256)" if self.addon else
@@ -744,7 +792,8 @@ class Scorer:
         # finding 14: blind rows only on a blind pass
         self.split, self.allow_blind, self.n_boot, self.seed = split, split == "blind", n_boot, seed
         self.no_halves = bool(no_halves)
-        self.main, self.model_pred = main, (ModelPredictor(model, device) if model is not None else None)
+        self.main, self.model_pred = main, (ModelPredictor(model, device) if model is not None else
+                                            _StorePredictor() if has_model else None)
         self.device = device
         self.guardrail_windows, self.guardrail_seeds = guardrail_windows, tuple(guardrail_seeds)
         self.model = model
@@ -761,7 +810,7 @@ class Scorer:
         self.tile_bs = int(infer_batch or self.bs)
         self._OnionDataset = OnionDataset
         self.ds = OnionDataset(self.tables, split, cfg, seed=0)
-        self.predict_control = bool(self.ds.config.get("predict_control")) and model is not None
+        self.predict_control = bool(self.ds.config.get("predict_control")) and has_model
         self.regions = [(c, int(s)) for c, s in self.ev["regions"]]
         #: SF0 (Amendment 8, B.4): positions in `regions` that the pair jobs run on (all by default)
         pr = self.ev.get("pair_regions")
@@ -804,7 +853,7 @@ class Scorer:
         #: SM: worker processes over the imputation groups and the pairs (fork; results merged in
         #: the serial order, so every output is the serial one); 1 = the serial path
         self.workers = max(1, int(workers or 1))
-        if self.workers > 1 and model is not None:
+        if self.workers > 1 and model is not None:     # (the metric phase has no model: workers)
             # a model's CPU kernels may sum in another order with another thread count, and CUDA
             # does not survive fork: a model is scored serially (its forward is the long part)
             log(f"score: --workers {self.workers} applies to training-free predictors only; "
@@ -1178,9 +1227,14 @@ class Scorer:
         pair = job["kind"] in ("correction", "replicate")
         halves = (not pair) and self._halves_ok(tgt)
         want_ctl = (not pair) and self.model_pred is not None and self._needs_predicted_control(job)
-        if pair:
-            dos, floor_n = self._fit_pair_refs(job)
         names = tuple(refs) + ((self.main,) if self.main in REFS and self.main not in refs else ())
+        if pair and set(names) & set(PAIR_ONLY):    # SP2b: none when the terms come from refs_from
+            dos, floor_n = self._fit_pair_refs(job)
+        # SP2b: the metric phase reads the model's arrays of this job from the prediction store
+        st = srow = None
+        if self.store is not None and self.main == "model":
+            skey = f"pair/{_pair_key(job)}" if pair else f"item/{job['target']}/{job['regime']}"
+            st, srow = self.store.read(skey), self._store_regions[skey]
         want_avg_ctl = ((not pair) and "position_average" in names
                         and self._needs_average_control(job))
         want_dump_ctl = (not pair) and self._dump_wants_avg_ctl(job)    # AGd; read by the dump only
@@ -1230,11 +1284,23 @@ class Scorer:
                         preds[name] = {"n": n, "mu": mu}
                 t2 = time.perf_counter()
                 self.timing["reference_predictors"] += t2 - t1
-                preds["main"] = preds[self.main] if self.main in preds else self.model_pred(batch)
-                if want_ctl:
-                    out["main.ctl_mu"].append(self._predicted_control(batch, t).reshape(-1))
-                self.timing["model_forward"] += time.perf_counter() - t2
+                if st is not None:     # SP2b: this batch's bins of the stored request, as float64
+                    k, a0 = srow[ri], b0 * self.L
+                    sl = slice(a0, a0 + len(tl) * self.L)
+                    preds["main"] = _FROM_STORE
+                    if want_ctl:
+                        out["main.ctl_mu"].append(st["ctl_mu"][k, sl].astype(np.float64))
+                    self.timing["store_read"] += time.perf_counter() - t2
+                else:
+                    preds["main"] = preds[self.main] if self.main in preds else self.model_pred(batch)
+                    if want_ctl:
+                        out["main.ctl_mu"].append(self._predicted_control(batch, t).reshape(-1))
+                    self.timing["model_forward"] += time.perf_counter() - t2
                 for name, p in preds.items():
+                    if p is _FROM_STORE:
+                        out["main.n"].append(st["n"][k, sl].astype(np.float64))
+                        out["main.mu"].append(st["mu"][k, sl].astype(np.float64))
+                        continue
                     out[f"{name}.n"].append(p["n"][:, :, t].reshape(-1))
                     out[f"{name}.mu"].append(p["mu"][:, :, t].reshape(-1))
                 if want_dump_ctl:      # AGd: the training-average control at the target's C'
@@ -1734,7 +1800,8 @@ class Scorer:
 
     # -------------------------------------------------------------- pairs
     def _pair_record(self, job):
-        A = self._job_arrays(job, ("depth_only_scaling", "pseudoreplicate_floor"))
+        ext = self._ref_terms[_pair_key(job)] if self._ref_terms is not None else {}
+        A = self._job_arrays(job, () if ext else ("depth_only_scaling", "pseudoreplicate_floor"))
         y = A["y"]
         out = {k: job.get(k) for k in ("pair_id", "assay", "cell", "knob", "never_trained",
                                        "subset_pair", "rung", "source", "target")}
@@ -1745,6 +1812,18 @@ class Scorer:
         for nm, key, rk in (("main", "crps_model", "crps_sum_model"),
                             ("depth_only_scaling", "crps_depth_only", "crps_sum_depth_only"),
                             ("pseudoreplicate_floor", "crps_floor", "crps_sum_floor")):
+            if nm in ext:              # SP2b: the reference's own CRPS and per-region sums
+                crps, size, sums = ext[nm]
+                if size != y.size:
+                    raise ScoreRefused(f"--refs-from: pair {_pair_key(job)} has {size} bins in the "
+                                       f"{nm} reference, {y.size} here")
+                reg[rk] = sums
+                if np.isnan(crps):
+                    out[key] = out[key + "_oracle_scaled"] = Mx.Undefined(
+                        f"{nm} undefined on this pair")
+                else:
+                    out[key], out[key + "_oracle_scaled"] = crps, None
+                continue
             n, mu = A[f"{nm}.n"], A[f"{nm}.mu"]
             reg[rk] = nan_rows
             if np.isfinite(n).all() and np.isfinite(mu).all():
@@ -1796,6 +1875,8 @@ class Scorer:
         return lambda b: m({k: (v.to(dev) if torch.is_tensor(v) else v) for k, v in b.items()})
 
     def _copy_leak(self):
+        if self.store is not None:     # SP2b: the predict phase ran the guardrail with the model
+            return self.store.guardrail()
         if self.model is None:
             return {"hidden_input_max_abs_change": None, "unavailable_input_max_abs_change": None,
                     "same_view_copy_gain": None, "same_view_copy_gain_flag": None,
@@ -1914,13 +1995,18 @@ class Scorer:
 
         def copy(item):
             dst, src = item
-            size = src.stat().st_size
-            if not (dst.is_file() and dst.stat().st_size == size):
+            st = src.stat()
+            size = st.st_size
+            # SP2b (review of SF0): a staged copy is reused only when its size AND its modification
+            # time equal the source's (each copy takes the source's mtime); else it is copied fresh
+            if not (dst.is_file() and dst.stat().st_size == size
+                    and dst.stat().st_mtime_ns == st.st_mtime_ns):
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 tmp = dst.with_name(dst.name + ".part")
                 shutil.copyfile(src, tmp)
                 if tmp.stat().st_size != size:
                     raise OSError(f"--stage-dir: short copy of {src}")
+                os.utime(tmp, ns=(st.st_atime_ns, st.st_mtime_ns))
                 os.replace(tmp, dst)
             for f in (src, dst):     # the copy's page cache counts against the job's memory
                 _drop_cache(f)
@@ -1945,6 +2031,87 @@ class Scorer:
         self.log(f"score: staged {info['files']} files ({info['bytes'] / 1e9:.1f} GB) of "
                  f"{info['directories']} measurements to {root} in {info['seconds']} s")
         return info
+
+    # -------------------------------------------------------------- SP2b: the metric phase's inputs
+    def _open_store(self) -> None:
+        """Open the prediction store for this scoring (pinned interface M): the requests are built
+        as the predict command builds them; the store must have been made for the same run, eval
+        set, tables and request list (`PredictionStore.complete` refuses otherwise; `git_sha` is
+        never compared) and must be complete."""
+        from onion_eval import predict_store as P
+        reqs = P.requests(self)
+        st = P.PredictionStore.for_scorer(self.pred_store_dir, self, run=self.store_run)
+        if not st.complete(reqs):
+            raise ScoreRefused(f"{self.pred_store_dir}: the prediction store is not complete (a "
+                               f"shard or a request is missing); run the predict jobs first")
+        info = st.info
+        if int(info.get("region_bins", -1)) != self.rb:
+            raise ScoreRefused(f"{self.pred_store_dir}: region_bins {info.get('region_bins')} != "
+                               f"{self.rb}")
+        self.store, self.store_info = st, info
+        self._store_regions = {r["key"]: {ri: k for k, ri in enumerate(r["region_indices"])}
+                               for r in reqs}
+        self.log(f"score: prediction store {self.pred_store_dir}: {len(reqs)} requests, device "
+                 f"{info.get('device')}, infer_batch {info.get('infer_batch')}")
+
+    def _load_refs(self) -> None:
+        """Read the pair reference terms from `refs_from` (pinned interface M): per pair the CRPS of
+        depth-only scaling (from its own baseline scoring) and of the floor (from its), with their
+        per-region sums. Refused unless each baseline was scored on the same eval set (hash), the
+        same tables, the same lambda source and the same pair regions, and holds every pair. A
+        baseline of scorer version 1 is a valid reference (a baseline has no forward)."""
+        ev_sha = sha256_file(self.evalset_path)
+        _, cor, rep, _ = self.jobs()
+        keys = [_pair_key(j) for j in cor + rep]
+        terms = {k: {} for k in keys}
+        refs = {"dir": str(self.refs_from.resolve())}
+        for name, sub in REFS_FROM_DIRS.items():
+            d = self.refs_from / sub
+            short = "depth_only" if name == "depth_only_scaling" else "floor"
+            need = ("scores.json", "suffstats.npz") + (("pairs_per_region.npz",) if keys else ())
+            for f in need:
+                if not (d / f).is_file():
+                    raise ScoreRefused(f"--refs-from: {d / f} missing")
+            s = json.loads((d / "scores.json").read_text(encoding="utf-8"))
+            bad = []
+            if s.get("predictor") != name:
+                bad.append(f"predictor {s.get('predictor')!r}")
+            if s.get("evalset_sha256") != ev_sha:
+                bad.append("evalset_sha256")
+            if s.get("tables_sha256") != self.tables_sha256:
+                bad.append("tables_sha256")
+            ls = s.get("lambda_source_option", "auto")
+            if ls != self.lambda_source:
+                bad.append(f"lambda source {ls!r} != {self.lambda_source!r}")
+            if s.get("split", "val") != self.split:
+                bad.append("split")
+            n_pr = s.get("pair_regions_n", s.get("n_regions"))
+            if n_pr != len(self.pair_region_idx):
+                bad.append(f"pair_regions_n {n_pr} != {len(self.pair_region_idx)}")
+            sums, row = None, {}
+            if keys:
+                with np.load(d / "pairs_per_region.npz", allow_pickle=False) as z:
+                    if [int(i) for i in z["region_indices"]] != list(self.pair_region_idx):
+                        bad.append("pair regions (region_indices of pairs_per_region.npz)")
+                    row = {str(k): i for i, k in enumerate(z["pair_ids"])}
+                    sums = np.asarray(z[f"crps_sum_{short}"], np.float64)
+            if bad:
+                raise ScoreRefused(f"--refs-from {d}: a reference of another scoring ("
+                                   + "; ".join(bad) + ")")
+            refs[f"sha256_{short}"] = sha256_file(d / "suffstats.npz")
+            if not keys:
+                continue
+            col = 1 if name == "depth_only_scaling" else 2      # suffstats pair/<key> columns
+            with np.load(d / "suffstats.npz", allow_pickle=False) as z:
+                missing = [k for k in keys if f"pair/{k}" not in z.files or k not in row]
+                if missing:
+                    raise ScoreRefused(f"--refs-from {d}: {len(missing)} pairs of this scoring are "
+                                       f"not in the reference (first: {missing[0]})")
+                for k in keys:
+                    v = np.asarray(z[f"pair/{k}"], np.float64)
+                    terms[k][name] = (float(v[col]), int(v[3]), sums[row[k]].copy())
+        self.refs, self._ref_terms = refs, terms
+        self.log(f"score: reference terms of {len(keys)} pairs from {self.refs_from}")
 
     def _pair_not_applicable(self, a, b) -> str:
         """SF0 (Amendment 8, section A): why a replicate pair (a, b) can be no model-side pair job,
@@ -2029,6 +2196,7 @@ class Scorer:
         process that has not run multi-threaded torch work before (score.py's command line): forked
         workers inherit a started GNU OpenMP pool and can hang in it."""
         import multiprocessing as mp
+        from concurrent.futures import ProcessPoolExecutor
         global _WORKER
         self._rung_pairs("", "")                 # build the index once, before the fork
         self.ds._close_all()                     # no h5 handle crosses the fork
@@ -2038,9 +2206,11 @@ class Scorer:
         _WORKER = (self, tasks)
         try:
             ctx = mp.get_context("fork")
-            with ctx.Pool(self.workers, initializer=_worker_init) as pool:
+            # SP2b (review of SF0): a pool executor, so a killed worker raises BrokenProcessPool
+            # (multiprocessing.Pool waited for it until the walltime); results in task order
+            with ProcessPoolExecutor(self.workers, mp_context=ctx, initializer=_worker_init) as pool:
                 res, t0, ng = [], time.time(), len(group_list)
-                for i, r in enumerate(pool.imap(_worker_task, range(len(tasks)), chunksize=1)):
+                for i, r in enumerate(pool.map(_worker_task, range(len(tasks)), chunksize=1)):
                     res.append(r)                # progress: arrivals are in task order
                     if i + 1 == ng or (i + 1 > ng and (i + 1 - ng) % 200 == 0) or i + 1 == len(tasks):
                         self.log(f"score: workers done {min(i + 1, ng)}/{ng} groups, "
@@ -2080,6 +2250,7 @@ class Scorer:
         t0 = time.time()
         imp, cor, rep, ctl = self.jobs()
         sc = self.ev.get("scorable", {})
+        self._open_inputs()
         if self.stage_dir is not None:
             self.stage_info = self._stage(imp, cor, rep, ctl)
         self.marg = self._fit_marginal({j["assay"] for j in imp + ctl})
@@ -2118,7 +2289,33 @@ class Scorer:
                     "correction_pair_records": [jrec(r) for r in cor_recs],
                     "replicate_pair_records": [jrec(r) for r in rep_recs],
                     "wall_seconds": round(time.time() - t0, 1)})
+        self._two_phase_keys(res)
         return res
+
+    def _open_inputs(self) -> None:
+        """SP2b: the metric phase's store and reference terms (no-op on the legacy path)."""
+        if self.pred_store_dir is not None and self.store is None:
+            self._open_store()
+        if self.refs_from is not None and self._ref_terms is None:
+            self._load_refs()
+
+    def _two_phase_keys(self, scores: dict) -> None:
+        """SP2b (pinned interface M): the keys of a metric-phase output; the predictions' device
+        and inference batch are the store's."""
+        if self.store is None:
+            return
+        info = self.store_info
+        scores["scorer_version"] = SCORER_VERSION_TWO_PHASE
+        scores["scorer_settings"] = {"device": info.get("device"), "infer_batch": info.get(
+            "infer_batch"), "tf32": info.get("tf32"), "amp": info.get("amp"), "phase": "metrics"}
+        scores["pair_regions_n"] = len(self.pair_region_idx)
+        scores["refs"] = (dict(self.refs) if self.refs is not None else
+                          {"dir": None, "computed_in_run": True})
+        scores["pred_store"] = str(self.pred_store_dir.resolve())
+        if "device" in scores:
+            scores["device"] = info.get("device")
+        if "infer_batch" in scores:
+            scores["infer_batch"] = info.get("infer_batch")
 
     def run(self) -> dict:
         t0 = time.time()
@@ -2128,6 +2325,7 @@ class Scorer:
         imp, cor, rep, ctl = self.jobs()
         sc = self.ev.get("scorable", {})
         sc_imp, sc_cor = sc.get("imputation", []), sc.get("correction", [])
+        self._open_inputs()
         if self.stage_dir is not None:
             ts = time.perf_counter()
             self.stage_info = self._stage(imp, cor, rep, ctl)
@@ -2294,6 +2492,7 @@ class Scorer:
                 "note": "add-on score (Amendment 4): reported only; evaluation-only targets enter "
                         "explained_fraction_per_layer and per_target only, never a headline block, "
                         "a selection term or n_targets"}
+        self._two_phase_keys(scores)
         return scores
 
     def _add_flagged(self, scores, recs) -> None:
@@ -2623,8 +2822,82 @@ def run_tables_sha256(run) -> str:
     return str(ck["tables_sha256"])
 
 
+def run_config(run) -> dict:
+    """SP2b: the run's training config from its checkpoint, with no model built (the metric
+    phase; the same checks as `registry.load_run` on the checkpoint)."""
+    from minicandi import contract as C
+    from minicandi.registry import CKPT_NAME
+    path = Path(run) / CKPT_NAME
+    ck = torch.load(path, map_location="cpu", weights_only=False)
+    C.check_ckpt(ck)
+    config = dict(ck["config"])
+    if config.get("res_bp", C.RES) > C.RES:
+        raise ValueError(f"{path}: res_bp {config['res_bp']} > 25; score it with res_score.py")
+    return config
+
+
 def score(evalset, out, *, run=None, baseline=None, model=None, config=None,
-          repeat_blind_reason=None, signal_override=None, pairs_only=False, **kw) -> dict:
+          repeat_blind_reason=None, signal_override=None, pairs_only=False, phase=None,
+          pred_store=None, refs_from=None, **kw) -> dict:
+    """`phase` (SP2b): None, the legacy single-job path (default), or "metrics": the metric phase
+    of the two-phase path, which reads the model's predictions from `pred_store` (made for `run`,
+    or for an in-memory scoring when `config` and `run_tables_sha256` are given with no run) and
+    the pair reference terms from `refs_from` (None: computed in the run, for tests). TF32 is off
+    for matmul and cuDNN on every path that loads a model (foreman decision, Amendment 10)."""
+    if (run is not None or model is not None) and phase is None:
+        tf32_off()
+    if phase not in (None, "metrics"):
+        raise ValueError(f"phase {phase!r}: None (legacy) or 'metrics'")
+    if (phase == "metrics") != (pred_store is not None):
+        raise ValueError("phase 'metrics' goes with pred_store, and only it")
+    if refs_from is not None and phase != "metrics":
+        raise ValueError("refs_from goes with phase 'metrics'")
+    if phase == "metrics":
+        if model is not None or baseline is not None or signal_override is not None:
+            raise ValueError("the metric phase scores a run's prediction store: give run (or "
+                             "config and run_tables_sha256), no model or baseline")
+        if (Path(out) / SCORED).is_file() and pairs_only:
+            raise ScoreRefused(f"--pairs-only: {out} holds a full scoring ({SCORED})")
+        tf32_off()
+        sha = kw.pop("run_tables_sha256", None)
+        if run is not None:
+            sha, config = run_tables_sha256(run), run_config(run)
+            if kw.get("dump_signal"):
+                kw.setdefault("dump_method", str(Path(run).resolve()))
+        sc = Scorer(evalset, main="model", config=config, run_tables_sha256=sha,
+                    pred_store=pred_store, store_run=run, refs_from=refs_from, **kw)
+        return _score_with(sc, Path(out), run=run, pairs_only=pairs_only)
+    return _score_legacy(evalset, out, run=run, baseline=baseline, model=model, config=config,
+                         repeat_blind_reason=repeat_blind_reason, signal_override=signal_override,
+                         pairs_only=pairs_only, **kw)
+
+
+def _score_with(sc, out: Path, *, run, pairs_only) -> dict:
+    """SP2b: write the outputs of a metric-phase scoring (validation split; no blind ledger)."""
+    if sc.split == "blind":
+        raise ScoreRefused("the metric phase scores the validation split only; a blind pass runs "
+                           "on the legacy path, which keeps the blind ledger")
+    if pairs_only:
+        res = sc.run_pairs_only()
+        if run is not None:
+            res["run"] = str(Path(run).resolve())
+        out.mkdir(parents=True, exist_ok=True)
+        write_pairs_per_region(sc, out)
+        tmp = out / "pairs_only.json.tmp"
+        tmp.write_text(json.dumps(res, indent=1, sort_keys=True, allow_nan=False) + "\n",
+                       encoding="utf-8")
+        tmp.replace(out / "pairs_only.json")
+        return res
+    scores = sc.run()
+    if run is not None:
+        scores["run"] = str(Path(run).resolve())
+    write_outputs(scores, sc.suff, out)
+    write_pairs_per_region(sc, out)
+    return scores
+
+
+def _score_legacy(evalset, out, *, run=None, baseline=None, model=None, config=None,
+                  repeat_blind_reason=None, signal_override=None, pairs_only=False, **kw) -> dict:
     """`pairs_only` (SF0): score the pair jobs only and write `pairs_only.json` and
     `pairs_per_region.npz`, no scores.json. Score a run dir, an in-memory model, a baseline name, or an external entry; writes the
     output files. `signal_override` (chunk XE): a callable (target row, regions) -> the entry's
@@ -2663,6 +2936,8 @@ def score(evalset, out, *, run=None, baseline=None, model=None, config=None,
     if pairs_only:
         if split == "blind":
             raise ScoreRefused("--pairs-only scores the validation split only")
+        if (out / SCORED).is_file():   # SP2b (review of SF0): never over a full scoring's pair file
+            raise ScoreRefused(f"--pairs-only: {out} holds a full scoring ({SCORED})")
         res = sc.run_pairs_only()
         if run is not None:
             res["run"] = str(Path(run).resolve())
@@ -2793,8 +3068,23 @@ def main(argv=None) -> int:
     ap.add_argument("--pairs-only", action="store_true",
                     help="SF0: score the pair jobs only; writes pairs_only.json and "
                          "pairs_per_region.npz, no scores.json")
+    ap.add_argument("--phase", default=None, choices=("metrics",),
+                    help="SP2b: 'metrics' scores the run from its prediction store (--pred-store) "
+                         "in CPU workers, with the pair reference terms from --refs-from; default: "
+                         "the legacy single-job path")
+    ap.add_argument("--pred-store", default=None, help="SP2b: the run's prediction store")
+    ap.add_argument("--refs-from", default=None,
+                    help="SP2b: directory with depth_only_scaling/seed0 and "
+                         "pseudoreplicate_floor/seed0 scored on the same eval set")
     add_dump_arguments(ap)
     a = ap.parse_args(argv)
+    if a.phase == "metrics" and not (a.run and a.pred_store and a.refs_from):
+        ap.error("--phase metrics needs --run, --pred-store and --refs-from")
+    if a.phase is None and (a.pred_store or a.refs_from):
+        ap.error("--pred-store and --refs-from go with --phase metrics")
+    for k in ("pred_store", "refs_from", "stage_dir"):     # "$SLURM_TMPDIR/..." works
+        if getattr(a, k):
+            setattr(a, k, os.path.expandvars(getattr(a, k)))
     done = Path(a.out) / ("pairs_only.json" if a.pairs_only else SCORED)
     if done.is_file() and not a.force:
         print(f"skip: {done} exists")
@@ -2802,7 +3092,9 @@ def main(argv=None) -> int:
     set_threads()
     device = a.device
     if device == "auto":
-        device = "cuda" if (a.run and torch.cuda.is_available()) else "cpu"
+        device = "cuda" if (a.run and torch.cuda.is_available() and not a.phase) else "cpu"
+    phase_kw = ({"phase": a.phase, "pred_store": a.pred_store, "refs_from": a.refs_from}
+                if a.phase else {})
     try:
         s = score(a.evalset, a.out, run=a.run, baseline=a.baseline, split=a.split,
                   allow_blind=a.allow_blind, device=device, n_boot=a.n_boot,
@@ -2813,7 +3105,7 @@ def main(argv=None) -> int:
                   **({"workers": a.workers} if a.workers > 1 else {}),
                   **({"stage_dir": a.stage_dir} if a.stage_dir else {}),
                   **({"pairs_only": True} if a.pairs_only else {}),
-                  **dump_kwargs(a))
+                  **phase_kw, **dump_kwargs(a))
     except (PermissionError, ScoreRefused) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2
