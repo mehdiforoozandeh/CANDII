@@ -18,7 +18,7 @@ WAITING ON THE PI: nothing (PI cancelled the slow rung-1 jobs, 2026-11-13).
 | SM builder (opus) | scorer TIME: full scoring of eic_v1 in ~2 h, identical outputs (memory part done: commit 1e94d92, 16000M) | review; merge; resubmit the 4 baseline scorings and the 24 rung-1 scorings with the new scorer and job shape |
 | SM reviewer (opus) | review of 1e94d92 (memory change, bit identity) | merge if ACCEPT |
 WAITING ON THE PI: cancel the 28 old-scorer jobs (4 baseline scorings 27179565-27179568 + 24 pending rung-1 scoring jobs); training jobs stay.
-| (region wave R1: V7, ERx, STt, RBk merged) | next: TR (sampler `train_regions` + window loss weights) after the foreman reads SM's diff; SAx after L1a merges; then RB1a, STa, PRg | - |
+| (region experiments: tools, configs and all lists ready; TR, SAx, STt2, RBk2 merged) | running: RB1a (budget-curve trainings on rung 1, trainings only). Waiting: RTa (36+ region runs on rung 4; needs the ladder version), PRg (--per-region; after SM's time work), ECa | - |
 | (deck done) | law-of-total-variance deck: cruxvault/presentations/onion-total-variance/; artifact H8ShBq8tJ1eMzwpjNpdU87 | - |
 | (OXa returned) | second experiments submitted (jobs 27184156-27204216; notes results/t264); OXc collect when they end; 13 rows wait for their tail partners (with D6u). D6c (priority 4) HELD until rung 1 is through (fair-share) | - |
 
