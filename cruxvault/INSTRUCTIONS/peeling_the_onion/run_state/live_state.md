@@ -11,7 +11,8 @@ PI priorities: imputation, covariate artifact correction, calibrated uncertainty
 PI DIRECTIVE 2026-11-14: results and insights in 3-4 days; iterative deployment in paper-section order (principle `iterative-deployment`). The 18-day ladder order is superseded by Amendment 9 (being written). NOTE: the Bash tool's cwd is the MAIN checkout now: use absolute paths to the onion worktree.
 
 ## Agents running
-| planner (fable) | Amendment 9: three iterations in 3-4 days, deliverables per iteration, later phases | cold review; PI decisions; launch iteration 1 |
+| planning agent (opus) | PI request: re-plan with the fewest iterations and maximum parallel paths per iteration -> .orchestrate/proposal_parallel_iterations.md | give the PI the proposal and his decisions; then the planner turns it into chunks |
+| I1a (layers rerun with pseudoreplicate pairs), I1e (Methods, merge), AGf (pack fix), SF0 (scorer base) | iteration-1 and scorer work in flight | review, merge |
 | agent | task | on return |
 |---|---|---|
 | (E7a returned) | eval set on eic_v1 (sha b5f7a4cf), check OK, average table done; baseline scorings resubmitted at 128000M: 27179565-27179568; layers 27164943 running; job watch -> E7b (collect: scorer validity, scoring cost AND memory), then gate G2, L1a, RCa, BRa. Ladder scoring memory: 128000M until measured | - |
