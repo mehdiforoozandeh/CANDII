@@ -71,5 +71,10 @@ cd "$KIT"
 source "$KIT/slurm/_kit_pin.sh"
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
+# SM: numpy's BLAS pool is pinned (default 2 threads, the CPU count of the E7a baseline and rung-1
+# scorings): r_spec's Level fit (inv, gemv) sums in an order that depends on it (2.3e-7 between 2
+# and 8 threads on a 32-region subset), so a fixed pool makes scores independent of the job's CPUs.
+export OPENBLAS_NUM_THREADS="${ONION_BLAS_THREADS:-2}" FLEXIBLAS_NUM_THREADS="${ONION_BLAS_THREADS:-2}" \
+  MKL_NUM_THREADS="${ONION_BLAS_THREADS:-2}"
 "${CMD[@]}"
 echo "=== done $(date -u)"
