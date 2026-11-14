@@ -16,12 +16,17 @@ Inputs. An arm is a directory `<runs>/<arm>/seed<k>/scores.json` (score.py; sele
 `--prefix` keeps the arms whose name starts with it; a directory with no `seed<k>` subdirectory is
 not an arm (e.g. `settlements/`). A baseline is `<baselines>/<name>/seed0/scores.json`
 (`eval/<tables>/baselines/`, as select_rule check-done reads it); every baseline found is a row
-with `kind = baseline`. `--sub blind` reads `seed<k>/blind/scores.json` instead. Only scores.json
-files are read. A seed directory without scores.json is not counted (n_seeds counts scored seeds).
+with `kind = baseline`. `--sub blind` reads `seed<k>/blind/scores.json` instead. Any other `--sub
+SUB` (Amendment 10, interface M: `p16`, `p256`) reads the arms' `seed<k>/<SUB>/scores.json` and a
+baseline's `seed0/<SUB>/scores.json` if present, else its `seed0/scores.json` (`baselines_p16`
+layout). Only scores.json files are read. A seed directory without scores.json is not counted (n_seeds counts scored seeds).
 
 Comparability. Every scores.json one command reads (arms and baselines) must carry the same
 non-empty `evalset_sha256`; otherwise the command REFUSES: it prints the reason, writes no file and
-exits 2.
+exits 2. Every ARM score must also share the scorer keys of select_rule (`tables_sha256`,
+`scorer_version`, `scorer_settings.device`, `scorer_settings.infer_batch`, `refs.sha256_*`), else
+REFUSED; baselines are references and are exempt (a scorer_version 1 baseline is comparable with
+version 2 runs). `--allow-mix <key>` exempts the device or the batch only.
 
 Statistics over the seeds of one arm, for one quantity (a JSON number, or null when the scorer
 marked it undefined): `n_seeds` = scored seeds, `n_defined` = seeds where it is defined, `mean`
@@ -109,6 +114,7 @@ _TOOLS = Path(__file__).resolve().parents[1]
 if str(_TOOLS) not in sys.path:
     sys.path.insert(0, str(_TOOLS))
 from onion_eval.select_rule import TRAINING_FREE, seed_dirs  # noqa: E402
+from onion_eval import select_rule as _SR  # noqa: E402
 
 MACRO = "__macro__"
 SPACES = ("counts_log1p", "signal_arcsinh", "signal_arcsinh_plug_in")
@@ -276,9 +282,29 @@ def write_tsv(rows: list[dict], columns: list[str], out) -> None:
     tmp.replace(out)
 
 
-def _load_groups(runs, prefix, baselines, sub):
+def load_baseline(b: Path, sub: str = "") -> list[dict]:
+    """The one scores.json of a baseline. With a score subdirectory other than `blind` (interface
+    M: `p16`, `p256`), `seed0/<sub>/scores.json` when it exists, else `seed0/scores.json` (a
+    baseline of a derived evaluation set lives in its own baselines dir, e.g. baselines_p16)."""
+    if sub and sub != "blind" and not any(_scores_path(d, sub).is_file() for d in seed_dirs(b)):
+        sub = ""
+    return load_scores(b, sub)[:1]
+
+
+def check_arm_keys(arms: dict, allow=()) -> None:
+    """Refused unless every arm score shares the scorer keys of select_rule.SCORER_KEYS (Amendment
+    10); baselines are references and are not passed here."""
+    try:
+        _SR.check_scorer_keys([(s["__path__"], _SR.scorer_keys(s))
+                               for seeds in arms.values() for s in seeds], allow)
+    except _SR.Refused as e:
+        raise Refused(str(e)) from None
+
+
+def _load_groups(runs, prefix, baselines, sub, allow_mix=()):
     arms = {p.name: load_scores(p, sub) for p in find_arms(runs, prefix)}
-    base = {p.name: load_scores(p, sub)[:1] for p in find_baselines(baselines)}
+    base = {p.name: load_baseline(p, sub) for p in find_baselines(baselines)}
+    check_arm_keys(arms, allow_mix)
     return arms, base
 
 
@@ -372,8 +398,8 @@ def _h7_seed(x, second: set, cls_of: dict, classes: list) -> dict:
     return out
 
 
-def headline(runs, prefix, baselines, sub="", addon=ADDON, pairs=None) -> tuple[list[dict], list[str]]:
-    arms, base = _load_groups(runs, prefix, baselines, sub)
+def headline(runs, prefix, baselines, sub="", addon=ADDON, pairs=None, allow_mix=()) -> tuple[list[dict], list[str]]:
+    arms, base = _load_groups(runs, prefix, baselines, sub, allow_mix)
     check_evalset({**arms, **base})
     add = {"arm": {k: load_addon(v, addon) for k, v in arms.items()},
            "baseline": {k: load_addon(v, addon) for k, v in base.items()}}
@@ -450,8 +476,8 @@ def headline(runs, prefix, baselines, sub="", addon=ADDON, pairs=None) -> tuple[
 
 # ------------------------------------------------------------------------------------------ explained
 
-def explained(runs, prefix, baselines=None, sub="", addon=ADDON) -> tuple[list[dict], list[str]]:
-    arms, base = _load_groups(runs, prefix, baselines, sub)
+def explained(runs, prefix, baselines=None, sub="", addon=ADDON, allow_mix=()) -> tuple[list[dict], list[str]]:
+    arms, base = _load_groups(runs, prefix, baselines, sub, allow_mix)
     add = {"arm": {k: load_addon(v, addon) for k, v in arms.items()},
            "baseline": {k: load_addon(v, addon) for k, v in base.items()}}
     _check_addon(add)
@@ -502,8 +528,8 @@ def explained(runs, prefix, baselines=None, sub="", addon=ADDON) -> tuple[list[d
 
 # ------------------------------------------------------------------------------------------ dev evals
 
-def dev_evals(runs, prefix, baselines=None, sub="") -> tuple[list[dict], list[str]]:
-    arms, base = _load_groups(runs, prefix, baselines, sub)
+def dev_evals(runs, prefix, baselines=None, sub="", allow_mix=()) -> tuple[list[dict], list[str]]:
+    arms, base = _load_groups(runs, prefix, baselines, sub, allow_mix)
     check_evalset({**arms, **base})
     cols = ["arm", "kind", "assay", "band", "n_seeds"] + [
         f"{k}.{x}" for k in BUDGET_KEYS for x in ("mean", "spread")]
@@ -535,8 +561,8 @@ def _per_assay(block, path, assay):
     return None, None
 
 
-def accessibility(runs, prefix, baselines=None, sub="") -> tuple[list[dict], list[str]]:
-    arms, base = _load_groups(runs, prefix, baselines, sub)
+def accessibility(runs, prefix, baselines=None, sub="", allow_mix=()) -> tuple[list[dict], list[str]]:
+    arms, base = _load_groups(runs, prefix, baselines, sub, allow_mix)
     check_evalset({**arms, **base})
     cols = ["arm", "kind", "assay", "quantity", "scorable", "n_seeds",
             "accessibility_only.mean", "accessibility_only.spread", "accessibility_only.n_defined",
@@ -569,8 +595,8 @@ def accessibility(runs, prefix, baselines=None, sub="") -> tuple[list[dict], lis
 
 # ------------------------------------------------------------------------------------------ per knob
 
-def per_knob(runs, prefix, baselines=None, sub="") -> tuple[list[dict], list[str]]:
-    arms, base = _load_groups(runs, prefix, baselines, sub)
+def per_knob(runs, prefix, baselines=None, sub="", allow_mix=()) -> tuple[list[dict], list[str]]:
+    arms, base = _load_groups(runs, prefix, baselines, sub, allow_mix)
     check_evalset({**arms, **base})
     cols = ["arm", "kind", "pair_kind", "knob", "n_seeds", "n_defined", "mean", "spread"]
     key = "correction_gap_closed_vs_depth_only_never_trained"
@@ -597,17 +623,21 @@ def _resolve(name, runs, baselines) -> tuple[Path, bool]:
     raise Refused(f"arm {name!r} not found under --runs {runs} or --baselines {baselines}")
 
 
-def shared_specific(runs, arms: list[str], baselines=None, sub="") -> tuple[list[dict], list[str]]:
+def shared_specific(runs, arms: list[str], baselines=None, sub="",
+                    allow_mix=()) -> tuple[list[dict], list[str]]:
     if len(arms) < 2:
         raise Refused("--arms needs at least two arms: the reference first")
-    groups = {}
+    groups, trained = {}, {}
     for a in arms:
         p, is_b = _resolve(a, runs, baselines)
-        seeds = load_scores(p, sub)[:1] if is_b else load_scores(p, sub)
+        seeds = load_baseline(p, sub) if is_b else load_scores(p, sub)
         if not seeds:
             raise Refused(f"arm {a!r}: no scored seed under {p}")
         groups[a] = seeds
+        if not is_b:
+            trained[a] = seeds
     check_evalset(groups)
+    check_arm_keys(trained, allow_mix)
     ref = arms[0]
     assays = sorted({x for ss in groups.values() for s in ss
                      for x in (_get(s, ("error_budget", "per_assay")) or {})})
@@ -644,7 +674,8 @@ def main(argv=None) -> int:
         p.add_argument("--prefix", default="")
         p.add_argument("--baselines", required=(name == "headline"), default=None)
         p.add_argument("--out", required=True)
-        p.add_argument("--sub", default="", choices=("", "blind"))
+        p.add_argument("--sub", default="", type=_SR.sub_name)
+        p.add_argument("--allow-mix", action="append", default=[], choices=_SR.MIXABLE)
         if name == "headline":
             p.add_argument("--addon", default=ADDON)
             p.add_argument("--pairs", default=None)
@@ -653,27 +684,32 @@ def main(argv=None) -> int:
     p.add_argument("--prefix", default="")
     p.add_argument("--baselines", default=None)
     p.add_argument("--out", required=True)
-    p.add_argument("--sub", default="", choices=("", "blind"))
+    p.add_argument("--sub", default="", type=_SR.sub_name)
+    p.add_argument("--allow-mix", action="append", default=[], choices=_SR.MIXABLE)
     p.add_argument("--addon", default=ADDON)
     p = sp.add_parser("shared-specific")
     p.add_argument("--runs", required=True)
     p.add_argument("--arms", required=True, help="comma-separated; the first is the reference")
     p.add_argument("--baselines", default=None)
     p.add_argument("--out", default=None)
-    p.add_argument("--sub", default="", choices=("", "blind"))
+    p.add_argument("--sub", default="", type=_SR.sub_name)
+    p.add_argument("--allow-mix", action="append", default=[], choices=_SR.MIXABLE)
     a = ap.parse_args(argv)
     fn = {"headline": headline, "dev-evals": dev_evals, "accessibility": accessibility,
           "per-knob": per_knob}
     try:
         if a.cmd == "shared-specific":
             rows, cols = shared_specific(a.runs, [x for x in a.arms.split(",") if x], a.baselines,
-                                         a.sub)
+                                         a.sub, allow_mix=tuple(a.allow_mix))
         elif a.cmd == "headline":
-            rows, cols = headline(a.runs, a.prefix, a.baselines, a.sub, a.addon, a.pairs)
+            rows, cols = headline(a.runs, a.prefix, a.baselines, a.sub, a.addon, a.pairs,
+                                  allow_mix=tuple(a.allow_mix))
         elif a.cmd == "explained":
-            rows, cols = explained(a.runs, a.prefix, a.baselines, a.sub, a.addon)
+            rows, cols = explained(a.runs, a.prefix, a.baselines, a.sub, a.addon,
+                                   allow_mix=tuple(a.allow_mix))
         else:
-            rows, cols = fn[a.cmd](a.runs, a.prefix, a.baselines, a.sub)
+            rows, cols = fn[a.cmd](a.runs, a.prefix, a.baselines, a.sub,
+                                   allow_mix=tuple(a.allow_mix))
     except Refused as e:
         print(f"REFUSED: {e}", file=sys.stderr)
         return 2
