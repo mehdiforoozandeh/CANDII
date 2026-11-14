@@ -59,7 +59,23 @@ SPEED=(--workers "${ONION_SCORE_WORKERS:-${SLURM_CPUS_PER_TASK:-1}}")   # >1 onl
 if [ "${ONION_STAGE:-1}" = 1 ] && [ -n "${SLURM_TMPDIR:-}" ]; then
   SPEED+=(--stage-dir "$SLURM_TMPDIR/stage")
 fi
-CMD=(python3 "$KIT/tools/onion_eval/score.py" "${SRC[@]}" --evalset "$EVALSET" --out "$OUT" "${SPEED[@]}" "$@")
+# SP3 (interface M, metric phase): ONION_SCORE_PHASE=metrics scores a run from its prediction
+# store (ONION_PRED_STORE, written by slurm/onion_eval/predict.sh) with the reference terms of
+# ONION_REFS_FROM (a baselines dir); unset = the legacy single-job call, unchanged. After SCORED
+# exists the metric phase removes the store, unless ONION_KEEP_PRED_STORE=1.
+PHASE="${ONION_SCORE_PHASE:-}"
+PHASE_ARGS=()
+case "$PHASE" in
+  "") ;;
+  metrics)
+    [ "$WHAT" = run ] || { echo "ONION_SCORE_PHASE=metrics scores a run, not a baseline" >&2; exit 2; }
+    [ -n "${ONION_PRED_STORE:-}" ] || { echo "ONION_SCORE_PHASE=metrics needs ONION_PRED_STORE" >&2; exit 2; }
+    [ -n "${ONION_REFS_FROM:-}" ] || { echo "ONION_SCORE_PHASE=metrics needs ONION_REFS_FROM" >&2; exit 2; }
+    PHASE_ARGS=(--phase metrics --pred-store "$ONION_PRED_STORE" --refs-from "$ONION_REFS_FROM") ;;
+  *) echo "ONION_SCORE_PHASE must be metrics or unset" >&2; exit 2 ;;
+esac
+CMD=(python3 "$KIT/tools/onion_eval/score.py" "${SRC[@]}" --evalset "$EVALSET" --out "$OUT" "${SPEED[@]}"
+     ${PHASE_ARGS[@]+"${PHASE_ARGS[@]}"} "$@")
 if [ "${DRY_RUN:-0}" = 1 ]; then echo "${CMD[*]}"; exit 0; fi
 if [ -f "$OUT/SCORED" ]; then echo "skip: $OUT/SCORED exists"; exit 0; fi
 echo "=== onion score job ${SLURM_JOB_ID:-local} host=$(hostname) $(date -u)"
@@ -82,4 +98,9 @@ T="${ONION_SCORE_THREADS:-2}"
 export OMP_NUM_THREADS="$T" OPENBLAS_NUM_THREADS="$T" FLEXIBLAS_NUM_THREADS="$T" MKL_NUM_THREADS="$T" \
   OMP_WAIT_POLICY=PASSIVE
 "${CMD[@]}"
+if [ "$PHASE" = metrics ] && [ "${ONION_KEEP_PRED_STORE:-0}" != 1 ] && [ -f "$OUT/SCORED" ] \
+   && [ -f "$ONION_PRED_STORE/STORE.json" ]; then
+  rm -rf -- "$ONION_PRED_STORE"
+  echo "removed the prediction store $ONION_PRED_STORE (KEEP_PRED_STORE unset)"
+fi
 echo "=== done $(date -u)"
