@@ -125,3 +125,67 @@ def test_arm_trains_and_its_input_differs_from_base(env, arm):
     # the shared keys are the same stream: the arm only adds an input
     for k in ("x_counts", "y_counts", "c_in", "c_out"):
         assert (b_arm[k] == b_base[k]).all(), k
+
+
+# ------------------------------------------------- train.py fixes (foreman, 2026-11-14)
+import torch  # noqa: E402
+
+from minicandi import registry as R  # noqa: E402
+
+
+def _ckpt(run):
+    return torch.load(run / "ckpt.pt", weights_only=False)["state_dict"]
+
+
+def test_staging_copies_the_average_h5_and_keeps_the_run_identical(env, tmp_path, capsys):
+    cfg = _small(json.loads((OUT / "average_input.json").read_text()),
+                 average_h5=str(env["avg"]))
+    T.train(cfg, env["tables"], 0, tmp_path / "plain", log_every=1)
+    T.train(cfg, env["tables"], 0, tmp_path / "staged", log_every=1, stage_dir=tmp_path / "st")
+    out = capsys.readouterr().out
+    staged = tmp_path / "st" / "aux" / env["avg"].name
+    assert f"to {staged}" in out and staged.is_file()
+    assert staged.stat().st_size == env["avg"].stat().st_size
+    a, b = _ckpt(tmp_path / "plain"), _ckpt(tmp_path / "staged")
+    assert all(torch.equal(a[k], b[k]) for k in a)
+    losses = [json.loads(x)["loss"] for x in (tmp_path / "plain" / "log.jsonl").read_text()
+              .splitlines()]
+    assert losses == [json.loads(x)["loss"] for x in (tmp_path / "staged" / "log.jsonl")
+                      .read_text().splitlines()]
+    # the run's config keeps the original path; only the dataset reads the copy
+    run = json.loads((tmp_path / "staged" / "run.json").read_text())
+    assert run["config"]["average_h5"] == str(env["avg"])
+    ds = OnionDataset(env["tables"], "train", T.full_config(cfg), 0)
+    info = T.stage_average(ds, tmp_path / "st2")
+    assert ds.config["average_h5"] == info["dst"] and Path(info["dst"]).is_file()
+    assert T.stage_average(OnionDataset(env["tables"], "train", T.full_config(_small(_base())),
+                                        0), tmp_path / "st3") is None
+
+
+@pytest.mark.parametrize("arm", ("base",) + ARMS)
+def test_one_window_probe_gives_the_old_flops_per_window(env, arm):
+    cfg = _small(_base() if arm == "base" else json.loads((OUT / f"{arm}.json").read_text()))
+    if arm == "average_input":
+        cfg["average_h5"] = str(env["avg"])
+    cfg = T.full_config(cfg)
+    ds = OnionDataset(env["tables"], "train", cfg, 0)
+    torch.manual_seed(0)
+    model = R.build_model(cfg).train()
+    full = ds.batch(BS, np.random.default_rng([0, 2]))
+    one = ds.batch(1, np.random.default_rng([0, 2]))
+    assert one["meta"][0] == full["meta"][0]          # the first window of the old probe
+    old = T.flops_per_window(model, full, "cpu", cfg)
+    new = T.flops_per_window(model, one, "cpu", cfg)
+    assert new == old, (arm, old, new)
+
+
+def test_probe_oom_never_stops_a_training(env, tmp_path, monkeypatch, capsys):
+    def oom(*a, **k):
+        raise torch.cuda.OutOfMemoryError("CUDA out of memory (test)")
+    monkeypatch.setattr(T, "flops_per_window", oom)
+    T.train(_small(_base()), env["tables"], 0, tmp_path / "run", log_every=1)
+    assert "flops_per_window: unavailable (OOM)" in capsys.readouterr().out
+    recs = [json.loads(x) for x in (tmp_path / "run" / "log.jsonl").read_text().splitlines()]
+    assert len(recs) == STEPS and all(r["training_flops"] is None for r in recs)
+    assert all(math.isfinite(r["loss"]) for r in recs)
+    assert (tmp_path / "run" / "DONE").is_file()

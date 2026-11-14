@@ -175,6 +175,36 @@ def stage_counts(ds: OnionDataset, stage_dir, threads: int = 8) -> dict:
     return {"files": len(jobs), "bytes": int(nbytes), "seconds": round(time.time() - t0, 1)}
 
 
+def stage_average(ds: OnionDataset, stage_dir) -> dict | None:
+    """`--stage-dir` with `average_h5`: copy the average table to `<stage dir>/aux/` (after a check
+    of its size against the free space there) and point the DATASET at the copy; the run's config
+    keeps the original path. None when the config has no `average_h5`. The bytes are the same, so
+    the stream does not change (reason: chunk A1k, an unstaged read of the 7.45 GB eic_v1 table
+    cost about 0.15 s per window on Nibi)."""
+    import shutil
+    path = ds.config.get("average_h5")
+    if not path:
+        return None
+    src = Path(path)
+    size = src.stat().st_size
+    dst = Path(stage_dir) / "aux" / src.name
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    t0 = time.time()
+    if not (dst.is_file() and dst.stat().st_size == size):
+        free = shutil.disk_usage(dst.parent).free
+        if free < size * 1.05:
+            raise OSError(f"--stage-dir: {src} needs {size} bytes; {dst.parent} has {free} free")
+        tmp = dst.with_name(dst.name + ".part")
+        shutil.copyfile(src, tmp)
+        if tmp.stat().st_size != size:
+            raise OSError(f"--stage-dir: short copy of {src}")
+        os.replace(tmp, dst)
+    ds._close_all()
+    ds.config["average_h5"] = str(dst)
+    return {"src": str(src), "dst": str(dst), "bytes": int(size),
+            "seconds": round(time.time() - t0, 1)}
+
+
 def full_config(config: dict) -> dict:
     """The config with the train loop's defaults filled in; this is what ckpt.pt stores."""
     cfg = dict(DEFAULTS)
@@ -240,6 +270,23 @@ def flops_per_window(model, batch: dict, device, config: dict | None = None) -> 
         total = fc.get_total_flops()
     model.zero_grad(set_to_none=True)
     return total / B, fwd / B
+
+
+def probe_flops(model, batch: dict, device, config: dict | None = None) -> tuple:
+    """`flops_per_window`, or (None, None) after a CUDA out-of-memory error (logged as
+    `flops_per_window: unavailable (OOM)`): the probe never stops a training."""
+    try:
+        return flops_per_window(model, batch, device, config)
+    except torch.cuda.OutOfMemoryError:
+        model.zero_grad(set_to_none=True)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        print("flops_per_window: unavailable (OOM)", flush=True)
+        return None, None
+
+
+def _tflops(windows: int, fpw):
+    return None if fpw is None else windows * fpw
 
 
 def set_pearson_stats(model, batches: list) -> None:
@@ -316,6 +363,10 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
         st_ = stage_counts(ds, stage_dir)
         print(f"staged {st_['files']} counts files, {st_['bytes'] / 1e9:.2f} GB, in "
               f"{st_['seconds']} s to {stage_dir}", flush=True)
+        sa = stage_average(ds, stage_dir)
+        if sa is not None:
+            print(f"staged average_h5 {sa['src']} ({sa['bytes'] / 1e9:.2f} GB) in "
+                  f"{sa['seconds']} s to {sa['dst']}", flush=True)
     torch.manual_seed(seed)
     model = build_model(cfg)
     model.to(dev)
@@ -363,9 +414,15 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
         print(f"resume: step {step}, windows {windows} of {budget}")
     else:
         step, windows, wall0, n_resumes = 0, 0, 0.0, 0
-        probe = ds.batch(bs, np.random.default_rng([seed, 2]))
+        # the probe is one window (the first window of the old bs-window probe stream); FLOPs
+        # per window are the same, and a two-step model fits a 10 GB slice (chunk A1k)
+        probe = ds.batch(1, np.random.default_rng([seed, 2]))
         model.train()
-        fpw, fpw_fwd = flops_per_window(model, to_device(probe, dev), dev, cfg)
+        fpw, fpw_fwd = probe_flops(model, to_device(probe, dev), dev, cfg)
+        del probe
+        if dev.type == "cuda":
+            torch.cuda.empty_cache()
+            torch.cuda.reset_peak_memory_stats(dev)
         if cfg.get("count_transform") == "pearson":
             prng = np.random.default_rng([seed, 3])
             set_pearson_stats(model, [ds.batch(bs, prng) for _ in range(PEARSON_BATCHES)])
@@ -397,7 +454,7 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
                 "tables": str(Path(tables).resolve()), "param_count": model.param_count(),
                 "d_model": getattr(model, "d_model", None),
                 "flops_per_window": fpw, "flops_per_window_forward": fpw_fwd,
-                "training_flops": windows * fpw, "windows_seen": windows, "steps": step,
+                "training_flops": _tflops(windows, fpw), "windows_seen": windows, "steps": step,
                 "total_steps": total_steps, "wall_seconds": wall0 + (time.time() - t0),
                 "device": str(dev), "host": socket.gethostname(), "torch": torch.__version__,
                 "n_resumes": n_resumes, "done": done, **({"workers": workers} if workers else {}),
@@ -450,14 +507,16 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
         windows += batch["x_counts"].shape[0]
         last = {"last_train_loss": float(loss.item())}
         if step % log_every == 0 or step == 1 or windows >= budget:
-            rec = {"step": step, "windows_seen": windows, "training_flops": windows * fpw,
+            rec = {"step": step, "windows_seen": windows, "training_flops": _tflops(windows, fpw),
                    "loss": float(loss.item()), "grad_norm": gnorm,
                    "lr": opt.param_groups[0]["lr"],
                    "wall_seconds": round(wall0 + time.time() - t0, 2), "parts": parts,
                    **({"windows_per_stratum": dict(strata)} if strata else {}),
                    **({"exclude_rejections": excl["rejections"],
                        "exclude_rejection_rate": excl["rejections"]
-                       / (excl["rejections"] + excl["windows"])} if excl else {})}
+                       / (excl["rejections"] + excl["windows"])} if excl else {}),
+                   **({"cuda_peak_mem_mb": round(torch.cuda.max_memory_allocated(dev) / 2**20)}
+                      if dev.type == "cuda" else {})}
             log.write(json.dumps(rec) + "\n")
             log.flush()
         if next_val is not None and windows >= next_val:
