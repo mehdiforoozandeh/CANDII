@@ -1,15 +1,15 @@
 ---
 id: t168
 type: task
-title: Onion: FASTQ-level uniform kit for histone ChIP-seq and ATAC-seq
+title: "Onion: FASTQ-level uniform kit for histone ChIP-seq and ATAC-seq"
 category: implementation
 parent: t152
 blocked_by: t153, t154
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-10T22:47:24
-updated: 2026-11-10T22:47:24
+status: done
+created: "2026-11-10T22:47:24"
+updated: "2026-11-14T02:20:21"
 ---
 
 # t168 — Onion: FASTQ-level uniform kit for histone ChIP-seq and ATAC-seq
@@ -24,7 +24,7 @@ runs the uniform ENCODE-DCC pipeline from FASTQ for histone and ATAC
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 3409fc6](results/t168/PIPELINES.md)
 
 ## Evidence
 

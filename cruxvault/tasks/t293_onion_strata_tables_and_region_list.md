@@ -1,15 +1,15 @@
 ---
 id: t293
 type: task
-title: Onion: Strata tables and region lists: collect
+title: "Onion: Strata tables and region lists: collect"
 category: data-acquisition
 parent: t152
 blocked_by: t292
 refs: h33, h34, h36
 hypothesis_refs: 
-status: open
-created: 2026-11-13T12:42:52
-updated: 2026-11-13T12:42:52
+status: done
+created: "2026-11-13T12:42:52"
+updated: "2026-11-14T02:20:38"
 ---
 
 # t293 — Onion: Strata tables and region lists: collect
@@ -24,7 +24,7 @@ PI questions of 2026-11-13 on region budget and selection (Amendment 7): checked
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Collected in STRATA_REAL.md](results/t292/STRATA_REAL.md)
 
 ## Evidence
 

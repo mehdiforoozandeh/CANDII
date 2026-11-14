@@ -1,15 +1,15 @@
 ---
 id: t276
 type: task
-title: Onion: Reproduction gate against Max's numbers
+title: "Onion: Reproduction gate against Max's numbers"
 category: implementation
 parent: t152
 blocked_by: t274, t270, t271
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-12T18:39:34
-updated: 2026-11-12T18:39:34
+status: done
+created: "2026-11-12T18:39:34"
+updated: "2026-11-14T02:20:36"
 ---
 
 # t276 — Onion: Reproduction gate against Max's numbers
@@ -24,7 +24,7 @@ PI task of 2026-11-13 (AlphaGenome 2 as a competitor): shows our scorer gives Ma
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [gate: PASS, Fir job 3727830](results/t276/MAX_REPRO.md)
 
 ## Evidence
 

@@ -1,15 +1,15 @@
 ---
 id: t287
 type: task
-title: Onion: Evaluation set from an explicit regions file
+title: "Onion: Evaluation set from an explicit regions file"
 category: implementation
 parent: t152
 blocked_by: None
 refs: h35
 hypothesis_refs: 
-status: open
-created: 2026-11-13T12:42:51
-updated: 2026-11-13T12:42:51
+status: done
+created: "2026-11-13T12:42:51"
+updated: "2026-11-14T02:20:37"
 ---
 
 # t287 — Onion: Evaluation set from an explicit regions file
@@ -24,7 +24,7 @@ PI questions of 2026-11-13 on region budget and selection (Amendment 7): the 1,0
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 716a989: evaluation set from a regions file](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

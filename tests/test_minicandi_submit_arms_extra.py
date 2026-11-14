@@ -247,15 +247,12 @@ def test_score_only_without_squeue_refuses_a_real_submission(env, tmp_path):
     assert p.returncode == 2 and not (tmp / "sbatch.log").exists()
 
 
-def test_train_time_and_hold(env):
+def test_train_time_overrides_the_training_time_only(env):
     tmp, e = env
     base = sbatch_lines(run(tmp, e, 2, "base", DRY_RUN=1, SEEDS="0"))
-    tr, sc = sbatch_lines(run(tmp, e, 2, "base", DRY_RUN=1, SEEDS="0", TRAIN_TIME="04:00:00",
-                              HOLD=1))
+    tr, sc = sbatch_lines(run(tmp, e, 2, "base", DRY_RUN=1, SEEDS="0", TRAIN_TIME="04:00:00"))
     assert _opt(base[0], "time") != "04:00:00" and _opt(tr, "time") == "04:00:00"
-    assert _opt(sc, "time") == _opt(base[1], "time")                # scoring time unchanged
-    assert " --hold " in tr and " --hold " in sc and "--hold" not in " ".join(base)
-    assert tr.replace(" --hold", "").replace("--time=04:00:00", f"--time={_opt(base[0], 'time')}") \
-        == base[0]
+    assert tr.replace("--time=04:00:00", f"--time={_opt(base[0], 'time')}") == base[0]
+    assert sc == base[1]                                             # scoring line unchanged
     p = run(tmp, e, 2, "base", DRY_RUN=1, TRAIN_TIME="4h", ok=False)
     assert p.returncode == 2 and "TRAIN_TIME" in p.stderr

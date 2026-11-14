@@ -20,6 +20,10 @@ Refs:: _(none)_
 
 submits per-library and per-lane views and the blind experiments for eic_v2
 
+## Decisions and runs
+
+- Held by the foreman on 2026-11-13 (scheduling): group fair-share was low (CPU 0.14, GPU 0.23) and priority 4 feeds only blind-side inputs, which the ladder does not need; it waits until rung 1 has trained and scored. Source: run Log, INSTRUCTIONS/peeling_the_onion/run_state/plan.md.
+
 ## Output
 
 <!-- required before `done`, and the engine checks it resolves. Either form:

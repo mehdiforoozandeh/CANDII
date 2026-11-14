@@ -1,15 +1,15 @@
 ---
 id: t257
 type: task
-title: Onion: Select the second experiments
+title: "Onion: Select the second experiments"
 category: data-acquisition
 parent: t152
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-12T03:06:50
-updated: 2026-11-12T03:06:50
+status: done
+created: "2026-11-12T03:06:50"
+updated: "2026-11-14T02:20:32"
 ---
 
 # t257 — Onion: Select the second experiments
@@ -24,7 +24,7 @@ picks one ENCODE experiment and a fallback per EIC track, to measure the experim
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 382de4a: 88 second experiments selected](results/t257/SELECTION.md)
 
 ## Evidence
 

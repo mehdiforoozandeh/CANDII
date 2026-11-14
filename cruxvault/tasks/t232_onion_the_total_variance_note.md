@@ -1,15 +1,15 @@
 ---
 id: t232
 type: task
-title: Onion: The total-variance note
+title: "Onion: The total-variance note"
 category: manuscript
 parent: t152
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-11T23:05:08
-updated: 2026-11-11T23:05:08
+status: done
+created: "2026-11-11T23:05:08"
+updated: "2026-11-14T02:20:28"
 ---
 
 # t232 — Onion: The total-variance note
@@ -24,7 +24,7 @@ pins the total-variance identity that every headline metric and onion layer maps
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 729179a: the vault note on total variance](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

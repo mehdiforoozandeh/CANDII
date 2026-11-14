@@ -20,6 +20,10 @@ Refs:: _(none)_
 
 builds and verifies the second-experiment measurements on Nibi, with one resubmit and one fallback (chunks OXa, OXc)
 
+## Decisions and runs
+
+- Partly done: the second experiments were submitted after 3 smoke gates (OXa, 2026-11-13); 13 rows whose EIC partner is a tail DNase-seq row wait for the dataset update; row 2028 failed on the 12 GB Java heap and was resubmitted (stage 27232990, build 27232991). The collect (OXc) is not done. Notes: results/t264/SUBMITTED.md.
+
 ## Output
 
 <!-- required before `done`, and the engine checks it resolves. Either form:

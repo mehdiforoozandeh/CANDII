@@ -1,15 +1,15 @@
 ---
 id: t286
 type: task
-title: Onion: Training regions, exclusion and per-window loss weights
+title: "Onion: Training regions, exclusion and per-window loss weights"
 category: implementation
 parent: t152
 blocked_by: None
 refs: h33, h34, h36
 hypothesis_refs: 
-status: open
-created: 2026-11-13T12:42:51
-updated: 2026-11-13T12:42:51
+status: done
+created: "2026-11-13T12:42:51"
+updated: "2026-11-14T02:20:36"
 ---
 
 # t286 — Onion: Training regions, exclusion and per-window loss weights
@@ -24,7 +24,7 @@ PI questions of 2026-11-13 on region budget and selection (Amendment 7): the sam
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 34f7711, 2cfe3a3: training regions sampler](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

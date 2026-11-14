@@ -1,15 +1,15 @@
 ---
 id: t247
 type: task
-title: Onion: Model code for another bin size
+title: "Onion: Model code for another bin size"
 category: implementation
 parent: t152
 blocked_by: t244, t241, t243
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-11T23:05:10
-updated: 2026-11-11T23:05:10
+status: done
+created: "2026-11-11T23:05:10"
+updated: "2026-11-14T02:20:32"
 ---
 
 # t247 — Onion: Model code for another bin size
@@ -24,7 +24,7 @@ lets a rung train and be scored at bin sizes other than 25 bp
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged c4daa47: model code for another bin size](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

@@ -20,6 +20,10 @@ Refs:: _(none)_
 
 PI ruling 38 (2026-11-13, freeze eic_v1 at a fixed time, then versioned updates): resubmits a failed tail row once and builds the next dataset version with its change notes
 
+## Decisions and runs
+
+- Not started. Since the freeze, rows 46 and 52 (validation histone) and 388 and 390 (DNase-seq training) verified, so a first update (eic_v1_1) is possible (run Log 2026-11-14 05:20 UTC).
+
 ## Output
 
 <!-- required before `done`, and the engine checks it resolves. Either form:

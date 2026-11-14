@@ -1,15 +1,15 @@
 ---
 id: t309
 type: task
-title: Onion: Methods: the dataset and the evaluation protocol
+title: "Onion: Methods: the dataset and the evaluation protocol"
 category: manuscript
 parent: t152
 blocked_by: None
 refs: q17
 hypothesis_refs: 
-status: open
-created: 2026-11-14T00:35:54
-updated: 2026-11-14T00:35:54
+status: done
+created: "2026-11-14T00:35:54"
+updated: "2026-11-14T02:20:38"
 ---
 
 # t309 — Onion: Methods: the dataset and the evaluation protocol
@@ -24,7 +24,7 @@ Iteration 1 of Amendment 9 (ships 2026-11-15 09:00 UTC): the Methods sections Da
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged fa43c57](results/t309/sources.md)
 
 ## Evidence
 

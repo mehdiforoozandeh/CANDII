@@ -1,15 +1,15 @@
 ---
 id: t194
 type: task
-title: Onion: Selection rule: the blind state after a validation failure
+title: "Onion: Selection rule: the blind state after a validation failure"
 category: implementation
 parent: t152
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-11T11:20:26
-updated: 2026-11-11T11:20:26
+status: done
+created: "2026-11-11T11:20:26"
+updated: "2026-11-14T02:20:26"
 ---
 
 # t194 — Onion: Selection rule: the blind state after a validation failure
@@ -24,7 +24,7 @@ unblocks the done rule on the blind tracks
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged c7bc174: blind state after a validation failure](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

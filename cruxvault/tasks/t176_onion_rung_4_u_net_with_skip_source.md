@@ -1,15 +1,15 @@
 ---
 id: t176
 type: task
-title: Onion: Rung 4: U-Net with skip-source arms
+title: "Onion: Rung 4: U-Net with skip-source arms"
 category: implementation
 parent: t152
 blocked_by: t164
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-10T22:47:26
-updated: 2026-11-10T22:47:26
+status: done
+created: "2026-11-10T22:47:26"
+updated: "2026-11-14T02:20:22"
 ---
 
 # t176 — Onion: Rung 4: U-Net with skip-source arms
@@ -24,7 +24,7 @@ adds rung 4 of the miniCANDI ladder
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 50f41ed: rung 4](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

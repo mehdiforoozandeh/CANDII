@@ -1,15 +1,15 @@
 ---
 id: t262
 type: task
-title: Onion: Build list of the second experiments, and its kit
+title: "Onion: Build list of the second experiments, and its kit"
 category: data-acquisition
 parent: t152
 blocked_by: t257
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-12T03:06:51
-updated: 2026-11-12T03:06:51
+status: done
+created: "2026-11-12T03:06:51"
+updated: "2026-11-14T02:20:33"
 ---
 
 # t262 — Onion: Build list of the second experiments, and its kit
@@ -24,7 +24,7 @@ unblocks the Nibi build of the second experiments
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged e81d12c](results/t262/BUILD_LIST.md)
 
 ## Evidence
 

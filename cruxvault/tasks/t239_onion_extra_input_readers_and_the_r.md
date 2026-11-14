@@ -1,15 +1,15 @@
 ---
 id: t239
 type: task
-title: Onion: Extra-input readers and the reverse-complement transform
+title: "Onion: Extra-input readers and the reverse-complement transform"
 category: implementation
 parent: t152
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-11T23:05:09
-updated: 2026-11-11T23:05:09
+status: done
+created: "2026-11-11T23:05:09"
+updated: "2026-11-14T02:20:30"
 ---
 
 # t239 — Onion: Extra-input readers and the reverse-complement transform
@@ -24,7 +24,7 @@ unblocks the integration of the RNA-seq inputs and the reverse-complement augmen
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 1d26cbe: extra-input readers](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

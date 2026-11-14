@@ -1,15 +1,15 @@
 ---
 id: t289
 type: task
-title: Onion: Configs of the region experiments
+title: "Onion: Configs of the region experiments"
 category: implementation
 parent: t152
 blocked_by: None
 refs: h32, h33, h34, h36
 hypothesis_refs: 
-status: open
-created: 2026-11-13T12:42:52
-updated: 2026-11-13T12:42:52
+status: done
+created: "2026-11-13T12:42:52"
+updated: "2026-11-14T02:20:37"
 ---
 
 # t289 — Onion: Configs of the region experiments
@@ -24,7 +24,7 @@ PI questions of 2026-11-13 on region budget and selection (Amendment 7): the run
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged a09e0ce, 81bafbd: region configs](INSTRUCTIONS/peeling_the_onion/run_state/plan.md)
 
 ## Evidence
 

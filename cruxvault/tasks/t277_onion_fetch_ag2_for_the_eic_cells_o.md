@@ -20,6 +20,10 @@ Refs:: _(none)_
 
 PI task of 2026-11-13 (AlphaGenome 2 as a competitor): fetches only the AG2 predictions that the comparison needs
 
+## Decisions and runs
+
+- The fetch itself was done under t284 (8,960 calls on the evaluation regions) and the validation pack under t308; this task stays open until the foreman decides whether it is superseded.
+
 ## Output
 
 <!-- required before `done`, and the engine checks it resolves. Either form:

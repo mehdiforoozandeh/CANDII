@@ -522,7 +522,7 @@ Each line gives the fact, then its source. Sources are files in this vault or on
 - Baseline scoring with the parallel code (unmerged, commit 9cd5f04 on `chunk/onion-SM`): 1 h 21 min on 16 CPUs on same-cell pairs. Time goes to the count-space CRPS oracle search, the expected signal under the Negative Binomial, and the explained fraction per layer.
 
 **Region-selection facts**
-- At the model's window (25.6 kb) nearly every region holds a training peak, so class-based strata are near-uniform. The experiment uses a continuous score with a set tilt strength. The cCRE-like density and the cross-cell variance are anti-correlated across regions (rank correlation -0.51). Source: `cruxvault/results/t292/STRATA_REAL.md`.
+- At the sampling tile size (51.2 kb; the model's window is 25.6 kb) nearly every tile holds a training peak, so class-based strata are near-uniform. The experiment uses a continuous score with a set tilt strength. The cCRE-like density and the cross-cell variance are anti-correlated across regions (rank correlation -0.51). Source: `cruxvault/results/t292/STRATA_REAL.md`.
 - Training windows may overlap evaluation regions (ruling 39: measure the gap, no protocol change).
 
 **Mistakes of the foreman, so they are not repeated**
@@ -556,3 +556,7 @@ Each line gives the fact, then its source. Sources are files in this vault or on
 - **Ruling 45.** The check that picks the pair-region count runs on rung-4 models now; the rung-1 version follows in a later phase. This amends the reading of ruling 42.
 - **Ruling 46.** Move the frozen dataset to Fir by Globus, so that Fir takes the CPU work of iteration 2. The PI said "do the globus yourself".
 - Moved to later phases by the plan: the scoring of the budget curve, and the 256-region check on rung 1.
+
+- **2026-11-14, file limit on Nibi.** The project space of the group on Nibi has a limit of 500,000 files, shared by the whole lab. It was full at about 09:40 UTC and jobs failed on write. Each code snapshot ("kit") that a builder pushes holds about 2,000 files. Rule from now on: when a kit is no longer used by a queued or running job, it is packed into one tar file under `/scratch/mforooz/onion/kit_archive` and its folder is removed; the count of files (`diskusage_report`) is checked before each batch of new kits. The PI approved the first removal of 68 kits (130,067 files) on 2026-11-14.
+- **2026-11-14, Globus.** Two transfers from Nibi to Fir were started in the Globus web page (same paths on both clusters): `measurements` and `aux` under `/scratch/mforooz/onion/`, and `aux`, `eval`, `genome`, `region`, `runs`, `runs_region`, `tables` under `/project/def-maxwl/mforooz/ONION/`. Collections: `alliancecan#nibi` and `computecanada#cedar-globus & alliancecan#fir-globus`.
+- **2026-11-14, PI directive.** "on both fir and nibi, when we face file count, consider moving to scratch -- soft quota on nibi scratch is 20TB". New code snapshots, environments and logs go under `/scratch` from now on.
