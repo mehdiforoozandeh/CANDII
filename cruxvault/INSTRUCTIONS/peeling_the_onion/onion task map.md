@@ -181,3 +181,15 @@ Every chunk of the peeling-the-onion plan maps to one crux child task of t152. `
 | RB4a | t302 | Budget curve on rung 4: submit |
 | RB4b | t303 | Budget curve on rung 4: report |
 | RGs | t304 | The answers to the PI's region questions |
+| I1a | t305 | The variance layers on real data |
+| I1b | t306 | The baselines on the eic_v1 evaluation set (submit) |
+| I1c | t307 | The baselines: collect, and the room for a model |
+| I1d | t308 | AlphaGenome 2 against the baselines on the validation tracks |
+| I1e | t309 | Methods: the dataset and the evaluation protocol |
+| I1f | t310 | Deck 1 and the paper note of iteration 1 |
+| I2a | t311 | The screening evaluation set and its baselines |
+| I2b | t312 | Screening scorings of rung 1 and of the budget curve (submit) |
+| I2c | t313 | Rung 1: the model results |
+| I2d | t314 | The budget curve on rung 1 |
+| I2e | t315 | AlphaGenome 2 against miniCANDI rung 1 on the fair tracks |
+| I2f | t316 | Deck 2 and the paper note of iteration 2 |
