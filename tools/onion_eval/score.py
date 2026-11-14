@@ -559,6 +559,20 @@ def _np_out(o):
 
 # ------------------------------------------------------------------------------------------ scorer
 
+def _drop_cache(path) -> None:
+    """Ask the kernel to drop a file's cached pages (posix_fadvise DONTNEED; no-op elsewhere)."""
+    if not hasattr(os, "posix_fadvise"):
+        return
+    try:
+        fd = os.open(path, os.O_RDONLY)
+        try:
+            os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
+        finally:
+            os.close(fd)
+    except OSError:
+        pass
+
+
 #: SM: (scorer, tasks) of the parent, read by forked workers
 _WORKER = None
 
@@ -1804,6 +1818,8 @@ class Scorer:
                 if tmp.stat().st_size != size:
                     raise OSError(f"--stage-dir: short copy of {src}")
                 os.replace(tmp, dst)
+            for f in (src, dst):     # the copy's page cache counts against the job's memory
+                _drop_cache(f)
             return size
 
         with ThreadPoolExecutor(max_workers=max(1, int(threads))) as pool:
