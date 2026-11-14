@@ -565,6 +565,13 @@ _WORKER = None
 
 def _worker_init() -> None:
     sc, _ = _WORKER
+    # one torch thread per worker: the workers share the job's CPUs (a spinning OpenMP pool of n
+    # threads in each of n workers slowed the windows 70x). Only training-free predictors run in
+    # workers, so no torch kernel whose result depends on the thread count runs here. numpy's BLAS
+    # pool keeps the parent's size: r_spec's Level fit (inv, gemv) sums in an order that depends on
+    # it (2.3e-7 on a 32-region subset, 2 against 8 threads), so a worker equals the serial run of
+    # the same job shape only with the same BLAS threads.
+    torch.set_num_threads(1)
     sc._cells_ahead = None                       # the parent counts; a worker clears per group
     sc._pa_cache.clear()
     sc._pa_keep_cells = None
@@ -707,9 +714,11 @@ class Scorer:
         #: SM: worker processes over the imputation groups and the pairs (fork; results merged in
         #: the serial order, so every output is the serial one); 1 = the serial path
         self.workers = max(1, int(workers or 1))
-        if self.workers > 1 and str(device) != "cpu":
-            log(f"score: --workers {self.workers} ignored on device {device} (CUDA does not "
-                f"survive fork); scoring serially")
+        if self.workers > 1 and model is not None:
+            # a model's CPU kernels may sum in another order with another thread count, and CUDA
+            # does not survive fork: a model is scored serially (its forward is the long part)
+            log(f"score: --workers {self.workers} applies to training-free predictors only; "
+                f"scoring the model serially")
             self.workers = 1
         #: SM: copy the files the scoring reads to local disk first (see _stage)
         self.stage_dir = Path(stage_dir) if stage_dir else None
