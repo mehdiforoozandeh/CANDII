@@ -25,7 +25,10 @@ Config keys read: `skip_source` (dna | counts | both; base both), `covariate_inj
 `mask_mode`, `dna`, `count_transform`, `qc_on_input`, `average_input`, `param_budget`, and the
 optional `width` (channels of the finest level; when absent the constructor picks the width whose
 parameter count is closest to `param_budget`), `scramble_covariates` and `scramble_all`
-(`model_covariates`, the rule shared by all six rungs). Keys that act outside the model
+(`model_covariates`, the rule shared by all six rungs), and `hide_depth_covariate` (rung 4 only,
+default false; the `hard_offset` arm, configs/rung4/hard_offset.json): depth leaves C, C' and the
+input count transform, and enters only the NB head's offset add-back. Keys that act outside the
+model
 (base_depth, control_input, predict_control, windows_seen, lr, batch_size) are accepted and
 ignored here.
 
@@ -164,6 +167,7 @@ class Model(MiniCandi):
         self.dna_mode = cfg["dna"]
         self.average_input = bool(cfg["average_input"])
         self.scramble = scramble_mode(cfg)
+        self.hide_depth = bool(cfg.get("hide_depth_covariate", False))
         self.k_in = k_input(cfg)
         kw = component_kwargs(cfg)
         self.cov_dropout = kw["covariate_dropout"]
@@ -236,7 +240,7 @@ class Model(MiniCandi):
         x_counts, x_avail = batch["x_counts"], batch["x_avail"].bool()
         x_bin_mask = batch["x_bin_mask"].bool()
         c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training,
-                                                         self.cov_dropout)
+                                                         self.cov_dropout, self.hide_depth)
         c_in, c_out = c_in.float(), c_out.float()
         y_avail = batch["y_avail"].bool()
         B, L, _ = x_counts.shape
