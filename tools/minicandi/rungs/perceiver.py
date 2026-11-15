@@ -37,6 +37,11 @@ d_model, n_heads, n_latents, n_self_layers, patch_bins, d_bin, d_dna, d_bin_out,
 `n_latents` is the key of the agent-extra arms (PI ruling 14): `latents_small` = 32,
 `latents_large` = 512 against the base 128; all three stay within 10% of the 1.0e6 budget.
 
+Tuning keys (round-2 tuning, default off; absent = today's model, parameter for parameter):
+`decoder_norm` (bool, default false) puts a LayerNorm on the decoder output before `unpatch`, as
+rung 5 does (`dec_norm`); `unpatch_hidden` (int, default 0) makes `unpatch` a two-layer MLP,
+Linear(d, h) -> GELU -> Linear(h, P x `d_bin_out`), in place of the single Linear.
+
 Scrambled covariates: `model_covariates`, the rule shared by all six rungs.
 `average_input` adds one always-present token per (track, patch) from log1p of the batch's `avg`
 rate. `two_step = true` raises NotApplicable, as in every rung.
@@ -201,7 +206,12 @@ class Model(MiniCandi):
         self.out_track = nn.Parameter(torch.randn(A, d) * 0.02)
         self.cout = CovariateInjector(self.injection, d, k_input(None), **kw["injector"])
         self.decode = Block(d, n_heads, mlp, cross=True)
-        self.unpatch = nn.Linear(d, P * d_out)
+        self.dec_norm = nn.LayerNorm(d) if cfg.get("decoder_norm", False) else None
+        hid = int(cfg.get("unpatch_hidden", 0))
+        if hid < 0:
+            raise ValueError(f"unpatch_hidden {hid} must be >= 0")
+        self.unpatch = (nn.Sequential(nn.Linear(d, hid), nn.GELU(), nn.Linear(hid, P * d_out))
+                        if hid else nn.Linear(d, P * d_out))
         self.head = NBHead(d_out, self.transform, **kw["head"])
         # extra inputs (chunk XI), constructed last; dna = off leaves no DNA features
         self.build_extras(cfg, d_dna if self.dna_mode != "off" else None, ("cin", "cout"))
@@ -270,6 +280,8 @@ class Model(MiniCandi):
         else:
             q = self.cout(q, c_out[:, None])
         o = self.decode(q.reshape(B, NP * Ac, d), z)                          # [B, NP*A, d]
+        if self.dec_norm is not None:
+            o = self.dec_norm(o)
         o = F.gelu(self.unpatch(o)).view(B, NP, Ac, P, -1)
         o = o.permute(0, 1, 3, 2, 4).reshape(B, L, Ac, -1)                   # [B, L, A, d_out]
         return self.head(o, c_out_t)
