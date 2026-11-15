@@ -1,0 +1,27 @@
+{
+ "rung": 2,
+ "context_bins": 1024,
+ "covariate_injection": "film",
+ "mask_mode": "token",
+ "dna": "own",
+ "scramble_covariates": false,
+ "scramble_all": false,
+ "count_transform": "offset",
+ "qc_on_input": false,
+ "two_step": false,
+ "base_depth": "native",
+ "average_input": false,
+ "control_input": true,
+ "predict_control": true,
+ "param_budget": 1000000.0,
+ "windows_seen": 80000,
+ "lr": "<FILL>",
+ "batch_size": 8,
+ "simpler_than_base": null,
+ "heldout_loss": {
+  "batches": 16,
+  "every": 20
+ },
+ "_template": "stage B tuning combination: fill before submit, then delete every key that starts with '_'",
+ "_rule": "lr = the lr among {0.0003, 0.001 (rung2_base_heldout), 0.003} with the lowest held-out statistic; add each of {warmup_frac 0.15 + warmup_max 2000, grad_clip 3.0, weight_decay 0.1} whose trial beats rung2_base_heldout by more than delta; run only if the result differs from base and from every stage-A trial"
+}
