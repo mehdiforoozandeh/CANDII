@@ -223,7 +223,7 @@ def hide_depth(c: torch.Tensor, avail: torch.Tensor) -> torch.Tensor:
 
 
 def model_covariates(batch: dict, mode: str, training: bool, dropout: float = 0.0,
-                     hide_depth_covariate: bool = False) -> tuple:
+                     hide_depth_covariate: bool | str = False) -> tuple:
     """(c_in, c_out) for the covariate encoders and (c_in_t, c_out_t) whose column 0 is the depth
     the count transform and the NB head use.
 
@@ -233,6 +233,9 @@ def model_covariates(batch: dict, mode: str, training: bool, dropout: float = 0.
     c_out_t keeps the true target depth, which enters the NB mean through the offset add-back
     alone. The raw input counts still carry depth implicitly (their level scales with depth);
     the arm hides the depth covariate, not the counts. False returns today's tensors.
+    Two string values hide one encoder path only, with c_in_t and c_out_t kept true (PI ruling
+    49): `"output"` hides column 0 of c_out alone (the `hide_depth_output` arm); `"input"` hides
+    column 0 of c_in alone (the `hide_depth_input` arm). Any other value is a ValueError.
 
     `covariates`: every covariate column the encoders read (depth included) is permuted across the
     windows of the batch (`scramble_covariates`); the transform keeps each track's true depth, so
@@ -246,6 +249,9 @@ def model_covariates(batch: dict, mode: str, training: bool, dropout: float = 0.
     (`drop_covariates`); the two transform copies are never dropped, so the depth offset is kept.
     At 0, or in eval mode, nothing is drawn and the outputs are today's.
     """
+    if not (isinstance(hide_depth_covariate, bool) or hide_depth_covariate in ("output", "input")):
+        raise ValueError(f"hide_depth_covariate {hide_depth_covariate!r}; want false, true, "
+                         f"\"output\" or \"input\"")
     c_in, c_out = batch["c_in"], batch["c_out"]
     if mode == "none":
         e_in, e_out, t_in, t_out = c_in, c_out, c_in, c_out
@@ -257,9 +263,11 @@ def model_covariates(batch: dict, mode: str, training: bool, dropout: float = 0.
             e_in, e_out, t_in, t_out = s_in, s_out, s_in, s_out
         else:
             e_in, e_out, t_in, t_out = s_in, s_out, c_in, c_out
-    if hide_depth_covariate:
+    if hide_depth_covariate in (True, "input"):
         e_in = hide_depth(e_in, batch["x_avail"])
+    if hide_depth_covariate in (True, "output"):
         e_out = hide_depth(e_out, batch["y_avail"])
+    if hide_depth_covariate is True:
         t_in = hide_depth(t_in, batch["x_avail"])
     if training and dropout > 0:
         e_in, e_out = drop_covariates(e_in, e_out, float(dropout))
