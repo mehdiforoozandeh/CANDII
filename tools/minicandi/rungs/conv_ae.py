@@ -45,6 +45,13 @@ embedding expands each token's output features to five sub-bins before the outpu
 head emits (mu, n) per sub-bin, and the output holds `mu_sub`, `n_sub` [B, L, A, 5] and their pooled
 NB at 25 bp as `mu`, `n` (`components.sub_output`). At 1 (default) neither builds anything.
 
+Structure keys (rung 2 tuning, default-off): `n_levels` (downsampling steps, default N_LEVELS),
+`kernel` (odd conv kernel of every ConvBlock, default KERNEL) and `blocks_per_level` (ConvBlocks
+per encoder and decoder level, dilations 1, 2, 4, ..., default 2). The width W is still chosen
+for `param_budget`, so each key trades width against depth, kernel or bottleneck size. With the
+three keys absent the model is today's, parameter for parameter and output for output
+(tests/test_minicandi_tune_rung2.py).
+
 Guardrail part 1 holds by construction: the only reads of `x_counts` go through the
 count transform, whose window statistics use visible bins only, and the MaskHandler replaces every
 hidden or missing position before any cross-bin or cross-track mixing.
@@ -105,10 +112,23 @@ def check_rung(cfg: dict) -> None:
         raise NotApplicable(TWO_STEP_MESSAGE)
 
 
-def _level_widths(W: int) -> list[int]:
+def _level_widths(W: int, n_levels: int = N_LEVELS) -> list[int]:
     """Channels per encoder level: W, 1.25 W, 1.5 W, ... rounded to a multiple of WIDTH_STEP."""
     return [max(WIDTH_STEP, int(round(W * (1 + 0.25 * i) / WIDTH_STEP)) * WIDTH_STEP)
-            for i in range(N_LEVELS + 1)]
+            for i in range(n_levels + 1)]
+
+
+def _structure(cfg: dict) -> tuple[int, int, int]:
+    """(n_levels, kernel, blocks_per_level) from the structure keys; absent = the constants."""
+    n, k, b = (int(cfg.get("n_levels", N_LEVELS)), int(cfg.get("kernel", KERNEL)),
+               int(cfg.get("blocks_per_level", 2)))
+    if not 1 <= n <= 6:
+        raise ValueError(f"n_levels {n} not in 1..6")
+    if k < 1 or k % 2 == 0:
+        raise ValueError(f"kernel {k} must be odd and positive")
+    if not 1 <= b <= 4:
+        raise ValueError(f"blocks_per_level {b} not in 1..4")
+    return n, k, b
 
 
 class Model(C.MiniCandi):
@@ -157,25 +177,27 @@ class Model(C.MiniCandi):
         self.inj_in = CovariateInjector(inj, D_TRACK, k_in, D_COV, **kw["injector"])
         self.dna = DnaTower(cfg["dna"], D_DNA, **kw["dna"])
 
-        widths = _level_widths(W)
+        n_lev, K, nb = _structure(cfg)
+        self.n_levels = n_lev
+        widths = _level_widths(W, n_lev)
         c_stem = A * D_TRACK + (A if mask_mode == "drop" else 0) \
             + (D_DNA if cfg["dna"] != "off" else 0)
         self.stem = nn.Conv1d(c_stem, widths[0], 1)
         self.enc = nn.ModuleList()
         self.down = nn.ModuleList()
-        for i in range(N_LEVELS):
-            self.enc.append(nn.ModuleList([ConvBlock(widths[i], widths[i], KERNEL),
-                                           ConvBlock(widths[i], widths[i], KERNEL, dilation=2)]))
+        for i in range(n_lev):
+            self.enc.append(nn.ModuleList([ConvBlock(widths[i], widths[i], K, dilation=2 ** j)
+                                           for j in range(nb)]))
             self.down.append(Downsample(widths[i], widths[i + 1]))
-        wb = widths[N_LEVELS]
-        self.mid = nn.ModuleList([ConvBlock(wb, wb, KERNEL, dilation=2),
-                                  ConvBlock(wb, wb, KERNEL, dilation=4)])
+        wb = widths[n_lev]
+        self.mid = nn.ModuleList([ConvBlock(wb, wb, K, dilation=2),
+                                  ConvBlock(wb, wb, K, dilation=4)])
         self.up = nn.ModuleList()
         self.dec = nn.ModuleList()
-        for i in reversed(range(N_LEVELS)):
+        for i in reversed(range(n_lev)):
             self.up.append(Upsample(widths[i + 1], widths[i]))
-            self.dec.append(nn.ModuleList([ConvBlock(widths[i], widths[i], KERNEL),
-                                           ConvBlock(widths[i], widths[i], KERNEL, dilation=2)]))
+            self.dec.append(nn.ModuleList([ConvBlock(widths[i], widths[i], K, dilation=2 ** j)
+                                           for j in range(nb)]))
 
         self.out_proj = nn.Linear(widths[0], A * D_OUT)
         self.out_track = nn.Parameter(torch.randn(A, D_OUT) * 0.02)
@@ -225,7 +247,7 @@ class Model(C.MiniCandi):
             feats.append(self.add_extra_track(self.dna(batch[dna_key]), batch).to(h.dtype))
         z = torch.cat(feats, dim=-1).transpose(1, 2)                       # [B, C, L]
 
-        f = 2 ** N_LEVELS
+        f = 2 ** self.n_levels
         pad = (-L) % f
         if pad:
             z = F.pad(z, (0, pad))

@@ -1,0 +1,26 @@
+{
+ "rung": 2,
+ "context_bins": 1024,
+ "covariate_injection": "film",
+ "mask_mode": "token",
+ "dna": "own",
+ "scramble_covariates": false,
+ "scramble_all": false,
+ "count_transform": "offset",
+ "qc_on_input": false,
+ "two_step": false,
+ "base_depth": "native",
+ "average_input": false,
+ "control_input": true,
+ "predict_control": true,
+ "param_budget": 1000000.0,
+ "windows_seen": 80000,
+ "lr": "<FILL: stage-B lr>",
+ "batch_size": 8,
+ "simpler_than_base": null,
+ "heldout_loss": {
+  "batches": 16,
+  "every": 20
+ },
+ "_stage_b_rule": "B1 combined recipe: lr = the grid value in {0.0003, 0.001, 0.003} with the lowest score (the base lr 0.001 unless another qualifies); plus every optimizer knob (warm-up: warmup_frac 0.15 + warmup_max 2000; clip: grad_clip 3.0; weight decay: weight_decay 0.1) that qualified; plus the single shape knob (n_levels 3, n_levels 5, kernel 9, blocks_per_level 1, blocks_per_level 3) with the lowest score, if it qualified. Skip B1 if it equals a run already done. Score = mean of the last two heldout_loss values; qualifies = score below the reference (rung2_base_heldout) by more than delta_r = max(0.005, half the seed-0..2 range of the reference score)."
+}
