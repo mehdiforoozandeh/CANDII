@@ -1,6 +1,6 @@
 # Onion Shipment Two: the deck of shipment 2 of the peeling-the-onion run
 
-Artifact: pending (the foreman publishes it and adds the URL here and in `../ARTIFACTS.md`).
+Artifact: https://claude.ai/artifact/RHucrLM3AXXxVfzQtCqEDS (private).
 
 Source: `index.html` beside this file, built by `build_deck.py` from `deck_src.html` (prezit paper arc). Shipment 2 holds the model Results on screening scores and a first Discussion. The written form is the paper note `INSTRUCTIONS/peeling_the_onion/onion paper.md` (Model, Results 4 to 8, Discussion). The deck is derived, not evidence: no finding cites it.
 
