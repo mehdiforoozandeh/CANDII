@@ -35,7 +35,7 @@ Sets, per assay, how much variance imputation must explain (the cell-type layer)
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**4 children** · open 1, leaning 3, settled 0, parked 0 · 5 finding(s) on this question
+**4 children** · open 1, leaning 3, settled 0, parked 0 · 6 finding(s) on this question
 
 - `h37` [[h37_on_real_data_the_cell_type_layer_is_the_|On real data the cell-type layer is the largest layer for the narrow marks and for accessibility, and the sampling layer is the largest at 25 bp for the broad marks]] — *leaning · moderate*
 - `q24` _(Q)_ [[q24_how_much_of_each_variance_layer_does_the|How much of each variance layer does the model explain (the explained fraction per layer, beside the data layers of iteration 1)?]] — *open*
@@ -46,4 +46,5 @@ _(optional: the pre-registered rules — endpoints, thresholds, scope — locked
 - `f52` finding (moderate) [[f52_read_from_layers_by_assay_tsv_of_the_rer|Read from layers_by_assay.tsv of the rerun (job 27265045); moderate because…]]
 - `f53` finding (moderate) [[f53_read_from_layers_by_assay_tsv_and_layers|Read from layers_by_assay.tsv and layers_by_stratum.tsv of the rerun (job…]]
 - `f64` finding (moderate) [[f64_measured_on_the_same_3_908_pairs_as_f51_|Measured on the same 3,908 pairs as f51 to f53 with intervals; moderate…]]
+- `f77` finding (weak) [[f77_weak_on_purpose_this_qualifies_one_cavea|Weak on purpose: this qualifies one caveat of the earlier layers findings…]]
 <!-- crux:ledger:end -->

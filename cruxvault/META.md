@@ -78,6 +78,7 @@ Root: [[candii]]
 - ◐ `q20` [Q] [[q20_which_eic_tracks_did_alphagenome_2_train|**Which EIC tracks did AlphaGenome 2 train on, and how does it do against the baselines on the tracks that are fair?**]] — *leaning* · moderate
   - ○ `q26` [Q] [[q26_alphagenome_2_against_minicandi_rung_1_a|**AlphaGenome 2 against miniCANDI rung 1 and the baselines on the fair validation tracks.**]] — *open*
     - ○ `h41` [H] [[h41_on_the_12_unseen_validation_tracks_alpha|On the 12 unseen validation tracks AlphaGenome 2 is ahead of rung 1 base in rspec_cal]] — *open*
+  - ○ `q40` [Q] [[q40_why_does_alphagenome_2_score_above_the_p|**Why does AlphaGenome 2 score above the pseudoreplicate-half noise floor on the fair validation tracks for recalibrated r_spec (0.438 against 0.333), i.e. is that floor a real ceiling for this recalibrated metric?**]] — *open*
 - ◐ `q22` [Q] [[q22_does_the_smallest_model_beat_the_baselin|**Does the smallest model beat the baselines on imputation, covariate correction and calibrated uncertainty, and by how much against the seed spread?**]] — *leaning* · moderate
   - ◐ `h39` [H] [[h39_rung_1_base_beats_the_position_average_o|Rung 1 base beats the position average on imputation by more than 2 seed spreads on the composite's imputation term and closes part of the correction gap]] — *leaning* · moderate · supports
   - ◐ `q39` [Q] [[q39_do_the_context_rungs_2_to_6_convolution_|**Do the context rungs 2 to 6 (convolution, attention, U-Net, axial, Perceiver) beat the pointwise rung 1 and the baselines on each goal at equal training windows?**]] — *leaning* · moderate
@@ -88,7 +89,7 @@ Root: [[candii]]
 
 ## Dashboard
 
-- **Questions** (39): open 10 · leaning 21 · settled 8 · parked 0
+- **Questions** (40): open 11 · leaning 21 · settled 8 · parked 0
 - **Hypotheses** (40): open 11 · leaning 17 · settled 6 · parked 6
 - **Confidence**: weak 17 · moderate 21 · strong 14
-- **Findings**: 72
+- **Findings**: 75

@@ -61,7 +61,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t264` [data-acquisition] Onion: Build the second experiments: submit and collect
 - `t285` [data-acquisition] Onion: Update the dataset from a watchdog report
 - `t294` [implementation] Onion: Per-region output of the scorer and the region bootstrap — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h35_256_evaluation_regions_are_enough\|h35]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]]
-- `t308` [implementation] Onion: AlphaGenome 2 against the baselines on the validation tracks — refs [[q20_which_eic_tracks_did_alphagenome_2_train\|q20]]
 - `t311` [implementation] Onion: The screening evaluation set and its baselines — refs [[q22_does_the_smallest_model_beat_the_baselin\|q22]]
 - `t327` [implementation] Onion: fast model scoring for a fast feedback loop (PI directive 2026-11-14; Amendment 8) — refs [[q27_are_the_onion_run_s_estimators_scorers_a\|q27]]
 - `t329` [implementation] Onion: legacy scorer: merge, pair rules for cross-cell pairs, per-region pair sums (SF0) — refs [[q27_are_the_onion_run_s_estimators_scorers_a\|q27]]
@@ -106,8 +105,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t265` [data-acquisition] Onion: Build and check the eic_v1x tables — blocked by `t264`, `t263`, `t183`
 - `t266` [implementation] Onion: Add-on eval set, the experiment layer and the baselines' two bounds — blocked by `t265`, `t259`, `t260`, `t261`, `t185`, `t186`, `t236`
 - `t277` [data-acquisition] Onion: Fetch AG2 for the EIC cells on the eval regions — blocked by `t273`, `t268`, `t271`, `t276`, `t185`
-- `t278` [implementation] Onion: AG2 against the baselines on the validation tracks (submit) — blocked by `t277`, `t275`, `t272`, `t274`, `t186`
-- `t279` [implementation] Onion: AG2 against the baselines on the validation tracks (collect) — blocked by `t278`
 - `t280` [implementation] Onion: miniCANDI against AG2 on the validation tracks (submit) — blocked by `t223`, `t279`
 - `t281` [implementation] Onion: miniCANDI against AG2 on the validation tracks (collect) — blocked by `t280`
 - `t282` [implementation] Onion: AG2 on the blind tracks, inside the single blind pass — blocked by `t225`, `t281`
@@ -226,8 +223,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t255` [implementation] Onion: Extra inputs in a mix or evolved design — *blocked*
 - `t256` [implementation] Onion: Stage 3 on the design: submit, collect and settle — *blocked*
 - `t266` [implementation] Onion: Add-on eval set, the experiment layer and the baselines' two bounds — *blocked*
-- `t278` [implementation] Onion: AG2 against the baselines on the validation tracks (submit) — *blocked*
-- `t279` [implementation] Onion: AG2 against the baselines on the validation tracks (collect) — *blocked*
 - `t280` [implementation] Onion: miniCANDI against AG2 on the validation tracks (submit) — *blocked*
 - `t281` [implementation] Onion: miniCANDI against AG2 on the validation tracks (collect) — *blocked*
 - `t282` [implementation] Onion: AG2 on the blind tracks, inside the single blind pass — *blocked*
@@ -242,7 +237,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t302` [implementation] Onion: Budget curve on rung 4: submit — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — *blocked*
 - `t303` [implementation] Onion: Budget curve on rung 4: report — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — *blocked*
 - `t304` [implementation] Onion: The answers to the PI's region questions — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h35_256_evaluation_regions_are_enough\|h35]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *blocked*
-- `t308` [implementation] Onion: AlphaGenome 2 against the baselines on the validation tracks — refs [[q20_which_eic_tracks_did_alphagenome_2_train\|q20]] — *open*
 - `t311` [implementation] Onion: The screening evaluation set and its baselines — refs [[q22_does_the_smallest_model_beat_the_baselin\|q22]] — *open*
 - `t312` [implementation] Onion: Screening scorings of rung 1 and of the budget curve (submit) — refs [[h39_rung_1_base_beats_the_position_average_o\|h39]], [[h40_scrambled_covariates_lowers_the_correcti\|h40]], [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — *blocked*
 - `t313` [implementation] Onion: Rung 1: the model results — refs [[h39_rung_1_base_beats_the_position_average_o\|h39]], [[h40_scrambled_covariates_lowers_the_correcti\|h40]], [[q24_how_much_of_each_variance_layer_does_the\|q24]] — *blocked*
@@ -454,6 +448,8 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t274` [implementation] Onion: The same-track scorer and the ag2_board table — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
 - `t275` [implementation] Onion: Dump hook: method track files from the scorer — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
 - `t276` [implementation] Onion: Reproduction gate against Max's numbers — *done* → `results/t276/MAX_REPRO.md`
+- `t278` [implementation] Onion: AG2 against the baselines on the validation tracks (submit) — *done* → `results/t308/AG2_VS_BASELINES.md`
+- `t279` [implementation] Onion: AG2 against the baselines on the validation tracks (collect) — *done* → `results/t308/AG2_VS_BASELINES.md`
 - `t283` [implementation] Onion: The eval regions, written before the tables exist — *done* → `results/t283/REGIONS.md`
 - `t284` [data-acquisition] Onion: AlphaGenome 2 fetch on the regions file — *done* → `results/t284/FETCH.md`
 - `t286` [implementation] Onion: Training regions, exclusion and per-window loss weights — refs [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
@@ -467,6 +463,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t305` [implementation] Onion: The variance layers on real data — refs [[h37_on_real_data_the_cell_type_layer_is_the_\|h37]], [[q18_how_large_is_each_layer_of_the_variance_\|q18]] — *done* → `results/t305/LAYERS_REAL.md`
 - `t306` [implementation] Onion: The baselines on the eic_v1 evaluation set (submit) — refs [[h38_the_gap_between_depth_only_scaling_and_t\|h38]], [[q19_what_do_the_training_free_baselines_reac\|q19]] — *done* → `results/t307/BASELINES.md`
 - `t307` [implementation] Onion: The baselines: collect, and the room for a model — refs [[h38_the_gap_between_depth_only_scaling_and_t\|h38]], [[q19_what_do_the_training_free_baselines_reac\|q19]] — *done* → `results/t307/BASELINES.md`
+- `t308` [implementation] Onion: AlphaGenome 2 against the baselines on the validation tracks — refs [[q20_which_eic_tracks_did_alphagenome_2_train\|q20]] — *done* → `results/t308/AG2_VS_BASELINES.md`, `results/t308/ag2_contrasts_val.tsv`
 - `t309` [manuscript] Onion: Methods: the dataset and the evaluation protocol — refs [[q17_what_is_the_dataset_and_what_did_it_cost\|q17]] — *done* → `results/t309/sources.md`
 - `t310` [manuscript] Onion: Deck 1 and the paper note of iteration 1 — refs [[q17_what_is_the_dataset_and_what_did_it_cost\|q17]], [[q18_how_large_is_each_layer_of_the_variance_\|q18]], [[q19_what_do_the_training_free_baselines_reac\|q19]], [[q20_which_eic_tracks_did_alphagenome_2_train\|q20]], [[q21_does_stratified_selection_of_training_re\|q21]] — *done* → `presentations/onion-ship1-2026-11-15/DECK.md`
 - `t317` [implementation] Onion: rung consistency across the six rungs (scramble rule, wiring check, registration) — refs [[q27_are_the_onion_run_s_estimators_scorers_a\|q27]] — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`

@@ -1,15 +1,15 @@
 ---
 id: t308
 type: task
-title: Onion: AlphaGenome 2 against the baselines on the validation tracks
+title: "Onion: AlphaGenome 2 against the baselines on the validation tracks"
 category: implementation
 parent: t152
 blocked_by: t306
 refs: q20
 hypothesis_refs: 
-status: open
-created: 2026-11-14T00:35:54
-updated: 2026-11-14T00:35:54
+status: done
+created: "2026-11-14T00:35:54"
+updated: "2026-11-14T19:19:24"
 ---
 
 # t308 — Onion: AlphaGenome 2 against the baselines on the validation tracks
@@ -28,7 +28,8 @@ Iteration 1 of Amendment 9 (ships 2026-11-15 09:00 UTC): AlphaGenome 2 beside th
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [AlphaGenome 2 against the baselines, validation tracks](results/t308/AG2_VS_BASELINES.md)
+- [Contrasts](results/t308/ag2_contrasts_val.tsv)
 
 ## Evidence
 

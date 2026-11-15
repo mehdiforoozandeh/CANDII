@@ -1,15 +1,15 @@
 ---
 id: t278
 type: task
-title: Onion: AG2 against the baselines on the validation tracks (submit)
+title: "Onion: AG2 against the baselines on the validation tracks (submit)"
 category: implementation
 parent: t152
 blocked_by: t277, t275, t272, t274, t186
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-12T18:39:34
-updated: 2026-11-12T18:39:34
+status: done
+created: "2026-11-12T18:39:34"
+updated: "2026-11-14T19:19:24"
 ---
 
 # t278 — Onion: AG2 against the baselines on the validation tracks (submit)
@@ -24,7 +24,7 @@ PI task of 2026-11-13 (AlphaGenome 2 as a competitor): submits the jobs that wri
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Baseline track dumps, jobs 27337502, 27337503, 27337505 (Source section)](results/t308/AG2_VS_BASELINES.md)
 
 ## Evidence
 

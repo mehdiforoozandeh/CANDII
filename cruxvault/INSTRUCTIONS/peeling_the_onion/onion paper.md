@@ -90,7 +90,7 @@ Source: `cruxvault/results/t305/LAYERS_REAL.md` and `layers_by_assay.tsv`, `laye
 
 ==The layers hypothesis held in part. For H3K27me3, H3K36me3 and H3K9me3 the sampling layer is 0.88 to 0.89 of the three layers at 25 bp, as expected. The expectation that the cell-type layer leads for the narrow marks and accessibility fails at 25 bp over all regions (sampling 0.76 to 0.85, cell type at most 0.23) and holds at the broad scale and in promoters for DNase-seq.==
 
-==Caveats. The shares are at the depth of one pseudoreplicate half, and on log1p counts the sampling layer shrinks as depth grows, so at full depth its share is smaller. The replicate layer pools three sources, and the cell-type layer holds donor and lab, because the sequencing, technical, anisogenic and other-experiment rungs have no pair. DNase-seq rests on 33 pseudoreplicate, 8 isogenic and 136 other-cell-type pairs, because 18 training DNase-seq tracks are absent from `eic_v1`.==
+==Caveats. The shares are at the depth of one pseudoreplicate half, and on log1p counts the sampling share falls as depth grows, so at full depth its share is smaller. The sampling layer itself does not shrink with depth at these counts: in a simulation (`cruxvault/results/eta_space/THEORY.md`, section 4), the log1p sampling variance rose with depth up to about 5 reads per bin (0.0023 at 0.005 reads per bin, 0.205 at 5) and fell above it (0.032 at 100), and the data sit at about 0.02 to 0.05 reads per bin. The replicate layer pools three sources, and the cell-type layer holds donor and lab, because the sequencing, technical, anisogenic and other-experiment rungs have no pair. DNase-seq rests on 33 pseudoreplicate, 8 isogenic and 136 other-cell-type pairs, because 18 training DNase-seq tracks are absent from `eic_v1`.==
 
 ### Results 2: the training-free baselines
 
@@ -108,7 +108,7 @@ Source: `cruxvault/results/t307/BASELINES.md` and its tables (`baselines_headlin
 
 ==The headroom expectation (the gap is largest for the depth and run-type knobs and near 0 for pure subset pairs) is not supported as written: the run-type knob rests on 1 cell, pooled over both directions the largest gaps are crop+mapq (0.116 [0.064, 0.170]) and depth+nodedup (0.107 [0.061, 0.164]), and the subset pairs have a gap of 0.035 [0.021, 0.055], which mixes -0.011 on shallower targets and 0.081 on deeper ones.==
 
-### Results 3: AlphaGenome 2, the training-track audit
+### Results 3: AlphaGenome 2, the training-track audit and the board against the baselines
 
 Source: `cruxvault/results/t273/AG2_LEAKAGE.md` (audit), `cruxvault/results/t308/SUBMITTED.md` (pack and board status), `cruxvault/results/ag2/AG2_FACTS.md` (what the model predicts). Label: interim, dataset `eic_v1`, validation tracks.
 
@@ -116,7 +116,21 @@ Source: `cruxvault/results/t273/AG2_LEAKAGE.md` (audit), `cruxvault/results/t308
 
 ==In `eic_v1` the headline regime holds 43 validation targets, because two validation DNase-seq tracks are absent. The packed predictions therefore hold a fair set of 11 tracks in 9 cells that neither AlphaGenome 2 nor our models trained on, and a trained-on set of 31 tracks in 20 cells; the sibling-condition track is set aside. The two sets are scored and reported apart, and only the fair set can carry a claim about unseen tracks.==
 
-==The board of AlphaGenome 2 against the baselines has not run. The oracle-baseline step needs a fragment length to turn counts into a signal track, and the tables leave `frag_len` empty for 35 of 98 validation base tracks and 196 of 555 training ChIP-seq base tracks, so the step failed, and only 10 of the 43 headline targets have a signal-space truth. The board arrives in shipment 2, after that gap is closed.==
+Board source: `cruxvault/results/t308/AG2_VS_BASELINES.md`, with `ag2_board_val.tsv`, `ag2_contrasts_val.tsv` and `ag2_per_target_val.tsv` of the same folder. Interval: 95% cluster bootstrap over cells, 2,000 resamples.
+
+==We scored AlphaGenome 2 and the training-free baselines on the same validation tracks, regions and truth, in the asinh signal space at 25 bp. Each prediction got the same per-track isotonic recalibration to the truth, i.e. a monotone map fitted on the test track itself. The primary signal metric is the recalibrated r_spec, i.e. the correlation with the truth after both have the mean of the training tracks removed. The peak metric is the area under the precision-recall curve (AUPRC) against ENCODE peak tiles of 500 bp. On the fair set of 11 tracks in 9 cells, AlphaGenome 2 had a recalibrated r_spec of 0.438, against 0.222 for the position average and 0.121 for the marginal Negative Binomial. The position average minus AlphaGenome 2 was -0.216 [-0.297, -0.123], and the position average was ahead on 0 of 11 tracks. Every other baseline was also behind, with an interval that excludes 0, on recalibrated r_spec and on peak AUPRC. On Spearman correlation, the position average minus AlphaGenome 2 was -0.031 [-0.106, +0.064], so that comparison has no call. On the 30 tracks that AlphaGenome 2 trained on, its recalibrated r_spec was 0.614, against a noise floor of 0.585. That result measures the fit of AlphaGenome 2 to its training tracks, so it is not evidence about imputation.==
+
+| method | fair set: r_spec, recalibrated | fair set: AUPRC, ENCODE peaks | trained-on set: r_spec, recalibrated | trained-on set: AUPRC, ENCODE peaks |
+|---|---|---|---|---|
+| AlphaGenome 2, matched read-type channel | 0.438 | 0.454 | 0.614 | 0.809 |
+| position average | 0.222 | 0.271 | 0.122 | 0.533 |
+| marginal Negative Binomial | 0.121 | 0.132 | 0.069 | 0.232 |
+| training-track mean signal | 0 (by definition) | 0.256 | 0 (by definition) | 0.570 |
+| closest-five training tracks (oracle) | 0.066 | 0.255 | 0.154 | 0.595 |
+| pseudoreplicate half (noise floor) | 0.333 [0.276, 0.382] | 0.571 [0.399, 0.695] | 0.585 [0.519, 0.639] | 0.866 |
+| tracks, cells | 11 tracks, 9 cells | 11 tracks, 9 cells | 30 tracks, 20 cells | 30 tracks, 20 cells |
+
+==Limits. The fair set has 11 tracks in 9 cells, and 9 of its 10 marks have one track, so the board supports a direction against the training-free baselines and not a per-mark ranking. The board has no row for our trained model yet. The two training-track baselines leave out 33 training tracks, because no fragment length was available to turn their counts into a signal track. The control-free table and the retrieval baseline have not run. AlphaGenome 2 is above the noise floor on the fair set (0.438 against 0.333). The noise floor compares two read halves, each at half the depth of the truth, so it is not a ceiling for a prediction; whether this recalibrated metric has a real ceiling is an open question.==
 
 ### Results 4 onward: the models
 

@@ -1,15 +1,15 @@
 ---
 id: t279
 type: task
-title: Onion: AG2 against the baselines on the validation tracks (collect)
+title: "Onion: AG2 against the baselines on the validation tracks (collect)"
 category: implementation
 parent: t152
 blocked_by: t278
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-12T18:39:34
-updated: 2026-11-12T18:39:34
+status: done
+created: "2026-11-12T18:39:34"
+updated: "2026-11-14T19:19:24"
 ---
 
 # t279 — Onion: AG2 against the baselines on the validation tracks (collect)
@@ -24,7 +24,7 @@ PI task of 2026-11-13 (AlphaGenome 2 as a competitor): gives the first AG2 resul
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [AlphaGenome 2 against the baselines, validation tracks](results/t308/AG2_VS_BASELINES.md)
 
 ## Evidence
 
