@@ -53,7 +53,8 @@ Component arm keys (pinned interface E, chunk A3) reach every component through
 `component_kwargs(cfg)`: `covariate_injection = adaln_zero`, `covariate_dropout` (passed to
 `model_covariates`), `covariate_embedding`, `dna = precomputed` (the DnaTower of the DNA row and
 of the per-bin DNA skip reads `batch["x_dna_emb"]`; needs `dna_embedding_dim`), `offset_eps`, `count_transform = soft_clip` and
-`head = nb_shared_size`. With every key at its default the model is today's, parameter for
+`head = nb_shared_size`. Shape keys (round-2 tuning): `d_model` (128), `n_layers` (4) and `n_heads` (8);
+the FFN width still fills the parameter budget. With every key at its default the model is today's, parameter for
 parameter and output for output (tests/test_minicandi_rung_arms.py).
 """
 from __future__ import annotations
@@ -177,7 +178,12 @@ class Model(MiniCandi):
         self.L = int(cfg.get("context_bins", 1024))
         if self.L % PATCH:
             raise ValueError(f"context_bins {self.L} is not a multiple of the patch {PATCH}")
-        d = D_MODEL
+        # shape keys (round-2 tuning, default off): absent = the module constants, bit for bit
+        d = self.d = int(cfg.get("d_model", D_MODEL))
+        n_layers = int(cfg.get("n_layers", N_LAYERS))
+        heads = int(cfg.get("n_heads", N_HEADS))
+        if d % heads or n_layers < 1:
+            raise ValueError(f"d_model {d} must divide by n_heads {heads}; n_layers {n_layers} >= 1")
         self.n_patch = self.L // PATCH
         k_in = k_input(cfg)
 
@@ -206,14 +212,14 @@ class Model(MiniCandi):
 
         # attention stack
         self.layers = nn.ModuleList()
-        for _ in range(N_LAYERS):
+        for _ in range(n_layers):
             blk = nn.ModuleDict()
             if self.axis != "track_only":
-                blk["pos"] = AxialAttention(d, N_HEADS, "position")
+                blk["pos"] = AxialAttention(d, heads, "position")
             if self.axis != "position_only":
-                blk["row"] = AxialAttention(d, N_HEADS, "row")
+                blk["row"] = AxialAttention(d, heads, "row")
             self.layers.append(blk)
-        self.readout = AxialAttention(d, N_HEADS, "row") if self.axis == "position_only" else None
+        self.readout = AxialAttention(d, heads, "row") if self.axis == "position_only" else None
 
         # decoder
         self.dec_norm = nn.LayerNorm(d)
@@ -224,8 +230,8 @@ class Model(MiniCandi):
         # FFN width from the parameter budget: every FFN adds d_ff (2d + 1) + 3d parameters
         budget = float(cfg.get("param_budget", 1.0e6))
         p0 = self.param_count()
-        per = N_LAYERS * (2 * d + 1)
-        self.d_ff = max(D_FF_MIN, int(round((budget - p0 - N_LAYERS * 3 * d) / per)))
+        per = n_layers * (2 * d + 1)
+        self.d_ff = max(D_FF_MIN, int(round((budget - p0 - n_layers * 3 * d) / per)))
         for blk in self.layers:
             blk["ffn"] = FFN(d, self.d_ff)
         # extra inputs (chunk XI), constructed last (after the FFN width, which they do not
@@ -240,7 +246,7 @@ class Model(MiniCandi):
         B, L, _ = xc.shape
         if L != self.L:
             raise ValueError(f"window has {L} bins; the model was built for {self.L}")
-        N, d = self.n_patch, D_MODEL
+        N, d = self.n_patch, self.d
         vis = MaskHandler.visible(avail, bmask)
         z = self.transform(xc, c_in_t[..., LOG2_DEPTH_COL], vis)            # [B, L, A]
         feat = torch.stack([z, torch.ones_like(z)], dim=-1)                        # [B, L, A, 2]

@@ -1,0 +1,27 @@
+{
+ "rung": 5,
+ "context_bins": 1024,
+ "covariate_injection": "tokens",
+ "mask_mode": "drop",
+ "dna": "own",
+ "scramble_covariates": false,
+ "scramble_all": false,
+ "count_transform": "offset",
+ "qc_on_input": false,
+ "two_step": false,
+ "base_depth": "native",
+ "average_input": false,
+ "control_input": true,
+ "predict_control": true,
+ "param_budget": 1000000,
+ "windows_seen": 80000,
+ "lr": "<FILL: B1 lr>",
+ "batch_size": 8,
+ "simpler_than_base": null,
+ "axis": "both",
+ "_stage_b_rule": "B1 combined recipe: lr = the grid value with the lowest score (the base lr unless another qualifies); plus every optimizer knob (warm-up, clip, weight decay, dropout) that qualified; plus the single shape knob with the lowest score, if it qualified. Skip B1 if it equals a run already done. Rung 5 grid: 3e-4 (base), 1e-3 (rung5_lr1e3 seed 0), 3e-3; optimizer knobs: warmup15 (warmup_frac 0.15, warmup_max 10000), clip3 (grad_clip 3.0), weight_decay0.1 (weight_decay 0.1); shape knobs: layers3 (n_layers 3), width96_layers6 (d_model 96, n_layers 6), width160_layers2 (d_model 160, n_layers 2). Delete this key when filling.",
+ "heldout_loss": {
+  "batches": 16,
+  "every": 20
+ }
+}
