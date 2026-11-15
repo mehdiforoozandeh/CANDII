@@ -1,0 +1,27 @@
+{
+ "rung": 4,
+ "context_bins": 1024,
+ "skip_source": "both",
+ "covariate_injection": "film",
+ "mask_mode": "token",
+ "dna": "own",
+ "scramble_covariates": false,
+ "scramble_all": false,
+ "count_transform": "offset",
+ "qc_on_input": false,
+ "two_step": false,
+ "base_depth": "native",
+ "average_input": false,
+ "control_input": true,
+ "predict_control": true,
+ "param_budget": 1000000.0,
+ "windows_seen": 80000,
+ "lr": "FILL",
+ "batch_size": 8,
+ "simpler_than_base": null,
+ "_stage_b_rule": "lr = the lr with the lowest final held-out loss among tune_rung4_lr3e-4, rung4_base_heldout (1e-3), tune_rung4_lr3e-3; plus the ONE change among warmup15 / clip3 / wd0.1 whose run has the lowest final held-out loss AND beats rung4_base_heldout by more than the noise floor (PLAN.md). Copy that change's keys. If none beats base, do not run. Delete _stage_b_rule before submission.",
+ "heldout_loss": {
+  "batches": 16,
+  "every": 20
+ }
+}
