@@ -139,6 +139,28 @@ the code before them, and `plan()` draws no extra random number. The two may not
 `region_record()` gives the path and sha256 of the file read ({} without the keys); the train loop
 stores it in run.json and logs the window count per stratum.
 
+Training views (chunk CF, the counterfactual-data ablation). Two train-mode-only controls; each
+is off at its default, and the defaults give bit-identical batches.
+  train_views      a list of view kinds that TRAIN mode may read as input or target. A view kind
+                   is the knob that `view_of` returns: `base` (no arm), `depth` (depth0.50,
+                   depth0.25, depth0.125), `se`, `crop` (crop36, crop50), `nodedup`, `mapq`
+                   (mapq0), and `abproxy` (testbed tables only); the names are `VIEW_KINDS`. Absent
+                   or null = every view (today's sampler). A view whose kind is not listed is
+                   removed from the training candidates of its track before any draw; a track left
+                   with no listed view is a missing track of its cell (no input, no target), and a
+                   cell left with no track is not drawn. An empty list or an unknown name raises
+                   ValueError, and so does a list that leaves no training track. Pseudoreplicate
+                   halves (`pr1.h5`, `pr2.h5`) are files of a view, not views: the training sampler
+                   never reads them in any arm (it reads `counts` only), so this key does not touch
+                   them. The key never changes validation or blind items, the leave-one-cell-out
+                   average (`train_base` keeps the base view of every training track), `train_cells`
+                   (the expression z-score set) or `withheld.tsv` checks.
+  same_view_prob   at 1.0 (or above) the sampler draws same-view pairs only: the fallback list of
+                   `_candidates` (tried when the first pair completes a withheld combination
+                   across tracks) then holds only same-view pairs, so no cross-view (kind 2)
+                   entry is ever drawn. Below 1.0 the fallback list is today's (every ordered
+                   pair of views), so the default 0.5 is unchanged.
+
 Leave-one-cell-out average (`average_input`): with `config["average_h5"]` (built once by
 `build_average_h5`) it reads one per-track sum of training-cell rates and subtracts the window's
 own cell; without it, it reads every other training cell directly (small tables only). The
@@ -230,6 +252,8 @@ REVCOMP_PROB = 0.5
 #: interface I: tries of the locus draw under `exclude_regions` (8 without it)
 EXCLUDE_TRIES = 64
 REGION_LIST_COLUMNS = ("chrom", "start_bin", "n_bins", "stratum", "sample_weight", "loss_weight")
+#: `train_views`: the view kinds (the knob of `view_of`) a training config may name
+VIEW_KINDS = ("base", "depth", "se", "crop", "nodedup", "mapq", "abproxy")
 
 
 class RoleError(PermissionError):
@@ -374,6 +398,7 @@ class OnionDataset(IterableDataset):
         self.train_base = {k: min(v, key=lambda m: (view_of(self.rows[m])[0] != "base",
                                                      _base_rank(self.rows[m])))
                            for k, v in self.train_tracks.items()}
+        self._init_train_views()
 
         gdir = self.config.get("genome_dir") or (self.tables_dir.parent.parent / "genome")
         self._pool = _HandlePool()
@@ -398,6 +423,42 @@ class OnionDataset(IterableDataset):
             raise FileNotFoundError(f"dna_embedding_h5 {self.dna_emb_path}: missing")
         self._init_extras()
         self._init_regions()
+
+    def _init_train_views(self) -> None:
+        """`train_views` (module docstring, Training views); applied in train mode only."""
+        tv = self.config.get("train_views")
+        self.train_views = None
+        self._sampled_cache = None
+        if tv is None:
+            return
+        if isinstance(tv, str) or not list(tv):
+            raise ValueError(f"train_views {tv!r}: want a non-empty list of view kinds")
+        bad = sorted({str(k) for k in tv} - set(VIEW_KINDS))
+        if bad:
+            raise ValueError(f"train_views names {bad}; the view kinds are {VIEW_KINDS}")
+        if self.mode != "train":
+            return
+        self.train_views = frozenset(str(k) for k in tv)
+        if not self._sampled()[0]:
+            raise ValueError(f"train_views {sorted(self.train_views)}: no training track "
+                             f"keeps a view of these kinds")
+
+    def _sampled(self) -> tuple[dict, list]:
+        """(tracks, cells) the training sampler draws from: `train_tracks` and `train_cells`
+        without `train_views`; else each track's views of the listed kinds, tracks with none
+        dropped, and the cells that keep a track."""
+        if self.train_views is None:
+            return self.train_tracks, self.train_cells
+        cache = self._sampled_cache
+        if cache is None or cache[0] is not self.train_tracks:
+            tracks = {}
+            for k, mids in self.train_tracks.items():
+                keep = [m for m in mids if view_of(self.rows[m])[0] in self.train_views]
+                if keep:
+                    tracks[k] = keep
+            cache = self._sampled_cache = (self.train_tracks, tracks,
+                                           sorted({c for c, _ in tracks}))
+        return cache[1], cache[2]
 
     def _init_regions(self) -> None:
         """`exclude_regions` / `train_regions` (pinned interface I); train mode only."""
@@ -793,14 +854,15 @@ class OnionDataset(IterableDataset):
         """One training window's choices, without reading counts."""
         if self.mode != "train":
             raise RuntimeError("plan() is the training sampler; use window() or iterate")
-        cell = self.train_cells[int(rng.integers(len(self.train_cells)))]
+        tracks, cells = self._sampled()
+        cell = cells[int(rng.integers(len(cells)))]
         row = None
         if self.regions is not None:
             chrom, start, row = self._draw_region(rng)
         else:
             self._exclude_rejections = 0
             chrom, start = self._draw_locus(rng)
-        assays = sorted(a for c, a in self.train_tracks if c == cell)
+        assays = sorted(a for c, a in tracks if c == cell)
         order = [assays[i] for i in rng.permutation(len(assays))]
         masked = self._masked_set(cell, order, rng)
         if len(assays) > 1 and len(masked) == len(assays):
@@ -809,7 +871,7 @@ class OnionDataset(IterableDataset):
             masked = set()
         accepted, entries = [], []
         for a in order:
-            views = self.train_tracks[(cell, a)]
+            views = tracks[(cell, a)]
             for v_in, v_out in self._candidates(a in masked, views, rng):
                 if self._compatible(v_in, v_out, accepted):
                     accepted.append((v_in, v_out))
@@ -839,11 +901,12 @@ class OnionDataset(IterableDataset):
             n_vis = int(round(share * len(order)))
             return set(order[n_vis:])
         # panel: copy the missing-assay pattern of another training cell
-        others = [c for c in self.train_cells if c != cell]
+        tracks, cells = self._sampled()
+        others = [c for c in cells if c != cell]
         if not others:
             return set()
         donor = others[int(rng.integers(len(others)))]
-        return {a for a in order if (donor, a) not in self.train_tracks}
+        return {a for a in order if (donor, a) not in tracks}
 
     def _candidates(self, masked: bool, views: list, rng) -> list:
         vs = [views[i] for i in rng.permutation(len(views))]
@@ -852,9 +915,13 @@ class OnionDataset(IterableDataset):
             return impute
         first_in = vs[0]
         others = [v for v in vs if v != first_in]
-        same = rng.random() < self.config["same_view_prob"] or not others
+        p_same = self.config["same_view_prob"]
+        same = rng.random() < p_same or not others
         first = (first_in, first_in) if same else (first_in, others[0])
-        rest = [(i, o) for i in vs for o in vs if (i, o) != first]
+        if p_same >= 1.0:              # same-view pairs only, also in the fallback list
+            rest = [(v, v) for v in vs if (v, v) != first]
+        else:
+            rest = [(i, o) for i in vs for o in vs if (i, o) != first]
         rest = [rest[j] for j in rng.permutation(len(rest))] if rest else []
         return [first] + rest + impute
 
