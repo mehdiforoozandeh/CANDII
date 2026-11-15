@@ -33,6 +33,11 @@ model
 (base_depth, control_input, predict_control, windows_seen, lr, batch_size) are accepted and
 ignored here.
 
+Round-2 tuning keys (default-off; absent = today's model, parameter for parameter and output for
+output, tests/test_minicandi_tune_rung4.py): `n_levels` (2 to 5, default N_LEVELS = 4; the
+bottleneck stride is 2**n_levels, channels follow LEVEL_MULT, and the width is refitted to
+`param_budget`) and `attn_dropout` (default 0.0; the dropout of the bottleneck transformer layers).
+
 Not applicable (`NotApplicable`): `skip_source = dna` with `dna = off` (no DNA skip exists), and
 `two_step = true`, as in every rung.
 `skip_source = both` with `dna = off` keeps only the count skips; that is the `dna_off` arm of the
@@ -82,7 +87,8 @@ RUNG = 4
 NAME = "unet"
 SKIP_SOURCES = ("dna", "counts", "both")
 N_LEVELS = 4                 # stride 16 at the bottleneck
-LEVEL_MULT = (1, 2, 2, 4, 4)  # channels per level as multiples of `width` (level N_LEVELS = bottom)
+LEVEL_MULT = (1, 2, 2, 4, 4, 4)  # channels per level as multiples of `width` (level n = bottom)
+N_LEVELS_RANGE = (2, 5)      # tuning key `n_levels` (round-2 tuning, default-off)
 D_TRACK = 8                  # per-track input feature width
 D_HEAD = 32                  # per-track head width
 D_COV = 32                   # covariate embedding width
@@ -123,8 +129,9 @@ class _Tower(nn.Module):
 
     def __init__(self, chans: tuple):
         super().__init__()
-        self.blocks = nn.ModuleList(ConvBlock(chans[i], chans[i]) for i in range(N_LEVELS))
-        self.down = nn.ModuleList(Downsample(chans[i], chans[i + 1]) for i in range(N_LEVELS))
+        n = len(chans) - 1
+        self.blocks = nn.ModuleList(ConvBlock(chans[i], chans[i]) for i in range(n))
+        self.down = nn.ModuleList(Downsample(chans[i], chans[i + 1]) for i in range(n))
 
     def forward(self, x: torch.Tensor):
         skips = []
@@ -174,7 +181,13 @@ class Model(MiniCandi):
         self.cov_dropout = kw["covariate_dropout"]
         self.skip_counts = self.skip_source in ("counts", "both")
         self.skip_dna = self.skip_source in ("dna", "both") and self.dna_mode != "off"
-        chans = tuple(width * m for m in LEVEL_MULT[:N_LEVELS + 1])
+        # round-2 tuning knobs, default-off (absent = N_LEVELS and dropout 0.0, today's model)
+        self.n_levels = nl = int(cfg.get("n_levels", N_LEVELS))
+        attn_dropout = float(cfg.get("attn_dropout", 0.0))
+        if not N_LEVELS_RANGE[0] <= nl <= N_LEVELS_RANGE[1] or not 0.0 <= attn_dropout < 1.0:
+            raise ValueError(f"rung 4: n_levels {nl} not in {N_LEVELS_RANGE} or attn_dropout "
+                             f"{attn_dropout} not in [0, 1)")
+        chans = tuple(width * m for m in LEVEL_MULT[:nl + 1])
         self.chans = chans
         tokens = self.injection == "tokens"
         d_model = chans[-1]
@@ -202,7 +215,7 @@ class Model(MiniCandi):
             self.dna = DnaTower("off", chans[0])
 
         # bottleneck attention
-        layer = nn.TransformerEncoderLayer(d_model, N_HEADS, 2 * d_model, dropout=0.0,
+        layer = nn.TransformerEncoderLayer(d_model, N_HEADS, 2 * d_model, dropout=attn_dropout,
                                            activation="gelu", batch_first=True, norm_first=True)
         self.attn = nn.TransformerEncoder(layer, N_ATTN_LAYERS, enable_nested_tensor=False)
 
@@ -212,14 +225,14 @@ class Model(MiniCandi):
         if tokens:
             self.tok_to_cov = nn.Linear(d_model, D_COV)
             self.tok_to_head = nn.Linear(d_model, D_HEAD)
-        skip_w = [chans[i] * (int(self.skip_counts) + int(self.skip_dna)) for i in range(N_LEVELS)]
-        self.up = nn.ModuleList(Upsample(chans[i + 1], chans[i]) for i in range(N_LEVELS))
+        skip_w = [chans[i] * (int(self.skip_counts) + int(self.skip_dna)) for i in range(nl)]
+        self.up = nn.ModuleList(Upsample(chans[i + 1], chans[i]) for i in range(nl))
         self.steer = nn.ModuleList(
             G(D_COV, 2 * skip_w[i], torch.cat([torch.ones(skip_w[i]), torch.zeros(skip_w[i])]))
-            for i in range(N_LEVELS))
+            for i in range(nl))
         self.dec1 = nn.ModuleList(ConvBlock(chans[i] + skip_w[i], chans[i])
-                                  for i in range(N_LEVELS))
-        self.dec2 = nn.ModuleList(ConvBlock(chans[i], chans[i]) for i in range(N_LEVELS))
+                                  for i in range(nl))
+        self.dec2 = nn.ModuleList(ConvBlock(chans[i], chans[i]) for i in range(nl))
 
         # head
         self.to_head = nn.Linear(chans[0], D_HEAD)
@@ -266,8 +279,8 @@ class Model(MiniCandi):
             h = h + self.avg_in(torch.log1p(batch["avg"].float().clamp_min(0))[..., None])
         h_track = torch.cat([h, vis[..., None].to(h.dtype)], dim=-1)      # [B, L, A, d+1]
 
-        # pad L to a multiple of 2**N_LEVELS (zeros carry no input value)
-        stride = 2 ** N_LEVELS
+        # pad L to a multiple of 2**n_levels (zeros carry no input value)
+        stride = 2 ** self.n_levels
         Lp = -(-L // stride) * stride
         fused = h_track.reshape(B, L, -1).transpose(1, 2)                   # [B, A*(d+1), L]
         fused = F.pad(fused, (0, Lp - L))
@@ -305,7 +318,7 @@ class Model(MiniCandi):
             per = self.out_inj.embed(c_out)
         g_out = (per * w).sum(1) / w.sum(1).clamp_min(1.0)                  # [B, D_COV]
 
-        for i in reversed(range(N_LEVELS)):
+        for i in reversed(range(self.n_levels)):
             z = self.up[i](z)
             parts = []
             if self.skip_counts:
