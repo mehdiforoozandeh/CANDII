@@ -15,13 +15,12 @@
  "predict_control": true,
  "param_budget": 1000000.0,
  "windows_seen": 80000,
- "lr": "<FILL>",
+ "lr": "<FILL: stage-B lr>",
  "batch_size": 8,
  "simpler_than_base": null,
  "heldout_loss": {
   "batches": 16,
   "every": 20
  },
- "_template": "stage B tuning combination: fill before submit, then delete every key that starts with '_'",
- "_rule": "lr = the lr among {0.0003, 0.001 (rung2_base_heldout), 0.003} with the lowest held-out statistic; add each of {warmup_frac 0.15 + warmup_max 2000, grad_clip 3.0, weight_decay 0.1} whose trial beats rung2_base_heldout by more than delta; run only if the result differs from base and from every stage-A trial"
+ "_stage_b_rule": "B2 grid edge: if the best lr is at a grid edge (0.0003 or 0.003), one more step outward (0.0001 or 0.01) on the B1 recipe (or the base recipe if B1 was skipped). Otherwise skip."
 }
