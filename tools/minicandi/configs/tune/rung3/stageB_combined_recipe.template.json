@@ -1,0 +1,26 @@
+{
+ "rung": 3,
+ "context_bins": 1024,
+ "covariate_injection": "film",
+ "mask_mode": "token",
+ "dna": "own",
+ "scramble_covariates": false,
+ "scramble_all": false,
+ "count_transform": "offset",
+ "qc_on_input": false,
+ "two_step": false,
+ "base_depth": "native",
+ "average_input": false,
+ "control_input": true,
+ "predict_control": true,
+ "param_budget": 1000000,
+ "windows_seen": 80000,
+ "lr": "FILL",
+ "batch_size": 8,
+ "simpler_than_base": null,
+ "heldout_loss": {
+  "batches": 16,
+  "every": 20
+ },
+ "_stage_b_rule": "lr = the grid value {3e-4, 1e-3, 3e-3} with the lowest score (1e-3 unless another qualifies); plus every optimizer knob that qualified (warmup15: warmup_frac 0.15 + warmup_max 2000; clip3: grad_clip 3.0; wd0.1: weight_decay 0.1; attn_dropout0.1: attn_dropout 0.1); plus the single shape knob with the lowest score, if it qualified (attn_layers4: attn_layers 4; attn_at_128_positions: n_down 3; attn_heads8: attn_heads 8). Skip if this equals a run already done. Remove _stage_b_rule when filling."
+}

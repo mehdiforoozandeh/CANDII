@@ -15,12 +15,12 @@
  "predict_control": true,
  "param_budget": 1000000,
  "windows_seen": 80000,
- "lr": 0.001,
+ "lr": "FILL",
  "batch_size": 8,
  "simpler_than_base": null,
- "_rule": "Take the stage-B recipe above (or base if it was skipped) and add the structural key of the best structural arm (attn_layers4, attn_at_128_positions, attn_heads8) if it beat base_heldout by more than the noise margin; otherwise skip this trial.",
  "heldout_loss": {
   "batches": 16,
   "every": 20
- }
+ },
+ "_stage_b_rule": "If the best lr is at a grid edge (3e-4 or 3e-3), one more step outward (1e-4 or 1e-2) on the B1 recipe (or the base recipe if B1 was skipped). Otherwise skip. Remove _stage_b_rule when filling."
 }
