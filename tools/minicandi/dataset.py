@@ -730,6 +730,22 @@ class OnionDataset(IterableDataset):
         i = int(np.searchsorted(starts, start + self.L, side="left")) - 1
         return i >= 0 and int(end_max[i]) > start
 
+    def exclude_windows(self, intervals) -> None:
+        """Reject every training start whose window overlaps one of `intervals` ((chrom, start
+        bin, n bins) triples), through the `exclude_regions` draw above. Used by the train loop's
+        `heldout_loss` (its held-out windows) and to keep those windows off the evaluation regions.
+        Train mode only, and not with `exclude_regions` or `train_regions`."""
+        if self.mode != "train" or self.excluded is not None or self.regions is not None:
+            raise ValueError("exclude_windows: train mode without exclude_/train_regions only")
+        per: dict[str, list] = {}
+        for chrom, start, n in intervals:
+            per.setdefault(str(chrom), []).append((int(start), int(start) + int(n)))
+        self.excluded = {}
+        for chrom, iv in per.items():
+            iv.sort()
+            self.excluded[chrom] = (np.asarray([s for s, _ in iv], np.int64),
+                                    np.maximum.accumulate(np.asarray([e for _, e in iv], np.int64)))
+
     def _draw_region(self, rng) -> tuple[str, int, int]:
         """`train_regions`: (chrom, start, row index). A row by sample weight, then a start uniform
         in the row; a failed mask test redraws the start in the same row (8 tries, then the best)."""

@@ -71,6 +71,17 @@ Without the keys run.json, log.jsonl and train_state.pt are unchanged.
 
 `--val-every W` (windows, 0 = off) logs the NB loss (of the main output, whatever `loss` is) over the first `--val-batches` batches of the
 dataset in val mode (needs the tables' evalset.json); the batches are fixed for the whole run.
+
+Held-out loss (config key `heldout_loss`, default absent = off; chunk FC). `{"batches": n,
+"every": k}` draws n training-sampler batches from a dataset and generators seeded by
+HELDOUT_SEED only (so every rung and run seed gets the same windows), with every start that
+overlaps an evaluation region (`regions` and `fit_regions` of the evalset.json that val mode reads)
+rejected; then the TRAINING sampler of this run rejects every start that overlaps a held-out
+window (`OnionDataset.exclude_windows`). Every k-th log line (and the last) carries
+`heldout_loss`: the training loss of the config over those batches, without gradient, in eval mode,
+weighted by loss-mask bins, with the torch RNG forked. The exclusion changes the training stream
+(rejected starts are drawn again), not the model; run.json gains `heldout`. Not combined with
+`exclude_regions` or `train_regions`.
 """
 from __future__ import annotations
 
@@ -108,6 +119,23 @@ WARMUP_FRAC, WARMUP_MAX, LR_FLOOR = 0.05, 1000, 0.1
 PEARSON_BATCHES = 4
 CAPPED_NAME = "CAPPED"
 WORKER_STREAM = 4          # batch k with workers: default_rng([seed, WORKER_STREAM, k])
+HELDOUT_SEED = 20261115    # heldout_loss: fixed, independent of the run seed
+
+
+def heldout_batches(tables, cfg: dict) -> list:
+    """`heldout_loss`: the fixed held-out batches (see the module docstring)."""
+    hk = cfg["heldout_loss"]
+    if cfg.get("exclude_regions") or cfg.get("train_regions"):
+        raise ValueError("heldout_loss is not combined with exclude_regions / train_regions")
+    hds = OnionDataset(tables, "train", cfg, HELDOUT_SEED)
+    path = cfg.get("evalset") or (hds.tables_dir.parent.parent / "eval" / hds.tables_dir.name
+                                  / "evalset.json")
+    ev = json.loads(Path(path).read_text(encoding="utf-8"))   # no evalset: refuse, never guess
+    rb = int(ev.get("region_bins", hds.config["region_bins"]))
+    hds.exclude_windows([(c, s, rb) for c, s in list(ev.get("regions", []))
+                         + list(ev.get("fit_regions", []))])
+    return [hds.batch(int(cfg["batch_size"]), np.random.default_rng([HELDOUT_SEED, k]))
+            for k in range(int(hk["batches"]))]
 
 
 class StepBatches(torch.utils.data.Dataset):
@@ -367,6 +395,11 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
         if sa is not None:
             print(f"staged average_h5 {sa['src']} ({sa['bytes'] / 1e9:.2f} GB) in "
                   f"{sa['seconds']} s to {sa['dst']}", flush=True)
+    held, h_every = None, 0
+    if cfg.get("heldout_loss"):
+        held = heldout_batches(tables, cfg)
+        h_every = int(cfg["heldout_loss"]["every"])
+        ds.exclude_windows([(m["chrom"], m["start_bin"], ds.L) for b in held for m in b["meta"]])
     torch.manual_seed(seed)
     model = build_model(cfg)
     model.to(dev)
@@ -449,6 +482,19 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
         model.train()
         return tot / max(k, 1)
 
+    def heldout_loss() -> float:
+        model.eval()
+        tot, k = 0.0, 0
+        with torch.no_grad(), torch.random.fork_rng(devices=_devices(dev)):
+            for b in held:
+                b = to_device(b, dev)
+                n = int(C.loss_mask(b).sum())
+                if n:
+                    tot += step_loss(model, b, cfg).item() * n
+                    k += n
+        model.train()
+        return tot / max(k, 1)
+
     def summary(done: bool, last: dict) -> dict:
         return {"config": cfg, "seed": int(seed), "git_sha": sha, "tables_sha256": tsha,
                 "tables": str(Path(tables).resolve()), "param_count": model.param_count(),
@@ -458,6 +504,9 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
                 "total_steps": total_steps, "wall_seconds": wall0 + (time.time() - t0),
                 "device": str(dev), "host": socket.gethostname(), "torch": torch.__version__,
                 "n_resumes": n_resumes, "done": done, **({"workers": workers} if workers else {}),
+                **({"heldout": {"seed": HELDOUT_SEED, "windows": sum(len(b["meta"]) for b in held),
+                                "loci": [[m["chrom"], m["start_bin"]] for b in held
+                                         for m in b["meta"]]}} if held else {}),
                 **region, **last}
 
     def checkpoint(done: bool, last: dict) -> dict:
@@ -517,6 +566,8 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
                        / (excl["rejections"] + excl["windows"])} if excl else {}),
                    **({"cuda_peak_mem_mb": round(torch.cuda.max_memory_allocated(dev) / 2**20)}
                       if dev.type == "cuda" else {})}
+            if held and (step % (log_every * h_every) == 0 or windows >= budget):
+                rec["heldout_loss"] = last["last_heldout_loss"] = heldout_loss()
             log.write(json.dumps(rec) + "\n")
             log.flush()
         if next_val is not None and windows >= next_val:
