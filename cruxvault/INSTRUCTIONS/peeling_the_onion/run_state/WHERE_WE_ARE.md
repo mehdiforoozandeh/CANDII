@@ -2,7 +2,7 @@
 title: where we are (peeling the onion run)
 kind: live status page, maintained by the foreman agent
 parent: "[[peeling the onion]]"
-updated: 2026-11-15T02:35Z
+updated: 2026-11-15T07:35Z
 ---
 
 # Where we are
@@ -48,7 +48,15 @@ Working copies of items 2 and 3 live in the worktree at `.claude/worktrees/onion
 - Globus: two transfers Nibi to Fir started at about 09:50; not verified on Fir yet.
 - Status deck 2026-11-14: `cruxvault/presentations/onion-status-2026-11-14/`, artifact https://claude.ai/artifact/FwKjytRr1UuhT3xhTpWDrL (private).
 
-**Latest (2026-11-15T02:35Z; read this block before the older "In work" block below)**
+**Latest (2026-11-15T07:35Z; newest block, read first)**
+- Ruling 48 (PI "Rung 4 only"): hard-offset arm (depth covariate hidden; key hide_depth_covariate; umbrella 8efe46f; kit HO). 3 seeds SCORED. Seed means against rung-4 base: composite 0.260 vs 0.444; specific variance recovered 0.406 vs 0.440; gap closed 0.218 vs 0.298; uncertainty term -0.098 vs 0.600. Hiding depth did not help.
+- Score tables with composite version 2 exist (results/metrics_screening/scores_{ladder,rung1_arms,rung4_arms,selection_arms}.md; refresh /scratch/mforooz/onion/tb2/tables_tb2.sh).
+- 58 runs scored. GPU queue: 36 GPU jobs pending (rung-1 arms inject_tokens, mask_token, matched_compute, scramble_all; trainings 27273016, 27272462).
+- rg_variance_e50_w seed 2: trained; predict + metric jobs 27402882 to 27402886 submitted.
+- Agent in work: ship-2 recorder and deck builder (deck folder presentations/onion-ship2-2026-11-15; the foreman publishes the artifact and mirrors the URL in ARTIFACTS.md). Ship 2 due 18:00.
+- No open item with the PI.
+
+**Earlier (2026-11-15T02:35Z; read this block before the older "In work" block below)**
 - Ship 1 is delivered. Ruling 47 is merged (umbrella code 2443ffb).
 - AlphaGenome 2 board DONE (results/t308/AG2_VS_BASELINES.md; jobs 27337502, 27337503, 27337505, 27337509; never resubmit). Fair set of 11 tracks: AlphaGenome 2 0.438, position average 0.222, noise floor 0.333 (recalibrated r_spec). No miniCANDI row on that board yet. Not run: control-free table, retrieval baseline.
 - 50 runs SCORED on the screening set: rungs 1 to 6 base x3, rung-4 scrambled x3, rung-1 base, dna_off, scrambled x3, inject_concat 1, rg_no_eval 3, selection arms 22 of 24.
