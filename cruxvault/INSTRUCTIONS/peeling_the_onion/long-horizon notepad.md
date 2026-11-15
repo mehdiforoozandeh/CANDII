@@ -564,3 +564,5 @@ Each line gives the fact, then its source. Sources are files in this vault or on
 - **PI question (2026-11-14).** Can the negative binomial be formulated with the depth-corrected eta (mean = exp(log depth + eta)) throughout: model design, variance decomposition, law of total variance? Notes: `cruxvault/results/eta_space/{THEORY,MODEL_DESIGN,LITERATURE,LAYERS_ETA}.md`. Key facts so far: the rung-1 model already predicts mean = depth x 2^eta and also reads depth as a covariate; in eta space the layers above sampling are depth-free and the NB dispersion equals the squared CV of the unexplained rate; on log1p the sampling share depends on depth (simulation: 0.979 to 0.057).
 
 - **Ruling 48 (2026-11-15, PI "Rung 4 only")**: the hard-offset arm (depth hidden from the network, mean = depth x 2^eta) runs at rung 4 only, 3 seeds, existing pipeline. No rung-1 arm.
+
+- **Ruling 49 (2026-11-15, PI "Yes")**: two split arms at rung 4, 3 seeds each: depth covariate hidden on the output side only, and on the input side only; the input count normalization by depth is kept in both.
