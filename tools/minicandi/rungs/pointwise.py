@@ -32,6 +32,11 @@ Component arm keys (pinned interface E, chunk A3) reach every component through
 `batch["x_dna_emb"]`; needs `dna_embedding_dim`), `offset_eps`, `count_transform = soft_clip` and
 `head = nb_shared_size`. With every key at its default the model is today's, parameter for
 parameter and output for output (tests/test_minicandi_rung_arms.py).
+
+Shape keys (round-2 tuning, default off; tests/test_minicandi_tune_rung1.py): `mlp_depth` (default
+2) is the number of Linear layers in each of phi, the trunk MLP block and psi; `trunk_blocks`
+(default 1, may be 0) is the number of residual MLP blocks in the trunk. The width search refits
+`d_model` to `param_budget` under both. Neither key changes the one-bin receptive field.
 """
 from __future__ import annotations
 
@@ -77,16 +82,22 @@ def check_rung(cfg: dict) -> None:
 
 
 class _MLP(nn.Module):
-    """Linear -> GELU -> Linear, residual when d_in == d_out."""
+    """Linear -> GELU -> Linear, residual when d_in == d_out. `depth` > 2 inserts depth - 2 hidden
+    Linear -> GELU layers between l1 and l2 (built after l2, so depth 2 is today's module)."""
 
-    def __init__(self, d_in: int, d_hidden: int, d_out: int):
+    def __init__(self, d_in: int, d_hidden: int, d_out: int, depth: int = 2):
         super().__init__()
         self.l1 = nn.Linear(d_in, d_hidden)
         self.l2 = nn.Linear(d_hidden, d_out)
         self.residual = d_in == d_out
+        if depth > 2:
+            self.mid = nn.ModuleList(nn.Linear(d_hidden, d_hidden) for _ in range(depth - 2))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h = self.l2(F.gelu(self.l1(x)))
+        h = F.gelu(self.l1(x))
+        for m in getattr(self, "mid", ()):
+            h = F.gelu(m(h))
+        h = self.l2(h)
         return x + h if self.residual else h
 
 
@@ -108,20 +119,25 @@ class Model(C.MiniCandi):
         k_in = C.k_input(cfg)
         kw = component_kwargs(cfg)
         self.cov_dropout = kw["covariate_dropout"]
+        depth = int(cfg.get("mlp_depth", 2))
+        blocks = int(cfg.get("trunk_blocks", 1))
+        if depth < 2 or blocks < 0:
+            raise ValueError(f"mlp_depth {depth} must be >= 2 and trunk_blocks {blocks} >= 0")
 
         self.transform = CountTransform(cfg.get("count_transform", "offset"), **kw["transform"])
         self.in_proj = nn.Linear(1, d)
         self.in_track = nn.Parameter(torch.zeros(C.A, d))
         nn.init.normal_(self.in_track, std=0.02)
         self.in_cov = CovariateInjector(self.injection, d, k_in, **kw["injector"])
-        self.phi = _MLP(d, d, d)
+        self.phi = _MLP(d, d, d, depth)
         self.mask = MaskHandler(self.mask_mode, d)
         self.dna = DnaTower(cfg.get("dna", "own"), D_DNA, **kw["dna"])
-        self.trunk = nn.Sequential(nn.Linear(d + 1 + D_DNA, d), nn.GELU(), _MLP(d, d, d))
+        self.trunk = nn.Sequential(nn.Linear(d + 1 + D_DNA, d), nn.GELU(),
+                                   *(_MLP(d, d, d, depth) for _ in range(blocks)))
         self.out_track = nn.Parameter(torch.zeros(C.A, d))
         nn.init.normal_(self.out_track, std=0.02)
         self.out_cov = CovariateInjector(self.injection, d, C.K_META, **kw["injector"])
-        self.psi = _MLP(d, d, d)
+        self.psi = _MLP(d, d, d, depth)
         self.head = NBHead(d, self.transform, **kw["head"])
         if self.average_input:                    # additive, default off: constructed last
             self.avg_proj = nn.Linear(1, d)

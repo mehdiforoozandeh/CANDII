@@ -18,8 +18,7 @@
  "lr": "<BEST_LR>",
  "batch_size": 8,
  "simpler_than_base": null,
- "<RECIPE_KEY_1>": "<RECIPE_VALUE_1>",
- "<RECIPE_KEY_2>": "<RECIPE_VALUE_2>",
+ "_stage_b_rule": "B1 combined recipe: lr = the grid value with the lowest score (the base lr unless another qualifies); plus every optimizer knob (warm-up, clip, weight decay, dropout) that qualified; plus the single shape knob with the lowest score, if it qualified. Skip B1 if it equals a run already done.",
  "heldout_loss": {
   "batches": 16,
   "every": 20

@@ -15,10 +15,10 @@
  "predict_control": true,
  "param_budget": 1000000,
  "windows_seen": 40000,
- "lr": "<BEST_LR>",
+ "lr": "<1e-4 or 1e-2>",
  "batch_size": 8,
  "simpler_than_base": null,
- "<RECIPE_KEY_1>": "<RECIPE_VALUE_1>",
+ "_stage_b_rule": "B2 grid edge: if the best lr is at a grid edge (3e-4 or 3e-3), one more step outward (1e-4 or 1e-2) on the B1 recipe (or the base recipe if B1 was skipped). Otherwise skip.",
  "heldout_loss": {
   "batches": 16,
   "every": 20

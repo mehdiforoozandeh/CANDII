@@ -15,9 +15,10 @@
  "predict_control": true,
  "param_budget": 1000000,
  "windows_seen": 40000,
- "lr": "<1e-4 if BEST_LR == 3e-4, else 1e-2 if BEST_LR == 3e-3>",
+ "lr": 0.001,
  "batch_size": 8,
  "simpler_than_base": null,
+ "trunk_blocks": 0,
  "heldout_loss": {
   "batches": 16,
   "every": 20
