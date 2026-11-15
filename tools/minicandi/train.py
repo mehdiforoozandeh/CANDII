@@ -45,7 +45,15 @@ Scrambled covariates (`scramble_covariates`, `scramble_all`): the model applies 
 forward (`covariates.model_covariates`); neither this loop nor the dataset scrambles.
 
 Schedule: AdamW (lr = `config["lr"]`, weight decay 0.01), linear warm-up over the first 5% of steps
-(at most 1000), cosine decay to 10% of lr at the last step; gradient norm clipped at 1.0. The loss
+(at most 1000), cosine decay to 10% of lr at the last step; gradient norm clipped at 1.0. Optional
+recipe keys (chunk S1) override these: `weight_decay` (0.01), `grad_clip` (1.0), `warmup_frac`
+(0.05), `warmup_max` (1000); absent, the run is bit-identical to the tree before them. With any of
+them, run.json gains `recipe`: lr, weight_decay, grad_clip, warmup_steps, total_steps.
+
+Unknown keys: training refuses a config key that no code reads. The accepted keys come from the
+code itself (`code_keys`): every string constant used as a subscript, as the first argument of
+`.get` / `.pop` / `.setdefault`, or left of `in`, in any .py file under tools/minicandi (and in
+`model_file` when set). A key that starts with "_" is a comment and always passes. The loss
 is `losses.total_loss(out, batch, config)` (config keys `loss`, `loss_weights`, and the base leg of
 `two_step`); without those keys it is `contract.nb_nll` over `contract.loss_mask`, bit for bit.
 Each log line carries the loss `parts`. A non-finite loss stops the run with an error and leaves
@@ -120,6 +128,41 @@ PEARSON_BATCHES = 4
 CAPPED_NAME = "CAPPED"
 WORKER_STREAM = 4          # batch k with workers: default_rng([seed, WORKER_STREAM, k])
 HELDOUT_SEED = 20261115    # heldout_loss: fixed, independent of the run seed
+RECIPE_DEFAULTS = {"weight_decay": WEIGHT_DECAY, "grad_clip": CLIP, "warmup_frac": WARMUP_FRAC,
+                   "warmup_max": WARMUP_MAX}
+
+
+def code_keys(extra_files=()) -> set:
+    """Every string the minicandi source reads as a key (module docstring, 'Unknown keys')."""
+    import ast
+    keys = set()
+    for p in [*sorted((_TOOLS / "minicandi").rglob("*.py")), *extra_files]:
+        for n in ast.walk(ast.parse(Path(p).read_text(encoding="utf-8"))):
+            k = (n.slice if isinstance(n, ast.Subscript) else
+                 n.args[0] if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                               and n.func.attr in ("get", "pop", "setdefault") and n.args) else
+                 n.left if (isinstance(n, ast.Compare)
+                            and isinstance(n.ops[0], (ast.In, ast.NotIn))) else None)
+            if isinstance(k, ast.Constant) and isinstance(k.value, str):
+                keys.add(k.value)
+    return keys
+
+
+def check_config_keys(cfg: dict) -> None:
+    """Refuse a config key that no code reads (keys starting with "_" are comments)."""
+    extra = []
+    if cfg.get("model_file"):
+        p = Path(cfg["model_file"])
+        extra = [p if p.is_absolute() else _TOOLS.parent / p]
+    known = code_keys(extra)
+    unknown = sorted(k for k in cfg if not str(k).startswith("_") and k not in known)
+    if unknown:
+        raise KeyError(f"config keys {unknown} are read by no code under tools/minicandi; "
+                       f"fix the name, or prefix a comment key with '_'")
+
+
+def warmup_steps(total: int, frac: float = WARMUP_FRAC, cap: int = WARMUP_MAX) -> int:
+    return max(1, min(cap, int(frac * total)))
 
 
 def heldout_batches(tables, cfg: dict) -> list:
@@ -255,8 +298,8 @@ def git_sha() -> str:
     return os.environ.get("MINICANDI_GIT_SHA", "unknown")
 
 
-def lr_at(step: int, total: int, lr: float) -> float:
-    warm = max(1, min(WARMUP_MAX, int(WARMUP_FRAC * total)))
+def lr_at(step: int, total: int, lr: float, warm: int | None = None) -> float:
+    warm = warmup_steps(total) if warm is None else warm
     if step < warm:
         return lr * (step + 1) / warm
     frac = (step - warm) / max(1, total - warm)
@@ -383,6 +426,18 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
     bs = int(cfg["batch_size"])
     budget = int(cfg["windows_seen"])
     total_steps = math.ceil(budget / bs)
+    check_config_keys(cfg)
+    rc = {"weight_decay": cfg.get("weight_decay", WEIGHT_DECAY),   # literal reads: code_keys
+          "grad_clip": cfg.get("grad_clip", CLIP),                 # learns the keys from them
+          "warmup_frac": cfg.get("warmup_frac", WARMUP_FRAC),
+          "warmup_max": cfg.get("warmup_max", WARMUP_MAX)}
+    warm = warmup_steps(total_steps, float(rc["warmup_frac"]), int(rc["warmup_max"]))
+    if not (rc["weight_decay"] >= 0 and rc["grad_clip"] > 0 and 0 <= rc["warmup_frac"] <= 1):
+        raise ValueError(f"recipe keys out of range: {rc}")
+    recipe = ({"recipe": {"lr": float(cfg["lr"]), "weight_decay": float(rc["weight_decay"]),
+                          "grad_clip": float(rc["grad_clip"]), "warmup_steps": warm,
+                          "total_steps": total_steps}}
+              if any(k in cfg for k in RECIPE_DEFAULTS) else {})
 
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
@@ -403,7 +458,8 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
     torch.manual_seed(seed)
     model = build_model(cfg)
     model.to(dev)
-    opt = torch.optim.AdamW(model.parameters(), lr=float(cfg["lr"]), weight_decay=WEIGHT_DECAY)
+    opt = torch.optim.AdamW(model.parameters(), lr=float(cfg["lr"]),
+                            weight_decay=rc["weight_decay"])
     data_rng = np.random.default_rng([seed, 1])
     scr_gen = torch.Generator().manual_seed(seed)
     region = ds.region_record()                      # interface I; {} without its keys
@@ -507,7 +563,7 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
                 **({"heldout": {"seed": HELDOUT_SEED, "windows": sum(len(b["meta"]) for b in held),
                                 "loci": [[m["chrom"], m["start_bin"]] for b in held
                                          for m in b["meta"]]}} if held else {}),
-                **region, **last}
+                **recipe, **region, **last}
 
     def checkpoint(done: bool, last: dict) -> dict:
         _save(C.make_ckpt(model, cfg, windows, tsha, sha), ckpt_path)
@@ -543,14 +599,14 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
                 excl["rejections"] = excl.get("rejections", 0) + int(m["exclude_rejections"])
                 excl["windows"] = excl.get("windows", 0) + 1
         for g in opt.param_groups:
-            g["lr"] = lr_at(step, total_steps, float(cfg["lr"]))
+            g["lr"] = lr_at(step, total_steps, float(cfg["lr"]), warm)
         parts: dict = {}
         loss = step_loss(model, batch, cfg, parts)
         if not torch.isfinite(loss):
             raise FloatingPointError(f"non-finite loss {loss.item()} at step {step}")
         opt.zero_grad(set_to_none=True)
         loss.backward()
-        gnorm = float(torch.nn.utils.clip_grad_norm_(model.parameters(), CLIP))
+        gnorm = float(torch.nn.utils.clip_grad_norm_(model.parameters(), rc["grad_clip"]))
         opt.step()
         step += 1
         windows += batch["x_counts"].shape[0]
