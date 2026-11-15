@@ -54,7 +54,9 @@ Working copies of items 2 and 3 live in the worktree at `.claude/worktrees/onion
 - 58 runs scored. GPU queue: 36 GPU jobs pending (rung-1 arms inject_tokens, mask_token, matched_compute, scramble_all; trainings 27273016, 27272462).
 - rg_variance_e50_w seed 2: trained; predict + metric jobs 27402882 to 27402886 submitted.
 - Agent in work: ship-2 recorder and deck builder (deck folder presentations/onion-ship2-2026-11-15; the foreman publishes the artifact and mirrors the URL in ARTIFACTS.md). Ship 2 due 18:00.
-- No open item with the PI.
+- SHIP 2 DELIVERED 2026-11-15 about 08:10: deck https://claude.ai/artifact/RHucrLM3AXXxVfzQtCqEDS (presentations/onion-ship2-2026-11-15); vault f78 to f81, q41 to q43.
+- Open with the PI: approve two split arms at rung 4 (depth hidden on the output side only; on the input side only; 3 seeds each). No compute for them before his yes.
+- Next: iteration 2 (16 vs 256 region check, budget-curve scores, rung-1 arms still in the GPU queue, miniCANDI row on the AlphaGenome 2 board), due 2026-11-17 12:00.
 
 **Earlier (2026-11-15T02:35Z; read this block before the older "In work" block below)**
 - Ship 1 is delivered. Ruling 47 is merged (umbrella code 2443ffb).
