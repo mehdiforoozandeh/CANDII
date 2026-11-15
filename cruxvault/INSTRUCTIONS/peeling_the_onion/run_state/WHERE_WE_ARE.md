@@ -2,7 +2,7 @@
 title: where we are (peeling the onion run)
 kind: live status page, maintained by the foreman agent
 parent: "[[peeling the onion]]"
-updated: 2026-11-15T07:35Z
+updated: 2026-11-16T04:10Z
 ---
 
 # Where we are
@@ -47,6 +47,14 @@ Working copies of items 2 and 3 live in the worktree at `.claude/worktrees/onion
 - Nibi file limit fixed at about 10:10 (PI approved the removal of 68 archived code snapshots); rule: file-heavy content goes to /scratch.
 - Globus: two transfers Nibi to Fir started at about 09:50; not verified on Fir yet.
 - Status deck 2026-11-14: `cruxvault/presentations/onion-status-2026-11-14/`, artifact https://claude.ai/artifact/FwKjytRr1UuhT3xhTpWDrL (private).
+
+**NEWEST (2026-11-16T04:10Z; read this block first)**
+- PI directives 2026-11-15 evening: make the architecture findings trustworthy (every architecture a fair chance; every named knob tested); one ablation lead with one agent per architecture, the foreman approves; compute may use Nibi and Fir; the report must show whether the counterfactual views help.
+- Audits: results/ladder_audit/FAIR_CHANCE.md (six-place order not trustworthy; three tiers) and COVERAGE.md (38 knobs: 10 full, 7 partial, 21 untested). Tuning plan: results/ladder_tuning/LEAD_PLAN.md (protocol, stage B rule, round 3 = winners at 3 seeds under equal windows and matched compute + mechanism arms).
+- NIBI COMPUTE DOWN since 2026-11-15 13:10. ALL CPU WORK NOW RUNS ON FIR: root /project/def-maxwl/mforooz/ONION/runs_fir, kit RTf, ids in runs_fir/SUBMITTED.tsv. 95 runs: counterfactual-view ablation (rung4_views_*), fair-chance round 1, base_heldout seeds 0-2, tuning round 2 (tune_rung{2..6}_*), score-only of rung4_hide_depth_output seeds 0,1. The same jobs on Nibi are HELD (never release, never resubmit; cancel is the PI's).
+- Fir recipe and differences: results/fir_failover/FIR_READY.md. Table tool on Fir: PYTHONPATH=$K/src python $K/tools/onion_eval/select_rule.py table --runs $O/runs_fir --prefix <p> --sub p16 (K = onion_kit/RTf).
+- Report for Max sent by the PI 2026-11-16: presentations/onion-update-max-2026-11-15/report.pdf (5 pages). Max has group read access to the onion folders on Nibi.
+- Owed: read Fir results (split arms, counterfactual ablation, round 1, round 2 by held-out loss per LEAD_PLAN section 5), stage B, round 3 proposal to the PI (matched compute about 1,660 CPU-h: bring a trimmed option), rung-1 GPU trials, vault findings, paper text fixes (Discussion items 1 and 3), 16 vs 256 region check, budget-curve scores.
 
 **Latest (2026-11-15T07:35Z; newest block, read first)**
 - Ruling 48 (PI "Rung 4 only"): hard-offset arm (depth covariate hidden; key hide_depth_covariate; umbrella 8efe46f; kit HO). 3 seeds SCORED. Seed means against rung-4 base: composite 0.260 vs 0.444; specific variance recovered 0.406 vs 0.440; gap closed 0.218 vs 0.298; uncertainty term -0.098 vs 0.600. Hiding depth did not help.
