@@ -3054,3 +3054,4 @@ What can start before `eic_v1` exists: the 18 chunks of wave B1 now; then B2 (RX
           6 mc_rung4_hide_depth_output_s1
           6 mc_rung4_hide_depth_output_s2
     27405429 27405464 
+- 2026-11-15T12:40Z ruling-49 split arms: rung4_hide_depth_input 3 of 3 SCORED (seed means: composite 0.382, spec var 0.401, gap closed 0.215, clean-pair gap closed 0.601, uncertainty 0.511); rung4_hide_depth_output seed 2 SCORED (0.462 / 0.430 / 0.342 / 0.522 / 0.644). Output seeds 0,1 trainings 27405429, 27405435 TIMEOUT at 4 h on slow nodes c560, c575 (steps 6300 and 7250 of 10000); dependents cancelled. RESUME submitted from kit HO2: jobs 27429644 to 27429655 (train + 4 predict + metrics per seed); never resubmit.
