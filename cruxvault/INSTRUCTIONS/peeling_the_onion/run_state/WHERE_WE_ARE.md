@@ -2,7 +2,7 @@
 title: where we are (peeling the onion run)
 kind: live status page, maintained by the foreman agent
 parent: "[[peeling the onion]]"
-updated: 2026-11-15T00:12Z
+updated: 2026-11-15T02:35Z
 ---
 
 # Where we are
@@ -48,7 +48,16 @@ Working copies of items 2 and 3 live in the worktree at `.claude/worktrees/onion
 - Globus: two transfers Nibi to Fir started at about 09:50; not verified on Fir yet.
 - Status deck 2026-11-14: `cruxvault/presentations/onion-status-2026-11-14/`, artifact https://claude.ai/artifact/FwKjytRr1UuhT3xhTpWDrL (private).
 
-**In work** (state at 2026-11-14T21:26Z)
+**Latest (2026-11-15T02:35Z; read this block before the older "In work" block below)**
+- Ship 1 is delivered. Ruling 47 is merged (umbrella code 2443ffb).
+- AlphaGenome 2 board DONE (results/t308/AG2_VS_BASELINES.md; jobs 27337502, 27337503, 27337505, 27337509; never resubmit). Fair set of 11 tracks: AlphaGenome 2 0.438, position average 0.222, noise floor 0.333 (recalibrated r_spec). No miniCANDI row on that board yet. Not run: control-free table, retrieval baseline.
+- 50 runs SCORED on the screening set: rungs 1 to 6 base x3, rung-4 scrambled x3, rung-1 base, dna_off, scrambled x3, inject_concat 1, rg_no_eval 3, selection arms 22 of 24.
+- GPU queue on Nibi is the limit: 98 GPU jobs pending on priority (rung-1 arms inject_tokens, mask_token, matched_compute, scramble_all; trainings average_input seed 1 27273016, two_step_native seed 0 27272462).
+- rg_variance_e50_w seed 2 training resubmitted as 27366823 (resume; 3 h limit). Owed after it: predict (4 CPU shards) and the metric job.
+- Agents in work: builder for the score tables with composite version 2 (kit TB2; results/metrics_screening/scores_{ladder,rung1_arms,rung4_arms,selection_arms}.md); recorder for the AlphaGenome 2 board, the paper text and the log-scale sampling-layer correction.
+- Then: ship-2 deck (prezit) and recorder, due 2026-11-15 18:00; rewrite of the layers section in eta terms.
+
+**In work** (state at 2026-11-14T21:26Z; older)
 - First screening scores exist: rung-1 base, scrambled_covariates, dna_off (8 of 9 scored; results/metrics_screening/first_scores.md). Baselines report done (results/t307/BASELINES.md; vault f55 to f60, q32).
 - Builder: metric jobs for every other store, then the ladder table and the rung-1 arm table (results/metrics_screening/scores_ladder.md, scores_rung1_arms.md).
 - Predict jobs released at 21:25: rung 5 seeds 1 and 2, the other 5 rung-1 arms, the 7 selection arms. All ladder stores of rungs 2, 3, 4, 6 and rung 5 seed 0 are complete.
