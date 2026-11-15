@@ -1,15 +1,15 @@
 ---
 id: t346
 type: task
-title: Onion: the oracle floor in the tools: reference build, select_rule and arm_report (OF)
+title: "Onion: the oracle floor in the tools: reference build, select_rule and arm_report (OF)"
 category: implementation
 parent: t152
 blocked_by: None
 refs: q32
 hypothesis_refs: 
-status: open
-created: 2026-11-14T16:39:32
-updated: 2026-11-14T16:39:32
+status: done
+created: "2026-11-14T16:39:32"
+updated: "2026-11-15T00:24:42"
 ---
 
 # t346 — Onion: the oracle floor in the tools: reference build, select_rule and arm_report (OF)
@@ -28,7 +28,7 @@ puts ruling 47 into composite version 2 for the second shipment
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Oracle floor in the tools, merged at umbrella 9740e66](results/oracle_floor/ORACLE_FLOOR.md)
 
 ## Evidence
 

@@ -72,7 +72,11 @@ The figure of the protocol is `cruxvault/results/t309/protocol_figure.svg`.
 
 ### Model
 
-==Arrives in shipment 2.==
+Source: `tools/minicandi/registry.py` (`RUNGS`), `tools/minicandi/configs/rung<k>/base.json`, and `run.json` of each run on Nibi (`$O/runs/<run>/seed<k>/run.json`; `/scratch/mforooz/onion/mtb/out/runjson.tsv`).
+
+==The model family is miniCANDI, a ladder of six architectures with about 1.0 M parameters each (993,599 to 1,042,514). Rung 1 is pointwise, i.e. it sees one 25 bp bin at a time with no sequence context. Rung 2 is a convolutional autoencoder, rung 3 a convolutional autoencoder with attention, rung 4 a U-Net, rung 5 an axial model and rung 6 a Perceiver. Every rung reads a window of 1,024 bins and trains on 80,000 windows. The output per assay and bin is a Negative Binomial with mean = depth x 2^eta, i.e. the network predicts a depth-free log rate eta and the target depth enters as a fixed offset. The network also reads log2 depth as a soft covariate, together with the other three experimental covariates, through FiLM layers (feature-wise scaling and shifting) on the input side and before the head. The NB size is a per-bin output. Recorded training compute is 7.8 x 10^15 FLOPs for rung 1 (on GPU) and 1.3 x 10^14 to 1.8 x 10^15 FLOPs for rungs 2 to 6 (on CPU).==
+
+==The arms change one thing against a base. The rung-1 arms switch off the DNA input, scramble the four covariates, inject the covariates by concatenation or as tokens instead of FiLM, mark a missing assay with a learned mask token, train on 24,565 instead of 80,000 windows to match a smaller compute budget, or scramble all inputs. The rung-4 arms scramble the covariates, train on a region set without the evaluation regions, or hide the depth covariate from the network while the mean keeps the depth offset (the hard-offset arm, PI ruling 48). The selection arms train rung 4 on 20,000 windows drawn by one selection rule, against uniform tiling.==
 
 ## Results
 
@@ -132,12 +136,50 @@ Board source: `cruxvault/results/t308/AG2_VS_BASELINES.md`, with `ag2_board_val.
 
 ==Limits. The fair set has 11 tracks in 9 cells, and 9 of its 10 marks have one track, so the board supports a direction against the training-free baselines and not a per-mark ranking. The board has no row for our trained model yet. The two training-track baselines leave out 33 training tracks, because no fragment length was available to turn their counts into a signal track. The control-free table and the retrieval baseline have not run. AlphaGenome 2 is above the noise floor on the fair set (0.438 against 0.333). The noise floor compares two read halves, each at half the depth of the truth, so it is not a ceiling for a prediction; whether this recalibrated metric has a real ceiling is an open question.==
 
-### Results 4 onward: the models
+### Results 4: the model ladder
 
-==Arrives in shipment 2 (screening scores of the model ladder against the baselines).==
+Source: `cruxvault/results/metrics_screening/scores_ladder.md` (refreshed 2026-11-15T07:18Z, 58 scored runs). Tier: screening (imputation on 256 regions, pair tests on 16 regions). Composite version 2: the correction term is gap closed against the oracle floor (PI ruling 47; `cruxvault/results/oracle_floor/ORACLE_FLOOR.md`). Each value is a seed mean over 3 seeds with the seed spread (maximum minus minimum) in parentheses. A difference "exceeds" when it is larger than the larger seed spread of its two arms.
+
+==The oracle floor changed the scale of correction. On the old scale, the top was the half-against-half floor, and the position average scored 3.35 and rung 1 5.34. On the new scale, the top is the oracle floor (half the mean absolute difference of the target's two read halves), and the position average scores 0.235, the old floor 0.151 and rung 1 0.474. All models now lie between depth-only scaling (0) and the oracle (1).==
+
+==Every rung is above the position average on composite version 2 (0.160) and on gap closed (0.235). The composite seed means are: rung 1 0.444 (0.009), rung 2 0.502 (0.031), rung 3 0.493 (0.033), rung 4 0.444 (0.030), rung 5 0.469 (0.030) and rung 6 0.261 (0.052). Rung 2 beats rung 1 on every column by more than the seed spread: composite +0.058 (0.031), specific variance recovered above noise +0.042 (0.030), gap closed +0.102 (0.023). Its composite gain is below the 2 seed spreads (0.062) that the selection rule asks for, so no rung is selected over rung 1 on this tier. Rung 3 is within the seed spread of rung 2 on every column except gap closed on the 18 pairs with no duplicate-keeping side (-0.040 against 0.029).==
+
+==Rung 4 trades correction for imputation. It recovers the most specific variance of the ladder (0.440 against 0.389 for rung 3; +0.051, spread 0.013) and closes the least gap of rungs 1 to 5 (0.298 against 0.572 for rung 3; -0.273, spread 0.052). Rung 5 recovers about as much specific variance as rung 3 (0.390) and closes a gap between those of rungs 4 and 3 (0.447). Rung 6 is the lowest rung on every column (specific variance 0.154, gap closed 0.291), but it stays above the position average on the composite.==
+
+### Results 5: the rung-1 arms
+
+Source: `cruxvault/results/metrics_screening/scores_rung1_arms.md`. Tier: screening.
+
+==No scored rung-1 arm moved composite version 2 by more than the seed spread: DNA off +0.012 (0.021), covariates by concatenation +0.007 (0.009, 2 seeds), learned mask token +0.001 (0.012, 2 seeds), scrambled covariates -0.036 (0.058). Covariates as tokens has 1 seed (-0.001) and is not judged. Scrambling the covariates lowered specific variance by -0.019 (0.003) and gap closed on the no-duplicate-side pairs by -0.048 (0.046). Switching off the DNA input changed no column by more than the seed spread, so at rung 1 the DNA input shows no measurable use.==
+
+### Results 6: the rung-4 arms and the hard offset
+
+Source: `cruxvault/results/metrics_screening/scores_rung4_arms.md` and `sh2_refresh/table_runs.tsv` of the same folder (uncertainty term per seed). Tier: screening. 3 paired seeds per arm.
+
+==Scrambling the covariates at rung 4 moved the two gap-closed columns in opposite directions: +0.101 (0.052) on all 102 headline pairs and -0.099 (0.081) on the 18 pairs with no duplicate-keeping side. Both exceed the seed spread. On 84 of the 102 headline pairs one side keeps duplicates, so source and target can share DNA fragments, and the oracle floor is not a strict bound there. Scrambling also lowered specific variance by -0.029 (0.013). The composite changed by +0.017 (0.030), less than the seed spread. Training without the evaluation regions changed no column by more than the seed spread (composite +0.002 against 0.042).==
+
+==Hiding the depth covariate from the network (the hard offset) made rung 4 worse. The composite fell from 0.444 to 0.260 (paired -0.184; seed spread 0.030). Specific variance fell from 0.440 to 0.406 (-0.033, spread 0.013). Gap closed fell from 0.298 to 0.218 on all pairs (-0.081, spread 0.086) and from 0.519 to 0.510 on the pairs with no duplicate-keeping side (-0.008, spread 0.120); neither exceeds the seed spread. The uncertainty term, i.e. 1 - PIT deviation of the model / PIT deviation of the marginal NB, fell from 0.600 to -0.099 (per seed -0.182, -0.142, +0.029; paired -0.699 against a seed spread of 0.211). So without depth as an input, the model's predicted distribution was less well calibrated than one constant NB per track. The uncertainty term gave -0.148 of the -0.184 composite difference. The mean formula, depth x 2^eta, was the same in both arms.==
+
+### Results 7: training-region selection
+
+Source: `cruxvault/results/metrics_screening/scores_selection_arms.md`. Tier: screening. Each arm is rung 4 on 20,000 windows; the reference is uniform tiling.
+
+==No selection rule beat uniform tiling on composite version 2 by more than the seed spread; the best was a territory draw (+0.009, spread 0.029). Two rules were lower by more than the seed spread: k-center (-0.027, spread 0.019) and an unweighted cCRE-density tilt (-0.025, spread 0.015). Almost all of each drop came from the uncertainty term (0.25 x (0.524 - 0.624) and 0.25 x (0.523 - 0.624)), and on that term alone the drops are about one seed spread of the term. On specific variance, no rule was higher than uniform tiling by more than the spread, and k-center (-0.019, spread 0.011) and the weighted cCRE-density tilt at strength 0.25 (-0.011, spread 0.011) were lower. Under the settling rule, the uniform draw stays.==
+
+### Results 8: what is missing from the model results
+
+==Four rung-1 arms (covariates as tokens, learned mask token, matched compute, scramble every input) and two input arms (average input, two-step) have fewer than 3 scored seeds or none; their jobs wait in the Nibi GPU queue. The variance-tilt selection arm has 2 of 3 seeds. Every model score is a screening score on 16 pair regions; the check of 16 against 256 pair regions runs in iteration 2. The AlphaGenome 2 board has no miniCANDI row. The budget curve (rung-1 arms at 20,000 and 40,000 windows) has no screening score yet.==
 
 ## Discussion
 
-==Arrives in shipment 2 (first draft).==
+First draft, on screening scores. Each statement gives its evidence and its limit.
+
+1. ==Sequence context helps both goals at first, and then the goals separate. Rung 2 beats the pointwise rung 1 on every headline term by more than the seed spread (composite +0.058). Limit: the gain is below the 2 seed spreads that the selection rule asks for, and it rests on 3 seeds on 16 pair regions.==
+2. ==No architecture leads both imputation and correction. Rung 4 recovers the most specific variance (0.440) and closes the least gap of rungs 1 to 5 (0.298); rungs 2 and 3 close the most gap (0.576 and 0.572). Limit: the cause is open, and the gap-closed term on all headline pairs mixes clean pairs with pairs that can share DNA fragments.==
+3. ==Depth must stay an input of the network even though the mean already carries depth as an offset. Hiding depth cost 0.184 of composite at rung 4, and four fifths of that came from calibration (uncertainty term 0.600 to -0.099). Limit: one rung, screening tier; whether the NB size or eta carries the needed depth information is not yet measured.==
+4. ==Gap closed on all headline pairs can reward a model for the wrong reason. At rung 4, scrambling the covariates raised it by 0.101 and lowered gap closed on the 18 clean pairs by 0.099. Limit: the clean subset holds 18 pairs in 6 assays, and no direct test of fragment sharing has run.==
+5. ==In the depth-free eta space, the variance layers above read sampling do not change with depth, so model and layer results can be compared at one reference without thinning. Thinning to 1/2 and 1/4 of the common depth moved the eta-space replicate and cell-type layers by at most 10%, while the log1p cell-type share fell by 8% to 63% (`cruxvault/results/eta_space/LAYERS_ETA.md`). Limit: the eta estimates are weighted toward high-count bins, the replicate layer is not small in eta space (8% to 59% of the sampling-free variance), and no model score is yet read in eta space.==
+
+==Training-region selection by the tilts that ran does not beat uniform tiling at 20,000 windows, so the uniform draw stays for now.==
 
 ## Later phases

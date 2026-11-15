@@ -53,7 +53,7 @@ Root: [[candii]]
   - ○ `h33` [H] [[h33_at_80_000_windows_training_on_r_blocks_o|At 80,000 windows, training on R blocks of U is as good as training on all of U]] — *open*
   - ○ `q25` [Q] [[q25_does_a_run_of_20_000_or_40_000_windows_r|**Does a run of 20,000 or 40,000 windows rank the arms as 80,000 does (the prototype budget; core-before-scale)?**]] — *open*
 - ◐ `q14` [Q] [[q14_how_should_training_regions_be_selected_|**How should training regions be selected under a limited budget?**]] — *leaning* · weak
-  - ○ `h34` [H] [[h34_at_a_limited_budget_20_000_windows_a_wei|At a limited budget (20,000 windows), a weighted stratified draw beats the uniform draw]] — *open*
+  - ◐ `h34` [H] [[h34_at_a_limited_budget_20_000_windows_a_wei|At a limited budget (20,000 windows), a weighted stratified draw beats the uniform draw]] — *leaning* · weak · mixed
   - ● `q21` [Q] [[q21_does_stratified_selection_of_training_re|**Does stratified selection of training regions change what is sampled?**]] — *settled* · strong
   - ○ `q29` [Q] [[q29_do_training_regions_stratified_by_ccre_c|**Do training regions stratified by cCRE class or by ChromHMM state beat the uniform draw, once the annotation is free of EIC validation and blind cells?**]] — *open*
   - ○ `q30` [Q] [[q30_does_a_per_bin_loss_weight_from_annotati|**Does a per-bin loss weight from annotation or peak density, applied inside the window at 25 bp, improve the model as a stage-3 loss arm?**]] — *open*
@@ -69,7 +69,8 @@ Root: [[candii]]
   - ◐ `q33` [Q] [[q33_can_the_negative_binomial_be_written_wit|**Can the negative binomial be written with the depth-corrected eta (mean = depth x exp(eta)) throughout the model design, the variance decomposition and the law of total variance, and does decomposing the variance in eta space instead of on counts help, and how?**]] — *leaning* · moderate
     - ◐ `q34` [Q] [[q34_what_does_the_eta_formulation_change_in_|**What does the eta formulation change in the miniCANDI model: is the depth offset already in it, and would a hard offset, a dispersion tied across depth, or an eta-space readout of the model help?**]] — *leaning* · moderate
       - ○ `q35` [Q] [[q35_do_rung_1_base_and_the_baselines_meet_th|**Do rung 1 base and the baselines meet the depth law on the subset (pure thinning) correction pairs, and what is the count scale error against the true target total on all pairs?**]] — *open*
-      - ○ `q36` [Q] [[q36_does_hiding_depth_from_the_encoders_a_ha|**Does hiding depth from the encoders (a hard offset) change rung 1's correction gap closed, its depth law on subset pairs and its count scale error, against the base (offset plus soft covariate) and the tf_raw arm (soft covariate, no offset)?**]] — *open*
+      - ◐ `q36` [Q] [[q36_does_hiding_depth_from_the_encoders_a_ha|**Does hiding depth from the network (a hard offset) change rung 4's goal terms (specific variance, correction gap closed, calibration) against rung-4 base (offset plus soft depth covariate)?**]] — *leaning* · moderate
+        - ○ `q41` [Q] [[q41_why_does_hiding_depth_from_rung_4_drop_i|**Why does hiding depth from rung 4 drop its uncertainty term below the marginal NB while its mean-based terms move much less: does the predicted NB size lose a needed dependence on depth?**]] — *open*
       - ○ `q37` [Q] [[q37_how_much_of_rung_1_s_correction_gain_ove|**How much of rung 1's correction gain over depth-only scaling comes from depth and how much from the other covariates, read by decoding the model at the source covariates and the target depth?**]] — *open*
       - ○ `q38` [Q] [[q38_does_rung_1_s_predicted_nb_size_trend_wi|**Does rung 1's predicted NB size trend with target log2 depth on the depth-ladder targets of one base, and does the PIT deviation differ across log2-depth terciles?**]] — *open*
 - ◐ `q19` [Q] [[q19_what_do_the_training_free_baselines_reac|**What do the training-free baselines reach on the three goals, i.e. where does a model have room: imputation (the position average against the marginal NB and the noise floor), covariate correction (the gap between depth-only scaling and the half-against-half floor, per covariate knob: the size of the artifact that a model could remove), calibration (PIT and the variance ratio of the baselines)?**]] — *leaning* · moderate
@@ -82,14 +83,16 @@ Root: [[candii]]
 - ◐ `q22` [Q] [[q22_does_the_smallest_model_beat_the_baselin|**Does the smallest model beat the baselines on imputation, covariate correction and calibrated uncertainty, and by how much against the seed spread?**]] — *leaning* · moderate
   - ◐ `h39` [H] [[h39_rung_1_base_beats_the_position_average_o|Rung 1 base beats the position average on imputation by more than 2 seed spreads on the composite's imputation term and closes part of the correction gap]] — *leaning* · moderate · supports
   - ◐ `q39` [Q] [[q39_do_the_context_rungs_2_to_6_convolution_|**Do the context rungs 2 to 6 (convolution, attention, U-Net, axial, Perceiver) beat the pointwise rung 1 and the baselines on each goal at equal training windows?**]] — *leaning* · moderate
+    - ○ `q42` [Q] [[q42_why_does_rung_4_the_u_net_recover_the_mo|**Why does rung 4 (the U-Net) recover the most specific variance of the ladder but close the least correction gap of rungs 1 to 5?**]] — *open*
 - ◐ `q23` [Q] [[q23_is_the_model_wired_as_designed_does_scra|**Is the model wired as designed: does scrambling the covariates, switching the DNA off, another injection form, a mask token, or matched compute move the scores (the wiring checks of rung 1)?**]] — *leaning* · weak
-  - ◐ `h40` [H] [[h40_scrambled_covariates_lowers_the_correcti|scrambled_covariates lowers the correction term by more than 2 seed spreads and leaves imputation within 2; dna_off lowers imputation]] — *leaning* · weak · supports
+  - ◐ `h40` [H] [[h40_scrambled_covariates_lowers_the_correcti|scrambled_covariates lowers the correction term by more than 2 seed spreads and leaves imputation within 2; dna_off lowers imputation]] — *leaning* · weak · mixed
+  - ○ `q43` [Q] [[q43_does_the_gain_of_scrambled_covariates_in|**Does the gain of scrambled covariates in gap closed at rung 4 come from the 84 headline pairs with a duplicate-keeping side, where source and target can share DNA fragments?**]] — *open*
 - ◐ `q27` [Q] [[q27_are_the_onion_run_s_estimators_scorers_a|**Are the onion run's estimators, scorers and training pipeline correct, fast and reproducible on the clusters?**]] — *leaning* · moderate
 - ● `q28` [Q] [[q28_did_flashzoi_train_on_eic_blind_tracks_o|**Did Flashzoi train on EIC blind tracks or on the genomic loci of the blind scoring?**]] — *settled* · strong
 
 ## Dashboard
 
-- **Questions** (40): open 11 · leaning 21 · settled 8 · parked 0
-- **Hypotheses** (40): open 11 · leaning 17 · settled 6 · parked 6
-- **Confidence**: weak 17 · moderate 21 · strong 14
-- **Findings**: 75
+- **Questions** (43): open 13 · leaning 22 · settled 8 · parked 0
+- **Hypotheses** (40): open 10 · leaning 18 · settled 6 · parked 6
+- **Confidence**: weak 18 · moderate 22 · strong 14
+- **Findings**: 79

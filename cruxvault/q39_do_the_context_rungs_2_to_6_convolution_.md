@@ -35,7 +35,9 @@ Says whether the margin of the smallest model over the baselines grows with sequ
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+**1 children** · open 1, leaning 0, settled 0, parked 0 · 2 finding(s) on this question
 
+- `q42` _(Q)_ [[q42_why_does_rung_4_the_u_net_recover_the_mo|Why does rung 4 (the U-Net) recover the most specific variance of the ladder but close the least correction gap of rungs 1 to 5?]] — *open*
 - `f70` finding (moderate) [[f70_read_from_the_ladder_table_with_seed_spr|Read from the ladder table with seed spreads; moderate because it is a…]]
+- `f78` finding (moderate) [[f78_read_from_the_refreshed_ladder_table_und|Read from the refreshed ladder table under composite version 2 with 3 seeds…]]
 <!-- crux:ledger:end -->

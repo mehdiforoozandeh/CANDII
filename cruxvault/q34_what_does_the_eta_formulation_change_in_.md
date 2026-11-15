@@ -35,10 +35,10 @@ Says whether 'use eta throughout' asks for a change to the model or only to its 
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**4 children** · open 4, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+**4 children** · open 3, leaning 1, settled 0, parked 0 · 1 finding(s) on this question
 
 - `q35` _(Q)_ [[q35_do_rung_1_base_and_the_baselines_meet_th|Do rung 1 base and the baselines meet the depth law on the subset (pure thinning) correction pairs, and what is the count scale error against the true target total on all pairs?]] — *open*
-- `q36` _(Q)_ [[q36_does_hiding_depth_from_the_encoders_a_ha|Does hiding depth from the encoders (a hard offset) change rung 1's correction gap closed, its depth law on subset pairs and its count scale error, against the base (offset plus soft covariate) and the tf_raw arm (soft covariate, no offset)?]] — *open*
+- `q36` _(Q)_ [[q36_does_hiding_depth_from_the_encoders_a_ha|Does hiding depth from the network (a hard offset) change rung 4's goal terms (specific variance, correction gap closed, calibration) against rung-4 base (offset plus soft depth covariate)?]] — *leaning · moderate*
 - `q37` _(Q)_ [[q37_how_much_of_rung_1_s_correction_gain_ove|How much of rung 1's correction gain over depth-only scaling comes from depth and how much from the other covariates, read by decoding the model at the source covariates and the target depth?]] — *open*
 - `q38` _(Q)_ [[q38_does_rung_1_s_predicted_nb_size_trend_wi|Does rung 1's predicted NB size trend with target log2 depth on the depth-ladder targets of one base, and does the PIT deviation differ across log2-depth terciles?]] — *open*
 - `f67` finding (moderate) [[f67_read_from_the_code_and_from_recorded_fin|Read from the code and from recorded findings, with line citations checked;…]]

@@ -61,11 +61,10 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t264` [data-acquisition] Onion: Build the second experiments: submit and collect
 - `t285` [data-acquisition] Onion: Update the dataset from a watchdog report
 - `t294` [implementation] Onion: Per-region output of the scorer and the region bootstrap — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h35_256_evaluation_regions_are_enough\|h35]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]]
-- `t311` [implementation] Onion: The screening evaluation set and its baselines — refs [[q22_does_the_smallest_model_beat_the_baselin\|q22]]
+- `t312` [implementation] Onion: Screening scorings of rung 1 and of the budget curve (submit) — refs [[h39_rung_1_base_beats_the_position_average_o\|h39]], [[h40_scrambled_covariates_lowers_the_correcti\|h40]], [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]]
 - `t327` [implementation] Onion: fast model scoring for a fast feedback loop (PI directive 2026-11-14; Amendment 8) — refs [[q27_are_the_onion_run_s_estimators_scorers_a\|q27]]
 - `t329` [implementation] Onion: legacy scorer: merge, pair rules for cross-cell pairs, per-region pair sums (SF0) — refs [[q27_are_the_onion_run_s_estimators_scorers_a\|q27]]
 - `t333` [implementation] Onion: two-phase path in the scorer (SP2) — refs [[q27_are_the_onion_run_s_estimators_scorers_a\|q27]]
-- `t346` [implementation] Onion: the oracle floor in the tools: reference build, select_rule and arm_report (OF) — refs [[q32_which_reference_should_define_the_1_of_t\|q32]]
 
 ## Blocked
 
@@ -118,7 +117,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t302` [implementation] Onion: Budget curve on rung 4: submit — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — blocked by `t289`, `t290`, `t294`, `t216`
 - `t303` [implementation] Onion: Budget curve on rung 4: report — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — blocked by `t302`, `t216`
 - `t304` [implementation] Onion: The answers to the PI's region questions — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h35_256_evaluation_regions_are_enough\|h35]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — blocked by `t298`, `t299`, `t301`, `t303`
-- `t312` [implementation] Onion: Screening scorings of rung 1 and of the budget curve (submit) — refs [[h39_rung_1_base_beats_the_position_average_o\|h39]], [[h40_scrambled_covariates_lowers_the_correcti\|h40]], [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — blocked by `t311`
 - `t313` [implementation] Onion: Rung 1: the model results — refs [[h39_rung_1_base_beats_the_position_average_o\|h39]], [[h40_scrambled_covariates_lowers_the_correcti\|h40]], [[q24_how_much_of_each_variance_layer_does_the\|q24]] — blocked by `t312`
 - `t314` [implementation] Onion: The budget curve on rung 1 — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[q25_does_a_run_of_20_000_or_40_000_windows_r\|q25]] — blocked by `t312`
 - `t315` [implementation] Onion: AlphaGenome 2 against miniCANDI rung 1 on the fair tracks — refs [[h41_on_the_12_unseen_validation_tracks_alpha\|h41]], [[q26_alphagenome_2_against_minicandi_rung_1_a\|q26]] — blocked by `t312`, `t308`
@@ -237,8 +235,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t302` [implementation] Onion: Budget curve on rung 4: submit — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — *blocked*
 - `t303` [implementation] Onion: Budget curve on rung 4: report — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — *blocked*
 - `t304` [implementation] Onion: The answers to the PI's region questions — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h35_256_evaluation_regions_are_enough\|h35]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *blocked*
-- `t311` [implementation] Onion: The screening evaluation set and its baselines — refs [[q22_does_the_smallest_model_beat_the_baselin\|q22]] — *open*
-- `t312` [implementation] Onion: Screening scorings of rung 1 and of the budget curve (submit) — refs [[h39_rung_1_base_beats_the_position_average_o\|h39]], [[h40_scrambled_covariates_lowers_the_correcti\|h40]], [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — *blocked*
+- `t312` [implementation] Onion: Screening scorings of rung 1 and of the budget curve (submit) — refs [[h39_rung_1_base_beats_the_position_average_o\|h39]], [[h40_scrambled_covariates_lowers_the_correcti\|h40]], [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — *open*
 - `t313` [implementation] Onion: Rung 1: the model results — refs [[h39_rung_1_base_beats_the_position_average_o\|h39]], [[h40_scrambled_covariates_lowers_the_correcti\|h40]], [[q24_how_much_of_each_variance_layer_does_the\|q24]] — *blocked*
 - `t314` [implementation] Onion: The budget curve on rung 1 — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[q25_does_a_run_of_20_000_or_40_000_windows_r\|q25]] — *blocked*
 - `t315` [implementation] Onion: AlphaGenome 2 against miniCANDI rung 1 on the fair tracks — refs [[h41_on_the_12_unseen_validation_tracks_alpha\|h41]], [[q26_alphagenome_2_against_minicandi_rung_1_a\|q26]] — *blocked*
@@ -248,7 +245,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t334` [implementation] Onion: job shapes of score.sh and submit_arms.sh for the two-phase path (SP3) — refs [[q27_are_the_onion_run_s_estimators_scorers_a\|q27]] — *blocked*
 - `t335` [implementation] Onion: first model scoring, 6 rung-1 runs at all 256 pair regions (SRa) — refs [[q15_are_256_evaluation_regions_enough\|q15]] — *blocked*
 - `t336` [implementation] Onion: choose the pair-region count, derive the evaluation set, rescore (PCa) — refs [[q15_are_256_evaluation_regions_enough\|q15]] — *blocked*
-- `t346` [implementation] Onion: the oracle floor in the tools: reference build, select_rule and arm_report (OF) — refs [[q32_which_reference_should_define_the_1_of_t\|q32]] — *open*
 
 ### manuscript
 
@@ -466,6 +462,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t308` [implementation] Onion: AlphaGenome 2 against the baselines on the validation tracks — refs [[q20_which_eic_tracks_did_alphagenome_2_train\|q20]] — *done* → `results/t308/AG2_VS_BASELINES.md`, `results/t308/ag2_contrasts_val.tsv`
 - `t309` [manuscript] Onion: Methods: the dataset and the evaluation protocol — refs [[q17_what_is_the_dataset_and_what_did_it_cost\|q17]] — *done* → `results/t309/sources.md`
 - `t310` [manuscript] Onion: Deck 1 and the paper note of iteration 1 — refs [[q17_what_is_the_dataset_and_what_did_it_cost\|q17]], [[q18_how_large_is_each_layer_of_the_variance_\|q18]], [[q19_what_do_the_training_free_baselines_reac\|q19]], [[q20_which_eic_tracks_did_alphagenome_2_train\|q20]], [[q21_does_stratified_selection_of_training_re\|q21]] — *done* → `presentations/onion-ship1-2026-11-15/DECK.md`
+- `t311` [implementation] Onion: The screening evaluation set and its baselines — refs [[q22_does_the_smallest_model_beat_the_baselin\|q22]] — *done* → `results/t307/BASELINES.md`, `results/metrics_screening/scores_ladder.md`
 - `t317` [implementation] Onion: rung consistency across the six rungs (scramble rule, wiring check, registration) — refs [[q27_are_the_onion_run_s_estimators_scorers_a\|q27]] — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
 - `t318` [implementation] Onion: guardrail gate = wiring check only; copy gain as a diagnostic (F2) — refs [[q27_are_the_onion_run_s_estimators_scorers_a\|q27]] — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
 - `t319` [implementation] Onion: fix the 17 review findings of the scorer and selection rule (E6f) — refs [[q27_are_the_onion_run_s_estimators_scorers_a\|q27]] — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
@@ -489,5 +486,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t343` [admin] Onion: record the run's findings, questions and task states in the crux tree (recorder CR1) — *done* → `f34_at_25_bp_over_all_regions_the_cell_type_.md`, `q27_are_the_onion_run_s_estimators_scorers_a.md`
 - `t344` [implementation] Onion: fragment length for ChIP-seq tracks with an empty frag_len: side table and scorer option (FL) — refs [[q17_what_is_the_dataset_and_what_did_it_cost\|q17]], [[q20_which_eic_tracks_did_alphagenome_2_train\|q20]] — *done* → `results/fraglen_single_end/FRAGLEN.md`
 - `t345` [implementation] Onion: the oracle floor for the correction gap closed: investigation (GF) — refs [[q32_which_reference_should_define_the_1_of_t\|q32]] — *done* → `results/gap_closed_floor/GAP_FLOOR.md`
+- `t346` [implementation] Onion: the oracle floor in the tools: reference build, select_rule and arm_report (OF) — refs [[q32_which_reference_should_define_the_1_of_t\|q32]] — *done* → `results/oracle_floor/ORACLE_FLOOR.md`
 - `t347` [implementation] Onion: the depth-corrected eta formulation: theory, model design, literature and real-data layers (ETA) — refs [[q33_can_the_negative_binomial_be_written_wit\|q33]], [[q34_what_does_the_eta_formulation_change_in_\|q34]], [[q31_how_do_the_variance_layer_shares_change_\|q31]] — *done* → `results/eta_space/THEORY.md`, `results/eta_space/LAYERS_ETA.md`, `results/eta_space/MODEL_DESIGN.md`, `results/eta_space/LITERATURE.md`
 - `t348` [visualization] Onion: status deck of the run, 2026-11-14 — refs [[q18_how_large_is_each_layer_of_the_variance_\|q18]], [[q19_what_do_the_training_free_baselines_reac\|q19]] — *done* → `presentations/onion-status-2026-11-14/DECK.md`

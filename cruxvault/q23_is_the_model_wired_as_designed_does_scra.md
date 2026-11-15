@@ -35,7 +35,8 @@ If the model ignores an input that it should use, its scores on the three goals 
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**1 children** · open 0, leaning 1, settled 0, parked 0
+**2 children** · open 1, leaning 1, settled 0, parked 0
 
 - `h40` [[h40_scrambled_covariates_lowers_the_correcti|scrambled_covariates lowers the correction term by more than 2 seed spreads and leaves imputation within 2; dna_off lowers imputation]] — *leaning · weak*
+- `q43` _(Q)_ [[q43_does_the_gain_of_scrambled_covariates_in|Does the gain of scrambled covariates in gap closed at rung 4 come from the 84 headline pairs with a duplicate-keeping side, where source and target can share DNA fragments?]] — *open*
 <!-- crux:ledger:end -->

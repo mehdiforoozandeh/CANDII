@@ -1,15 +1,15 @@
 ---
 id: t311
 type: task
-title: Onion: The screening evaluation set and its baselines
+title: "Onion: The screening evaluation set and its baselines"
 category: implementation
 parent: t152
 blocked_by: None
 refs: q22
 hypothesis_refs: 
-status: open
-created: 2026-11-14T00:35:54
-updated: 2026-11-14T00:35:54
+status: done
+created: "2026-11-14T00:35:54"
+updated: "2026-11-15T00:24:42"
 ---
 
 # t311 — Onion: The screening evaluation set and its baselines
@@ -24,7 +24,8 @@ Iteration 2 of Amendment 9 (ships 2026-11-16 12:00 UTC): the screening set (pair
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Baselines on both tiers](results/t307/BASELINES.md)
+- [Screening-set scores with baselines](results/metrics_screening/scores_ladder.md)
 
 ## Evidence
 
