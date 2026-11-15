@@ -30,6 +30,10 @@ lands within 10% of the budget (matched parameters).
 
 Config keys read: covariate_injection, mask_mode, dna, count_transform, qc_on_input,
 average_input, scramble_covariates, scramble_all, two_step, context_bins, param_budget.
+Tuning knobs (default-off; absent = the module constants, so every earlier run is unchanged):
+`n_down` (N_DOWN; attention runs on context_bins / 2**n_down positions), `attn_layers`
+(N_LAYERS), `attn_heads` (N_HEADS; must divide the fitted width) and `attn_dropout` (0.0; the
+dropout of every transformer encoder layer). The width search refits W for each setting.
 `control_input`, `predict_control`, `base_depth` act in the dataset; the model needs no change for
 them. Scrambled covariates: `model_covariates`, the rule shared by all six rungs. `two_step = true`
 raises NotApplicable, as in every rung.
@@ -111,9 +115,17 @@ class Model(MiniCandi):
         super().__init__()
         cfg = resolve_config(config)
         check_rung(cfg)
+        # tuning knobs (round-2 tuning, default-off: absent = the module constants)
+        n_down = int(cfg.get("n_down", N_DOWN))
+        n_layers = int(cfg.get("attn_layers", N_LAYERS))
+        n_heads = int(cfg.get("attn_heads", N_HEADS))
+        attn_dropout = float(cfg.get("attn_dropout", 0.0))
+        if n_down < 1 or n_layers < 1 or n_heads < 1 or not 0.0 <= attn_dropout < 1.0:
+            raise ValueError(f"bad rung-3 knobs: n_down {n_down}, attn_layers {n_layers}, "
+                             f"attn_heads {n_heads}, attn_dropout {attn_dropout}")
         L = int(cfg["context_bins"])
-        if L % (2 ** N_DOWN):
-            raise ValueError(f"context_bins {L} must be a multiple of {2 ** N_DOWN}")
+        if L % (2 ** n_down):
+            raise ValueError(f"context_bins {L} must be a multiple of {2 ** n_down}")
         if width is None:
             width = fit_width(without_extras(cfg))
         self.config = cfg
@@ -143,13 +155,15 @@ class Model(MiniCandi):
         d_fuse = A * D_TRACK + (D_DNA if cfg["dna"] != "off" else 0)
         self.fuse = nn.Linear(d_fuse, W)
 
-        self.enc = nn.ModuleList(M.ConvBlock(W, W, KERNEL) for _ in range(N_DOWN))
-        self.down = nn.ModuleList(M.Downsample(W, W, 2) for _ in range(N_DOWN))
-        layer = nn.TransformerEncoderLayer(W, N_HEADS, FF_MULT * W, dropout=0.0,
+        if W % n_heads:
+            raise ValueError(f"width {W} is not a multiple of attn_heads {n_heads}")
+        self.enc = nn.ModuleList(M.ConvBlock(W, W, KERNEL) for _ in range(n_down))
+        self.down = nn.ModuleList(M.Downsample(W, W, 2) for _ in range(n_down))
+        layer = nn.TransformerEncoderLayer(W, n_heads, FF_MULT * W, dropout=attn_dropout,
                                            activation="gelu", batch_first=True, norm_first=True)
-        self.attn = nn.TransformerEncoder(layer, N_LAYERS, enable_nested_tensor=False)
-        self.up = nn.ModuleList(M.Upsample(W, W, 2) for _ in range(N_DOWN))
-        self.dec = nn.ModuleList(M.ConvBlock(W, W, KERNEL) for _ in range(N_DOWN))
+        self.attn = nn.TransformerEncoder(layer, n_layers, enable_nested_tensor=False)
+        self.up = nn.ModuleList(M.Upsample(W, W, 2) for _ in range(n_down))
+        self.dec = nn.ModuleList(M.ConvBlock(W, W, KERNEL) for _ in range(n_down))
 
         self.readout = nn.Linear(W, A * D_OUT)
         self.track_emb = nn.Parameter(torch.zeros(A, D_OUT))

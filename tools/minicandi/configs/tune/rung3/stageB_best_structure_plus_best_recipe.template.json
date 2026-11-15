@@ -1,0 +1,26 @@
+{
+ "rung": 3,
+ "context_bins": 1024,
+ "covariate_injection": "film",
+ "mask_mode": "token",
+ "dna": "own",
+ "scramble_covariates": false,
+ "scramble_all": false,
+ "count_transform": "offset",
+ "qc_on_input": false,
+ "two_step": false,
+ "base_depth": "native",
+ "average_input": false,
+ "control_input": true,
+ "predict_control": true,
+ "param_budget": 1000000,
+ "windows_seen": 80000,
+ "lr": 0.001,
+ "batch_size": 8,
+ "simpler_than_base": null,
+ "_rule": "Take the stage-B recipe above (or base if it was skipped) and add the structural key of the best structural arm (attn_layers4, attn_at_128_positions, attn_heads8) if it beat base_heldout by more than the noise margin; otherwise skip this trial.",
+ "heldout_loss": {
+  "batches": 16,
+  "every": 20
+ }
+}
