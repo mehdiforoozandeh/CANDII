@@ -55,7 +55,7 @@ Working copies of items 2 and 3 live in the worktree at `.claude/worktrees/onion
 - rg_variance_e50_w seed 2: trained; predict + metric jobs 27402882 to 27402886 submitted.
 - Agent in work: ship-2 recorder and deck builder (deck folder presentations/onion-ship2-2026-11-15; the foreman publishes the artifact and mirrors the URL in ARTIFACTS.md). Ship 2 due 18:00.
 - SHIP 2 DELIVERED 2026-11-15 about 08:10: deck https://claude.ai/artifact/RHucrLM3AXXxVfzQtCqEDS (presentations/onion-ship2-2026-11-15); vault f78 to f81, q41 to q43.
-- Open with the PI: approve two split arms at rung 4 (depth hidden on the output side only; on the input side only; 3 seeds each). No compute for them before his yes.
+- Ruling 49 (PI "Yes", 2026-11-15): two split arms at rung 4, 3 seeds each: rung4_hide_depth_output (depth hidden in the output covariates only) and rung4_hide_depth_input (hidden in the input covariates only). Umbrella cfb57f3, kit HO2. 36 jobs 27405429 to 27405464 submitted about 08:05; never resubmit. At 09:13: 0 of 6 scored, 34 jobs in the queue. Owed: table (select_rule.py table --prefix rung4 --sub p16), comparison with rung-4 base and the hard-offset arm, vault finding, scores_rung4_arms.md. Caveat: the input depth is still readable from zero-count bins after the input transform.
 - Next: iteration 2 (16 vs 256 region check, budget-curve scores, rung-1 arms still in the GPU queue, miniCANDI row on the AlphaGenome 2 board), due 2026-11-17 12:00.
 
 **Earlier (2026-11-15T02:35Z; read this block before the older "In work" block below)**

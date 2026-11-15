@@ -3043,3 +3043,14 @@ What can start before `eic_v1` exists: the 18 chunks of wave B1 now; then B2 (RX
 - 2026-11-15T07:20Z rung4_hard_offset seeds 0,1,2 SCORED (18 jobs COMPLETED). Seed means, screening set, composite v2 (select_rule table, kit HO): base vs hard_offset: composite 0.444 vs 0.260; specific variance recovered 0.440 vs 0.406; gap closed (oracle) 0.298 vs 0.218 (per seed 0.185, 0.271, 0.197); gap closed no-nodedup pairs 0.519 vs 0.510; uncertainty term 0.600 vs -0.098 (-0.182, -0.142, +0.029). Hiding depth did NOT help; uncertainty calibration collapsed. rg_variance_e50_w seed 2 training COMPLETED (27366823); predict + metric still owed. 58 runs scored. GPU queue moved: 36 GPU jobs pending (was 98); rung1 arms scored: inject_concat 2, inject_tokens 1, mask_token 2. Dispatching ship-2 deck builder and recorder.
 - 2026-11-15T07:17Z rg_variance_e50_w seed 2: predict (4 CPU shards) + metric submitted, kit HO: 27402882 27402883 27402884 27402885 27402886 . Never resubmit.
 - 2026-11-15T07:37Z SHIP 2 DELIVERED early: SH2 commits 89640ad (vault: f78 on q39, f79 on h40, f80 on h34, f81 on q36; q41, q42, q43 new; t346, t311 closed; t312 open) and 09c8d99 (deck, 14 slides, verify strict pass). Artifact https://claude.ai/artifact/RHucrLM3AXXxVfzQtCqEDS. Open with PI: split arms (depth hidden on output side only / input side only) at rung 4.
+- 2026-11-15T07:45Z PI RULING 49 ('Yes'): two split arms at rung 4, 3 seeds each: depth hidden on the output side only; on the input side only; input count normalization kept in both. Builder HO2 in /Users/mforooz/Desktop/research/libbrechteam@sfu/.orchestrate-wt/CANDII/onion-HO2.
+- 2026-11-15T07:52Z HO2 ACCEPTED, merged (910c4bc -> umbrella cfb57f3, pushed; 188 lines; 32 of 32 fingerprints identical; golden 0 ULP). Kit HO2. SUBMITTED rung4_hide_depth_output and rung4_hide_depth_input, seeds 0,1,2 (36 jobs; never resubmit). CAVEAT from builder: with the true-depth input transform, a zero-count visible bin gives x = 24 - log2 depth, so the network can still read the input depth implicitly in the input arm. squeue:
+    dry run: would submit 6 runs, skipped 0
+    submitted 6 runs, skipped 0; log /project/def-maxwl/mforooz/ONION/runs/SUBMITTED.tsv
+          6 mc_rung4_hide_depth_input_s0
+          6 mc_rung4_hide_depth_input_s1
+          6 mc_rung4_hide_depth_input_s2
+          6 mc_rung4_hide_depth_output_s0
+          6 mc_rung4_hide_depth_output_s1
+          6 mc_rung4_hide_depth_output_s2
+    27405429 27405464 
