@@ -16,10 +16,10 @@
  "predict_control": true,
  "param_budget": 1000000.0,
  "windows_seen": 80000,
- "lr": "FILL",
+ "lr": 0.001,
  "batch_size": 8,
  "simpler_than_base": null,
- "_stage_b_rule": "as stageB_best_lr_plus_best_single, plus the SECOND of warmup15 / clip3 / wd0.1 that also beats rung4_base_heldout by more than the noise floor. If fewer than two beat base, do not run. Delete _stage_b_rule before submission.",
+ "n_levels": 5,
  "heldout_loss": {
   "batches": 16,
   "every": 20
