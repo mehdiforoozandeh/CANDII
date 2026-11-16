@@ -61,6 +61,11 @@ the sampler's own keys in `DEFAULTS`.
                            `FIXED_BASE_LOG2_DEPTH` is binomially thinned to it and C_base states
                            the thinned depth. A track without a base view has c_base = 0 (column
                            0, log2 depth, is never 0 for a real view, so it is the mask).
+  base_ref_log2_depth      optional {assay_class: log2 reads} for every class of
+                           `contract.ASSAY_CLASSES`; under `base_depth = fixed` it replaces
+                           `FIXED_BASE_LOG2_DEPTH` for the base leg only (PI ruling 2026-11-16:
+                           one reference depth per class). `input_depth` still reads the
+                           constant. Absent or null: the constant, as before.
   scramble_covariates      NOT applied here: the train loop must call
                            `covariates.scramble_covariates` on c_in and c_out of each batch.
 
@@ -349,6 +354,10 @@ class OnionDataset(IterableDataset):
             raise RoleError("mode = blind needs config['allow_blind'] = true (gate G4)")
         if self.config["base_depth"] not in ("native", "fixed"):
             raise ValueError(f"base_depth {self.config['base_depth']!r} not in (native, fixed)")
+        ref_map = self.config.get("base_ref_log2_depth")
+        if ref_map is not None and (not isinstance(ref_map, dict)
+                                    or set(ref_map) != set(C.ASSAY_CLASSES)):
+            raise ValueError(f"base_ref_log2_depth needs one value per class {C.ASSAY_CLASSES}")
         for key, allowed in (("input_depth", INPUT_DEPTHS), ("mask_scheme", MASK_SCHEMES),
                              ("bin_mask_shape", BIN_MASK_SHAPES)):
             if self.config[key] not in allowed:
@@ -947,7 +956,8 @@ class OnionDataset(IterableDataset):
         c = self.encoder.c_out(br)
         y = self.read(base, chrom, start, L)
         if self.config["base_depth"] == "fixed":
-            ref = FIXED_BASE_LOG2_DEPTH[br["assay_class"]]
+            ref = float((self.config.get("base_ref_log2_depth")
+                         or FIXED_BASE_LOG2_DEPTH)[br["assay_class"]])
             if c[C.LOG2_DEPTH_COL] > ref:
                 q = 2.0 ** (ref - float(c[C.LOG2_DEPTH_COL]))
                 rng = np.random.default_rng(np.random.SeedSequence(

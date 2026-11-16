@@ -1,4 +1,4 @@
-"""Nine named ablations of miniCANDI (chunk AB): every config under
+"""Ten named ablations of miniCANDI (chunk AB): every config under
 tools/minicandi/configs/ablations/<ablation>/rung{2,3,4}/<arm>.json is the architecture's base recipe
 (configs/final/rung<r>/reference_equal.json) plus exactly the declared keys of its arm, and builds
 through the registry within 10% of 1.0e6 parameters."""
@@ -24,7 +24,8 @@ EXPECTED = {
     "control_input": {"control_output_only": {"control_input"}},
     "predict_control": {"predict_control_off": {"predict_control"}},
     "average_input": {"average_input": {"average_input", "average_h5"}},
-    "two_step": {"two_step_native": {"two_step"}, "two_step_fixed": {"two_step", "base_depth"}},
+    "two_step": {"two_step_native": {"two_step"},
+                 "two_step_fixed": {"two_step", "base_depth", "base_ref_log2_depth"}},
     "dna_source": {"dna_gnlm": {"dna", "dna_embedding_dim", "dna_embedding_h5"},
                    "dna_flashzoi": {"dna", "dna_embedding_dim", "dna_embedding_h5"},
                    "dna_shift5mb": {"dna_shift_bp"}},
@@ -33,6 +34,7 @@ EXPECTED = {
                       "cov_dropout": {"covariate_dropout"},
                       "cov_numeric_per_value": {"covariate_embedding", "param_budget"}},
     "depth_input": {"input_depth_fixed": {"input_depth"}},
+    "cov_injection": {"inject_adaln_zero": {"covariate_injection"}},
     "losses": {"loss_impute_x4": {"loss_weights"}, "loss_poisson_mean": {"loss"},
                "loss_nb_crps": {"loss"}, "loss_bin_equal": {"loss_bin_equal"}},
 }

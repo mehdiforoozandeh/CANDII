@@ -46,11 +46,19 @@ DNA_EMBEDDING_DIM = 128
 #: the covariate-dropout probability of the `cov_dropout` arm (agent call; not pinned by the plan)
 COV_DROPOUT = 0.1
 
+#: the `two_step_fixed` arm's reference depth per assay class, log2 reads (PI ruling 2026-11-16:
+#: one depth per class). Rule: the 10th percentile of the log2 depth of the base view that the
+#: dataset picks for each training (cell, assay) of Fir eic_v1/measurements.tsv, rounded down to
+#: 0.5; the command is in the ablation 4 specification (4_two_step.md).
+BASE_REF_LOG2_DEPTH = {"accessibility_dnase": 24.5, "accessibility_atac": 25.0,
+                       "broad_histone": 24.0, "narrow_histone": 23.5, "control": 23.5}
+
 #: ARMS[arm] = (group, {key: value}): the change of each arm from the incumbent, in table order
 ARMS = {
     "qc_on_input": ("covariate vector (D6)", {"qc_on_input": True}),
     "two_step_native": ("correction route (D15)", {"two_step": True, "base_depth": "native"}),
-    "two_step_fixed": ("correction route (D15)", {"two_step": True, "base_depth": "fixed"}),
+    "two_step_fixed": ("correction route (D15)", {"two_step": True, "base_depth": "fixed",
+                                                  "base_ref_log2_depth": BASE_REF_LOG2_DEPTH}),
     "control_output_only": ("ChIP control", {"control_input": False}),
     "control_none": ("ChIP control", {"control_input": False, "predict_control": False}),
     "control_lambda_head": ("ChIP control", {"control_input": False,
