@@ -46,6 +46,10 @@ EXPECTED = {
     "views": {"base_only": {"train_views"}, "base_depth": {"train_views"},
               "base_fastq": {"train_views"}, "base_alignment": {"train_views"},
               "all_same_view_only": {"same_view_prob"}},
+    # close-out A8: the 8 named transforms and the pseudocount point of the sweep
+    "count_transforms": {**{f"tf_{t}": {"count_transform"} for t in (
+        "log1p", "asinh", "anscombe", "pearson", "local_ratio", "quantile", "raw", "soft_clip")},
+        "offset_eps0.1": {"offset_eps"}},
 }
 UNET_VIEWS = _ROOT / "tools/minicandi/configs/views/rung4"
 ON_DISK = sorted(ABL.glob("*/rung*/*.json"))

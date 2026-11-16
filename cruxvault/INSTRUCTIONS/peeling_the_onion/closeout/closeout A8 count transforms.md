@@ -34,9 +34,9 @@ Does any of the listed input transforms (log1p, asinh, Anscombe, NB Pearson resi
 
 ## 5. Work
 
-1. PI decision on scope: all 9 arms on 3 architectures (81 runs), or a two-stage screen (stage 1: all 9 arms on one architecture; stage 2: arms within 2 x the seed range of the default, or beyond it, on the other two).
-2. Write the arm configs on `final/rung{2,3,4}/reference_equal.json` with `stage2_arms.py write`; check parameter counts.
-3. Submit on Fir CPU, 3 seeds, scored into `p16_sv`.
+1. Scope (PI ruling 2026-11-16): all 9 arms on 3 architectures, 81 runs, no screen. Specification: `run_state/ablation_specs/15_count_transforms.md` (it lists what each arm changes beyond the input: 5 arms change the output link).
+2. Done 2026-11-16: configs in `tools/minicandi/configs/ablations/count_transforms/rung{2,3,4}/`; parameter counts equal the base; U-Net smokes passed.
+3. Submit on Fir CPU, 3 seeds, scored into `p16_sv`: `ABLATIONS=count_transforms bash tools/minicandi/configs/ablations/submit_all.sh` (foreman). Cost 9 x 3 x 87.2 = 2,354 CPU-h.
 4. Read against the reference; log D13 outcomes; record findings.
 
 ## 6. How the result answers the question
@@ -52,7 +52,7 @@ Does any of the listed input transforms (log1p, asinh, Anscombe, NB Pearson resi
 ## 7. Dependencies, cost, risks
 
 - Depends on nothing; reads better after ablation 8 of A1.
-- Cost: per-seed cost 32.5 / 22.4 / 32.3 CPU-h (`ablation_specs/1_control_input.md` section 7). All 9 arms on 3 architectures: 9 x 262 = 2,358 CPU-h. Two-stage: stage 1 on the conv autoencoder 9 x 3 x 32.5 = 878 CPU-h, then 3 x (22.4 + 32.3) = 164 CPU-h per arm carried to the other two architectures.
+- Cost: per-seed cost 32.5 / 22.4 / 32.3 CPU-h (`ablation_specs/1_control_input.md` section 7). All 9 arms on 3 architectures: 9 x 3 x 87.2 = 2,354 CPU-h (ruled). The two-stage figures below are superseded. Two-stage: stage 1 on the conv autoencoder 9 x 3 x 32.5 = 878 CPU-h, then 3 x (22.4 + 32.3) = 164 CPU-h per arm carried to the other two architectures.
 - Risk: `tf_local_ratio` and `tf_quantile` have no output-side inverse (ablations file L138, L143); check how the arm decodes the output before training.
 
 ## 8. Done when
