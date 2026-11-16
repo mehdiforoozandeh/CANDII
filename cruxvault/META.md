@@ -87,12 +87,14 @@ Root: [[candii]]
 - ◐ `q23` [Q] [[q23_is_the_model_wired_as_designed_does_scra|**Is the model wired as designed: does scrambling the covariates, switching the DNA off, another injection form, a mask token, or matched compute move the scores (the wiring checks of rung 1)?**]] — *leaning* · weak
   - ◐ `h40` [H] [[h40_scrambled_covariates_lowers_the_correcti|scrambled_covariates lowers the correction term by more than 2 seed spreads and leaves imputation within 2; dna_off lowers imputation]] — *leaning* · weak · mixed
   - ○ `q43` [Q] [[q43_does_the_gain_of_scrambled_covariates_in|**Does the gain of scrambled covariates in gap closed at rung 4 come from the 84 headline pairs with a duplicate-keeping side, where source and target can share DNA fragments?**]] — *open*
+  - ◐ `q44` [Q] [[q44_does_training_the_u_net_on_the_counterfa|**Does training the U-Net on the counterfactual processing views of EIC (depth thinning, single-end, read crop, no duplicate removal, no MAPQ filter) raise the three goal terms over training on the base view alone, and for which view type and which evaluation pairs?**]] — *leaning* · weak
+    - ○ `q45` [Q] [[q45_why_does_adding_the_no_duplicate_removal|**Why does adding the no-duplicate-removal and no-MAPQ-filter views to training lower gap closed on the never-trained pair that combines both (0.08 against 1.77 for base only, half-read floor scale)?**]] — *open*
 - ◐ `q27` [Q] [[q27_are_the_onion_run_s_estimators_scorers_a|**Are the onion run's estimators, scorers and training pipeline correct, fast and reproducible on the clusters?**]] — *leaning* · moderate
 - ● `q28` [Q] [[q28_did_flashzoi_train_on_eic_blind_tracks_o|**Did Flashzoi train on EIC blind tracks or on the genomic loci of the blind scoring?**]] — *settled* · strong
 
 ## Dashboard
 
-- **Questions** (43): open 13 · leaning 22 · settled 8 · parked 0
+- **Questions** (45): open 14 · leaning 23 · settled 8 · parked 0
 - **Hypotheses** (40): open 10 · leaning 18 · settled 6 · parked 6
-- **Confidence**: weak 18 · moderate 22 · strong 14
-- **Findings**: 79
+- **Confidence**: weak 19 · moderate 22 · strong 14
+- **Findings**: 81

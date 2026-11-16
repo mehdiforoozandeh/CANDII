@@ -2,7 +2,7 @@
 title: where we are (peeling the onion run)
 kind: live status page, maintained by the foreman agent
 parent: "[[peeling the onion]]"
-updated: 2026-11-16T04:10Z
+updated: 2026-11-16T08:30Z
 ---
 
 # Where we are
@@ -48,7 +48,11 @@ Working copies of items 2 and 3 live in the worktree at `.claude/worktrees/onion
 - Globus: two transfers Nibi to Fir started at about 09:50; not verified on Fir yet.
 - Status deck 2026-11-14: `cruxvault/presentations/onion-status-2026-11-14/`, artifact https://claude.ai/artifact/FwKjytRr1UuhT3xhTpWDrL (private).
 
-**NEWEST (2026-11-16T04:10Z; read this block first)**
+**NEWEST (2026-11-16T08:30Z; read this block first)**
+
+Fir results read for the U-Net (3 seeds, 16 regions); table in `cruxvault/results/views_ablation/VIEWS_ABLATION.md` (on disk only, git-ignored). (1) Counterfactual views: no gain; base view only reached composite 0.483 and gap closed 0.415 against 0.444 and 0.298 for all views; alignment-level views alone dropped gap closed to 0.072; same-view pairs only gave gap closed below 0. (2) Split depth arms, final: hiding depth on the output side costs nothing (0.455); the loss is on the input side (0.382). Both are recorded as findings. Still running on Fir (42 pending, 29 running at 08:30Z): held-out reference runs, fair-chance round 1, tuning round 2. Next: read those by held-out loss (LEAD_PLAN.md section 5), stage B, round-3 proposal, add the view result to the report for Max, iteration 2 (due 2026-11-17 12:00 UTC).
+
+**Earlier block (2026-11-16T04:10Z)**
 - PI directives 2026-11-15 evening: make the architecture findings trustworthy (every architecture a fair chance; every named knob tested); one ablation lead with one agent per architecture, the foreman approves; compute may use Nibi and Fir; the report must show whether the counterfactual views help.
 - Audits: results/ladder_audit/FAIR_CHANCE.md (six-place order not trustworthy; three tiers) and COVERAGE.md (38 knobs: 10 full, 7 partial, 21 untested). Tuning plan: results/ladder_tuning/LEAD_PLAN.md (protocol, stage B rule, round 3 = winners at 3 seeds under equal windows and matched compute + mechanism arms).
 - NIBI COMPUTE DOWN since 2026-11-15 13:10. ALL CPU WORK NOW RUNS ON FIR: root /project/def-maxwl/mforooz/ONION/runs_fir, kit RTf, ids in runs_fir/SUBMITTED.tsv. 95 runs: counterfactual-view ablation (rung4_views_*), fair-chance round 1, base_heldout seeds 0-2, tuning round 2 (tune_rung{2..6}_*), score-only of rung4_hide_depth_output seeds 0,1. The same jobs on Nibi are HELD (never release, never resubmit; cancel is the PI's).
