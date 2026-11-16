@@ -101,6 +101,8 @@ The DNA tower is 0.3% of the conv models' parameters, and DNA off at the pointwi
 - Cost (per-seed train + predict + metrics, Fir `sacct`, `5_dna_source.md` section 7): conv autoencoder 26.89, conv + attention 23.85, U-Net 28.18 CPU-h. Total 3 x (2 x 26.89 + 3 x 23.85 + 3 x 28.18) = 3 x (53.78 + 71.55 + 84.54) = 3 x 209.87 = 629.6 CPU-h. This is an upper bound: U-Net `fusion_early` trains with 16% fewer FLOPs per window.
 - Reference: the existing base runs `runs_fir/rung{2,3,4}_base_heldout` (no new run).
 
-## 8. Smoke (kit COA11)
+## 8. Smoke (kits COA11 and COA11b)
 
-Fir job 4449584 (4 CPUs, 245 s = 0.27 CPU-h, exit 0): each of the 8 arm configs trained 320 windows on the real `eic_v1` tables (seed 0), reloaded through `registry.load_run` with the expected parameter count, and logged finite losses (first 1.553, last 1.325 to 1.327 for every arm). Outputs `/project/def-maxwl/mforooz/ONION/smoke_COA11/rung{2,3,4}_<arm>`. Notes: `cruxvault/results/closeout_A11/SMOKE.md` (git-ignored).
+- Kit COA11b (after the review fixes), Fir job 4453946 (4 CPUs, 269 s = 0.30 CPU-h, exit 0). Each of the 8 arm configs trained 320 windows on the real `eic_v1` tables (seed 0) and reloaded through `registry.load_run` with the parameter counts of section 2. The logged losses were finite (first 1.553; last 1.325 to 1.326 for every arm). Outputs: `/project/def-maxwl/mforooz/ONION/smoke_COA11b/rung{2,3,4}_<arm>`.
+- Kit COA11 (before the fixes, superseded), Fir job 4449584 (0.27 CPU-h, exit 0). Outputs: `/project/def-maxwl/mforooz/ONION/smoke_COA11/`.
+- Notes: `cruxvault/results/closeout_A11/SMOKE.md` (git-ignored).
