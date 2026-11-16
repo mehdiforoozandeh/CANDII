@@ -80,6 +80,19 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 | Bring the records up to date (rulings, compute tallies, paper note) | [[closeout R1 records up to date]] | none | not started |
 | Close-out deck and written report | [[closeout R2 close-out deck and report]] | all | not started |
 
+## PI rulings of 2026-11-16 (answers to the item files' open decisions)
+
+- Blind-track rebuild: all 722 remaining rows.
+- New data set version (after the covariate fill): retrain the 3 base recipes and the final model only.
+- Count transforms: all 9 on all 3 models.
+- The 16-versus-256 pair-region plan is amended to the corrected correction terms before it runs.
+- RNA-seq tracks may move from Nibi to Fir by Globus.
+- No matched-compute runs for ablation arms.
+- Mix-and-match combinations of winning settings are done in this work.
+- Two-step fixed reference depth: one per assay class.
+- adaLN-zero covariate injection: an extra arm.
+- DNA embeddings: Globus transfer Nibi to Fir started 2026-11-16.
+
 ## Open PI decisions
 
-Listed in the foreman's chat block "What I need from you"; copied here when answered.
+- DNA-fusion arms (how the DNA features join the count features): needed, or covered by the DNA-source ablation?
