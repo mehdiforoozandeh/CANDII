@@ -40,7 +40,7 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 | Fill the lab, antibody and donor covariates | [[closeout D1 lab antibody donor covariates]] | none | spec (item agent started 2026-11-16) |
 | Second experiments: table, evaluation set, cross-lab pairs | [[closeout D2 second experiments and cross-lab pairs]] | D1 | not started |
 | Data set update with DNase-seq in the headline | [[closeout D3 dataset update with DNase-seq]] | D1 | not started |
-| Blind tracks, final model, blind pass, EIC board row | [[closeout D4 blind tracks final model EIC board]] | D1, D3, M1 | blocked: build script ready; real cost about 94,300 allocated CPU-hours, not 14,920; waits for the PI |
+| Blind tracks, final model, blind pass, EIC board row | [[closeout D4 blind tracks final model EIC board]] | D1, D3, M1 | blocked: PI approved the blind-only scope (51 blind tracks, 11 controls, 10 outage reruns; about 22,700 allocated CPU-hours); the submission from this session was refused by the permission system, so the PI must run the command |
 
 ### Evaluation (success criterion 3)
 
@@ -69,10 +69,10 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 | RNA-seq input | [[closeout A5 RNA-seq input]] | RNA fetch | not started |
 | Learned cell-type embedding | [[closeout A6 learned cell-type embedding]] | none | not started |
 | Resolution 1 to 125 bp | [[closeout A7 resolution]] | 1 bp region store | not started |
-| Count transforms | [[closeout A8 count transforms]] | none | running (81 runs submitted on Fir 2026-11-16; 5 arms also change the output link, see specification 15) |
+| Count transforms | [[closeout A8 count transforms]] | none | running (90 runs on Fir incl. pseudocount 0.01; 5 arms also change the output link, see specification 15) |
 | Final tuning round: matched-compute runs | [[closeout A9 matched-compute runs]] | none | running (12 trainings pending on Fir) |
 | Pointwise MLP under the corrected composite | [[closeout A10 pointwise MLP corrected score]] | GPU | not started |
-| DNA fusion: how the DNA features join the count features | [[closeout A11 DNA fusion]] | none | spec (item agent started 2026-11-16) |
+| DNA fusion: how the DNA features join the count features | [[closeout A11 DNA fusion]] | none | built (8 arm-architecture pairs, 24 runs ready); code in review before merge |
 | Settle the miniCANDI design: one document, ready for scaling | [[closeout M1 settled miniCANDI design]] | A1 to A11, E1 | not started |
 
 ### Records and close-out
