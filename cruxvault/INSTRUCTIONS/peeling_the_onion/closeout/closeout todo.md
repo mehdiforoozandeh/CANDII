@@ -40,7 +40,7 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 | Fill the lab, antibody and donor covariates | [[closeout D1 lab antibody donor covariates]] | none | spec (item agent started 2026-11-16) |
 | Second experiments: table, evaluation set, cross-lab pairs | [[closeout D2 second experiments and cross-lab pairs]] | D1 | not started |
 | Data set update with DNase-seq in the headline | [[closeout D3 dataset update with DNase-seq]] | D1 | not started |
-| Blind tracks, final model, blind pass, EIC board row | [[closeout D4 blind tracks final model EIC board]] | D1, D3, M1 | spec (item agent started 2026-11-16) |
+| Blind tracks, final model, blind pass, EIC board row | [[closeout D4 blind tracks final model EIC board]] | D1, D3, M1 | blocked: build script ready; real cost about 94,300 allocated CPU-hours, not 14,920; waits for the PI |
 
 ### Evaluation (success criterion 3)
 
@@ -50,6 +50,7 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 | Signal p-value and peaks from the predicted NB; AlphaGenome 2 board row; signal-space score | [[closeout E2 p-value and peaks from the predicted NB]] | none | spec (item agent started 2026-11-16) |
 | Report the metrics that are computed and never reported | [[closeout E3 report the computed metrics]] | none | done 2026-11-16 for the screening scores ([[computed metrics report]]); rerun on settled scores after E1 |
 | Complete the replicate ladder and the crossed mixed model | [[closeout E4 complete the replicate ladder]] | D2 | not started |
+| Scorer extensions: foreign covariates at scoring, artifact variance by platform, antigen and scale, per-stratum values, robust variance ratio | [[closeout E5 scorer extensions]] | D1 for lab and antigen | spec (item agent started 2026-11-16) |
 
 ### Training objective (success criterion 2)
 
@@ -68,7 +69,7 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 | RNA-seq input | [[closeout A5 RNA-seq input]] | RNA fetch | not started |
 | Learned cell-type embedding | [[closeout A6 learned cell-type embedding]] | none | not started |
 | Resolution 1 to 125 bp | [[closeout A7 resolution]] | 1 bp region store | not started |
-| Count transforms | [[closeout A8 count transforms]] | none | spec (item agent started 2026-11-16) |
+| Count transforms | [[closeout A8 count transforms]] | none | running (81 runs submitted on Fir 2026-11-16; 5 arms also change the output link, see specification 15) |
 | Final tuning round: matched-compute runs | [[closeout A9 matched-compute runs]] | none | running (12 trainings pending on Fir) |
 | Pointwise MLP under the corrected composite | [[closeout A10 pointwise MLP corrected score]] | GPU | not started |
 | DNA fusion: how the DNA features join the count features | [[closeout A11 DNA fusion]] | none | spec (item agent started 2026-11-16) |
