@@ -71,6 +71,10 @@ D13 is the binding rule for the design: an arm beats the incumbent only if its c
 | conv + attention | ready (same check, `final/rung3/`) |
 | U-Net | ready (same check, `final/rung4/`) |
 
+Written configs: `tools/minicandi/configs/ablations/control_input/rung{2,3,4}/control_output_only.json`, each with its `arms.tsv`. A json diff against `reference_equal.json` showed only `control_input` (true -> false) and `simpler_than_base` (null -> true). Parameter counts from `registry.build_model`: conv autoencoder 1,042,514; conv + attention 1,038,018; U-Net 993,599. These equal the base counts.
+
+Submit options: the defaults only. The arm reads one input fewer and adds no compute. The margin under the default training limit is small: the limit is 5,856 s, and the conv-autoencoder base seed 2 trained for 5,691 s (lead's note, Fir job 4246989).
+
 No code change and no shared-file edit. No new data: the controls are in `tables/eic_v1` (the eval set lists them as inputs on Fir).
 
 Cost. Source: `sacct` on Fir, CPUTimeRAW (allocated CPUs x elapsed) of the base jobs `mc_rung{2,3,4}_base_heldout_s{0,1,2}`, one training per seed, and two scoring passes per seed (6 metrics jobs, 24 predict jobs). Per seed: training + 4 predict shards + 1 metrics job.
