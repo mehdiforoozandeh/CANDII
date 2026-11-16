@@ -49,7 +49,7 @@ EXPECTED = {
     # close-out A8: the 8 named transforms and the pseudocount point of the sweep
     "count_transforms": {**{f"tf_{t}": {"count_transform"} for t in (
         "log1p", "asinh", "anscombe", "pearson", "local_ratio", "quantile", "raw", "soft_clip")},
-        "offset_eps0.1": {"offset_eps"}},
+        "offset_eps0.1": {"offset_eps"}, "offset_eps0.01": {"offset_eps"}},
 }
 UNET_VIEWS = _ROOT / "tools/minicandi/configs/views/rung4"
 ON_DISK = sorted(ABL.glob("*/rung*/*.json"))
