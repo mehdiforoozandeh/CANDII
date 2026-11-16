@@ -24,6 +24,7 @@ Build the blind-side data, freeze and train the final EIC model, run the single 
 ## 3. State today
 
 - No blind track is rebuilt: the 51 blind tracks are in build priority 4 (722 rows: blind experiments and their controls, their FASTQ-level arms, 54 per-library rows, 459 per-lane rows; `results/t170/build_plan.md` L112-113). Nibi `tables/` holds only `eic_v1`; 3 blind-only controls are absent (`onion paper.md`:27).
+- Checked 2026-11-16 (`results/closeout_D4/BUILD.md`): 721 of the 722 rows are unbuilt (row 1074 is built). The 45 blind ChIP-seq rows need 11 control experiments (priority-4 rows 499 to 543), not 3: the 3 counts EIC control tracks. PI ruling 2026-11-16: build all 722 rows. Submit script: `slurm/onion_data/closeout_d4_submit.sh` (blind base rows and their controls first).
 - Nibi `eic/board/` holds `verify_published.tsv` and `verify_published_measures.tsv`, no `final_board.tsv` (read 2026-11-16).
 - No freeze file, no final model, no `BLIND_PASSES.tsv` entry (audit row C3).
 - The scorer port reproduces the published board: all 25 ranks match (`results/t166/BOARD_REPRO.md`; notepad L340).
@@ -60,7 +61,7 @@ Acceptance checks:
 ## 7. Dependencies, cost, risks
 
 - Depends on D1, D3 and M1.
-- Cost: all of priority 4 was projected at 14,920 CPU-h and 76.3 h wall at 50 rows (`.orchestrate/plan.md` L1935). The blind subset is smaller; compute it from `build_list.tsv` reads x the measured CPU-h per million reads (0.198 ChIP-seq, 0.136 DNase-seq, 0.310 ATAC-seq; `results/t183/DATASET_EIC_V1.md` L78). Final models: 6 trainings, about 11 to 15 CPU-h each (`ablation_specs/1_control_input.md` section 7), plus one blind scoring.
+- Cost: all of priority 4 was projected at 14,920 CPU-h and 76.3 h wall at 50 rows (`.orchestrate/plan.md` L1935). That number is CPU time used. Allocated CPU-h, which fair-share charges, is about 83,400 for the 721 rows plus about 10,400 for the 10 outage reruns (range 74,800 to 110,800 in all; `results/closeout_D4/BUILD.md`). The blind subset is smaller; compute it from `build_list.tsv` reads x the measured CPU-h per million reads (0.198 ChIP-seq, 0.136 DNase-seq, 0.310 ATAC-seq; `results/t183/DATASET_EIC_V1.md` L78). Final models: 6 trainings, about 11 to 15 CPU-h each (`ablation_specs/1_control_input.md` section 7), plus one blind scoring.
 - Risk 1: a second look at the blind set breaks the protocol. Every blind read goes through the ledger.
 - Risk 2: the blind platform and lab are unseen in training even after D1; a poor blind result can come from the unseen ids, not from the model.
 
