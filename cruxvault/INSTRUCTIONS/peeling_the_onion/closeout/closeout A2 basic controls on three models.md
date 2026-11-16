@@ -25,6 +25,11 @@ From `results/ladder_audit/COVERAGE.md` rows 11, 13, 14, 16 (screening, composit
 - Injection: FiLM is the base on rungs 1 to 4. Concatenation: pointwise MLP, 2 seeds. Tokens: pointwise MLP, 1 seed; configs exist for conv + attention and U-Net, not for the conv autoencoder (not applicable).
 - The arm configs under `configs/arms/` derive from the old `base.json`, not from `final/rung{2,3,4}/reference_equal.json`, the reference of A1.
 
+Update 2026-11-16 (item agent, branch `chunk/onion-CO-A2`):
+- New configs on `final/rung{2,3,4}/reference_equal.json`: `tools/minicandi/configs/ablations/{scrambled_covariates,mask_mode,cov_injection_form}/rung{2,3,4}/` (11 arm-architecture pairs). Specifications: `run_state/ablation_specs/11_scrambled_covariates.md`, `12_mask_mode.md`, `13_cov_injection_form.md`.
+- Base `mask_mode` is `token` and `covariate_injection` is `film` on all three (read in `runs_fir/rung{2,3,4}_base_heldout/seed0/run.json`).
+- The scramble is an identity at scoring: `predict.py` batches tiles of one job, so all rows of a track are equal. The arm is "trained with scrambled covariates, scored with true covariates" (spec 11, section 6). Prior lead 1 below was scored the same way.
+
 ## 4. Prior leads
 
 - U-Net scrambled covariates: composite +0.017 within the range; specific variance -0.029 beyond; gap closed on all 102 pairs +0.101 beyond, i.e. the control scored better (`COVERAGE.md` row 11). On the 18 clean crop pairs: 0.420 against 0.519, within 2 x 0.081 (`correction_metric_review/REVIEW.md` L144). Prediction: under composite version 3 the control is worse on correction, but perhaps not beyond the D13 bar.
@@ -53,7 +58,7 @@ From `results/ladder_audit/COVERAGE.md` rows 11, 13, 14, 16 (screening, composit
 ## 7. Dependencies, cost, risks
 
 - Depends on nothing. Rerun the scrambled arm after D1 if the covariate vector changes.
-- Cost: per-seed cost 32.5 / 22.4 / 32.3 CPU-h (`ablation_specs/1_control_input.md` section 7). Three arms on 3 architectures: 3 x 262 = 786 CPU-h; tokens on 2: 3 x (22.4 + 32.3) = 164 CPU-h; total about 950 CPU-h.
+- Cost (per-run Fir `sacct` figures 28.99 / 23.56 / 34.85 CPU-h, `ablation_specs/7_cov_embedding.md` section 7): three arms on 3 architectures 3 x 262.2 = 786.6 CPU-h; tokens on 2: 3 x (23.56 + 34.85) = 175.2 CPU-h; total 961.8 CPU-h, plus at most 53 CPU-h for the slower concatenation arm (spec 13, section 7). 33 runs, 198 jobs.
 - Risk: the scrambled control shuffles covariates across tracks; the scrambled-all form also hides depth. Report which form ran.
 
 ## 8. Done when
