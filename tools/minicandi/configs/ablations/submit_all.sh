@@ -13,7 +13,9 @@
 # shards, 16-CPU metrics job), but with training (no SCORE_ONLY).
 # Training time: 03:00:00 for every arm (the default limit of 5,856 s is too tight: the conv
 # autoencoder base seed 2 trained for 5,691 s, Fir job 4246989); 06:00:00 for two_step (two
-# forward legs, about 2 x the FLOPs per window).
+# forward legs, about 2 x the FLOPs per window) and average_input (an unmeasured extra read per
+# window; the unstaged rung-1 read took 4.5 x the base time); 04:00:00 for loss_nb_crps (1.2 to
+# 2 x slower per window in the smokes).
 # An arm whose input file (dna_embedding_h5, average_h5) is missing on this cluster is skipped
 # and printed as BLOCKED.
 set -u
@@ -30,11 +32,15 @@ declare -A ARCH=([2]=convae [3]=convattn [4]=unet)
 ABL="${ABLATIONS:-control_input predict_control average_input two_step dna_source dna_off cov_embedding depth_input losses}"
 n=0
 for ab in $ABL; do
-  case $ab in two_step) export TRAIN_TIME=06:00:00 ;; *) export TRAIN_TIME=03:00:00 ;; esac
   for r in 2 3 4; do
     for c in "$A/$ab/rung$r"/*.json; do
       [ -e "$c" ] || continue
       arm=$(basename "$c" .json)
+      case $ab/$arm in
+        two_step/*|average_input/*) export TRAIN_TIME=06:00:00 ;;
+        losses/loss_nb_crps) export TRAIN_TIME=04:00:00 ;;
+        *) export TRAIN_TIME=03:00:00 ;;
+      esac
       miss=$(python3 -c "import json,os,sys;d=json.load(open(sys.argv[1]));print(' '.join(d[k] for k in ('dna_embedding_h5','average_h5') if d.get(k) and not os.path.exists(d[k])))" "$c")
       if [ -n "$miss" ]; then echo "BLOCKED abl_${ab}_${arm}_${ARCH[$r]}: missing $miss"; continue; fi
       bash $K/slurm/minicandi/submit_arms.sh $K $O/tables/eic_v1 $O/eval/eic_v1/evalset_p16.json $O/runs_fir $r "abl_${ab}_${arm}_${ARCH[$r]}=$c" 2>&1 | grep -v "^$"
