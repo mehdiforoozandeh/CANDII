@@ -21,7 +21,9 @@ Tables (`<table>`):
                   bin-weighted pooled curve of its targets (score.pooled_pit_deviation, the scorer's
                   own estimator), macro = mean over the scorable imputation assays (undefined when one
                   is). Equal to scores.json `pit_deviation_per_stratum` where a scoring wrote it
-                  (column `stored`, for the check). The worst stratum of the scorer is the maximum.
+                  (column `stored`, for the check). Per assay, the scorer's `pit_deviation_worst_stratum`
+                  is the maximum over these strata; its macro is the mean of those per-assay maxima,
+                  not the maximum of the per-stratum macros.
   variance-ratio  Headline 7 at the pseudoreplicate rung per assay: the stored mean of per-target
                   ratios (`predicted_over_replicate_variance`), the median of the per-target ratios
                   (from `per_target.<t>.per_rung.pseudoreplicate`), and the ratio of means. The ratio
@@ -34,10 +36,12 @@ Tables (`<table>`):
                   part (shared, specific) and band, the track means V (truth variance), E (error),
                   explained = C^2 / P (at most V) and added = E - (V - explained), Max's eue() with no
                   noise term (error_budget._eue, N = 0): the sampling noise is inside `unexplained`.
-                  When V < explained (a negative specific part), eue() sets unexplained to 0 and
-                  carries V - explained in `floor_correction` (`floor_flag` 1), so V = explained +
-                  unexplained_with_noise + floor_correction and E = unexplained_with_noise +
-                  floor_correction + added in every row.
+                  explained is capped at max(V, 0) (`cap_flag` 1 when C^2 / P was above V). With no
+                  noise term, unexplained = V - explained is negative only when V < 0 (a negative
+                  shared or specific part); eue() then sets unexplained to 0 and carries V in
+                  `floor_correction` (`floor_flag` 1), so V = explained + unexplained_with_noise +
+                  floor_correction and E = unexplained_with_noise + floor_correction + added in
+                  every row.
                   Units: the truth's variance of each target (counts_log1p, standardized). The
                   scorer's error budget sums these bands and subtracts the noise from the halves.
   by-covariate    Per-target values grouped by the target's lab, platform, antibody and donor
@@ -259,6 +263,7 @@ def table_by_scale(item, regime="leave_one_assay_out") -> list[dict]:
                              "V": r["V"], "E": r["E"], "explained": r["explained"],
                              "unexplained_with_noise": r["unexplained"], "added": r["added"],
                              "floor_correction": r["noise"], "floor_flag": int(r["floor_flag"]),
+                             "cap_flag": int(r["cap_flag"]),
                              "reason": ""})
     return rows
 

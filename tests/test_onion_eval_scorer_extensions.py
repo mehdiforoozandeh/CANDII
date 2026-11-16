@@ -487,7 +487,10 @@ def test_report_by_scale_and_by_covariate(env, tmp_path):
             fc = r["floor_correction"]
             assert r["V"] == pytest.approx(r["explained"] + r["unexplained_with_noise"] + fc, abs=1e-12)
             assert r["E"] == pytest.approx(r["unexplained_with_noise"] + fc + r["added"], abs=1e-12)
-            assert (fc != 0) == bool(r["floor_flag"]) or fc == 0
+            assert bool(r["floor_flag"]) == (fc != 0)
+            if r["floor_flag"]:
+                assert r["V"] < 0                          # with no noise term, only when V < 0
+            assert r["cap_flag"] in (0, 1)
     rows = RX.table_by_covariate(it, tables=env["tables"])
     lab = [r for r in rows if r["column"] == "lab" and r["assay"] == RX.ALL]
     assert lab and sum(r["n_targets"] for r in lab) == len(
@@ -595,3 +598,95 @@ def test_mixed_model_extra_factors(tmp_path):
                                         "lab", "log2_depth"]
     with pytest.raises(ValueError):
         mm.run(tables, ev, "peak", tmp_path / "x.tsv", n_boot=0, extra=("donor",))
+
+
+# ------------------------------------------------------------------------------------------ review 2
+
+def test_stray_seed_never_touches_a_normal_scoring(monkeypatch):
+    ap = __import__("argparse").ArgumentParser()
+    S.add_foreign_arguments(ap)
+    monkeypatch.delenv(S.FOREIGN_ENV, raising=False)
+    monkeypatch.setenv(S.FOREIGN_SEED_ENV, "not-a-number")
+    assert S.foreign_from_env() == (None, 0)
+    assert S.foreign_kwargs(ap.parse_args([])) == {}                 # a normal scoring runs
+    monkeypatch.setenv(S.FOREIGN_ENV, "out_keep_depth")
+    with pytest.raises(ValueError, match=S.FOREIGN_SEED_ENV):
+        S.foreign_kwargs(ap.parse_args([]))
+
+
+def test_foreign_block_lists_assays_without_donor_per_side(env):
+    sc = _scorer(env, "both_keep_depth")
+    imp = sc.jobs()[0][0]
+    tgt, inp = imp["target"], imp["inputs"][0]
+    sc._foreign_donor = {inp: None}                    # an input whose assay has no other cell
+    blk = sc.foreign_block({"in": imp["inputs"], "out": [tgt]})
+    a_in = sc.ds.rows[inp]["assay"]
+    assert blk["assays_without_donor"] == {"in": {a_in: [inp]}}
+    assert blk["n_without_donor"] == 1 and "true target" in blk["truth"]
+    assert "assays_without_donor" in S.FOREIGN_DEFINITION
+    assert blk["assignment"]["in"][inp]["donor"] is None
+    sc._foreign_donor = {inp: inp}                      # a donor identical in every column
+    blk = sc.foreign_block({"in": [inp], "out": []})
+    assert blk["assays_with_no_column_changed"] == {"in": {a_in: 1}}
+
+
+FAKE_SQUEUE_LIVE = r"""#!/bin/bash
+# the jobs the fake sbatch logged are all live: '%j' -> names; '%i %j %o' -> id name script
+[ -f "$FAKE_LOG" ] || exit 0
+fmt="${@: -1}"
+awk -v f="$fmt" '{n=""; s=""; for (i=1;i<=NF;i++) {if ($i ~ /^--job-name=/) n=substr($i,12);
+  if ($i ~ /\.sh$/ && s=="") s=$i}; if (f=="%j") print n; else print $1, n, s}' "$FAKE_LOG"
+"""
+
+
+def test_foreign_job_names_and_two_modes_in_sequence(sub_env):
+    tmp, e = sub_env
+    (tmp / "bin" / "squeue").write_text(FAKE_SQUEUE_LIVE)
+    # a normal scoring of the run is live: the default name is unchanged and it blocks only itself
+    p = _submit(tmp, e, SCORE_ONLY="1", SCORE_SUBDIR="p16_sv")
+    assert p.returncode == 0, p.stderr
+    names = lambda: [ln.split("--job-name=")[1].split()[0]   # noqa: E731
+                     for ln in (tmp / "sbatch.log").read_text().splitlines()]
+    assert set(names()) == {"mc_rung1_base_s0"}
+    for mode in ("both_keep_depth", "out_keep_depth"):
+        p = _submit(tmp, e, FOREIGN_COVARIATES=mode, SCORE_SUBDIR=f"p16_foreign_{mode}")
+        assert p.returncode == 0, p.stderr
+        assert "skip mc_" not in p.stdout and "submitted 1 runs" in p.stdout, p.stdout
+    assert set(names()) == {"mc_rung1_base_s0", "mc_rung1_base_s0_fcboth_keep_depth_s0",
+                            "mc_rung1_base_s0_fcout_keep_depth_s0"}
+    # the same mode again: now its own live job skips it
+    p = _submit(tmp, e, FOREIGN_COVARIATES="out_keep_depth", SCORE_SUBDIR="p16_foreign_out_keep_depth")
+    assert p.returncode == 0 and "skip mc_rung1_base_s0_fcout_keep_depth_s0" in p.stdout
+
+
+def _arm_runs(root, dirs, sub="p16x"):
+    for arm, src in dirs.items():
+        dst = root / arm / "seed0" / sub
+        dst.mkdir(parents=True)
+        for f in ("scores.json", "suffstats.npz", "pairs_per_region.npz", "SCORED"):
+            if (src / f).is_file():
+                (dst / f).write_bytes((src / f).read_bytes())
+    return root
+
+
+def test_arm_summary_refuses_mixed_modes_and_labels_foreign(env, capsys):
+    a = env["root"] / "real" / "seed0" / "p16"
+    b = env["root"] / "real" / "seed0" / "p16_foreign_bk"
+    st = env["root"] / "st" / "p16_foreign_bs"         # another mode (both_swap_depth)
+    if not (st / "scores.json").is_file():
+        pytest.skip("store test output missing")
+    for cmd in ("arm-summary", "table"):
+        mixed = _arm_runs(env["root"] / f"sr_mix_{cmd}", {"armA": a, "armB": b})
+        assert SR.main([cmd, "--runs", str(mixed), "--sub", "p16x"]) == 2
+        assert "foreign_covariates" in capsys.readouterr().out
+        modes = _arm_runs(env["root"] / f"sr_modes_{cmd}", {"armA": b, "armB": st})
+        assert SR.main([cmd, "--runs", str(modes), "--sub", "p16x"]) == 2
+        capsys.readouterr()
+    one = _arm_runs(env["root"] / "sr_one", {"armA": b})
+    assert SR.main(["arm-summary", "--runs", str(one), "--sub", "p16x"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert out[0].split("\t")[-1] == "foreign_covariates"
+    assert out[1].split("\t")[-1] == "both_keep_depth:seed0"
+    norm = _arm_runs(env["root"] / "sr_norm", {"armA": a})
+    assert SR.main(["arm-summary", "--runs", str(norm), "--sub", "p16x"]) == 0
+    assert "foreign" not in capsys.readouterr().out          # a normal table has no new column

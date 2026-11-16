@@ -17,9 +17,11 @@
 # Read with: select_rule.py arm-summary --runs $O/runs_fir --sub p16_foreign_<mode> (never mixed with
 # p16_sv: the comparability key `foreign_covariates` differs).
 # Idempotent through submit_arms.sh (a SCORED dir, or a queued job of the same name, is skipped).
+# Foreign jobs are named mc_<run>_s<seed>_fc<mode>_s<FOREIGN_SEED>: a queued normal scoring of the
+# run (mc_<run>_s<seed>) or a job of another mode never makes this script skip a seed.
 set -u
 O=/project/def-maxwl/mforooz/ONION
-K="${K:-/project/def-maxwl/mforooz/onion_kit/COE5}"
+K="${K:-/project/def-maxwl/mforooz/onion_kit/COE5b}"
 export DRY_RUN="${DRY_RUN:-1}"
 MODES="${MODES:-both_keep_depth out_keep_depth in_keep_depth both_swap_depth}"
 [ -f "$K/tools/onion_eval/report_extras.py" ] || { echo "kit $K has no E5 scorer" >&2; exit 2; }

@@ -359,6 +359,8 @@ def test_outputs_bit_identical_to_the_base_tree_with_an_oracle_reference(env, tm
     for tree, name in ((REPO, "new"), (old, "old")):
         e = dict(os.environ, PYTHONPATH=os.pathsep.join([str(tree / "src"), str(tree / "tools")]))
         e.pop("ONION_SCORE_SAME_VIEW", None)
+        e.pop("ONION_FOREIGN_COVARIATES", None)      # E5: a shell value never reaches either tree
+        e.pop("ONION_FOREIGN_SEED", None)
         for what, r in (("pa", "-"), ("model", str(run))):
             d = env["bdir"] / f"cmp_{name}_{what}" / "seed0"     # beside the oracle reference
             p = subprocess.run([sys.executable, "-c", SCORE_RUN, str(env["evalset"]), str(d), r],

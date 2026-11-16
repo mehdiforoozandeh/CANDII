@@ -318,8 +318,14 @@ FOREIGN_DEFINITION = (
     "foreign; `swap_depth` also takes the donor's depth (at the same half-read scale), so the depth "
     "offset moves with it. Only the model's forward reads the foreign rows: the reference predictors, "
     "the truth, the pair depth ratio (headline 5) and the copy-leak guardrail keep the true covariates. "
-    "The two-step base leg (c_base) is not changed. Scores of this mode are never comparable with "
+    "The two-step base leg (c_base) is not changed. A measurement whose assay has no base view in "
+    "another cell has no donor and keeps its true rows; such assays are listed per side under "
+    "`assays_without_donor` (and those whose donor changed no column under "
+    "`assays_with_no_column_changed`) and stay in every table and macro, so a foreign macro covers "
+    "the same assays as the normal one in every mode. Scores of this mode are never comparable with "
     "normal scores (select_rule.scorer_keys key `foreign_covariates`).")
+FOREIGN_TRUTH_NOTE = ("scored against the true target's counts: the truth, the reference predictors and "
+                      "the noise floor never read foreign covariates; only the model's forward does")
 #: E5: headline 7 robust aggregates (beside the existing mean of per-target ratios, unchanged)
 H7_ROBUST_KEY = "predicted_over_replicate_variance_robust"
 H7_ROBUST_DESCRIPTION = (
@@ -772,9 +778,16 @@ def same_view_from_env() -> bool:
 
 
 def foreign_from_env():
-    """E5: (mode or None, seed) from ONION_FOREIGN_COVARIATES and ONION_FOREIGN_SEED."""
-    m = os.environ.get(FOREIGN_ENV, "").strip()
-    return (m or None), int(os.environ.get(FOREIGN_SEED_ENV, "").strip() or 0)
+    """E5: (mode or None, seed) from ONION_FOREIGN_COVARIATES and ONION_FOREIGN_SEED. The seed is
+    read only when a mode is set (a stray seed value never touches a normal scoring)."""
+    m = os.environ.get(FOREIGN_ENV, "").strip() or None
+    if m is None:
+        return None, 0
+    raw = os.environ.get(FOREIGN_SEED_ENV, "").strip() or "0"
+    try:
+        return m, int(raw)
+    except ValueError:
+        raise ValueError(f"{FOREIGN_SEED_ENV}={raw!r}: want an integer") from None
 
 
 def foreign_spec(mode, seed=0):
@@ -1615,7 +1628,7 @@ class Scorer:
         that the mode does not swap is left out."""
         from minicandi.contract import META_COLUMNS, QC_COLUMNS
         rows = self.ds.rows
-        assign, n_ch, n_same = {}, {}, {}
+        assign, n_ch, n_same, no_donor, no_change = {}, {}, {}, {}, {}
         n_none = 0
         for side in self.foreign["sides"]:
             cols = list(META_COLUMNS) + (list(QC_COLUMNS) if side == "in" and self.ds.qc_on_input
@@ -1628,19 +1641,27 @@ class Scorer:
                 if d is None:
                     n_none += 1
                     per[m] = {"donor": None, "columns_changed": []}
+                    no_donor.setdefault(side, {}).setdefault(rows[m]["assay"], []).append(m)
                     continue
                 a, b = enc(rows[m]), enc(rows[d])
                 ch = [cols[i] for i in range(len(cols)) if a[i] != b[i]
                       and (i > 0 or self.foreign["depth"] == "swap_depth")]
                 per[m] = {"donor": d, "donor_cell": rows[d]["cell"], "columns_changed": ch}
+                if not ch:
+                    a_ = rows[m]["assay"]
+                    no_change.setdefault(side, {})[a_] = no_change.get(side, {}).get(a_, 0) + 1
                 for k in ch:
                     cnt[k] += 1
             assign[side], n_ch[side] = per, dict(sorted(cnt.items()))
             n_same[side] = sum(1 for e in per.values() if e["donor"] is not None
                                and not e["columns_changed"])
-        return dict(self.foreign, definition=FOREIGN_DEFINITION,
+        return dict(self.foreign, definition=FOREIGN_DEFINITION, truth=FOREIGN_TRUTH_NOTE,
                     n_measurements={k: len(v) for k, v in assign.items()},
                     n_without_donor=n_none, n_with_no_column_changed=n_same,
+                    assays_without_donor={k: {a: sorted(v) for a, v in sorted(d.items())}
+                                          for k, d in no_donor.items()},
+                    assays_with_no_column_changed={k: dict(sorted(d.items()))
+                                                   for k, d in no_change.items()},
                     n_changed_by_column=n_ch, assignment=assign)
 
     def _predicted_control(self, batch, t):

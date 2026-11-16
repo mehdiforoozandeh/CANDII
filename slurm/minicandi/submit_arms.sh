@@ -73,7 +73,9 @@
 #   exports ONION_FOREIGN_COVARIATES and ONION_FOREIGN_SEED to every job (and names them on the
 #   predict and metrics lines). Its prediction store is $PRED_STORE_ROOT/<runs root name>/<run
 #   name>[/same_view]/foreign_<mode>_s<seed>/seed<s>/<SUB>, apart from every other store; the metric
-#   phase also refuses a store whose STORE.json records another mode or seed.
+#   phase also refuses a store whose STORE.json records another mode or seed. Its jobs are named
+#   mc_<run dir name>_s<seed>_fc<mode>_s<FOREIGN_SEED>, so a queued normal scoring of the run, or a
+#   foreign scoring in another mode or donor seed, never makes the live-job check skip it.
 #
 # Idempotent. Per (arm, seed): skip when <run dir>/SCORED exists (training only: DONE), or when a
 # queued or running job of this user is named mc_<run dir name>_s<seed>; when DONE exists but not
@@ -223,6 +225,7 @@ for spec in "${ARGS_ARMS[@]}"; do
   for SEED in "${SEED_LIST[@]}"; do
     RUN="$ARMDIR/seed$SEED"
     JOB="mc_$(basename "$ARMDIR")_s$SEED"
+    [ -z "$FC" ] || JOB="${JOB}_fc${FC}_s$FCS"   # E5: a foreign scoring has its own job name
     SOUT="$RUN${SUB:+/$SUB}"   # the score dir (SCORE_SUBDIR)
     if [ -n "$EVALSET" ] && [ -f "$SOUT/SCORED" ]; then
       echo "skip $JOB: $SOUT/SCORED exists"; n_skip=$((n_skip + 1)); continue
