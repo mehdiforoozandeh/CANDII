@@ -35,6 +35,10 @@ EXPECTED = {
     "depth_input": {"input_depth_fixed": {"input_depth"}},
     "losses": {"loss_impute_x4": {"loss_weights"}, "loss_poisson_mean": {"loss"},
                "loss_nb_crps": {"loss"}, "loss_bin_equal": {"loss_bin_equal"}},
+    # close-out A8: the 8 named transforms and the pseudocount point of the sweep
+    "count_transforms": {**{f"tf_{t}": {"count_transform"} for t in (
+        "log1p", "asinh", "anscombe", "pearson", "local_ratio", "quantile", "raw", "soft_clip")},
+        "offset_eps0.1": {"offset_eps"}},
 }
 ON_DISK = sorted(ABL.glob("*/rung*/*.json"))
 
