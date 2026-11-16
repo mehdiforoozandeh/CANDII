@@ -50,7 +50,7 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 | Signal p-value and peaks from the predicted NB; AlphaGenome 2 board row; signal-space score | [[closeout E2 p-value and peaks from the predicted NB]] | none | spec (item agent started 2026-11-16) |
 | Report the metrics that are computed and never reported | [[closeout E3 report the computed metrics]] | none | done 2026-11-16 for the screening scores ([[computed metrics report]]); rerun on settled scores after E1 |
 | Complete the replicate ladder and the crossed mixed model | [[closeout E4 complete the replicate ladder]] | D2 | not started |
-| Scorer extensions: foreign covariates at scoring, artifact variance by platform, antigen and scale, per-stratum values, robust variance ratio | [[closeout E5 scorer extensions]] | D1 for lab and antigen | spec (item agent started 2026-11-16) |
+| Scorer extensions: foreign covariates at scoring, artifact variance by platform, antigen and scale, per-stratum values, robust variance ratio | [[closeout E5 scorer extensions]] | D1 for lab and antigen | running: code merged after two reviews; foreign-covariate scoring of the 9 base seeds submitted on Fir (4 modes, 180 jobs); by-lab and by-antigen tables wait for the corrected tables |
 
 ### Training objective (success criterion 2)
 
