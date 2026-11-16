@@ -9,7 +9,8 @@ Stdout is exactly one JSON object (the crux-autopilot scorer contract; every log
 stderr):
     {"passed": true|false, "reason": str, "composite": {"value": x}, "imputation": {"value": x},
      "correction": {"value": x}, "uncertainty": {"value": x}, "seed_values": [...],
-     "param_count": n, "flops_per_window": f, "cpu_hours": c, "attempt": <attempt dir>}
+     "param_count": n, "flops_per_window": f, "cpu_hours": c, "attempt": <attempt dir>,
+     "composite_version": v (on a passed attempt: the select_rule version read, 3 by default; CM)}
 and the exit code is 0 only when `passed` is true. A refused candidate gets `passed` false, the
 reason, and nulls for every score: no score is ever invented.
 
@@ -525,8 +526,11 @@ def run_seed(cfg: dict, tables, evalset, seed: int, windows: int, out, *, model_
 
 # ------------------------------------------------------------------------------------- composite
 
-def collect(seed_dirs: list[Path], windows: int) -> dict:
-    """Composite and goal terms from each seed's PROXY.json, run.json and scores.json."""
+def collect(seed_dirs: list[Path], windows: int, composite_version: int | None = None) -> dict:
+    """Composite and goal terms from each seed's PROXY.json, run.json and scores.json, read as
+    select_rule composite `composite_version` (None: select_rule's default, 3; CM). The result
+    carries `composite_version` (the version each seed was read as: 1 without an oracle
+    reference)."""
     from onion_eval import select_rule as SR
     seeds, fpw = [], None
     for d in seed_dirs:
@@ -547,7 +551,8 @@ def collect(seed_dirs: list[Path], windows: int) -> dict:
         if abs(n - PARAM_TARGET) > PARAM_TOL * PARAM_TARGET:
             raise Reject(f"{d.name}: param_count {n} is outside 10% of {PARAM_TARGET:.1e}")
         fpw = run.get("flops_per_window") if fpw is None else fpw
-        seeds.append(SR.load_seed(d / "scores.json"))
+        seeds.append(SR.load_seed(d / "scores.json", composite_version=(
+            SR.DEFAULT_COMPOSITE_VERSION if composite_version is None else composite_version)))
     try:
         SR.check_comparable(seeds, "val")
     except SR.Refused as e:
@@ -567,7 +572,7 @@ def collect(seed_dirs: list[Path], windows: int) -> dict:
     comps = [float(s["composite"]) for s in sc]
     goals = {k: sum(float(s["goals"][k]) for s in sc) / len(sc) for k in SR.GOALS}
     return {"composite": sum(comps) / len(comps), "seed_values": comps, "goals": goals,
-            "flops_per_window": fpw}
+            "flops_per_window": fpw, "composite_version": sc[0].get("composite_version", 1)}
 
 
 # ----------------------------------------------------------------------------------------- tally
@@ -888,7 +893,8 @@ def score_candidate(a) -> dict:
     g = c["goals"]
     return result(True, f"{len(seeds)} seeds scored on validation", composite=c["composite"],
                   imputation=g["imputation"], correction=g["correction"],
-                  uncertainty=g["uncertainty"], seed_values=c["seed_values"], **base)
+                  uncertainty=g["uncertainty"], seed_values=c["seed_values"],
+                  composite_version=c["composite_version"], **base)
 
 
 def scorer_parser() -> argparse.ArgumentParser:

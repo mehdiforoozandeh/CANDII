@@ -574,7 +574,7 @@ def test_end_to_end_train_score_compare(env, tmp_path):
     rows = R.table(runs, "rung2_")
     assert len(rows) == 6 and {r["state"] for r in rows} == {"done"}
     res = R.compare(runs / "rung2_base", runs / "rung2_dna_off", None,
-                    settlements=runs / "settlements.tsv")
+                    settlements=runs / "settlements.tsv", composite_version=2)   # CM: no oracle ref
     assert res["verdict"] in R.VERDICTS, res
     assert _tsv(runs / "settlements.tsv")[0]["verdict"] == res["verdict"]
 

@@ -11,7 +11,10 @@ owns no line of `score.py`.
         `_job_arrays`: the imputation groups of each regime (REGIMES, then "control"; assays sorted),
         then the correction pairs, then the replicate pairs. Each element is
         {"key": "item/<target>/<regime>" | "pair/<pair id>", "kind", "region_indices", "needs_ctl",
-         "job"}; a pair lists only the evaluation set's `pair_regions` when it has them.
+         "job"}; a pair lists only the evaluation set's `pair_regions` when it has them. With the
+        scorer's same-view pass on (CM, `Scorer(same_view=True)`; off by default, so the request
+        list and its hash are unchanged) the same-view pairs (`score.same_view_jobs`) follow the
+        replicate pairs as `pair/same_view/<target>`.
     predict(scorer, requests, out_dir, infer_batch, shard=(i, N), *, run=None, guardrail=True)
         writes `<out_dir>/<sha1 of key>.npz` per request of shard i (request j belongs to shard
         j mod N): `n`, `mu` (float32 [len(region_indices) x region_bins], region order then window
@@ -116,7 +119,8 @@ def requests(scorer) -> list:
                             "needs_ctl": bool(scorer.model_pred is not None
                                               and scorer._needs_predicted_control(j)),
                             "job": j})
-    for j in cor + rep:
+    sv = S.same_view_jobs(cor) if getattr(scorer, "same_view", False) else []
+    for j in cor + rep + sv:
         pid = j.get("pair_id") or j["source"] + ">" + j["target"]
         out.append({"key": f"pair/{pid}", "kind": j["kind"], "region_indices": list(pr),
                     "needs_ctl": False, "job": j})
@@ -633,13 +637,15 @@ def run(argv=None) -> int:
 
         python tools/onion_eval/predict_store.py run --run <run dir> --evalset <json>
             --pred-store <dir> [--shard i/N] [--infer-batch B] [--device auto|cuda|cpu]
-            [--stage-dir <dir>] [--guardrail-windows 256]
+            [--stage-dir <dir>] [--guardrail-windows 256] [--score-same-view]
 
     Builds the scorer of the run as `score.py --run` does (the same evaluation-set and tables
     checks; score.py's defaults), calls `requests` and `predict` for shard i of N, and exits 0 once
     the shard is stored; 2 with `refused: <reason>` when the scorer or the store refuses.
     `--infer-batch` defaults to the run's batch_size (the legacy batch). `--stage-dir` copies the
-    h5 files the shard reads to local disk first (byte copies: the same values)."""
+    h5 files the shard reads to local disk first (byte copies: the same values). `--score-same-view`
+    (or ONION_SCORE_SAME_VIEW=1; CM) adds the same-view requests; the metric phase must have the
+    same switch (the request hash differs)."""
     ap = argparse.ArgumentParser(prog="predict_store.py run", description="forwards of one run "
                                  "into a prediction store")
     ap.add_argument("--run", required=True)
@@ -650,6 +656,8 @@ def run(argv=None) -> int:
     ap.add_argument("--device", default="auto", help="auto (cuda when a GPU is visible), cuda, cpu")
     ap.add_argument("--stage-dir", default=None)
     ap.add_argument("--guardrail-windows", type=int, default=256)
+    ap.add_argument("--score-same-view", action="store_true",
+                    help=f"CM: also predict the same-view pairs (default off; also {S.SAME_VIEW_ENV}=1)")
     a = ap.parse_args(argv)
     for k in ("run", "evalset", "pred_store", "stage_dir"):            # "$SLURM_TMPDIR/..." works
         if getattr(a, k):
@@ -672,7 +680,8 @@ def run(argv=None) -> int:
         from minicandi.registry import load_run          # lazy, as score.py
         model, config = load_run(a.run)
         sc = S.Scorer(a.evalset, main="model", model=model, config=config, device=device,
-                      run_tables_sha256=run_sha, guardrail_windows=a.guardrail_windows, log=log)
+                      run_tables_sha256=run_sha, guardrail_windows=a.guardrail_windows, log=log,
+                      **({"same_view": True} if (a.score_same_view or S.same_view_from_env()) else {}))
         phases["build_seconds"] = time.perf_counter() - t0
         t1 = time.perf_counter()
         reqs = requests(sc)

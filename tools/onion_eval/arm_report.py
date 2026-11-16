@@ -106,7 +106,9 @@ Oracle floor (OF, PI ruling 47). When the scores have an oracle-floor reference
 `never_trained_non_subset_no_nodedup_side_oracle`. A mix of scores with and without a reference is
 REFUSED, as is a reference that exists but is unreadable or of another eval set or tables
 (oracle_floor.find_oracle). `headline` and `per-knob` always print `composite_version` (1 without a
-reference, 2 with one). The `oracle_floor` directory under
+reference; with one, the version read: 3 by default, `--composite-version 2` / `composite_version=2`
+for version 2; CM). Both oracle columns are printed in either version; version 3's correction term
+is `correction_gap_closed_oracle_no_nodedup_side` (select_rule.py). The `oracle_floor` directory under
 --baselines is a reference, not a baseline row.
 
 shared-specific. Each arm's gain in shared and in specific error (error_budget `shared`,
@@ -214,10 +216,11 @@ def _scores_path(seed_dir: Path, sub: str) -> Path:
     return seed_dir / sub / "scores.json" if sub else seed_dir / "scores.json"
 
 
-def load_scores(arm: Path, sub: str = "", oracle=None) -> list[dict]:
+def load_scores(arm: Path, sub: str = "", oracle=None,
+                composite_version: int = _SR.DEFAULT_COMPOSITE_VERSION) -> list[dict]:
     """The scores.json of every seed. `oracle` ("auto" or a directory): each score also gets
     `__oracle__`, its report-time gap closed with the oracle floor (oracle_floor.seed_terms; None
-    when no reference is found)."""
+    when no reference is found), labelled with `composite_version` (CM)."""
     out = []
     for d in seed_dirs(arm):
         p = _scores_path(d, sub)
@@ -226,7 +229,9 @@ def load_scores(arm: Path, sub: str = "", oracle=None) -> list[dict]:
             s["__path__"] = str(p)
             if oracle:
                 try:
-                    s["__oracle__"] = _SR._oracle_terms(p, s, oracle)
+                    t = _SR._oracle_terms(p, s, oracle)
+                    s["__oracle__"] = (None if t is None
+                                       else dict(t, composite_version=int(composite_version)))
                 except _SR.Refused as e:
                     raise Refused(str(e)) from None
             out.append(s)
@@ -304,13 +309,14 @@ def write_tsv(rows: list[dict], columns: list[str], out) -> None:
     tmp.replace(out)
 
 
-def load_baseline(b: Path, sub: str = "", oracle=None) -> list[dict]:
+def load_baseline(b: Path, sub: str = "", oracle=None,
+                  composite_version: int = _SR.DEFAULT_COMPOSITE_VERSION) -> list[dict]:
     """The one scores.json of a baseline. With a score subdirectory other than `blind` (interface
     M: `p16`, `p256`), `seed0/<sub>/scores.json` when it exists, else `seed0/scores.json` (a
     baseline of a derived evaluation set lives in its own baselines dir, e.g. baselines_p16)."""
     if sub and sub != "blind" and not any(_scores_path(d, sub).is_file() for d in seed_dirs(b)):
         sub = ""
-    return load_scores(b, sub, oracle)[:1]
+    return load_scores(b, sub, oracle, composite_version)[:1]
 
 
 def check_arm_keys(arms: dict, allow=()) -> None:
@@ -323,9 +329,10 @@ def check_arm_keys(arms: dict, allow=()) -> None:
         raise Refused(str(e)) from None
 
 
-def _load_groups(runs, prefix, baselines, sub, allow_mix=(), oracle=None):
-    arms = {p.name: load_scores(p, sub, oracle) for p in find_arms(runs, prefix)}
-    base = {p.name: load_baseline(p, sub, oracle) for p in find_baselines(baselines)
+def _load_groups(runs, prefix, baselines, sub, allow_mix=(), oracle=None,
+                 composite_version: int = _SR.DEFAULT_COMPOSITE_VERSION):
+    arms = {p.name: load_scores(p, sub, oracle, composite_version) for p in find_arms(runs, prefix)}
+    base = {p.name: load_baseline(p, sub, oracle, composite_version) for p in find_baselines(baselines)
             if p.name != "oracle_floor"}        # the oracle reference is no baseline score
     check_arm_keys(arms, allow_mix)
     if oracle:
@@ -335,7 +342,7 @@ def _load_groups(runs, prefix, baselines, sub, allow_mix=(), oracle=None):
 
 def check_composite_versions(groups: dict) -> bool:
     """True when every score of `groups` was read with an oracle-floor reference (composite
-    version 2), False when none was; Refused on a mix (arms and baselines alike)."""
+    version 2 or 3), False when none was; Refused on a mix (arms and baselines alike)."""
     try:
         _SR.check_composite_versions([
             {"path": s["__path__"], "composite_version":
@@ -355,7 +362,7 @@ OLD = "correction_gap_closed_halfread_superseded"
 
 
 def _version(seeds: list[dict]):
-    """The composite version of one arm or baseline (1 or 2; None with no scored seed)."""
+    """The composite version of one arm or baseline (1, 2 or 3; None with no scored seed)."""
     return (seeds[0].get("__oracle__") or {}).get("composite_version", 1) if seeds else None
 
 
@@ -455,8 +462,9 @@ def _h7_seed(x, second: set, cls_of: dict, classes: list) -> dict:
 
 
 def headline(runs, prefix, baselines, sub="", addon=ADDON, pairs=None, allow_mix=(),
-             oracle="auto") -> tuple[list[dict], list[str]]:
-    arms, base = _load_groups(runs, prefix, baselines, sub, allow_mix, oracle)
+             oracle="auto", composite_version: int = _SR.DEFAULT_COMPOSITE_VERSION
+             ) -> tuple[list[dict], list[str]]:
+    arms, base = _load_groups(runs, prefix, baselines, sub, allow_mix, oracle, composite_version)
     check_evalset({**arms, **base})
     v2 = bool(oracle) and check_composite_versions({**arms, **base})
     add = {"arm": {k: load_addon(v, addon) for k, v in arms.items()},
@@ -477,7 +485,7 @@ def headline(runs, prefix, baselines, sub="", addon=ADDON, pairs=None, allow_mix
     for c in classes:
         for k in ("upper_bound", "pass_rate", "n_targets"):
             cols += [f"{H7}.by_class.{c}.{k}.{x}" for x in ("mean", "spread", "n_defined")]
-    cols.append("composite_version")             # always: 1 (half-read floor) or 2 (oracle floor)
+    cols.append("composite_version")     # always: 1 (half-read floor), 2 or 3 (oracle floor; CM)
     if v2:
         cols += [f"{OLD}.{x}" for x in ("mean", "spread", "n_defined", "status")]
         for q in ORACLE_Q.values():
@@ -688,8 +696,9 @@ def accessibility(runs, prefix, baselines=None, sub="", allow_mix=()) -> tuple[l
 
 # ------------------------------------------------------------------------------------------ per knob
 
-def per_knob(runs, prefix, baselines=None, sub="", allow_mix=(), oracle="auto") -> tuple[list[dict], list[str]]:
-    arms, base = _load_groups(runs, prefix, baselines, sub, allow_mix, oracle)
+def per_knob(runs, prefix, baselines=None, sub="", allow_mix=(), oracle="auto",
+             composite_version: int = _SR.DEFAULT_COMPOSITE_VERSION) -> tuple[list[dict], list[str]]:
+    arms, base = _load_groups(runs, prefix, baselines, sub, allow_mix, oracle, composite_version)
     check_evalset({**arms, **base})
     v2 = bool(oracle) and check_composite_versions({**arms, **base})
     cols = ["arm", "kind", "pair_kind", "knob", "n_seeds", "n_defined", "mean", "spread",
@@ -785,6 +794,9 @@ def main(argv=None) -> int:
         p.add_argument("--out", required=True)
         p.add_argument("--sub", default="", type=_SR.sub_name)
         p.add_argument("--allow-mix", action="append", default=[], choices=_SR.MIXABLE)
+        if name in ("headline", "per-knob"):
+            p.add_argument("--composite-version", type=int, choices=_SR.COMPOSITE_VERSIONS,
+                           default=_SR.DEFAULT_COMPOSITE_VERSION)
         if name == "headline":
             p.add_argument("--addon", default=ADDON)
             p.add_argument("--pairs", default=None)
@@ -812,10 +824,15 @@ def main(argv=None) -> int:
                                          a.sub, allow_mix=tuple(a.allow_mix))
         elif a.cmd == "headline":
             rows, cols = headline(a.runs, a.prefix, a.baselines, a.sub, a.addon, a.pairs,
-                                  allow_mix=tuple(a.allow_mix))
+                                  allow_mix=tuple(a.allow_mix),
+                                  composite_version=a.composite_version)
         elif a.cmd == "explained":
             rows, cols = explained(a.runs, a.prefix, a.baselines, a.sub, a.addon,
                                    allow_mix=tuple(a.allow_mix))
+        elif a.cmd == "per-knob":
+            rows, cols = per_knob(a.runs, a.prefix, a.baselines, a.sub,
+                                  allow_mix=tuple(a.allow_mix),
+                                  composite_version=a.composite_version)
         else:
             rows, cols = fn[a.cmd](a.runs, a.prefix, a.baselines, a.sub,
                                    allow_mix=tuple(a.allow_mix))

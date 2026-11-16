@@ -140,6 +140,21 @@ Options of chunk SC (each off by default; a default scores.json is unchanged):
   A blind eval set may be `evalset_blind.json` or `evalset_blind_<tag>.json`; the scorer reads
       `include_blind` from the eval set, not its name.
 
+Same-view pass (CM; off by default, so a default scores.json, suffstats.npz and
+pairs_per_region.npz are unchanged). `--score-same-view` (or the environment variable
+ONION_SCORE_SAME_VIEW=1, which slurm/minicandi/submit_arms.sh sets from SCORE_SAME_VIEW=1 on the
+predict and metrics jobs) adds one pair job per distinct target of the headline correction pairs
+(rung '', never_trained 1, subset_pair 0): source = target = that view, the target's pr1 half in,
+its pr2 half scored (`same_view_jobs`, pair id `same_view/<target>`; in a prediction store the
+request `pair/same_view/<target>`, after the replicate pairs, so the predict and the metrics job
+must both have the switch). Outputs: `<out>/same_view_per_region.npz` (per same-view job: the
+model's CRPS per pair region, bins, target, assay, cell) and scores.json `correction_only_
+covariate_cost_closed` (`correction_only_block`: per headline pair d, m, s, f; per pair type
+(`knob`) the pooled term and the means; the macro over pair types). Never inside the composite.
+
+Composite versions (CM): computed at report time only (select_rule.py); the scorer writes no
+version key, so without the same-view switch every output is the pre-CM one.
+
 Add-on scoring (OXe, Amendment 4, PI ruling 33). `--addon` scores an add-on eval set
 (`evalset.py addon`, key `addon_of`) and is required for one; it is refused on any other eval set
 and on the blind split. The form is `score.sh $K $EVX <seed dir>/ox run <seed dir> --addon`: the
@@ -249,6 +264,23 @@ H7_DESCRIPTION = ("lower-bound check: mean predicted NB variance over the pair v
                   "pseudoreplicate and <= 1 at upper_bound_rung (PI ruling 31). PIT stays the "
                   "selection metric.")
 POOLED = "__pooled__"
+#: CM: the same-view pass (module docstring); off unless --score-same-view or the env variable is 1
+SAME_VIEW_ENV = "ONION_SCORE_SAME_VIEW"
+SAME_VIEW_PREFIX = "same_view/"
+CORRECTION_ONLY_KEY = "correction_only_covariate_cost_closed"
+CORRECTION_ONLY_DEFINITION = (
+    "per headline correction pair (rung '', never trained, not a subset pair): d = CRPS of "
+    "depth-only scaling (source pr1 -> target pr2), m = the model's CRPS on the pair (cross-view), "
+    "s = the model's CRPS on the same-view pair of the target (target pr1 -> target pr2, the "
+    "target's covariates on both sides), f = the half-read floor (target pr1 as the mean). Per pair "
+    "type (the pair's knob label), pooled as means over its pairs: term = 1 - (mean m - mean s) / "
+    "(mean d - mean f), i.e. the share of a raw copy's covariate cost (d - f) that the model closes, "
+    "its excess over its own same-view score (m - s) counting against it. 1 when m = s, 0 when the "
+    "model is depth-only scaling (m = d, s = f). A pair type whose relative denominator "
+    "(mean d - mean f) / mean d is below select_rule.CORRECTION_DENOM_REL_TOL is left out of the "
+    "macro and named (`pair_types_excluded`). Value = the unweighted mean over the other pair types "
+    "(all assays); undefined when one of them is undefined or none is left. Reported beside the "
+    "composite, never inside it (PI ruling 2026-11-16, review item 9)")
 #: OXe: why an evaluation-only target (a second experiment) has no assay-level value
 FLAGGED_REASON = ("evaluation-only target (a second experiment, PI ruling 33): outside the "
                   "shared/specific split, the error budget and every headline block")
@@ -630,6 +662,86 @@ def _pair_key(job) -> str:
     return job.get("pair_id") or job["source"] + ">" + job["target"]
 
 
+def same_view_from_env() -> bool:
+    """CM: the same-view switch from the environment (ONION_SCORE_SAME_VIEW=1)."""
+    return os.environ.get(SAME_VIEW_ENV, "").strip() == "1"
+
+
+def _headline_pair(p) -> bool:
+    return (str(p.get("rung") or "") == "" and int(p.get("never_trained") or 0) == 1
+            and int(p.get("subset_pair") or 0) == 0)
+
+
+def same_view_jobs(cor) -> list:
+    """CM: one same-view pair job per distinct target of the headline correction pairs `cor`, in
+    order of first appearance: source = target (pr1 in, pr2 scored, the target's covariates)."""
+    out = {}
+    for p in cor:
+        if p.get("kind", "correction") == "correction" and _headline_pair(p) and p["target"] not in out:
+            t = p["target"]
+            out[t] = {"kind": "correction", "source": t, "target": t,
+                      "pair_id": SAME_VIEW_PREFIX + t, "assay": p.get("assay"), "cell": p.get("cell"),
+                      "rung": "", "knob": "same_view", "never_trained": 1, "subset_pair": 0,
+                      "same_view": 1}
+    return list(out.values())
+
+
+def correction_only_block(cor_recs, sv_recs) -> dict:
+    """CM: the correction-only term (CORRECTION_ONLY_DEFINITION) from the correction pair records
+    (`crps_model`, `crps_depth_only`, `crps_floor`, `knob`, `target`) and the same-view records
+    (`target`, `crps_model_same_view`). Pure; numbers are floats or None."""
+    sv = {r["target"]: r.get("crps_model_same_view") for r in sv_recs}
+    head = [r for r in cor_recs if _headline_pair(r)]
+    rows, bad = [], []
+    for r in head:
+        v = {"m": r.get("crps_model"), "d": r.get("crps_depth_only"), "f": r.get("crps_floor"),
+             "s": sv.get(r["target"])}
+        if any(x is None or _undef(x) or not math.isfinite(float(x)) for x in v.values()):
+            bad.append(_pair_key(r) if r.get("source") else str(r.get("pair_id")))
+            continue
+        rows.append(dict({k: float(x) for k, x in v.items()}, knob=r.get("knob") or ""))
+
+    from onion_eval.select_rule import CORRECTION_DENOM_REL_TOL as tol
+
+    def pooled(rs):
+        mean = {k: float(np.mean([x[k] for x in rs])) for k in "dmsf"}
+        den = mean["d"] - mean["f"]
+        rel = den / mean["d"] if mean["d"] > 0 else None
+        val = 1.0 - (mean["m"] - mean["s"]) / den if den > 0 else None
+        return {"value": val, "n_pairs": len(rs), "d_mean": mean["d"], "m_mean": mean["m"],
+                "s_mean": mean["s"], "f_mean": mean["f"], "denominator_relative": rel,
+                "below_tolerance": rel is None or rel < tol,
+                "reason": "" if val is not None else "depth-only is not above the floor"}
+    knobs = defaultdict(list)
+    for x in rows:
+        knobs[x["knob"]].append(x)
+    per = {k: pooled(rs) for k, rs in sorted(knobs.items())}
+    excl = {k: f"relative denominator {v['denominator_relative']} below {tol}"
+            for k, v in per.items() if v["below_tolerance"]}
+    used = {k: v for k, v in per.items() if k not in excl}
+    out = {"definition": CORRECTION_ONLY_DEFINITION, "value": None, "per_pair_type": per,
+           "denominator_relative_tolerance": tol, "pair_types_excluded": excl,
+           "pair_types_in_macro": sorted(used),
+           "pooled_all_pairs": pooled(rows) if rows else None,
+           "n_pairs": len(head), "n_pairs_defined": len(rows), "n_pairs_undefined": len(bad),
+           "n_same_view_targets": len(sv), "n_pairs_by_type": {k: v["n_pairs"] for k, v in per.items()},
+           "reason": ""}
+    for k in ("d_mean", "m_mean", "s_mean", "f_mean"):
+        out[k] = out["pooled_all_pairs"][k] if rows else None
+    if bad:
+        out["reason"] = f"{len(bad)} headline pairs with an undefined CRPS or no same-view score (first: {bad[0]})"
+    elif not per:
+        out["reason"] = "no headline correction pair"
+    elif not used:
+        out["reason"] = "every pair type is below the denominator tolerance: " + ", ".join(sorted(excl))
+    elif any(v["value"] is None for v in used.values()):
+        out["reason"] = "undefined for pair types " + ", ".join(
+            k for k, v in used.items() if v["value"] is None)
+    else:
+        out["value"] = float(np.mean([v["value"] for v in used.values()]))
+    return out
+
+
 def pair_metrics_from_records(cor_recs, rep_recs, scorable, n_boot, seed, not_applicable=None) -> dict:
     """The pair metrics of scores.json from pair records (SF0, pinned interface L): headline 4 with
     its CRPS blocks and subset pairs, headline 5, and `replicate_pair_gap_closed_vs_depth_only`.
@@ -721,7 +833,7 @@ def _worker_task(i: int):
         if sc._pa_keep_cells is None:            # first pair after a group: the pair-phase cache
             sc._pa_cache.clear()
             sc._pa_keep_cells = sc._pair_keep
-        out = sc._pair_record(job)
+        out = sc._same_view_record(job) if kind == "same_view" else sc._pair_record(job)
     return out, list(sc.suff.items()), dict(sc.timing), sc._dump_meta, list(sc.pair_regional.items())
 
 
@@ -732,7 +844,7 @@ class Scorer:
                  log=print, region_cache=True, infer_batch=None, lambda_source="auto",
                  signal_override=None, addon=False, dump_signal=None, dump_targets=None,
                  dump_method=None, workers=1, stage_dir=None, pred_store=None, store_run=None,
-                 refs_from=None, fraglen_table=None):
+                 refs_from=None, fraglen_table=None, same_view=False):
         from minicandi import contract as C
         from minicandi.dataset import OnionDataset, tables_sha256
         from onion_eval.evalset import tables_dir_of
@@ -766,6 +878,9 @@ class Scorer:
         self.n_pairs_not_read_disjoint = 0
         self.pairs_not_applicable = {}           # SF0: see _pair_not_applicable
         self.pair_regional = {}                  # SF0: pair key -> per-region sums
+        #: CM: the same-view pass (off by default) and its records (run() fills them)
+        self.same_view = bool(same_view)
+        self.same_view_records = []
         self.C, self.log = C, log
         self.evalset_path = Path(evalset).resolve()
         self.ev = json.loads(self.evalset_path.read_text(encoding="utf-8"))
@@ -1947,6 +2062,30 @@ class Scorer:
         _trim_heap()
         return out
 
+    def _same_view_record(self, job):
+        """CM: the main predictor's CRPS on one same-view job (`same_view_jobs`), with its sums per
+        pair region (`crps_sum_model`, [Rp]); the estimator of `_pair_record`'s main branch. Writes
+        nothing to suffstats or pairs_per_region (default outputs unchanged)."""
+        A = self._job_arrays(job, ())
+        y, n, mu = A["y"], A["main.n"], A["main.mu"]
+        from candi.bench.distributional import crps_eval, p_from_mu
+        Rp = len(self.pair_region_idx)
+        out = {k: job.get(k) for k in ("pair_id", "assay", "cell", "target")}
+        out["bins"] = int(y.size)
+        out["crps_sum_model"] = np.full(Rp, np.nan)
+        if np.isfinite(n).all() and np.isfinite(mu).all():
+            d, _, _ = Mx._clean({"n": n, "mu": mu, "y": y}, ("y",), None)
+            v = crps_eval(None, 0)(d["n"], p_from_mu(d["n"], d["mu"]), d["y"])
+            out["crps_model_same_view"] = float(np.mean(v))
+            if np.size(v) == Rp * self.rb:
+                out["crps_sum_model"] = np.asarray(v, np.float64).reshape(Rp, self.rb).sum(axis=1)
+            del v
+        else:
+            out["crps_model_same_view"] = Mx.Undefined("main undefined on this same-view pair")
+        del A, y, n, mu
+        _trim_heap()
+        return out
+
     # -------------------------------------------------------------- guardrail
     def _guard_model(self):
         """The model as the guardrail calls it: CPU batches in, on the scoring device inside."""
@@ -2282,7 +2421,7 @@ class Scorer:
         return imp, cor, rep, ctl
 
     # -------------------------------------------------------------- SM: worker processes
-    def _parallel(self, group_list, pairs) -> dict:
+    def _parallel(self, group_list, pairs, same_view=()) -> dict:
         """Run every imputation group and every pair in `self.workers` forked processes. Each task
         returns its records and the suffstats, timing and dump-metadata entries it wrote; run()
         merges them in the serial order, so scores.json, suffstats.npz and tracks.json are the
@@ -2301,7 +2440,7 @@ class Scorer:
         self.ds._close_all()                     # no h5 handle crosses the fork
         self._region, self._rc = None, {}
         tasks = [("group", regime, jobs) for regime, _, jobs in group_list] + [
-            ("pair", None, j) for j in pairs]
+            ("pair", None, j) for j in pairs] + [("same_view", None, j) for j in same_view]
         _WORKER = (self, tasks)
         try:
             ctx = mp.get_context("fork")
@@ -2325,7 +2464,8 @@ class Scorer:
                      f"worker {resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / kib:.2f} GiB")
         except (ImportError, OSError):
             pass
-        return {"groups": res[:len(group_list)], "pairs": res[len(group_list):]}
+        ng, npr = len(group_list), len(pairs)
+        return {"groups": res[:ng], "pairs": res[ng:ng + npr], "same_view": res[ng + npr:]}
 
     def _merge_result(self, r):
         """Fold one worker result into this scorer, in the serial order; returns its records."""
@@ -2450,12 +2590,14 @@ class Scorer:
             group_list += [(regime, a, groups[a]) for a in sorted(groups)]
         self._pair_keep = {self.ds.rows[j["target"]]["cell"] for j in cor + rep}
         self.pair_order = [_pair_key(j) for j in cor + rep]
+        sv = same_view_jobs(cor) if self.same_view else []      # CM: empty by default
         par = None
         if self.workers > 1:
             tp = time.perf_counter()
             self.log(f"score: {len(group_list)} groups and {len(cor) + len(rep)} pairs on "
-                     f"{self.workers} worker processes")
-            par = self._parallel(group_list, cor + rep)
+                     f"{self.workers} worker processes"
+                     + (f" (+ {len(sv)} same-view pairs)" if sv else ""))
+            par = self._parallel(group_list, cor + rep, sv)
             self.timing["workers_wall"] += time.perf_counter() - tp
         scores = {}
         recs_by_regime, flagged_by_regime = {}, {}
@@ -2504,9 +2646,11 @@ class Scorer:
             if par is None:
                 cor_recs = [self._pair_record(j) for j in cor]
                 rep_recs = [self._pair_record(j) for j in rep]
+                sv_recs = [self._same_view_record(j) for j in sv]
             else:
                 outs = [self._merge_result(r) for r in par["pairs"]]
                 cor_recs, rep_recs = outs[:len(cor)], outs[len(cor):]
+                sv_recs = [self._merge_result(r) for r in par["same_view"]]
         finally:
             self._pa_cache.clear()
             self._pa_keep_cells = None
@@ -2514,6 +2658,9 @@ class Scorer:
         ta = time.perf_counter()
         scores.update(pair_metrics_from_records(cor_recs, rep_recs, sc, self.n_boot, self.seed,
                                                 not_applicable=self.pairs_not_applicable))
+        if self.same_view:                       # CM: keys only with the switch
+            self.same_view_records = sv_recs
+            scores[CORRECTION_ONLY_KEY] = correction_only_block(cor_recs, sv_recs)
         self.timing["assembly"] += time.perf_counter() - ta
         tg = time.perf_counter()
         scores["copy_leak"] = self._copy_leak()
@@ -2931,6 +3078,36 @@ def write_pairs_per_region(sc, out):
     return p
 
 
+def write_same_view_per_region(sc, out):
+    """CM: `<out>/same_view_per_region.npz` beside pairs_per_region.npz, only with the same-view
+    pass: `pair_ids` [T] (`same_view/<target>`), `region_indices` [Rp], `crps_sum_model` and `bins`
+    float64 [T, Rp], `crps_model_same_view` [T] (NaN when undefined), strings `target`, `assay`,
+    `cell` [T]. Not written without the switch or without a same-view job."""
+    recs = getattr(sc, "same_view_records", None) or []
+    if not getattr(sc, "same_view", False) or not recs:
+        return None
+    p = Path(out) / "same_view_per_region.npz"
+    Rp = len(sc.pair_region_idx)
+    np.savez_compressed(p, pair_ids=np.array([r["pair_id"] for r in recs]),
+                        region_indices=np.asarray(sc.pair_region_idx, np.int64),
+                        crps_sum_model=np.stack([np.asarray(r["crps_sum_model"], np.float64)
+                                                 for r in recs]),
+                        bins=np.full((len(recs), Rp), float(sc.rb)),
+                        crps_model_same_view=np.array([_nan_if_none(r["crps_model_same_view"])
+                                                       for r in recs], np.float64),
+                        **{k: np.array([str(r.get(k) or "") for r in recs])
+                           for k in ("target", "assay", "cell")})
+    return p
+
+
+def _write_all(scores: dict, sc, out) -> None:
+    """The output files of one scoring, in the pre-CM order (scores.json + suffstats.npz + SCORED,
+    then pairs_per_region.npz), then the same-view records (only with the switch, CM)."""
+    write_outputs(scores, sc.suff, out)
+    write_pairs_per_region(sc, out)
+    write_same_view_per_region(sc, out)
+
+
 def write_skipped(out, reason: str) -> Path:
     """`<out>/SKIPPED` (the reason): the job had nothing to score; no scores.json is written."""
     out = Path(out)
@@ -3040,8 +3217,7 @@ def _score_with(sc, out: Path, *, run, pairs_only) -> dict:
     scores = sc.run()
     if run is not None:
         scores["run"] = str(Path(run).resolve())
-    write_outputs(scores, sc.suff, out)
-    write_pairs_per_region(sc, out)
+    _write_all(scores, sc, out)
     return scores
 
 
@@ -3123,8 +3299,7 @@ def _score_legacy(evalset, out, *, run=None, baseline=None, model=None, config=N
         scores["run"] = str(Path(run).resolve())
     if ledger is not None:
         scores["blind_ledger"] = str(ledger)
-    write_outputs(scores, sc.suff, out)
-    write_pairs_per_region(sc, out)
+    _write_all(scores, sc, out)
     if ledger is not None:
         ledger_append(ledger, dict(entry, time=_utc(), status="scored"))
     return scores
@@ -3224,6 +3399,10 @@ def main(argv=None) -> int:
     ap.add_argument("--fraglen-table", default=None, metavar="TSV",
                     help="FL: estimated fragment lengths (qc_fill.py collect --fraglen-out) for "
                          "ChIP-seq tracks whose frag_len is empty; default none (today's path)")
+    ap.add_argument("--score-same-view", action="store_true",
+                    help="CM: also score the model's same-view pair (target pr1 -> target pr2) of "
+                         "every headline correction target and write the correction-only term; "
+                         f"default off (also on with {SAME_VIEW_ENV}=1)")
     a = ap.parse_args(argv)
     if a.phase == "metrics" and not (a.run and a.pred_store and a.refs_from):
         ap.error("--phase metrics needs --run, --pred-store and --refs-from")
@@ -3257,7 +3436,8 @@ def main(argv=None) -> int:
                   **({"stage_dir": a.stage_dir} if a.stage_dir else {}),
                   **({"pairs_only": True} if a.pairs_only else {}),
                   **phase_kw, **dump_kwargs(a),
-                  **({"fraglen_table": a.fraglen_table} if a.fraglen_table else {}))
+                  **({"fraglen_table": a.fraglen_table} if a.fraglen_table else {}),
+                  **({"same_view": True} if (a.score_same_view or same_view_from_env()) else {}))
     except (PermissionError, ScoreRefused) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2

@@ -3,7 +3,10 @@
     python tools/onion_eval/oracle_floor.py compute --evalset <json> --out <dir> [--tables <dir>]
     -> <out>/oracle_per_region.npz, <out>/oracle_floor.json (json last)
     python tools/onion_eval/oracle_floor.py report <scores.json> [...] [--oracle <dir>]
-    -> per score: the gap closed with the oracle floor and with the half-read floor, both subsets
+        [--composite-version 2|3]
+    -> per score: the gap closed with the oracle floor and with the half-read floor, both subsets;
+       the composites of versions 1, 2 and 3 (`composite_version` names the version the selection
+       rule reads, default 3: select_rule.py, CM)
 
 Definition (ruling 47). For one correction pair, the oracle O is one half of the mean absolute
 difference between the two read halves (pr1, pr2) of the TARGET view, on the bins, regions and raw
@@ -483,8 +486,11 @@ def seed_terms(score_path, s: dict, oracle="auto") -> dict | None:
     """Report-time correction term of one scores.json. None: no oracle reference (read the score
     as before, composite version 1). Else {"composite_version": 2, "gap_closed_floor": "oracle",
     "value" (all headline pairs; None when undefined), "reason", "denominator_relative_min",
-    "block" (gap_closed_block or None), "oracle_dir"}. `oracle`: "auto" (find_oracle), a directory,
-    or None/False (never use one)."""
+    "block" (gap_closed_block or None), "oracle_dir", "evalset_assays_no_nodedup_side" (CM: the
+    assays of the reference's headline correction pairs with no duplicate-keeping side; select_rule's
+    version 3 needs each of them in its macro)}. `composite_version` here is the version of "value"
+    (all headline pairs); select_rule picks the term of the version it reads. `oracle`: "auto"
+    (find_oracle), a directory, or None/False (never use one)."""
     if not oracle:
         return None
     if oracle == "auto":
@@ -501,6 +507,9 @@ def seed_terms(score_path, s: dict, oracle="auto") -> dict | None:
            "value": None, "reason": "", "denominator_relative_min": None, "block": None,
            "oracle_dir": str(d)}
     o = load_oracle(d)
+    nnd = ((o["rung"] == "") & (o["never_trained"] == 1) & (o["subset_pair"] == 0)
+           & (o["nodedup_side"] == 0))
+    out["evalset_assays_no_nodedup_side"] = sorted({str(a) for a in o["assay"][nnd]})
     recs, why = pair_records(Path(score_path).parent, o)
     if recs is None:
         out["reason"] = "gap closed (oracle floor) undefined: " + why
@@ -527,6 +536,8 @@ def main(argv=None) -> int:
     r = sp.add_parser("report")
     r.add_argument("scores", nargs="+")
     r.add_argument("--oracle", default="auto")
+    r.add_argument("--composite-version", type=int, default=3, choices=(2, 3),
+                   help="the version printed under composite_version (default 3, select_rule's)")
     r.add_argument("--pairs-out", default=None,
                    help="also write every score's correction pair records joined with the oracle")
     a = ap.parse_args(argv)
@@ -542,7 +553,7 @@ def main(argv=None) -> int:
                      "numerator", "denominator", "denominator_relative_min",
                      "correction_gap_closed_halfread_superseded", "excess_macro", "crps_model_macro",
                      "oracle_macro", "n_pairs_below_oracle", "composite_v1", "composite_v2",
-                     "reason")))
+                     "reason", "composite_v3")))
     pf = open(a.pairs_out, "w", encoding="utf-8") if a.pairs_out else None
     cols = ("pair_id", "assay", "cell", "knob", "never_trained", "subset_pair", "nodedup_side",
             "crps_model", "crps_depth_only", "crps_floor", "oracle", "why")
@@ -552,15 +563,16 @@ def main(argv=None) -> int:
         s = json.loads(Path(p).read_text(encoding="utf-8"))
         try:
             t = seed_terms(p, s, a.oracle)
-            c2 = R.screen_terms([R.load_seed(p, a.oracle)])[1][0]["composite"]
+            c2 = R.screen_terms([R.load_seed(p, a.oracle, 2)])[1][0]["composite"]
+            c3 = R.screen_terms([R.load_seed(p, a.oracle, 3)])[1][0]["composite"]
         except (OracleRefused, R.Refused) as e:
             print(f"REFUSED: {e}", file=sys.stderr)
             return 2
         c1 = R.screen_terms([R.load_seed(p, None)])[1][0]["composite"]
-        ver = str(t["composite_version"]) if t else "1"
+        ver = str(a.composite_version) if t else "1"
         if t is None or t["block"] is None:
             print("\t".join((p, ver, "", "", "", "", "", "", "", "", "", "", "", "", "", f(c1), "",
-                             "no oracle reference found" if t is None else t["reason"])))
+                             "no oracle reference found" if t is None else t["reason"], "")))
             continue
         for name in SUBSETS:
             b = t["block"][name]
@@ -570,7 +582,8 @@ def main(argv=None) -> int:
                              f(b["gap_closed_halfread_superseded"]), f(b["excess_macro"]),
                              f(b["crps_model_macro"]), f(b["oracle_macro"]),
                              str(b["n_pairs_below_oracle"]), f(c1),
-                             f(c2) if name == "all" else "", b["reason"])))
+                             f(c2) if name == "all" else "", b["reason"],
+                             f(c3) if name == "no_nodedup_side" else "")))
         if pf:
             recs, _ = pair_records(Path(p).parent, load_oracle(t["oracle_dir"]))
             for r in recs or []:

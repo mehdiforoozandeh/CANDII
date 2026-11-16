@@ -19,6 +19,12 @@ if str(REPO / "tools") not in sys.path:
 from onion_eval import arm_report as AR  # noqa: E402
 from onion_eval import select_rule as R  # noqa: E402
 
+# CM: these arms have no oracle-floor reference; the select rule's default is composite version 3
+# (which needs one), so every call here asks for the legacy version 2 path explicitly
+from functools import partial as _partial  # noqa: E402
+compare_v2 = _partial(R.compare, composite_version=2)
+
+
 EV, TB = "E" * 64, "T" * 64
 
 
@@ -100,7 +106,7 @@ def outputs(root: Path, sub_args: tuple = ()) -> dict:
     """Every command output (stdout or the written tsv) on the fixture tree, as text."""
     runs, base = build(root, sub_args[1] if sub_args else "")
     out = {}
-    rc, txt = _run(R.main, ["compare", "--incumbent", str(runs / "rung1_base"), "--challenger",
+    rc, txt = _run(R.main, ["compare", "--composite-version", "2", "--incumbent", str(runs / "rung1_base"), "--challenger",
                             str(runs / "rung1_x"), "--simpler", "none", "--settlements",
                             str(root / "s.tsv"), *sub_args])
     out["compare"] = f"{rc}\n{txt}"
@@ -201,9 +207,9 @@ def _mix(tmp_path, key):
 def test_a_mix_of_each_key_is_refused(tmp_path, key):
     runs, base = _mix(tmp_path, key)
     with pytest.raises(R.Refused, match=key.split(".")[0]):
-        R.compare(runs / "rung1_base", runs / "rung1_x", "none", settlements=tmp_path / "s.tsv",
+        compare_v2(runs / "rung1_base", runs / "rung1_x", "none", settlements=tmp_path / "s.tsv",
                   sub="p16")
-    rc, txt = _run(R.main, ["compare", "--incumbent", str(runs / "rung1_base"), "--challenger",
+    rc, txt = _run(R.main, ["compare", "--composite-version", "2", "--incumbent", str(runs / "rung1_base"), "--challenger",
                             str(runs / "rung1_x"), "--simpler", "none", "--settlements",
                             str(tmp_path / "s.tsv"), "--sub", "p16"])
     assert rc == 2 and txt.startswith("REFUSED")
@@ -219,7 +225,7 @@ def test_a_mix_of_each_key_is_refused(tmp_path, key):
 def test_uniform_v2_arms_with_v1_baselines_are_accepted(tmp_path):
     """A scorer_version 1 baseline is comparable with version 2 runs as a reference directory."""
     runs, base = build(tmp_path, "p16", **V2)
-    res = R.compare(runs / "rung1_base", runs / "rung1_x", "none", settlements=tmp_path / "s.tsv",
+    res = compare_v2(runs / "rung1_base", runs / "rung1_x", "none", settlements=tmp_path / "s.tsv",
                     sub="p16")
     assert res["verdict"] == "CHALLENGER"
     rows, _ = AR.headline(runs, "", base, sub="p16")
@@ -235,7 +241,7 @@ def test_a_v1_score_is_never_an_arm_beside_v2(tmp_path):
             s.pop(key)
         p.write_text(json.dumps(s))
     with pytest.raises(R.Refused, match="scorer_version"):
-        R.compare(runs / "rung1_base", runs / "rung1_x", "none", settlements=tmp_path / "s.tsv",
+        compare_v2(runs / "rung1_base", runs / "rung1_x", "none", settlements=tmp_path / "s.tsv",
                   sub="p16")
     with pytest.raises(AR.Refused, match="scorer_version"):
         AR.headline(runs, "", base, sub="p16")
@@ -245,11 +251,11 @@ def test_a_v1_score_is_never_an_arm_beside_v2(tmp_path):
 def test_allow_mix_of_a_setting(tmp_path, key):
     """--allow-mix accepts a mix of the device or the batch only, never of the other keys."""
     runs, base = _mix(tmp_path, key)
-    assert _run(R.main, ["compare", "--incumbent", str(runs / "rung1_base"), "--challenger",
+    assert _run(R.main, ["compare", "--composite-version", "2", "--incumbent", str(runs / "rung1_base"), "--challenger",
                          str(runs / "rung1_x"), "--simpler", "none", "--settlements",
                          str(tmp_path / "s.tsv"), "--sub", "p16", "--allow-mix", key])[0] == 0
     assert AR.main(["headline", "--runs", str(runs), "--baselines", str(base), "--out",
                     str(tmp_path / "o.tsv"), "--sub", "p16", "--allow-mix", key]) == 0
     with pytest.raises(SystemExit):
-        R.main(["compare", "--incumbent", "a", "--challenger", "b", "--allow-mix",
+        R.main(["compare", "--composite-version", "2", "--incumbent", "a", "--challenger", "b", "--allow-mix",
                 "scorer_version"])

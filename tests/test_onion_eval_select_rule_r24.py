@@ -5,6 +5,12 @@ from __future__ import annotations
 from tests import test_onion_eval_select_rule as T
 
 R = T.R
+
+# CM: these arms have no oracle-floor reference; the select rule's default is composite version 3
+# (which needs one), so every call here asks for the legacy version 2 path explicitly
+from functools import partial as _partial  # noqa: E402
+check_done_v2 = _partial(R.check_done, composite_version=2)
+
 # position average's uncertainty 0.49: final 0.503 - 0.49 = 0.013 < 2 x seed spread 0.02 -> FAIL
 FAILING_BASELINES = dict(T.GOOD_BASELINES, position_average=(0.20, 0.15, 0.49))
 
@@ -24,14 +30,14 @@ def _setup(tmp_path, val_baselines, blind_baselines=None):
 
 def test_r24_blind_state_after_validation_fail_pass(tmp_path, capsys):
     runs, lad, bl, bb = _setup(tmp_path, FAILING_BASELINES, T.GOOD_BASELINES)
-    res = R.check_done(runs, lad, baselines=bl, blind_baselines=bb)
+    res = check_done_v2(runs, lad, baselines=bl, blind_baselines=bb)
     assert res["validation"][0] == "FAIL"
     assert res["blind"][0] == "PASS"                # was MISSING ("waits for validation") before
     assert res["condition_2"] == "FAIL"             # PASS only when both splits pass
     for g in R.GOALS:
         assert any(ln.strip().startswith(f"{g}:") and "margin" in ln and "seed spread" in ln
                    for ln in res["blind"][1])
-    rc = R.main(["check-done", "--runs", str(runs), "--ladder", str(lad), "--baselines", str(bl),
+    rc = R.main(["check-done", "--composite-version", "2", "--runs", str(runs), "--ladder", str(lad), "--baselines", str(bl),
                  "--blind-baselines", str(bb)])
     out = capsys.readouterr().out.splitlines()
     assert rc == 1
@@ -44,27 +50,27 @@ def test_r24_blind_state_after_validation_fail_pass(tmp_path, capsys):
 
 def test_r24_blind_state_after_validation_fail_fail(tmp_path):
     runs, lad, bl, bb = _setup(tmp_path, FAILING_BASELINES, FAILING_BASELINES)
-    res = R.check_done(runs, lad, baselines=bl, blind_baselines=bb)
+    res = check_done_v2(runs, lad, baselines=bl, blind_baselines=bb)
     assert (res["validation"][0], res["blind"][0], res["condition_2"]) == ("FAIL", "FAIL", "FAIL")
     assert any("uncertainty" in ln and "does not beat" in ln for ln in res["blind"][1])
 
 
 def test_r24_validation_fail_without_blind_pass(tmp_path, capsys):
     runs, lad, bl, _ = _setup(tmp_path, FAILING_BASELINES)
-    res = R.check_done(runs, lad, baselines=bl)
+    res = check_done_v2(runs, lad, baselines=bl)
     assert (res["validation"][0], res["blind"][0], res["condition_2"]) == ("FAIL", "MISSING", "FAIL")
-    R.main(["check-done", "--runs", str(runs), "--ladder", str(lad), "--baselines", str(bl)])
+    R.main(["check-done", "--composite-version", "2", "--runs", str(runs), "--ladder", str(lad), "--baselines", str(bl)])
     out = [ln.strip() for ln in capsys.readouterr().out.splitlines()]
     assert "D14 condition 2: FAIL" in out and "blind: MISSING" in out
 
 
 def test_r24_validation_pass_states_unchanged(tmp_path):
     runs, lad, bl, bb = _setup(tmp_path, T.GOOD_BASELINES)
-    res = R.check_done(runs, lad, baselines=bl)
+    res = check_done_v2(runs, lad, baselines=bl)
     assert (res["validation"][0], res["blind"][0], res["condition_2"]) == ("PASS", "MISSING", "PENDING")
     runs, lad, bl, bb = _setup(tmp_path / "b", T.GOOD_BASELINES, FAILING_BASELINES)
-    res = R.check_done(runs, lad, baselines=bl, blind_baselines=bb)
+    res = check_done_v2(runs, lad, baselines=bl, blind_baselines=bb)
     assert (res["validation"][0], res["blind"][0], res["condition_2"]) == ("PASS", "FAIL", "FAIL")
     runs, lad, bl, bb = _setup(tmp_path / "c", T.GOOD_BASELINES, T.GOOD_BASELINES)
-    res = R.check_done(runs, lad, baselines=bl, blind_baselines=bb)
+    res = check_done_v2(runs, lad, baselines=bl, blind_baselines=bb)
     assert (res["validation"][0], res["blind"][0], res["condition_2"]) == ("PASS", "PASS", "PASS")

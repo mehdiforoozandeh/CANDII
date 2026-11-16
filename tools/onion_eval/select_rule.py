@@ -4,9 +4,14 @@
         [--simpler incumbent|challenger|none] [--name <comparison>] [--settlements <tsv>]
         [--sub SUB] [--allow-mix scorer_settings.device|scorer_settings.infer_batch|fraglen_table.sha256 ...]
     python tools/onion_eval/select_rule.py table --runs <dir> [--prefix p] [--sub SUB]
+        [--composite-version 2|3]
         (columns: arm, seed, state, composite (from the clipped terms while CLIP_GOAL_TERMS),
         <goal>_raw and <goal>_clipped for each goal, copy_leak_pass (the gate as applied below:
         True, False or unreliable), same_view_copy_gain_flag)
+    python tools/onion_eval/select_rule.py arm-summary --runs <dir> [--prefix p] [--sub SUB]
+        (per arm, over its scored seeds: n_seeds, then mean and range (max - min) of the clipped
+        composite of version 2 and of version 3 and of each raw goal term, the correction term of
+        both versions; plus the correction-only term when the scores hold it; CM)
     python tools/onion_eval/select_rule.py check-rung --runs <dir> --rung <r> --ladder <json>
     python tools/onion_eval/select_rule.py check-done --runs <dir> --ladder <json>
         [--final <arm dir>] [--baselines <dir>] [--blind-baselines <dir>]
@@ -103,6 +108,29 @@ undefined with the reason (never the old value). No reference: the seed is read 
 (version 1). Every command REFUSES a mix of composite versions (arms and baselines alike). Clipping
 to [0, 1] inside the composite is kept: the marginal NB still scores below 0 on the new scale.
 
+Composite version 3 (CM, PI ruling of 2026-11-16; cruxvault/results/correction_metric_review). The
+correction term is the gap closed with the oracle floor on the headline pairs with NO
+duplicate-keeping side (`oracle_floor` subset `no_nodedup_side`: the crop and crop + single-end
+pairs), same per-assay ratio of pair means and the same macro, over the assays that have such a
+pair; its denominator check reads that subset's (depth-only - O) / depth-only. The term is
+undefined, with the reason, when a correction-scorable assay of the seed that has such a pair in
+the eval set (the oracle reference's labels) does not enter it (no per-pair record); the
+assays and pairs that entered are reported beside it (`correction_n_assays`, `correction_n_pairs`).
+Weights unchanged (0.5, 0.25, 0.25). It is computed at report time only, from the stored
+`pairs_per_region.npz`, so every score of version 2 reads as version 3 with no rescoring and
+score.py writes no version key. Every command and every python function reads version 3 by
+default (DEFAULT_COMPOSITE_VERSION); `--composite-version 2` / `composite_version=2` keeps version 2.
+Version 1 (no oracle reference) is unchanged by the option. A seed read as version 2 or 3 also
+carries both correction terms (`correction_gap_closed_oracle_all`, `..._no_nodedup_side`) and
+`table` prints both composites (`composite_v2`, `composite_v3`).
+Settlements by version (CM). Version 3 `compare` writes `settlements_v3.tsv` (beside where
+settlements.tsv goes; SETTLEMENT_COLUMNS plus `composite_version`) and refuses, writing nothing, an
+arm with a seed that has no oracle reference. `check-rung` and `check-done` under version 3 read
+settlements_v3.tsv only; a comparison with no row there is MISSING ("no version-3 comparison
+yet"), never FAIL. The legacy settlements.tsv is never touched by version 3: with
+`--composite-version 2` every reader and writer is the pre-CM code (same file, columns and
+output).
+
 Arm naming and the ladder (pinned). An arm of the ladder is named `rung<k>_<arm>` (k = 1..6; arm
 in [a-z0-9_], the rung base is `rung<k>_base`); `_rung_of` reads k from the incumbent.
 `ladder.json` schema:
@@ -173,6 +201,11 @@ ARM_RE = re.compile(r"^rung([1-6])_([a-z0-9][a-z0-9_]*)$")
 SETTLEMENT_COLUMNS = ("comparison", "incumbent", "challenger", "simpler", "composite_delta",
                       "seed_spread", "per_goal_deltas", "per_goal_spreads", "copy_leak", "verdict",
                       "time", "clip_goal_terms", "goal_terms_raw", "goal_terms_clipped")
+#: CM: the settlements of composite version 3 live in their own file, with one more column; the
+#: legacy settlements.tsv (version 2 and before) is never read or written by version 3
+SETTLEMENTS_FILE = {2: "settlements.tsv", 3: "settlements_v3.tsv"}
+SETTLEMENT_COLUMNS_V3 = SETTLEMENT_COLUMNS + ("composite_version",)
+V3_MISSING = "no version-3 comparison yet"
 LADDER_KEYS = ("name", "incumbent", "challenger", "simpler", "d14_condition_1", "verdict",
                "notepad_ref")
 SEED_RE = re.compile(r"^seed(\d+)$")
@@ -197,6 +230,15 @@ UNCERTAINTY_DENOM_TOL = 0.005      # marginal-NB PIT deviation (mean |F_bar(u) -
 CORRECTION_DENOM_REL_TOL = 0.01    # (depth-only CRPS - floor CRPS) / depth-only CRPS below this
 DENOM_KEYS = {"uncertainty": ("uncertainty_marginal_pit_deviation", UNCERTAINTY_DENOM_TOL),
               "correction": ("correction_baseline_minus_floor_relative_min", CORRECTION_DENOM_REL_TOL)}
+
+# Composite versions with an oracle reference (CM): the oracle_floor subset of the correction term.
+CORRECTION_SUBSET = {2: "all", 3: "no_nodedup_side"}
+COMPOSITE_VERSIONS = tuple(CORRECTION_SUBSET)
+#: the version the command line reads by default (PI ruling 2026-11-16)
+DEFAULT_COMPOSITE_VERSION = 3
+CLI_COMPOSITE_VERSION = DEFAULT_COMPOSITE_VERSION
+#: score.py's correction-only term (CM; reported beside the composite, never inside it)
+CORRECTION_ONLY_KEY = "correction_only_covariate_cost_closed"
 
 
 class Refused(Exception):
@@ -226,14 +268,24 @@ def _composite(g: dict):
     return None if any(g[k] is None for k in GOALS) else sum(WEIGHTS[k] * g[k] for k in GOALS)
 
 
-def load_seed(path: Path, oracle="auto") -> dict:
+def load_seed(path: Path, oracle="auto", composite_version: int = DEFAULT_COMPOSITE_VERSION) -> dict:
     """Goal terms, recomputed composite, copy-leak results, denominators and the comparability
     fields of one scores.json. With an oracle-floor reference (`oracle_floor.find_oracle`, or the
     directory `oracle`; None never uses one) the correction term is the gap closed with the
     oracle floor (PI ruling 47), recomputed from the score's per-pair records, and the seed carries
-    `composite_version` 2; the scored (half-read) term is kept as `correction_gap_closed_halfread_superseded`.
-    Without one the seed is read as before (`composite_version` 1)."""
+    `composite_version` 2 (all headline pairs) or 3 (`composite_version=3`: the pairs with no
+    duplicate-keeping side, CM); the scored (half-read) term is kept as
+    `correction_gap_closed_halfread_superseded`. Without one the seed is read as before
+    (`composite_version` 1)."""
     s = json.loads(Path(path).read_text(encoding="utf-8"))
+    return seed_from_scores(s, path, oracle, composite_version)
+
+
+def seed_from_scores(s: dict, path, oracle="auto", composite_version: int = DEFAULT_COMPOSITE_VERSION) -> dict:
+    """load_seed on a scores dict already read (score.py calls it before writing scores.json, with
+    `path` the scores.json it will write: the per-pair records beside it must exist)."""
+    if composite_version not in COMPOSITE_VERSIONS:
+        raise ValueError(f"composite_version {composite_version!r}: one of {COMPOSITE_VERSIONS}")
     sel = s.get("selection") or {}
     g = {k: _num(sel.get(GOAL_KEYS[k])) for k in GOALS}
     reasons = {k: sel.get(f"{k}_reason") or "" for k in GOALS}
@@ -244,13 +296,47 @@ def load_seed(path: Path, oracle="auto") -> dict:
     ver, extra = 1, {}
     t = _oracle_terms(path, s, oracle)
     if t is not None:
-        ver = t["composite_version"]
+        ver = composite_version
+        blk = t["block"] or {}
+        both = {v: _num((blk.get(sub) or {}).get("gap_closed_oracle")) for v, sub in
+                CORRECTION_SUBSET.items()}
+        nnd_raw = both[3]
+        # version 3 needs every correction-scorable assay of the seed that has a pair with no
+        # duplicate-keeping side in the eval set
+        want = (set(t.get("evalset_assays_no_nodedup_side") or ())
+                & set((s.get("scorable") or {}).get("correction") or ()))
+        got = set((blk.get(CORRECTION_SUBSET[3]) or {}).get("per_assay") or {})
+        v3_why = ""
+        if t["block"] is not None and want - got:
+            both[3] = None
+            v3_why = ("gap closed (oracle floor, pairs with no duplicate-keeping side) undefined: "
+                      f"{len(got)} of the {len(want)} correction-scorable assays that have such a "
+                      "pair in the eval set entered; missing (no per-pair record): "
+                      + ", ".join(sorted(want - got)))
+        den_name = "correction_depth_only_minus_oracle_relative_min"
+        sb = blk.get(CORRECTION_SUBSET[ver]) or {}
         extra = {"correction_gap_closed_halfread_superseded": g["correction"], "oracle_block": t["block"],
+                 "correction_n_assays": sb.get("n_assays"), "correction_n_pairs": sb.get("n_pairs"),
+                 "correction_numerator": sb.get("numerator"),
+                 "correction_denominator": sb.get("denominator"),
                  "oracle_dir": t["oracle_dir"],
-                 "denominator_names": {"correction": "correction_depth_only_minus_oracle_relative_min"}}
-        g["correction"] = _num(t["value"])
-        reasons["correction"] = t["reason"]
-        dens["correction"] = _num(t["denominator_relative_min"])
+                 "correction_gap_closed_oracle_all": both[2],
+                 "correction_gap_closed_oracle_no_nodedup_side": nnd_raw,
+                 "correction_n_assays_expected": len(want),
+                 "correction_by_version": both,
+                 "denominator_names": {"correction": den_name if ver == 2
+                                       else den_name + "_no_nodedup_side"}}
+        if ver == 2:                     # composite version 2, exactly as before CM
+            g["correction"] = _num(t["value"])
+            reasons["correction"] = t["reason"]
+            dens["correction"] = _num(t["denominator_relative_min"])
+        else:                            # version 3: the subset with no duplicate-keeping side
+            b = blk.get(CORRECTION_SUBSET[ver])
+            g["correction"] = both[ver]
+            reasons["correction"] = (t["reason"] if b is None else v3_why or (
+                "" if both[ver] is not None else "gap closed (oracle floor, pairs with no "
+                "duplicate-keeping side) undefined: " + (b.get("reason") or "")))
+            dens["correction"] = None if b is None else _num(b.get("denominator_relative_min"))
         keys.update(composite_version=ver, gap_closed_floor=t["gap_closed_floor"])
     return {**extra, "composite_version": ver,
             "goals": g, "composite": _composite(g), "copy_leak_pass": cl.get("copy_leak_pass"),
@@ -265,7 +351,7 @@ def load_seed(path: Path, oracle="auto") -> dict:
             "tables_sha256": s.get("tables_sha256") or "", "split": s.get("split"),
             "regime": s.get("regime"), "space": sel.get("space"),
             "noise_floor": s.get("noise_floor"), "evalset": s.get("evalset", ""),
-            "scorer_keys": keys}
+            "scorer_keys": keys, "correction_only": _num((s.get(CORRECTION_ONLY_KEY) or {}).get("value"))}
 
 
 def _oracle_terms(path, s: dict, oracle):
@@ -284,26 +370,29 @@ def _oracle_terms(path, s: dict, oracle):
 
 def check_composite_versions(seeds: list[dict]) -> None:
     """Refused when the seeds (arms AND baselines) carry composites of more than one version: a
-    version 2 composite has the oracle floor as the top of its correction term (PI ruling 47), a
-    version 1 composite the half-read floor."""
+    version 3 composite's correction term is the oracle-floor gap closed on the pairs with no
+    duplicate-keeping side (CM), version 2's on all headline pairs (PI ruling 47), version 1's the
+    half-read floor."""
     vals: dict = {}
     for s in seeds:
         vals.setdefault(s.get("composite_version", 1), []).append(s["path"])
     if len(vals) > 1:
-        raise Refused("composite versions differ (version 2: correction gap closed with the oracle "
+        raise Refused("composite versions differ (version 3: oracle floor, pairs with no "
+                      "duplicate-keeping side; version 2: correction gap closed with the oracle "
                       "floor; version 1: the half-read floor, superseded): " + "; ".join(
                           f"version {v}: {len(ps)} scores, e.g. {ps[0]}"
                           for v, ps in sorted(vals.items())))
 
 
-def load_arm(arm, sub: str = "", min_seeds: int = MIN_SEEDS, oracle="auto") -> list[dict]:
+def load_arm(arm, sub: str = "", min_seeds: int = MIN_SEEDS, oracle="auto",
+             composite_version: int = DEFAULT_COMPOSITE_VERSION) -> list[dict]:
     """Every seed of an arm with a scores.json (under `sub` inside each seed dir) and no CAPPED;
     Missing when fewer than min_seeds."""
     seeds = []
     for d in seed_dirs(Path(arm)):
         p = d / sub / "scores.json" if sub else d / "scores.json"
         if p.is_file() and not (d / CAPPED).exists():      # a capped run never counts as a seed
-            seeds.append(load_seed(p, oracle))
+            seeds.append(load_seed(p, oracle, composite_version))
     if len(seeds) < min_seeds:
         raise Missing(f"{arm}: {len(seeds)} scored seeds; the rule needs at least {min_seeds}")
     return seeds
@@ -566,12 +655,12 @@ def simpler_from_config(challenger: Path) -> str:
     raise Refused(f"{challenger}: no simpler_than_base in seed0/run.json; pass --simpler")
 
 
-def append_settlement(path: Path, row: dict) -> None:
+def append_settlement(path: Path, row: dict, columns=SETTLEMENT_COLUMNS) -> None:
     path = Path(path)
     new = not path.is_file()
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(SETTLEMENT_COLUMNS), delimiter="\t",
+        w = csv.DictWriter(fh, fieldnames=list(columns), delimiter="\t",
                            lineterminator="\n", extrasaction="ignore")
         if new:
             w.writeheader()
@@ -598,15 +687,30 @@ def _utc() -> str:
 
 
 def compare(incumbent, challenger, simpler=None, name=None, settlements=None, *, clip=None,
-            sub: str = "", allow_mix=()) -> dict:
+            sub: str = "", allow_mix=(), composite_version: int = DEFAULT_COMPOSITE_VERSION) -> dict:
     inc_dir, ch_dir = Path(incumbent), Path(challenger)
     if simpler is None:
         if not is_own_rung_base(inc_dir.name, ch_dir.name):
             raise Refused(f"{inc_dir.name} is not the rung base of {ch_dir.name}: simpler_than_base "
                           f"is relative to the challenger's own rung base, so pass --simpler")
         simpler = simpler_from_config(ch_dir)
-    inc = load_arm(inc_dir, sub)
-    ch = load_arm(ch_dir, sub)
+    inc = load_arm(inc_dir, sub, composite_version=composite_version)
+    ch = load_arm(ch_dir, sub, composite_version=composite_version)
+    v3 = int(composite_version) == 3
+    if v3:                               # CM: version 3 needs the oracle reference of every seed
+        bad = [s["path"] for s in inc + ch if s.get("composite_version") != 3]
+        if bad:
+            raise Refused(f"composite version 3 needs an oracle-floor reference for every seed; "
+                          f"{len(bad)} seeds have none (e.g. {bad[0]}); nothing written. Use "
+                          f"--composite-version 2 for the legacy comparison")
+    if settlements:                      # an explicit path must not cross the version boundary
+        base = Path(settlements).name
+        if v3 and base != SETTLEMENTS_FILE[3]:
+            raise Refused(f"composite version 3 writes only a file named {SETTLEMENTS_FILE[3]}; "
+                          f"got --settlements {base}; nothing written")
+        if not v3 and base == SETTLEMENTS_FILE[3]:
+            raise Refused(f"{SETTLEMENTS_FILE[3]} holds version-3 rows only; a version-2 "
+                          f"comparison cannot write there; nothing written")
     res = decide(inc, ch, simpler, clip=clip, allow_mix=allow_mix)
     name = name or f"{inc_dir.name}__vs__{ch_dir.name}"
     row = {"comparison": name, "incumbent": inc_dir.name, "challenger": ch_dir.name,
@@ -617,7 +721,12 @@ def compare(incumbent, challenger, simpler=None, name=None, settlements=None, *,
            "clip_goal_terms": str(res["clip_goal_terms"]).lower(),
            "goal_terms_raw": _fmt_terms(res.get("goal_terms_raw")),
            "goal_terms_clipped": _fmt_terms(res.get("goal_terms_clipped"))}
-    append_settlement(Path(settlements) if settlements else ch_dir.parent / "settlements.tsv", row)
+    if v3:
+        row["composite_version"] = "3"
+        append_settlement(Path(settlements) if settlements else ch_dir.parent / SETTLEMENTS_FILE[3],
+                          row, SETTLEMENT_COLUMNS_V3)
+    else:                                # legacy: the pre-CM file, columns and row
+        append_settlement(Path(settlements) if settlements else ch_dir.parent / "settlements.tsv", row)
     res["comparison"] = name
     res["composite_version"] = inc[0].get("composite_version", 1)
     return res
@@ -649,11 +758,15 @@ def seed_state(d: Path, sub: str = "") -> str:
     return "queued"
 
 
-def table(runs, prefix: str = "", sub: str = "", oracle="auto") -> list[dict]:
-    """One row per seed. A seed read with an oracle-floor reference (composite version 2) also gets
-    `composite_version`, `correction_gap_closed_halfread_superseded` (the old term, PI ruling 47),
+def table(runs, prefix: str = "", sub: str = "", oracle="auto", composite_version: int = DEFAULT_COMPOSITE_VERSION) -> list[dict]:
+    """One row per seed. A seed read with an oracle-floor reference (composite version 2 or 3) also
+    gets `composite_version`, `correction_gap_closed_halfread_superseded` (the old term, PI ruling 47),
     `correction_gap_closed_oracle_no_nodedup_side`, `correction_numerator` and
-    `correction_denominator` (macro over assays, all headline pairs)."""
+    `correction_denominator` (macro over assays of the version's own term: all headline pairs in
+    version 2, the pairs with no duplicate-keeping side in version 3), `correction_n_assays`,
+    `correction_n_pairs` (what entered that term), and (CM)
+    `correction_gap_closed_oracle_all`, `composite_v2` and `composite_v3` (clipped composites with
+    either correction term). `correction_only` (CM) when the scores.json holds that term."""
     rows = []
     for arm in sorted(p for p in Path(runs).iterdir() if p.is_dir() and p.name.startswith(prefix)):
         for d in seed_dirs(arm):
@@ -663,7 +776,7 @@ def table(runs, prefix: str = "", sub: str = "", oracle="auto") -> list[dict]:
             v2 = {}
             sp = d / sub / "scores.json" if sub else d / "scores.json"
             if sp.is_file():
-                s = screen_terms([load_seed(sp, oracle)])[1][0]
+                s = screen_terms([load_seed(sp, oracle, composite_version)])[1][0]
                 if s["composite_version"] != 1:
                     blk = s.get("oracle_block") or {}
                     a, b = blk.get("all") or {}, blk.get("no_nodedup_side") or {}
@@ -671,8 +784,16 @@ def table(runs, prefix: str = "", sub: str = "", oracle="auto") -> list[dict]:
                           "correction_gap_closed_halfread_superseded":
                               s["correction_gap_closed_halfread_superseded"],
                           "correction_gap_closed_oracle_no_nodedup_side": b.get("gap_closed_oracle"),
-                          "correction_numerator": a.get("numerator"),
-                          "correction_denominator": a.get("denominator")}
+                          "correction_numerator": s["correction_numerator"],
+                          "correction_denominator": s["correction_denominator"],
+                          "correction_n_assays": s["correction_n_assays"],
+                          "correction_n_pairs": s["correction_n_pairs"],
+                          "correction_gap_closed_oracle_all": a.get("gap_closed_oracle"),
+                          **{f"composite_v{v}": _composite(dict(s["clipped_goals"],
+                                                                correction=_clip(c)))
+                             for v, c in s["correction_by_version"].items()}}
+                if s.get("correction_only") is not None:
+                    v2["correction_only"] = s["correction_only"]
                 g = gate_status([s])            # the gate as select_rule applies it (old scores too)
                 comp, flag = s["composite"], s["copy_gain_flag"]
                 raw, clipped = s["raw_goals"], s["clipped_goals"]
@@ -688,7 +809,39 @@ def table(runs, prefix: str = "", sub: str = "", oracle="auto") -> list[dict]:
 #: the extra `table` columns of a seed read with an oracle-floor reference
 TABLE_V2_COLUMNS = ("composite_version", "correction_gap_closed_halfread_superseded",
                     "correction_gap_closed_oracle_no_nodedup_side", "correction_numerator",
-                    "correction_denominator")
+                    "correction_denominator", "correction_n_assays", "correction_n_pairs",
+                    "correction_gap_closed_oracle_all", "composite_v2", "composite_v3")
+
+
+def arm_summary(runs, prefix: str = "", sub: str = "", oracle="auto") -> list[dict]:
+    """CM: per arm, over its done seeds (`table` state done), n_seeds and the mean and range
+    (max - min) of: composite_v2, composite_v3 (clipped composites), imputation_raw,
+    correction_v2_raw, correction_v3_raw, uncertainty_raw, and correction_only when present. A
+    quantity undefined in any seed has mean and range None and its n_defined below n_seeds."""
+    rows = [r for r in table(runs, prefix, sub, oracle, 3) if r["state"] == "done"]
+    cols = {"composite_v2": "composite_v2", "composite_v3": "composite_v3",
+            "imputation_raw": "imputation_raw",
+            "correction_v2_raw": "correction_gap_closed_oracle_all",
+            "correction_v3_raw": "correction_gap_closed_oracle_no_nodedup_side",
+            "uncertainty_raw": "uncertainty_raw", "correction_only": "correction_only"}
+    out = []
+    for arm in sorted({r["arm"] for r in rows}):
+        rs = [r for r in rows if r["arm"] == arm]
+        o = {"arm": arm, "n_seeds": len(rs),
+             "composite_version": ",".join(sorted({str(r.get("composite_version", 1)) for r in rs}))}
+        for name, key in cols.items():
+            v = [r.get(key) for r in rs]
+            ok = [x for x in v if x is not None]
+            o[f"{name}.n_defined"] = len(ok)
+            full = len(ok) == len(v)
+            o[f"{name}.mean"] = _mean(ok) if ok and full else None
+            o[f"{name}.range"] = spread(ok) if ok and full else None
+        out.append(o)
+    return out
+
+
+SUMMARY_QUANTITIES = ("composite_v2", "composite_v3", "imputation_raw", "correction_v2_raw",
+                      "correction_v3_raw", "uncertainty_raw", "correction_only")
 
 
 H1_COLUMNS = ("assay", "n_targets", "n_targets_with_floor", "floor_exists", "headline1_defined",
@@ -742,12 +895,13 @@ def read_ladder(path) -> dict:
     return lad
 
 
-def latest_settlements(runs) -> dict:
+def latest_settlements(runs, composite_version: int = DEFAULT_COMPOSITE_VERSION) -> dict:
     """comparison -> verdict of its latest row (greatest `time`; a row without time is oldest;
-    ties keep the later row read)."""
+    ties keep the later row read), from the settlements files of `composite_version` only:
+    settlements_v3.tsv for version 3, the legacy settlements.tsv for version 2 (CM)."""
     best = {}
     k = 0
-    for p in sorted(Path(runs).glob("**/settlements.tsv")):
+    for p in sorted(Path(runs).glob(f"**/{SETTLEMENTS_FILE[int(composite_version)]}")):
         with open(p, newline="", encoding="utf-8") as fh:
             for r in csv.DictReader(fh, delimiter="\t"):
                 k += 1
@@ -757,11 +911,15 @@ def latest_settlements(runs) -> dict:
     return {c: v for c, (_, v) in best.items()}
 
 
-def ladder_verdict(c: dict, settled_rows: dict) -> tuple[str, str]:
-    """(verdict, problem) of one ladder comparison; problem '' when the verdict is accepted."""
+def ladder_verdict(c: dict, settled_rows: dict, v3: bool = False) -> tuple[str, str]:
+    """(verdict, problem) of one ladder comparison; problem '' when the verdict is accepted. With
+    `v3` (CM) a comparison that needs a settlements row and has none in settlements_v3.tsv gets the
+    problem V3_MISSING."""
     v = (c.get("verdict") or "").strip()
     s = (settled_rows.get(c["name"]) or "").strip()
     ref = (c.get("notepad_ref") or "").strip()
+    if v3 and not s and (not v or v in VERDICTS):
+        return v, V3_MISSING
     if not v:
         return (s, "") if s else ("", "no verdict in the ladder and no settlements.tsv row")
     if PI_RE.match(v) or v == NOT_APPLICABLE:
@@ -778,15 +936,16 @@ def _rung_of(c: dict):
     return int(m.group(1)) if m else None
 
 
-def check_rung(runs, rung: int, ladder) -> list[str]:
+def check_rung(runs, rung: int, ladder,
+               composite_version: int = DEFAULT_COMPOSITE_VERSION) -> list[str]:
     lad = read_ladder(ladder)
-    rows = latest_settlements(runs)
+    rows = latest_settlements(runs, composite_version)
     comps = [c for c in lad.get("comparisons", []) if _rung_of(c) == int(rung)]
     if not comps:
         return [f"no comparison of rung {rung} in {ladder}"]
     out = []
     for c in comps:
-        v, prob = ladder_verdict(c, rows)
+        v, prob = ladder_verdict(c, rows, int(composite_version) == 3)
         if prob:
             out.append(f"{c['name']} ({prob})")
         elif not (v in SETTLED + ESCALATED or PI_RE.match(v)):
@@ -818,17 +977,18 @@ def ladder_add(ladder, name, incumbent, challenger, simpler, d14: bool, verdict:
     return entry
 
 
-def done_condition_1(runs, ladder) -> tuple[bool, list[str]]:
+def done_condition_1(runs, ladder,
+                     composite_version: int = DEFAULT_COMPOSITE_VERSION) -> tuple[bool, list[str]]:
     runs = Path(runs)
     lad = read_ladder(ladder)
-    rows = latest_settlements(runs)
+    rows = latest_settlements(runs, composite_version)
     listed = [c for c in lad.get("comparisons", []) if c.get("d14_condition_1")]
     problems = []
     for r in range(1, 7):
         if not any(_rung_of(c) == r for c in listed):
             problems.append(f"rung {r}: no listed comparison")
     for c in listed:
-        v, prob = ladder_verdict(c, rows)
+        v, prob = ladder_verdict(c, rows, int(composite_version) == 3)
         if prob:
             problems.append(f"{c['name']}: {prob}; not a settlement")
             continue
@@ -844,11 +1004,12 @@ def done_condition_1(runs, ladder) -> tuple[bool, list[str]]:
     return not problems, problems
 
 
-def done_condition_2(final, baselines, sub: str = "", *, clip: bool | None = None) -> tuple[str, list[str]]:
+def done_condition_2(final, baselines, sub: str = "", *, clip: bool | None = None,
+                     composite_version: int = DEFAULT_COMPOSITE_VERSION) -> tuple[str, list[str]]:
     """(PASS|FAIL|ESCALATE|REFUSED|MISSING, lines) on one split (sub '' = validation, 'blind')."""
     split = "blind" if sub else "val"
     try:
-        seeds = load_arm(final, sub)
+        seeds = load_arm(final, sub, composite_version=composite_version)
     except Missing as e:
         return "MISSING", [str(e)]
     base, skipped = {}, []
@@ -861,7 +1022,7 @@ def done_condition_2(final, baselines, sub: str = "", *, clip: bool | None = Non
             continue
         if not p.is_file():
             return "MISSING", [f"baseline {b}: {p} missing"]
-        base[b] = load_seed(p)
+        base[b] = load_seed(p, composite_version=composite_version)
     try:
         check_comparable(seeds + list(base.values()), split)
         check_composite_versions(seeds + list(base.values()))
@@ -925,17 +1086,20 @@ def _baselines_from(final: Path, sub: str = "") -> str:
     return ""
 
 
-def check_done(runs, ladder, final=None, baselines=None, blind_baselines=None, *, clip=None) -> dict:
+def check_done(runs, ladder, final=None, baselines=None, blind_baselines=None, *, clip=None,
+               composite_version: int = DEFAULT_COMPOSITE_VERSION) -> dict:
     runs = Path(runs)
     final = Path(final) if final else runs / "final"
-    c1, p1 = done_condition_1(runs, ladder)
+    c1, p1 = done_condition_1(runs, ladder, composite_version)
     baselines = str(baselines) if baselines else _baselines_from(final)
-    sv, lv = (done_condition_2(final, baselines, clip=clip) if baselines
+    sv, lv = (done_condition_2(final, baselines, clip=clip, composite_version=composite_version)
+              if baselines
               else ("MISSING", ["no baselines dir (no scored final seed0)"]))
     # PI ruling 24: the blind pass runs once also after a validation failure, so the blind state is
     # computed whenever blind scores exist, whatever the validation state.
     bb = str(blind_baselines) if blind_baselines else _baselines_from(final, "blind")
-    sb, lb = (done_condition_2(final, bb, "blind", clip=clip) if bb
+    sb, lb = (done_condition_2(final, bb, "blind", clip=clip, composite_version=composite_version)
+              if bb
               else ("MISSING", ["no blind pass of the final design yet"]))
     if "FAIL" in (sv, sb):
         c2 = "FAIL"
@@ -947,8 +1111,15 @@ def check_done(runs, ladder, final=None, baselines=None, blind_baselines=None, *
         c2 = "PENDING"
     else:
         c2 = sb
-    return {"condition_1": "PASS" if c1 else "FAIL", "problems_1": p1, "condition_2": c2,
-            "validation": (sv, lv), "blind": (sb, lb)}
+    # CM: under version 3 a condition 1 whose only problems are comparisons with no version-3 row
+    # yet is MISSING, not FAIL
+    st1 = ("PASS" if c1 else "MISSING" if int(composite_version) == 3 and p1
+           and all(V3_MISSING in x for x in p1) else "FAIL")
+    out = {"condition_1": st1, "problems_1": p1, "condition_2": c2,
+           "validation": (sv, lv), "blind": (sb, lb)}
+    if int(composite_version) == 3:     # the legacy (version 2) result is the pre-CM dict
+        out["composite_version"] = 3
+    return out
 
 
 # ------------------------------------------------------------------------------------------ CLI
@@ -966,20 +1137,35 @@ def main(argv=None) -> int:
                    help="read <arm>/seed<s>/<SUB>/scores.json (interface M)")
     c.add_argument("--allow-mix", action="append", default=[], choices=MIXABLE,
                    help="accept a mix of this scorer setting across the two arms")
+    c.add_argument("--composite-version", type=int, choices=COMPOSITE_VERSIONS,
+                   default=CLI_COMPOSITE_VERSION)
     t = sub.add_parser("table")
     t.add_argument("--runs", required=True)
     t.add_argument("--prefix", default="")
     t.add_argument("--sub", default="", type=sub_name)
+    t.add_argument("--composite-version", type=int, choices=COMPOSITE_VERSIONS,
+                   default=CLI_COMPOSITE_VERSION,
+                   help="correction term with an oracle reference: 3 (default, pairs with no "
+                        "duplicate-keeping side) or 2 (all headline pairs)")
+    asum = sub.add_parser("arm-summary")
+    asum.add_argument("--runs", required=True)
+    asum.add_argument("--prefix", default="")
+    asum.add_argument("--sub", default="", type=sub_name)
     r = sub.add_parser("check-rung")
     r.add_argument("--runs", required=True)
     r.add_argument("--rung", type=int, required=True)
     r.add_argument("--ladder", required=True)
+    r.add_argument("--composite-version", type=int, choices=COMPOSITE_VERSIONS,
+                   default=CLI_COMPOSITE_VERSION,
+                   help="3 (default): settlements_v3.tsv only; 2: the legacy settlements.tsv")
     d = sub.add_parser("check-done")
     d.add_argument("--runs", required=True)
     d.add_argument("--ladder", required=True)
     d.add_argument("--final")
     d.add_argument("--baselines")
     d.add_argument("--blind-baselines")
+    d.add_argument("--composite-version", type=int, choices=COMPOSITE_VERSIONS,
+                   default=CLI_COMPOSITE_VERSION)
     h = sub.add_parser("h1-status")
     h.add_argument("scores", nargs="+", help="scores.json files")
     la = sub.add_parser("ladder-add")
@@ -996,7 +1182,7 @@ def main(argv=None) -> int:
     if a.cmd == "compare":
         try:
             res = compare(a.incumbent, a.challenger, a.simpler, a.name, a.settlements, sub=a.sub,
-                          allow_mix=tuple(a.allow_mix))
+                          allow_mix=tuple(a.allow_mix), composite_version=a.composite_version)
         except Refused as e:
             print(f"REFUSED: {e}")
             return 2
@@ -1008,13 +1194,15 @@ def main(argv=None) -> int:
     if a.cmd == "table":
         terms = [f"{k}_{v}" for v in ("raw", "clipped") for k in GOALS]
         try:
-            rows = table(a.runs, a.prefix, a.sub)
+            rows = table(a.runs, a.prefix, a.sub, composite_version=a.composite_version)
         except Refused as e:
             print(f"REFUSED: {e}")
             return 2
         vers = {r["composite_version"] for r in rows if "composite_version" in r}
         # composite_version is always printed (1 or 2); the other v2 columns only with a reference
         extra = list(TABLE_V2_COLUMNS) if vers else ["composite_version"]
+        if any("correction_only" in r for r in rows):
+            extra.append("correction_only")
         done = [r for r in rows if r["state"] == "done"]
         if len({r.get("composite_version", 1) for r in done}) > 1:
             print("warning: composite versions differ across rows (version 1 rows have no oracle "
@@ -1029,6 +1217,19 @@ def main(argv=None) -> int:
                              *((str(row.get(c, 1)) if row["state"] == "done" or c in row else "")
                                if c == "composite_version" else f(row.get(c)) for c in extra)]))
         return 0
+    if a.cmd == "arm-summary":
+        try:
+            rows = arm_summary(a.runs, a.prefix, a.sub)
+        except Refused as e:
+            print(f"REFUSED: {e}")
+            return 2
+        cols = ["arm", "n_seeds", "composite_version"] + [
+            f"{q}.{k}" for q in SUMMARY_QUANTITIES for k in ("mean", "range", "n_defined")]
+        print("\t".join(cols))
+        f = lambda x: "" if x is None else (str(x) if isinstance(x, (int, str)) else f"{x:.4f}")  # noqa: E731
+        for r in rows:
+            print("\t".join(f(r[c]) for c in cols))
+        return 0
     if a.cmd == "h1-status":
         print("\t".join(("scores",) + H1_COLUMNS))
         for p in a.scores:
@@ -1039,7 +1240,12 @@ def main(argv=None) -> int:
                                               for c in H1_COLUMNS[1:]]))
         return 0
     if a.cmd == "check-rung":
-        missing = check_rung(a.runs, a.rung, a.ladder)
+        if a.composite_version == 3:     # version 2: the pre-CM output, line for line
+            print(f"composite_version: {a.composite_version}")
+        missing = check_rung(a.runs, a.rung, a.ladder, a.composite_version)
+        if missing and a.composite_version == 3 and all(V3_MISSING in m for m in missing):
+            print(f"rung {a.rung}: MISSING: {', '.join(missing)}")
+            return 1
         if missing:
             print(f"rung {a.rung}: not settled: {', '.join(missing)}")
             return 1
@@ -1047,10 +1253,13 @@ def main(argv=None) -> int:
         return 0
     if a.cmd == "check-done":
         try:
-            res = check_done(a.runs, a.ladder, a.final, a.baselines, a.blind_baselines)
+            res = check_done(a.runs, a.ladder, a.final, a.baselines, a.blind_baselines,
+                             composite_version=a.composite_version)
         except Refused as e:
             print(f"REFUSED: {e}")
             return 2
+        if "composite_version" in res:
+            print(f"composite_version: {res['composite_version']}")
         print(f"D14 condition 1: {res['condition_1']}")
         for p in res["problems_1"]:
             print(f"  {p}")
