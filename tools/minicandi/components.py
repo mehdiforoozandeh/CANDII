@@ -58,7 +58,7 @@ INPUT_ONLY = ("local_ratio", "quantile")
 #: input-only `soft_clip`
 OFFSET_ADD_BACK = ("offset",) + INPUT_ONLY + ("soft_clip",)
 HEADS = ("nb", "nb_shared_size")
-COVARIATE_EMBEDDINGS = ("full", "numeric_only")
+COVARIATE_EMBEDDINGS = ("full", "numeric_only", "numeric_per_value")
 #: reference depth D0 = 2**REF_LOG2_DEPTH reads; size factor s = 2**(log2_depth - REF_LOG2_DEPTH)
 REF_LOG2_DEPTH = 24.0
 EPS = 1.0
@@ -197,7 +197,7 @@ class CovariateInjector(nn.Module):
             h' = h + gate * ((1 + scale) * LayerNorm(h) + shift)   (identity at initialisation,
             the DiT adaLN-Zero form; LayerNorm without affine parameters)
 
-    `embedding` (`full` | `numeric_only`) and `null_vector` (built for covariate dropout) are
+    `embedding` (`full` | `numeric_only` | `numeric_per_value`) and `null_vector` (built for covariate dropout) are
     passed to `CovariateEmbedding`; see `component_kwargs`.
 
     `c` must broadcast against h's leading dims after embedding (e.g. c [B, 1, A, K] against
@@ -213,7 +213,7 @@ class CovariateInjector(nn.Module):
             k_in, d_cov,
             numeric_only=_check(embedding, COVARIATE_EMBEDDINGS, "covariate_embedding")
             == "numeric_only",
-            null_vector=null_vector)
+            null_vector=null_vector, per_value=embedding == "numeric_per_value")
         if mode == "concat":
             self.proj = nn.Linear(d_model + d_cov, d_model)
         elif mode == "film":
