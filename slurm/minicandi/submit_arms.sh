@@ -62,11 +62,9 @@
 #   $PRED_STORE_ROOT/<runs root name>/<run name>/same_view/seed<s>[/<SUB>], apart from the store
 #   without the switch (the two hold different request sets). A seed already SCORED in a score dir
 #   is skipped as before: to get the term for it, score into a new SCORE_SUBDIR (e.g. p16_sv).
-# Store check (CM): a store complete by its files whose STORE.json records `requests_sha256` is
-#   also checked with `predict_store.py check` against the request set this run and switch make
-#   now; a store of another request set is skipped with the reason (remove it, or use another
-#   PRED_STORE_ROOT), never handed to a metrics job. When the check cannot run (exit other than
-#   0 or 1, e.g. no torch on the login node) the store counts as complete, with a note.
+#   The path alone separates the two: a complete store under the same_view path is reused, the
+#   store without the switch is never used for a same-view scoring. The metrics job refuses a
+#   store whose requests_sha256 differs from its own request set (the safety net).
 #
 # Idempotent. Per (arm, seed): skip when <run dir>/SCORED exists (training only: DONE), or when a
 # queued or running job of this user is named mc_<run dir name>_s<seed>; when DONE exists but not
@@ -136,21 +134,6 @@ except Exception:
     sys.exit(1)
 sys.exit(0 if all((d / f"PREDICTED_{i}of{n}.json").is_file() for i in range(n)) else 1)
 PYEOF
-}
-# CM: does a complete store hold the request set of this run and switch? 0 yes (or not checkable:
-# no requests_sha256 in STORE.json, or the check cannot run), 1 another request set
-store_matches() {
-  local st="$1" run="$2" rc=0
-  grep -q '"requests_sha256"' "$st/STORE.json" 2> /dev/null || return 0
-  local args=(check --run "$run" --evalset "$EVALSET" --pred-store "$st")
-  [ "$SV" != 1 ] || args+=(--score-same-view)
-  "$PY" "$KIT/tools/onion_eval/predict_store.py" "${args[@]}" > /dev/null 2>&1 || rc=$?
-  case "$rc" in
-    0) return 0 ;;
-    1) return 1 ;;
-    *) echo "note: request hash of the store $st not checked (predict_store.py check exit $rc)" >&2
-       return 0 ;;
-  esac
 }
 read -r -a SCORE_EXTRA <<< "${EXTRA_SCORE_ARGS:-}"
 [ "$#" -gt 0 ] || read -r -a ARGS_ARMS <<< "$("$PY" "$LADDER" arms --rung "$RUNG")"
@@ -261,10 +244,6 @@ for spec in "${ARGS_ARMS[@]}"; do
       RNAME="$(basename "$ARMDIR")"
       STORE="$PS_ROOT/$(basename "$ROOT")/$RNAME${SV_DIR}/seed$SEED${SUB:+/$SUB}"
       COMPLETE=0; store_complete "$STORE" && COMPLETE=1
-      if [ "$COMPLETE" = 1 ] && ! store_matches "$STORE" "$RUN"; then
-        echo "skip $JOB: the store $STORE holds another request set (requests_sha256 differs from this run and SCORE_SAME_VIEW=$SV); remove it or use another PRED_STORE_ROOT"
-        n_skip=$((n_skip + 1)); continue
-      fi
       if [ "$MONLY" = 1 ] && [ "${#PRED_IDS[@]}" = 0 ] && [ "$COMPLETE" != 1 ]; then
         echo "skip $JOB: METRICS_ONLY and the store $STORE is not complete (set PRED_JOBS)"
         n_skip=$((n_skip + 1)); continue

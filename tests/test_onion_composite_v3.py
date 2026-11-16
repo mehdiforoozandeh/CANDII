@@ -136,20 +136,31 @@ def test_v2_unchanged_when_asked_for(env):
         R.load_seed(p, composite_version=4)
 
 
-def test_v3_undefined_when_an_assay_with_such_pairs_is_left_out(env, tmp_path):
+def test_v3_expected_assays_are_the_scorable_ones_with_such_pairs(env, tmp_path):
     p0 = _p(env)
     have = OF.seed_terms(p0, json.loads(p0.read_text()))["evalset_assays_no_nodedup_side"]
     drop = have[0]
 
-    def edit(s):
+    def unscorable(s):                   # not correction-scorable: simply not expected
         s["scorable"]["correction"] = [a for a in s["scorable"]["correction"] if a != drop]
-    p = _runs(env, tmp_path, 1, edit=edit) / "rung1_base" / "seed0" / "scores.json"
-    v3 = R.load_seed(p, composite_version=3)
+    p = _runs(env, tmp_path / "a", 1, edit=unscorable) / "rung1_base" / "seed0" / "scores.json"
+    v3 = R.load_seed(p)
+    assert v3["goals"]["correction"] is not None and v3["goal_reasons"]["correction"] == ""
+    assert v3["correction_n_assays"] == v3["correction_n_assays_expected"] == len(have) - 1
+    # scorable but with no per-pair record: undefined, with the reason
+    p = _runs(env, tmp_path / "b", 1) / "rung1_base" / "seed0" / "scores.json"
+    z = dict(np.load(p.parent / "pairs_per_region.npz"))
+    o = OF.load_oracle(env["bdir"] / "oracle_floor" / "seed0")
+    nnd = {str(k) for k, a, n, r in zip(o["pair_ids"], o["assay"], o["nodedup_side"], o["rung"])
+           if str(a) == drop and n == 0 and str(r) == ""}
+    keep = np.array([str(k) not in nnd for k in z["pair_ids"]])
+    np.savez_compressed(p.parent / "pairs_per_region.npz",
+                        **{k: (v[keep] if v.ndim and v.shape[0] == keep.size else v) for k, v in z.items()})
+    v3 = R.load_seed(p)
     assert v3["goals"]["correction"] is None
     why = v3["goal_reasons"]["correction"]
-    assert drop in why and f"of the {len(have)} assays" in why
-    assert v3["correction_n_assays"] == len(have) - 1
-    rows = R.table(tmp_path / "runs")
+    assert drop in why and "no per-pair record" in why
+    rows = R.table(tmp_path / "b" / "runs")
     assert rows[0]["composite_v3"] is None and rows[0]["composite"] is None
 
 
@@ -199,48 +210,103 @@ def test_version2_score_reads_under_the_v3_table_and_summary(env, tmp_path, caps
     assert float(row[h.index("composite_v2.mean")]) == pytest.approx(sum(c2) / 3, abs=1e-4)
 
 
-def test_compare_and_check_done_under_v3(env, tmp_path, capsys):
+def test_compare_and_check_done_under_v3_use_their_own_file(env, tmp_path, capsys):
     runs = _runs(env, tmp_path, arm="rung1_base")
     _runs(env, tmp_path, arm="rung1_better", shift=0.2)
-    st = runs / "settlements.tsv"
-    res = R.compare(runs / "rung1_base", runs / "rung1_better", "none", name="c1", settlements=st)
-    assert res["composite_version"] == 3 and res["verdict"] == "CHALLENGER", res["reason"]
-    rows = list(csv.DictReader(open(st), delimiter="\t"))
-    assert rows[-1]["composite_version"] == "3"
-    # a version 2 compare row of the same comparison, written later, is never read by version 3
-    R.compare(runs / "rung1_base", runs / "rung1_better", "incumbent", name="c1", settlements=st,
-              composite_version=2)
-    rows = list(csv.DictReader(open(st), delimiter="\t"))
-    assert [r["composite_version"] for r in rows] == ["3", "2"]
-    assert R.latest_settlements(runs) == {"c1": "CHALLENGER"}
-    assert R.latest_settlements(runs, 2)["c1"] in R.VERDICTS
-    # check-done: the final design and the baselines are read as version 3 with the reference
-    shutil.copytree(runs / "rung1_better", runs / "final")
+    legacy = runs / "settlements.tsv"
+    legacy.write_text("comparison\tverdict\ttime\nc1\tINCUMBENT\tt0\n")
+    before = legacy.read_bytes()
     lad = tmp_path / "ladder.json"
     lad.write_text(json.dumps({"comparisons": [
         {"name": "c1", "incumbent": "rung1_base", "challenger": "rung1_better", "simpler": "none",
          "d14_condition_1": True, "verdict": "", "notepad_ref": ""}]}))
+    # no version-3 row yet: MISSING, never FAIL and never "does not match (none)"
+    assert R.check_rung(runs, 1, lad) == [f"c1 ({R.V3_MISSING})"]
+    assert R.main(["check-rung", "--runs", str(runs), "--rung", "1", "--ladder", str(lad)]) == 1
+    assert f"MISSING: c1 ({R.V3_MISSING})" in capsys.readouterr().out
+    ok, probs = R.done_condition_1(runs, lad)
+    assert not ok and all(R.V3_MISSING in x for x in probs if x.startswith("c1"))
+    res = R.compare(runs / "rung1_base", runs / "rung1_better", "none", name="c1")
+    assert res["composite_version"] == 3 and res["verdict"] == "CHALLENGER", res["reason"]
+    v3f = runs / "settlements_v3.tsv"
+    rows = list(csv.DictReader(open(v3f), delimiter="\t"))
+    assert list(rows[0]) == list(R.SETTLEMENT_COLUMNS_V3) and rows[0]["composite_version"] == "3"
+    assert legacy.read_bytes() == before                     # the legacy file is never touched
+    assert R.latest_settlements(runs) == {"c1": "CHALLENGER"}
+    assert R.latest_settlements(runs, 2) == {"c1": "INCUMBENT"}
+    assert R.check_rung(runs, 1, lad) == []
+    assert R.main(["check-rung", "--runs", str(runs), "--rung", "1", "--ladder", str(lad)]) == 0
+    assert "composite_version: 3" in capsys.readouterr().out
+    shutil.copytree(runs / "rung1_better", runs / "final")
     out = R.check_done(runs, lad, baselines=env["bdir"])
     assert out["composite_version"] == 3
     assert out["validation"][0] != "REFUSED", out["validation"]
     assert any("composite_version: 3" in ln for ln in out["validation"][1])
-    assert R.check_rung(runs, 1, lad) == []          # the version 3 row settles it
-    assert R.main(["check-rung", "--runs", str(runs), "--rung", "1", "--ladder", str(lad)]) == 0
-    assert "composite_version: 3" in capsys.readouterr().out
+    assert "c1" not in " ".join(out["problems_1"])
 
 
-def test_old_settlements_file_gets_the_column_and_reads_as_version_2(tmp_path):
-    p = tmp_path / "runs" / "settlements.tsv"
-    p.parent.mkdir()
-    old = [c for c in R.SETTLEMENT_COLUMNS if c != "composite_version"]
-    p.write_text("\t".join(old) + "\n" + "\t".join(["c", "a", "b", "none", "", "", "", "", "",
-                                                       "INCUMBENT", "t1", "", "", ""]) + "\n")
-    R.append_settlement(p, {"comparison": "c", "verdict": "CHALLENGER", "time": "t0",
-                            "composite_version": "3"})
-    rows = list(csv.DictReader(open(p), delimiter="\t"))
-    assert [R.row_version(r) for r in rows] == [2, 3] and None not in rows[0]
-    assert R.latest_settlements(tmp_path / "runs", 2) == {"c": "INCUMBENT"}
-    assert R.latest_settlements(tmp_path / "runs", 3) == {"c": "CHALLENGER"}
+def test_v3_compare_refuses_an_arm_without_a_reference_and_writes_nothing(tmp_path):
+    from tests import test_onion_eval_select_rule as T
+    inc = T.make_arm(tmp_path, "rung1_base", T.BASE)
+    ch = T.make_arm(tmp_path, "rung1_x", T.shift(T.BASE, di=0.1))
+    with pytest.raises(R.Refused, match="oracle-floor reference"):
+        R.compare(inc, ch, "none")
+    assert not list(tmp_path.glob("settlements*.tsv"))
+    assert R.main(["compare", "--incumbent", str(inc), "--challenger", str(ch), "--simpler",
+                   "none"]) == 2
+    assert not list(tmp_path.glob("settlements*.tsv"))
+
+
+LEGACY_RUN = """
+import json, sys
+from pathlib import Path
+from onion_eval import select_rule as R
+runs, lad, bl, extra = Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4:]
+inc, ch = runs / "rung1_base", runs / "rung1_x"
+res = R.compare(inc, ch, "none", name="r1_dna", settlements=runs / "settlements.tsv",
+                **({"composite_version": 2} if extra else {}))
+print("compare", res["verdict"], res.get("composite_version"))
+R.main(["check-rung", "--runs", str(runs), "--rung", "1", "--ladder", lad] + extra)
+R.main(["check-done", "--runs", str(runs), "--ladder", lad, "--baselines", bl] + extra)
+"""
+
+
+@pytest.mark.parametrize("old_cols", [11, 14])
+def test_legacy_settlements_identical_to_the_base_tree(tmp_path, old_cols):
+    """Foreman item 1: with --composite-version 2, compare + check-rung + check-done on a legacy
+    settlements.tsv (the old 11-column header, or the 14 columns with the clip ones) write and
+    print exactly what the 52bfde4 code does."""
+    from tests import test_onion_eval_select_rule as T
+    old = tmp_path / "old"
+    if not _base_tree(old):
+        pytest.skip(f"git archive {BASE_COMMIT} not available (a kit without .git)")
+    outs = {}
+    for tree, name, extra in ((REPO, "new", ["--composite-version", "2"]), (old, "old", [])):
+        root = tmp_path / name
+        runs = root / "runs"
+        lad = T._full_ladder(root, runs)
+        T.make_arm(runs, "rung1_x", T.shift(T.BASE, di=0.1))
+        T.make_arm(runs, "final", T.BASE)
+        bl = root / "baselines"
+        T._baselines(bl, T.GOOD_BASELINES)
+        cols = list(R.SETTLEMENT_COLUMNS[:old_cols])
+        st = runs / "settlements.tsv"
+        st.write_text("\t".join(cols) + "\n" + "".join(
+            "\t".join([f"r{r}_dna", f"rung{r}_base", f"rung{r}_dna_off", "challenger", "", "", "", "",
+                       "", "INCUMBENT", "2026-11-11T00:00:00+00:00"] + [""] * (old_cols - 11)) + "\n"
+            for r in range(1, 7)))
+        e = dict(os.environ, PYTHONPATH=os.pathsep.join([str(tree / "src"), str(tree / "tools")]))
+        p = subprocess.run([sys.executable, "-c", LEGACY_RUN, str(runs), str(lad), str(bl), *extra],
+                           env=e, capture_output=True, text=True, timeout=600)
+        assert p.returncode == 0, p.stderr[-2000:]
+        text = st.read_text().splitlines()
+        # the time of the appended row is the clock's: mask it
+        last = text[-1].split("\t")
+        last[10] = "<time>"
+        outs[name] = (p.stdout.replace(str(root), "<root>"), text[:-1] + ["\t".join(last)],
+                      sorted(x.name for x in runs.glob("**/settlements*.tsv")))
+    assert outs["new"] == outs["old"]
+    assert outs["new"][2] == ["settlements.tsv"]
 
 
 def _base_tree(dst: Path) -> bool:

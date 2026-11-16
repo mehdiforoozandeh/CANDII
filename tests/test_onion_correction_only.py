@@ -307,46 +307,22 @@ def test_submit_never_leaks_the_shell_value_into_jobs(sub_env):
     assert log and all(" SV=1 " in ln for ln in log)
 
 
-def _complete_store(d: Path, sha="abc"):
+def _complete_store(d: Path):
     d.mkdir(parents=True)
-    (d / "STORE.json").write_text(json.dumps({"format": 1, "n_shards": 1, "requests_sha256": sha}))
+    (d / "STORE.json").write_text(json.dumps({"format": 1, "n_shards": 1}))
     (d / "PREDICTED_0of1.json").write_text("{}")
 
 
-def _py_stub(tmp, rc: int) -> str:
-    """A $PYTHON whose `predict_store.py check` exits rc (the real interpreter otherwise)."""
-    p = tmp / "bin" / "pystub"
-    p.write_text(f'#!/bin/bash\nif [ "$2" = check ]; then exit {rc}; fi\nexec {sys.executable} "$@"\n')
-    p.chmod(0o755)
-    return str(p)
-
-
-def test_store_of_another_request_set_is_skipped_and_a_matching_one_is_used(sub_env):
+def test_same_view_store_is_apart_from_the_plain_store(sub_env):
+    """The path alone decides: a complete plain store is never used for a same-view scoring, and a
+    complete store under the same_view path is reused."""
     tmp, e = sub_env
-    st = tmp / "ps" / "runs" / "rung1_base" / "seed0"
-    _complete_store(st)
-    out = _submit(tmp, e, DRY_RUN="1", PYTHON=_py_stub(tmp, 1))
-    assert "holds another request set" in out and "predict.sh" not in out and "metrics" not in out.split("skip")[0]
-    out = _submit(tmp, e, DRY_RUN="1", PYTHON=_py_stub(tmp, 0))
+    _complete_store(tmp / "ps" / "runs" / "rung1_base" / "seed0")
+    out = _submit(tmp, e, DRY_RUN="1")
     assert "is complete; no predict job" in out and "predict.sh" not in out
-    # a kept store made without the switch is not the switch's store: new predict jobs
-    out = _submit(tmp, e, DRY_RUN="1", SCORE_SAME_VIEW="1", PYTHON=_py_stub(tmp, 1))
-    assert "predict.sh" in out and "/same_view/seed0" in out
-
-
-def test_store_check_command_compares_the_request_hash(env, tmp_path):
-    """predict_store.py check on a saved run: 0 for its own store, 1 with the switch flipped."""
-    from minicandi import registry as R
-    from onion_eval import predict_store as P
-    m, cfg = _model()
-    run = tmp_path / "run"
-    run.mkdir()
-    torch.save({"state_dict": m.state_dict(), "config": cfg, "param_count": m.param_count(),
-                "windows_seen": 0, "tables_sha256": env["sha"], "git_sha": "test"}, run / R.CKPT_NAME)
-    sc = S.Scorer(env["evalset"], main="model", model=m, config=cfg, run_tables_sha256=env["sha"], **KW)
-    st = tmp_path / "store"
-    st.mkdir()
-    (st / "STORE.json").write_text(json.dumps({"requests_sha256": P.requests_sha256(P.requests(sc))}))
-    args = ["--run", str(run), "--evalset", str(env["evalset"]), "--pred-store", str(st)]
-    assert P.check(args) == 0
-    assert P.check(args + ["--score-same-view"]) == 1
+    out = _submit(tmp, e, DRY_RUN="1", SCORE_SAME_VIEW="1")
+    assert "predict.sh" in out and "/rung1_base/same_view/seed0" in out
+    _complete_store(tmp / "ps" / "runs" / "rung1_base" / "same_view" / "seed0")
+    out = _submit(tmp, e, DRY_RUN="1", SCORE_SAME_VIEW="1")
+    assert "is complete; no predict job" in out and "predict.sh" not in out
+    assert "predict_store.py" not in SUBMIT.read_text().replace("score.py and predict_store.py", "")

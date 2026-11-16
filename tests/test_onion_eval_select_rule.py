@@ -14,6 +14,16 @@ if str(REPO / "tools") not in sys.path:
 
 from onion_eval import select_rule as R  # noqa: E402
 
+# CM: these arms have no oracle-floor reference; the select rule's default is composite version 3
+# (which needs one), so every call here asks for the legacy version 2 path explicitly
+from functools import partial as _partial  # noqa: E402
+compare_v2 = _partial(R.compare, composite_version=2)
+check_done_v2 = _partial(R.check_done, composite_version=2)
+check_rung_v2 = _partial(R.check_rung, composite_version=2)
+done_condition_1_v2 = _partial(R.done_condition_1, composite_version=2)
+latest_settlements_v2 = _partial(R.latest_settlements, composite_version=2)
+
+
 
 def write_seed(d: Path, imp, cor, unc, leak=True, sub="", simpler=None, done=True, **meta):
     """A hand-built scores.json with every field the rule checks; `meta` overrides top-level keys
@@ -65,7 +75,7 @@ def shift(goals, di=0.0, dc=0.0, du=0.0):
 
 
 def run_compare(tmp_path, inc, ch, simpler):
-    return R.compare(inc, ch, simpler, settlements=tmp_path / "settlements.tsv")
+    return compare_v2(inc, ch, simpler, settlements=tmp_path / "settlements.tsv")
 
 
 def test_clear_win(tmp_path):
@@ -97,7 +107,7 @@ def test_tie_uses_simpler(tmp_path, simpler, verdict):
 def test_tie_escalate_prints(tmp_path, capsys):
     inc = make_arm(tmp_path, "rung1_base", BASE)
     ch = make_arm(tmp_path, "rung1_x", shift(BASE, di=0.004))
-    rc = R.main(["compare", "--incumbent", str(inc), "--challenger", str(ch), "--simpler", "none",
+    rc = R.main(["compare", "--composite-version", "2", "--incumbent", str(inc), "--challenger", str(ch), "--simpler", "none",
                  "--settlements", str(tmp_path / "s.tsv")])
     out = capsys.readouterr().out
     assert rc == 0 and "TIE_ASK_PI" in out and "ESCALATE:" in out
@@ -155,7 +165,7 @@ def test_missing_guardrail_fails_closed(tmp_path):
 def test_undefined_metric_escalates(tmp_path, capsys):
     inc = make_arm(tmp_path, "rung1_base", BASE)
     ch = make_arm(tmp_path, "rung1_x", [(0.4, None, 0.5), (0.4, 0.4, 0.5), (0.4, 0.4, 0.5)])
-    rc = R.main(["compare", "--incumbent", str(inc), "--challenger", str(ch), "--simpler",
+    rc = R.main(["compare", "--composite-version", "2", "--incumbent", str(inc), "--challenger", str(ch), "--simpler",
                  "challenger", "--settlements", str(tmp_path / "s.tsv")])
     out = capsys.readouterr().out
     assert rc == 0 and "RULE_NOT_APPLICABLE_ASK_PI" in out and "ESCALATE:" in out
@@ -165,7 +175,7 @@ def test_undefined_metric_escalates(tmp_path, capsys):
 def test_fewer_than_three_seeds_refused(tmp_path, capsys):
     inc = make_arm(tmp_path, "rung1_base", BASE)
     ch = make_arm(tmp_path, "rung1_x", shift(BASE, di=0.3)[:2])
-    rc = R.main(["compare", "--incumbent", str(inc), "--challenger", str(ch), "--simpler",
+    rc = R.main(["compare", "--composite-version", "2", "--incumbent", str(inc), "--challenger", str(ch), "--simpler",
                  "incumbent", "--settlements", str(tmp_path / "s.tsv")])
     assert rc == 2 and "REFUSED" in capsys.readouterr().out
     assert not (tmp_path / "s.tsv").exists()
@@ -177,10 +187,10 @@ def test_simpler_read_from_config(tmp_path):
     inc = make_arm(tmp_path, "rung1_base", BASE)
     ch = make_arm(tmp_path, "rung1_dna_off", shift(BASE, di=0.002), simpler=True)
     assert R.simpler_from_config(ch) == "challenger"
-    res = R.compare(inc, ch, None, settlements=tmp_path / "s.tsv")
+    res = compare_v2(inc, ch, None, settlements=tmp_path / "s.tsv")
     assert res["verdict"] == "CHALLENGER_AS_SIMPLER"
     ch2 = make_arm(tmp_path, "rung1_tokens", shift(BASE, di=0.002), simpler=False)
-    assert R.compare(inc, ch2, None, settlements=tmp_path / "s.tsv")["verdict"] == "INCUMBENT"
+    assert compare_v2(inc, ch2, None, settlements=tmp_path / "s.tsv")["verdict"] == "INCUMBENT"
 
 
 def test_table_states(tmp_path, capsys):
@@ -219,14 +229,13 @@ def test_check_rung(tmp_path):
         {"name": "r1_tok", "incumbent": "rung1_base", "challenger": "rung1_tokens",
          "simpler": "incumbent", "d14_condition_1": True, "verdict": ""}])
     runs.mkdir()
-    missing = R.check_rung(runs, 1, lad)
+    missing = check_rung_v2(runs, 1, lad)
     assert [m.split(" ")[0] for m in missing] == ["r1_dna", "r1_tok"]   # no settlements row yet
     with open(runs / "settlements.tsv", "w") as fh:
         fh.write("\t".join(R.SETTLEMENT_COLUMNS) + "\n")
         fh.write("\t".join(["r1_tok", "a", "b", "c", "", "", "", "", "", "INCUMBENT", "t1"]) + "\n")
         fh.write("\t".join(["r1_dna", "a", "b", "c", "", "", "", "", "", "TIE_ASK_PI", "t1"]) + "\n")
-    # CM: rows without composite_version are version 2; check_rung reads version 3 by default
-    assert R.check_rung(runs, 1, lad, composite_version=2) == []
+    assert check_rung_v2(runs, 1, lad) == []
 
 
 def _full_ladder(tmp_path, runs, verdict="INCUMBENT", final_goals=None, base_goals=None):
@@ -265,18 +274,18 @@ def test_check_done_both_conditions(tmp_path, capsys):
     make_arm(runs, "final", BASE)
     bl = tmp_path / "baselines"
     _baselines(bl, GOOD_BASELINES)
-    res = R.check_done(runs, lad, baselines=bl, composite_version=2)   # CM: rows without the field
+    res = check_done_v2(runs, lad, baselines=bl)
     assert res["condition_1"] == "PASS"
     assert res["validation"][0] == "PASS" and res["condition_2"] == "PENDING"   # blind not scored
     for k in range(3):
         write_seed(runs / "final" / f"seed{k}", *BASE[k], sub="blind")
     _baselines(bl, GOOD_BASELINES, sub="blind")
-    res = R.check_done(runs, lad, baselines=bl, composite_version=2)
+    res = check_done_v2(runs, lad, baselines=bl)
     assert res["condition_2"] == "PENDING"      # blind baselines default beside the blind evalset
-    res = R.check_done(runs, lad, baselines=bl, blind_baselines=bl, composite_version=2)
+    res = check_done_v2(runs, lad, baselines=bl, blind_baselines=bl)
     assert res["condition_2"] == "PASS"
-    rc = R.main(["check-done", "--runs", str(runs), "--ladder", str(lad), "--baselines", str(bl),
-                 "--blind-baselines", str(bl), "--composite-version", "2"])
+    rc = R.main(["check-done", "--composite-version", "2", "--runs", str(runs), "--ladder", str(lad), "--baselines", str(bl),
+                 "--blind-baselines", str(bl)])
     out = capsys.readouterr().out
     assert rc == 0 and "D14 condition 1: PASS" in out and "D14 condition 2: PASS" in out
     assert "margin" in out
@@ -289,7 +298,7 @@ def test_check_done_condition_2_fails_on_one_goal(tmp_path):
     bl = tmp_path / "baselines"
     # position average's uncertainty 0.49: final 0.503 - 0.49 = 0.013 < 2 x spread 0.01 x 2 = 0.02
     _baselines(bl, dict(GOOD_BASELINES, position_average=(0.20, 0.15, 0.49)))
-    res = R.check_done(runs, lad, baselines=bl)
+    res = check_done_v2(runs, lad, baselines=bl)
     assert res["validation"][0] == "FAIL" and res["condition_2"] == "FAIL"
     assert any("uncertainty" in ln and "does not beat" in ln for ln in res["validation"][1])
 
@@ -297,20 +306,20 @@ def test_check_done_condition_2_fails_on_one_goal(tmp_path):
 def test_check_done_condition_1_fails(tmp_path):
     runs = tmp_path / "runs"
     lad = _full_ladder(tmp_path, runs, verdict="TIE_ASK_PI")           # escalated, not settled
-    res = R.check_done(runs, lad, baselines=tmp_path / "none")
+    res = check_done_v2(runs, lad, baselines=tmp_path / "none")
     assert res["condition_1"] == "FAIL"
     assert any("not a settlement" in p for p in res["problems_1"])
     lad2 = _full_ladder(tmp_path, runs, verdict="PI_INCUMBENT")
-    assert R.check_done(runs, lad2, baselines=tmp_path / "none")["condition_1"] == "PASS"
+    assert check_done_v2(runs, lad2, baselines=tmp_path / "none")["condition_1"] == "PASS"
     # a listed arm with 2 seeds fails condition 1
     import shutil
     shutil.rmtree(runs / "rung3_dna_off" / "seed2")
-    res = R.check_done(runs, lad2, baselines=tmp_path / "none")
+    res = check_done_v2(runs, lad2, baselines=tmp_path / "none")
     assert res["condition_1"] == "FAIL" and any("rung3_dna_off" in p for p in res["problems_1"])
     # a missing rung fails condition 1
     lad3 = _ladder(tmp_path, [c for c in json.loads(lad2.read_text())["comparisons"]
                               if c["incumbent"] != "rung6_base"])
-    assert any("rung 6" in p for p in R.check_done(runs, lad3, baselines=tmp_path / "x")["problems_1"])
+    assert any("rung 6" in p for p in check_done_v2(runs, lad3, baselines=tmp_path / "x")["problems_1"])
 
 
 def test_ladder_add_replaces_by_name(tmp_path):
@@ -337,9 +346,9 @@ def test_f1_scores_from_different_evalsets_or_splits_refused(tmp_path, capsys):
                   split="blind", regime="accessibility_only")
     s = tmp_path / "s.tsv"
     with pytest.raises(R.Refused, match="not comparable"):
-        R.compare(inc, ch, "none", settlements=s)
+        compare_v2(inc, ch, "none", settlements=s)
     assert not s.exists()
-    rc = R.main(["compare", "--incumbent", str(inc), "--challenger", str(ch), "--simpler", "none",
+    rc = R.main(["compare", "--composite-version", "2", "--incumbent", str(inc), "--challenger", str(ch), "--simpler", "none",
                  "--settlements", str(s)])
     assert rc == 2 and "REFUSED" in capsys.readouterr().out and not s.exists()
     # each field on its own
@@ -372,7 +381,7 @@ def test_f11_pilot_scores_without_noise_floor_refused(tmp_path):
     inc = make_arm(tmp_path, "rung1_base", BASE, noise_floor="none_pilot")
     ch = make_arm(tmp_path, "rung1_x", shift(BASE, di=0.10), noise_floor="none_pilot")
     with pytest.raises(R.Refused, match="no-halves"):
-        R.compare(inc, ch, "none", settlements=tmp_path / "s.tsv")
+        compare_v2(inc, ch, "none", settlements=tmp_path / "s.tsv")
 
 
 def test_f4_goal_term_out_of_band_escalates(tmp_path):
@@ -381,11 +390,11 @@ def test_f4_goal_term_out_of_band_escalates(tmp_path):
     jit = [(0.0, 0.0, 0.0), (0.01, 0.01, 0.01), (0.0, 0.01, 0.0)]
     inc = make_arm(tmp_path, "rung1_base", [(0.5 + a, 0.5 + b, 0.5 + c) for a, b, c in jit])
     ch = make_arm(tmp_path, "rung1_x", [(0.9 + a, 0.9 + b, -20 + c) for a, b, c in jit])
-    res = R.compare(inc, ch, "challenger", settlements=tmp_path / "s.tsv", clip=False)
+    res = compare_v2(inc, ch, "challenger", settlements=tmp_path / "s.tsv", clip=False)
     assert res["verdict"] == "RULE_NOT_APPLICABLE_ASK_PI"
     assert "uncertainty term = -20" in res["reason"] and "sanity band" in res["reason"]
     ch2 = make_arm(tmp_path, "rung1_y", [(0.5 + a, 0.5 + b, 5.0 + c) for a, b, c in jit])
-    res2 = R.compare(inc, ch2, "challenger", settlements=tmp_path / "s.tsv", clip=False)
+    res2 = compare_v2(inc, ch2, "challenger", settlements=tmp_path / "s.tsv", clip=False)
     assert res2["verdict"] == "RULE_NOT_APPLICABLE_ASK_PI" and "uncertainty term = 5" in res2["reason"]
     assert R.CLIP_GOAL_TERMS is True and R.GOAL_BAND == (-1.0, 1.5)       # ruling 18: clip by default
 
@@ -430,7 +439,7 @@ def test_f5_zero_seed_spread_refused(tmp_path, capsys):
     inc = make_arm(tmp_path, "rung1_base", [(0.3, 0.4, 0.5)] * 3)
     ch = make_arm(tmp_path, "rung1_x", [(0.3 + 1e-9, 0.4, 0.5)] * 3)
     s = tmp_path / "s.tsv"
-    rc = R.main(["compare", "--incumbent", str(inc), "--challenger", str(ch), "--simpler", "none",
+    rc = R.main(["compare", "--composite-version", "2", "--incumbent", str(inc), "--challenger", str(ch), "--simpler", "none",
                  "--settlements", str(s)])
     out = capsys.readouterr().out
     assert rc == 2 and "REFUSED" in out and "do not vary" in out and not s.exists()
@@ -457,13 +466,13 @@ def test_f7_missing_or_undefined_is_not_fail(tmp_path):
     runs = tmp_path / "runs"
     lad = _full_ladder(tmp_path, runs)
     make_arm(runs, "final", BASE)
-    res = R.check_done(runs, lad, baselines=tmp_path / "missing")
+    res = check_done_v2(runs, lad, baselines=tmp_path / "missing")
     assert res["validation"][0] == "MISSING" and res["condition_2"] == "MISSING"
     # an undefined lead metric of the final design escalates, it does not fail
     make_arm(runs, "final_u", [(0.3, None, 0.5), (0.31, 0.4, 0.5), (0.3, 0.41, 0.51)])
     bl = tmp_path / "baselines"
     _baselines(bl, GOOD_BASELINES)
-    res = R.check_done(runs, lad, final=runs / "final_u", baselines=bl)
+    res = check_done_v2(runs, lad, final=runs / "final_u", baselines=bl)
     assert res["validation"][0] == "ESCALATE" and res["condition_2"] == "ESCALATE"
     # every baseline undefined on a goal escalates too
     bl2 = tmp_path / "bl2"
@@ -486,13 +495,13 @@ def test_f8_hand_written_verdicts_need_settlements_or_pi_reference(tmp_path):
         make_arm(runs, f"rung{r}_dna_off", BASE)
         R.ladder_add(lad, f"r{r}", f"rung{r}_base", f"rung{r}_dna_off", "challenger", True,
                      "CHALLENGER")
-    ok, probs = R.done_condition_1(runs, lad, composite_version=2)
+    ok, probs = done_condition_1_v2(runs, lad)
     assert not ok and len(probs) == 6 and all("does not match" in p for p in probs)
     # a matching settlements row makes them settlements
     for r in range(1, 7):
         R.append_settlement(runs / "settlements.tsv", {"comparison": f"r{r}", "verdict": "CHALLENGER",
                                                        "time": "2026-11-11T00:00:00+00:00"})
-    assert R.done_condition_1(runs, lad, composite_version=2) == (True, [])   # CM: legacy rows
+    assert done_condition_1_v2(runs, lad) == (True, [])
     # "PI_" and a PI verdict without its notepad reference are not settlements
     with pytest.raises(R.Refused):
         R.ladder_add(lad, "r1", "rung1_base", "rung1_dna_off", "challenger", True, "PI_")
@@ -504,7 +513,7 @@ def test_f8_hand_written_verdicts_need_settlements_or_pi_reference(tmp_path):
     raw["comparisons"][0]["verdict"] = "PI_"
     raw["comparisons"][1]["verdict"] = "PI_INCUMBENT"          # no notepad_ref
     lad.write_text(json.dumps(raw))
-    ok, probs = R.done_condition_1(runs, lad, composite_version=2)
+    ok, probs = done_condition_1_v2(runs, lad)
     assert not ok and any(p.startswith("r1:") for p in probs) and any(p.startswith("r2:") for p in probs)
     assert R.main(["ladder-add", "--ladder", str(lad), "--name", "r1", "--incumbent", "rung1_base",
                    "--challenger", "rung1_dna_off", "--simpler", "challenger", "--d14", "true",
@@ -522,20 +531,16 @@ def test_f12_simpler_than_base_must_be_bool_or_null(tmp_path):
 def test_f17_latest_settlement_is_newest_in_time(tmp_path):
     """Finding 17: the newest row wins, not the last file in sorted-path order."""
     runs = tmp_path / "runs"
-    # CM: these arms have no oracle reference, so compare writes composite_version 1 rows; the
-    # hand-written rows say the same version, and every read names it
     R.append_settlement(runs / "a" / "settlements.tsv",
-                        {"comparison": "c", "verdict": "INCUMBENT", "time": "2026-11-02T00:00:00+00:00",
-                         "composite_version": "1"})
+                        {"comparison": "c", "verdict": "INCUMBENT", "time": "2026-11-02T00:00:00+00:00"})
     R.append_settlement(runs / "b" / "settlements.tsv",
-                        {"comparison": "c", "verdict": "CHALLENGER", "time": "2026-11-01T00:00:00+00:00",
-                         "composite_version": "1"})
-    assert R.latest_settlements(runs, 1) == {"c": "INCUMBENT"}
+                        {"comparison": "c", "verdict": "CHALLENGER", "time": "2026-11-01T00:00:00+00:00"})
+    assert latest_settlements_v2(runs) == {"c": "INCUMBENT"}
     inc = make_arm(runs, "rung1_base", BASE)
     ch = make_arm(runs, "rung1_x", shift(BASE, di=0.1))
-    R.compare(inc, ch, "none", name="c", settlements=runs / "a" / "settlements.tsv")
+    compare_v2(inc, ch, "none", name="c", settlements=runs / "a" / "settlements.tsv")
     rows = _rows(runs / "a" / "settlements.tsv")
-    assert rows[-1]["time"] > "2026-11-02" and R.latest_settlements(runs, 1)["c"] == "CHALLENGER"
+    assert rows[-1]["time"] > "2026-11-02" and latest_settlements_v2(runs)["c"] == "CHALLENGER"
 
 
 def test_ladder_simpler_explicit_off_the_rung_base(tmp_path):
@@ -544,11 +549,11 @@ def test_ladder_simpler_explicit_off_the_rung_base(tmp_path):
     b = make_arm(tmp_path, "rung3_base", shift(BASE, di=0.002), simpler=True)
     c = make_arm(tmp_path, "rung3_dna_off", shift(BASE, di=0.002), simpler=True)
     with pytest.raises(R.Refused, match="pass --simpler"):
-        R.compare(a, b, None, settlements=tmp_path / "s.tsv")          # cross-rung
+        compare_v2(a, b, None, settlements=tmp_path / "s.tsv")          # cross-rung
     with pytest.raises(R.Refused, match="pass --simpler"):
-        R.compare(b.parent / "rung3_dna_off", b, None, settlements=tmp_path / "s.tsv")  # arm v arm
-    assert R.compare(a, b, "incumbent", settlements=tmp_path / "s.tsv")["verdict"] == "INCUMBENT"
-    assert R.compare(b, c, None, settlements=tmp_path / "s.tsv")["verdict"] == "CHALLENGER_AS_SIMPLER"
+        compare_v2(b.parent / "rung3_dna_off", b, None, settlements=tmp_path / "s.tsv")  # arm v arm
+    assert compare_v2(a, b, "incumbent", settlements=tmp_path / "s.tsv")["verdict"] == "INCUMBENT"
+    assert compare_v2(b, c, None, settlements=tmp_path / "s.tsv")["verdict"] == "CHALLENGER_AS_SIMPLER"
     with pytest.raises(R.Refused, match="rung<k>_<arm>"):
         R.ladder_add(tmp_path / "l.json", "x", "base", "rung1_x", "none", True)
     assert R.ladder_add(tmp_path / "l.json", "x", "final", "stage2_x", "none", False)["verdict"] == ""
@@ -652,7 +657,7 @@ def test_r18_default_clips_out_of_band_without_escalating(tmp_path):
     inc = make_arm(tmp_path, "rung1_base", [(0.5 + a, 0.5 + b, 0.5 + c) for a, b, c in jit])
     ch = make_arm(tmp_path, "rung1_x", [(1.3 + a, 0.5 + b, 0.5 + c) for a, b, c in jit])
     st = tmp_path / "s.tsv"
-    res = R.compare(inc, ch, "none", settlements=st)
+    res = compare_v2(inc, ch, "none", settlements=st)
     assert res["verdict"] == "CHALLENGER" and res["clip_goal_terms"] is True
     # composite delta from clipped imputation (1.0 against ~0.503)
     assert res["composite_delta"] == pytest.approx(0.5 * (1.0 - (0.5 + 0.01 / 3)))
