@@ -498,6 +498,404 @@ def run_check(arms, baselines, evalset, out, *, sizes=SIZES, n_boot=N_BOOT, pmfr
     return {"chosen": chosen, "summary": summary, "first_line": first, "rows": rows}
 
 
+# ================================================================== amendment of 2026-11-16
+# PI ruling of 2026-11-16: the check is amended to the corrected correction terms before it runs.
+# Composite version 3 (select_rule.py) reads the gap closed with the ORACLE reference on the headline
+# crop pairs with no duplicate-keeping side as its correction term; the correction-only term
+# (score.correction_only_block, same-view pass) is reported beside it. `run-v3` tests those terms;
+# `run` above is unchanged. The text is the amendment section of PAIR_CHECK_PREREGISTRATION.md.
+# Condition 6 passes vacuously when no arm pair differs beyond its seed ranges on all regions; that
+# set is decided by the 256-region values alone, and condition 4 still bounds the subset seed spreads,
+# so a vacuous pass of condition 6 cannot hide a subset that distorts the correction terms.
+AMENDED = "2026-11-16"
+CONDITIONS_V3 = ("1", "2", "3", "4", "5", "6")
+#: the D13 comparisons of condition 3 and the arms of condition 6 (incumbent first): conv
+#: autoencoder, conv + attention and U-Net base recipes, and the U-Net with DNA-only skip connections
+COMPARISONS_V3 = (("rung2_base_heldout", "rung3_base_heldout"),
+                  ("rung2_base_heldout", "rung4_base_heldout"),
+                  ("rung3_base_heldout", "rung4_base_heldout"),
+                  ("rung4_base_heldout", "final_rung4_mech_skip_dna"))
+VERDICT_SIMPLER = "none"        # condition 3 reads the D13 outcome with no arm called simpler
+RANK_QUANTITIES = ("composite_v3", "correction_v3", "correction_only")
+SCREENING_RTOL = 1e-6           # condition S: the stored 16-region scores equal the p = 16 subset
+SEEDS_V3 = ("seed0", "seed1", "seed2")   # the pre-registered seeds of every arm
+V3_CELLS = 72                   # condition 2 on the pre-registered arms: 12 runs x 6 assays
+CONSISTENCY_ABS = 1e-9          # recomputed terms against select_rule / scores.json: else refuse
+
+
+def thresholds_v3() -> dict:
+    t = thresholds()
+    t.update(amended=AMENDED, correction_term="gap closed, oracle reference, headline pairs with no "
+             "duplicate-keeping side (composite version 3)",
+             correction_only="score.correction_only_block",
+             comparisons=[f"{a} vs {b}" for a, b in COMPARISONS_V3], verdict_simpler=VERDICT_SIMPLER,
+             rank_rule="sign of the subset difference equals the 256-region sign when the 256-region "
+             "difference of arm means exceeds the larger of the two seed ranges",
+             rank_quantities=list(RANK_QUANTITIES), screening_rtol=SCREENING_RTOL)
+    return t
+
+
+class RunV3(Run):
+    """A Run plus the same-view per-region file and the oracle reference rows of its headline
+    correction pairs with no duplicate-keeping side."""
+
+    def __init__(self, d, ev: dict, oracle: dict):
+        super().__init__(d, ev)
+        svp = self.dir / "same_view_per_region.npz"
+        if not svp.is_file():
+            raise FileNotFoundError(f"{svp}: the amended check needs the same-view pass")
+        z = np.load(svp, allow_pickle=False)
+        if not np.array_equal(np.asarray(z["region_indices"], np.int64), self.region_indices):
+            raise ValueError(f"{svp}: region_indices differ from pairs_per_region.npz")
+        self.sv_target = [str(x) for x in z["target"]]
+        self.sv = {"crps": np.asarray(z["crps_sum_model"], np.float64),
+                   "bins": np.asarray(z["bins"], np.float64)}
+        if [int(i) for i in oracle["region_indices"]] != [int(i) for i in self.region_indices]:
+            raise ValueError(f"{self.dir}: the oracle reference holds other pair regions")
+        self.scorable_cor = list((self.scores.get("scorable") or {}).get("correction") or [])
+        nnd = ((oracle["rung"] == "") & (oracle["never_trained"] == 1) & (oracle["subset_pair"] == 0)
+               & (oracle["nodedup_side"] == 0))
+        self.oracle_assays = sorted({str(a) for a in oracle["assay"][nnd]})
+        self.want = sorted(set(self.oracle_assays) & set(self.scorable_cor))
+        ri, oj, why = [], [], []
+        for i, m in enumerate(self.meta):
+            if m["kind"] != "correction" or m["never_trained"] != 1 or m["subset_pair"] != 0:
+                continue
+            j = oracle["row"].get(m["pair_id"])
+            if j is None:
+                raise KeyError(f"{self.dir}: pair {m['pair_id']} not in the oracle reference")
+            if int(oracle["nodedup_side"][j]):
+                continue
+            if float(self.arr["bins"][i].sum()) != float(np.sum(oracle["bins"][j])):
+                raise ValueError(f"{self.dir}: pair {m['pair_id']}: bins differ from the oracle's")
+            ri.append(i)
+            oj.append(j)
+            why.append(str(oracle["oracle_reason"][j]) if "oracle_reason" in oracle else "")
+        self.v3_rows, self.v3_why = np.asarray(ri, np.int64), why
+        self.orc = {"crps": np.asarray(oracle["crps_sum_oracle"], np.float64)[oj],
+                    "bins": np.asarray(oracle["bins"], np.float64)[oj]}
+
+    def v3(self, sums: dict, osums: dict) -> dict:
+        """The version-3 correction term (select_rule / oracle_floor rules) from summed arrays."""
+        from onion_eval import oracle_floor as OF
+        recs = []
+        for k, i in enumerate(self.v3_rows):
+            m, b = self.meta[i], sums["bins"][i]
+            ob = osums["bins"][k]
+            ov = osums["crps"][k] / ob if ob > 0 else float("nan")
+            r = {"pair_id": m["pair_id"], "assay": m["assay"], "cell": m["cell"], "knob": m["knob"],
+                 "never_trained": 1, "subset_pair": 0, "nodedup_side": 0, "why": self.v3_why[k],
+                 "oracle": float("nan") if self.v3_why[k] else float(ov)}
+            for key, sk in (("crps_model", "crps_sum_model"), ("crps_depth_only", "crps_sum_depth_only"),
+                            ("crps_floor", "crps_sum_floor")):
+                r[key] = float(sums[sk][i] / b) if b > 0 else float("nan")
+            recs.append(r)
+        m = OF.macro(recs, self.scorable_cor, "oracle", False)
+        dens = {}
+        for a, d in (m["per_assay_denominator"] or {}).items():
+            dm = [r["crps_depth_only"] for r in recs if r["assay"] == a]
+            if d is not None and dm and float(np.mean(dm)):
+                dens[a] = d / float(np.mean(dm))
+        val, why = m["macro"], m["reason"]
+        miss = sorted(set(self.want) - set(m["per_assay"]))
+        if val is not None and miss:
+            val, why = None, "assays with no record: " + ", ".join(miss)
+        return {"value": val, "per_assay": dict(m["per_assay"]), "reason": why,
+                "den_rel_min": min(dens.values()) if dens and len(dens) == m["n_assays"] else None}
+
+    def correction_only(self, cor_recs, svs: dict):
+        from onion_eval import score as S
+        sv = [{"target": t, "crps_model_same_view": (float(svs["crps"][k] / svs["bins"][k])
+                                                     if svs["bins"][k] > 0 else float("nan"))}
+              for k, t in enumerate(self.sv_target)]
+        return S.correction_only_block(cor_recs, sv)["value"]
+
+    def terms(self, w: np.ndarray, pmfr, scorable) -> dict:
+        """Every quantity of the amended check for one weight vector over the pair regions."""
+        sums = {k: self.arr[k] @ w for k in SUM_KEYS}
+        cor, rep = self.records(sums)
+        o = pmfr(cor, rep, scorable, 0, 0)
+        v = values(o)
+        t3 = self.v3(sums, {k: a @ w for k, a in self.orc.items()})
+        v.update(v3=t3["value"], v3_assay=t3["per_assay"], v3_den=t3["den_rel_min"],
+                 v3_reason=t3["reason"], co=self.correction_only(cor, {k: a @ w for k, a in self.sv.items()}),
+                 _out=o)
+        return v
+
+
+def _seed_v3(base: dict, t: dict) -> dict:
+    """A select_rule seed (load_seed of the 256-region scores.json) with its correction term, its
+    denominator and the correction-only term of one subset; the composite recomputed."""
+    s = copy.deepcopy(base)
+    s["goals"] = dict(s["goals"], correction=t["v3"])
+    s["denominators"] = dict(s["denominators"], correction=t["v3_den"])
+    s["composite"] = SR._composite(s["goals"])
+    s["correction_only"] = t["co"]
+    return s
+
+
+def _arm_values(seeds: list[dict]) -> dict:
+    """Per rank quantity: (mean, seed range) over an arm's seeds (the composite as decide reads it,
+    clipped terms)."""
+    _, sc = SR.screen_terms(seeds)
+    cols = {"composite_v3": [s["composite"] for s in sc],
+            "correction_v3": [s["goals"]["correction"] for s in seeds],
+            "correction_only": [s.get("correction_only") for s in seeds]}
+    return {q: (None, None) if any(_bad(x) for x in v) else (SR._mean(v), SR.spread(v))
+            for q, v in cols.items()}
+
+
+def run_check_v3(arms, evalset, oracle_dir, out, *, sub="p256_sv", screening_sub=None,
+                 comparisons=COMPARISONS_V3, sizes=SIZES, n_boot=N_BOOT, pmfr=None, log=print) -> dict:
+    """The check as amended on 2026-11-16 (module section above; PAIR_CHECK_PREREGISTRATION.md)."""
+    from onion_eval import oracle_floor as OF
+    if pmfr is None:
+        from onion_eval import score as S
+        pmfr = S.pair_metrics_from_records
+    sizes = sorted(int(x) for x in sizes)
+    out = Path(out)
+    out.mkdir(parents=True, exist_ok=True)
+    log("thresholds (amended): " + json.dumps(thresholds_v3(), sort_keys=True))
+    if n_boot != N_BOOT:
+        log(f"WARNING: --n-boot {n_boot} differs from the pre-registered {N_BOOT}")
+    ev = load_evalset(evalset)
+    regions, rb = [tuple(r[:2]) for r in ev["regions"]], int(ev["region_bins"])
+    R, scorable = len(regions), ev["scorable"]
+    orc = OF.load_oracle(oracle_dir)
+    arm_dirs = {Path(a).name: Path(a) for a in arms}
+    for a, b in comparisons:
+        for x in (a, b):
+            if x not in arm_dirs:
+                raise SystemExit(f"comparison arm {x} not among --arm")
+    runs = {}
+    for a, ad in arm_dirs.items():
+        names = sorted(d.name for d in SR.seed_dirs(ad))
+        if tuple(names) != SEEDS_V3:
+            raise SystemExit(f"arm {a}: seeds {names}; the amended check needs exactly {list(SEEDS_V3)}")
+        capped = [d.name for d in SR.seed_dirs(ad) if (d / SR.CAPPED).exists()]
+        if capped:
+            raise SystemExit(f"arm {a}: capped seeds {capped} never count")
+        rs = [(d.name, RunV3(d / sub if sub else d, ev, orc), d) for d in SR.seed_dirs(ad)
+              if ((d / sub if sub else d) / "pairs_per_region.npz").is_file()]
+        if len(rs) < SR.MIN_SEEDS:
+            raise SystemExit(f"arm {a}: {len(rs)} seeds scored under {sub!r}; need {SR.MIN_SEEDS}")
+        runs[a] = rs
+    all_runs = [(a, s, r, d) for a, rs in runs.items() for s, r, d in rs]
+    ri0 = all_runs[0][2].region_indices
+    for _, _, r, _ in all_runs:
+        if not np.array_equal(r.region_indices, ri0):
+            raise SystemExit(f"{r.dir}: region_indices differ from {all_runs[0][2].dir}")
+    if len(ri0) != R or not np.array_equal(np.sort(ri0), np.arange(R)):
+        raise SystemExit(f"the runs carry {len(ri0)} pair regions; the check needs all {R}")
+    cl = clusters([regions[i] for i in ri0], rb)
+    W = boot_weights(cl, n_boot)
+    log(f"regions {R}, clusters {int(cl.max()) + 1}, draws {n_boot}, runs {len(all_runs)}")
+
+    rows, full, boot, base = [], {}, {}, {}
+    ones = np.ones(R)
+    for a, s, r, _ in all_runs:
+        v = r.terms(ones, pmfr, scorable)
+        v.pop("_out", None)
+        full[(a, s)] = v
+        b0 = SR.load_seed(r.dir / "scores.json")          # oracle "auto": the run's own reference
+        base[(a, s)] = b0
+        od = b0.get("oracle_dir")
+        if not od or Path(od).resolve() != Path(oracle_dir).resolve():
+            raise SystemExit(f"{r.dir}: select_rule reads the oracle reference {od!r}, not --oracle "
+                             f"{oracle_dir}")
+        for q, ref, got, gate in (
+                ("correction_v3 recomputed - select_rule", b0["goals"]["correction"], v["v3"], True),
+                ("correction_only recomputed - scores.json", b0.get("correction_only"), v["co"], True),
+                ("h5 recomputed - scores.json", (r.scores.get(H5) or {}).get("macro"), v["h5"], False)):
+            d = None if _bad(ref) or _bad(got) else abs(float(ref) - float(got))
+            rows.append(_row("", "consistency", f"{a}/{s}", q, d, ref, None, None, None, None))
+            if gate and (_bad(ref) != _bad(got) or (d is not None and d > CONSISTENCY_ABS)):
+                raise SystemExit(f"{r.dir}: {q} = {d} (tool {got}, stored {ref}); the check refuses")
+        bv = []
+        for b in range(n_boot):
+            t = r.terms(W[b], pmfr, scorable)
+            t.pop("_out", None)
+            bv.append(t)
+        boot[(a, s)] = bv
+        log(f"bootstrap done: {a}/{s}")
+
+    def verdicts(tv):
+        res = {}
+        seeds = {a: [_seed_v3(base[(a, s)], tv[(a, s)]) for s, _, _ in runs[a]] for a in runs}
+        for a, b in comparisons:
+            try:
+                d = SR.decide(seeds[a], seeds[b], VERDICT_SIMPLER)
+                res[(a, b)] = (d["verdict"], d.get("reason", ""))
+            except SR.Refused as e:
+                res[(a, b)] = ("REFUSED", str(e))
+        return res, {a: _arm_values(sd) for a, sd in seeds.items()}
+
+    v256, av256 = verdicts(full)
+    summary, screening = {}, None
+    for p in sizes:
+        pos = pair_region_positions(R, p)
+        cond = {c: [] for c in CONDITIONS_V3}
+        subv = {}
+        for a, s, r, _ in all_runs:
+            vs = r.terms(r.columns(pos), pmfr, scorable)
+            subv[(a, s)] = vs
+            v2, bv = full[(a, s)], boot[(a, s)]
+            items = [("correction_v3", v2["v3"], vs["v3"], [x["v3"] for x in bv]),
+                     ("correction_only", v2["co"], vs["co"], [x["co"] for x in bv]),
+                     ("h5", v2["h5"], vs["h5"], [x["h5"] for x in bv])]
+            items += [(f"replicate gap closed, rung {g}", v2["rep"][g], vs["rep"].get(g),
+                       [x["rep"].get(g) for x in bv]) for g in sorted(v2["rep"]) if not _bad(v2["rep"][g])]
+            for q, ref, val, bl in items:
+                if _bad(ref):
+                    must = q in ("correction_v3", "correction_only")      # (a) and (c) must exist
+                    if must:
+                        cond["1"].append(False)
+                    rows.append(_row(p, "1", f"{a}/{s}", q, val, ref, None, None, None,
+                                     False if must else None, "undefined on all regions: "
+                                     + ("fail" if must else "not checked")))
+                    continue
+                lo, hi = _interval(bl)
+                ok = _inside(val, lo, hi)
+                cond["1"].append(ok)
+                rows.append(_row(p, "1", f"{a}/{s}", q, val, ref, lo, hi, "inside 95% interval", ok))
+            for asy in r.oracle_assays:
+                ref = v2["v3_assay"].get(asy)
+                if _bad(ref):
+                    cond["2"].append(False)
+                    rows.append(_row(p, "2", f"{a}/{s}/{asy}", "correction_v3 per assay",
+                                     vs["v3_assay"].get(asy), ref, None, None, None, False,
+                                     "undefined on all regions: counted as a fail"))
+                    continue
+                lo, hi = _interval([x["v3_assay"].get(asy) for x in bv])
+                ok = _inside(vs["v3_assay"].get(asy), lo, hi)
+                cond["2"].append(ok)
+                rows.append(_row(p, "2", f"{a}/{s}/{asy}", "correction_v3 per assay",
+                                 vs["v3_assay"].get(asy), ref, lo, hi, "inside 95% interval", ok))
+            sc = subset_scores(r.scores, vs["_out"], p)
+            m7a, m7b = dict(_metric7_paths(r.scores)), dict(_metric7_paths(sc))
+            extra = set(vs["_out"]) - set(B4_KEYS)
+            ok5 = m7a == m7b and not extra
+            cond["5"].append(ok5)
+            rows.append(_row(p, "5", f"{a}/{s}", "metric 7 keys equal; no key outside B.4", len(m7a),
+                             None, None, None, "equal", ok5, "" if ok5 else f"extra keys {sorted(extra)[:4]}"))
+        vp, avp = verdicts(subv)
+        for (a, b), (v0, w0) in v256.items():
+            ok3 = v0 != "REFUSED" and vp[(a, b)][0] == v0
+            cond["3"].append(ok3)
+            rows.append(_row(p, "3", f"{a} vs {b}", "D13 verdict (composite v3)", vp[(a, b)][0], v0,
+                             None, None, "equal", ok3, f"subset: {vp[(a, b)][1]}; all regions: {w0}"))
+        for a in runs:
+            for q, key in (("correction_v3", "v3"), ("correction_only", "co")):
+                x = [subv[(a, s)][key] for s, _, _ in runs[a]]
+                x0 = [full[(a, s)][key] for s, _, _ in runs[a]]
+                sp = None if any(_bad(t) for t in x) else SR.spread(x)
+                s0 = None if any(_bad(t) for t in x0) else SR.spread(x0)
+                ok4 = (False if sp is None or s0 is None else
+                       (sp <= SPREAD_RATIO_MAX * s0 * (1 + INSIDE_RTOL) if s0 > 0 else sp == 0))
+                cond["4"].append(ok4)
+                rows.append(_row(p, "4", a, f"seed spread of {q}", sp, s0, None,
+                                 None if s0 is None else SPREAD_RATIO_MAX * s0,
+                                 f"<= {SPREAD_RATIO_MAX} x all regions", ok4))
+        names = list(runs)
+        for q in RANK_QUANTITIES:
+            for i, a in enumerate(names):
+                for b in names[i + 1:]:
+                    (ma, ra), (mb, rb_) = av256[a][q], av256[b][q]
+                    (sa, _), (sb, _) = avp[a][q], avp[b][q]
+                    if any(_bad(x) for x in (ma, mb, ra, rb_)):
+                        cond["6"].append(False)
+                        rows.append(_row(p, "6", f"{a} vs {b}", q, None, None, None, None, None, False,
+                                         "undefined on all regions: counted as a fail"))
+                        continue
+                    d0, bar = mb - ma, max(ra, rb_)
+                    if abs(d0) <= bar:
+                        rows.append(_row(p, "6", f"{a} vs {b}", f"{q} difference", None if _bad(sa) or
+                                         _bad(sb) else sb - sa, d0, None, None, f"|d| > {bar:.4g}",
+                                         None, "a tie on all regions: not tested"))
+                        continue
+                    ds = None if _bad(sa) or _bad(sb) else sb - sa
+                    ok6 = ds is not None and np.sign(ds) == np.sign(d0)
+                    cond["6"].append(ok6)
+                    rows.append(_row(p, "6", f"{a} vs {b}", f"{q} difference", ds, d0, None, None,
+                                     "same sign", ok6, f"seed-range bar {bar:.4g}"))
+        res = {}
+        for c in CONDITIONS_V3:
+            if c == "2":
+                share = (sum(cond[c]) / len(cond[c])) if cond[c] else None
+                ok = share is not None and share >= PER_ASSAY_SHARE_MIN
+                note = f"{len(cond[c])} cells"
+                if set(runs) == {x for ab in COMPARISONS_V3 for x in ab} and len(cond[c]) != V3_CELLS:
+                    ok, note = False, f"{len(cond[c])} cells; the amendment names {V3_CELLS}"
+                rows.append(_row(p, "2", "ALL", "share of cells inside", share, None, None, None,
+                                 f">= {PER_ASSAY_SHARE_MIN}", ok, note))
+            elif c == "6" and not cond[c]:
+                ok = True
+                rows.append(_row(p, "6", "ALL", "no arm pair differs beyond its seed ranges", None,
+                                 None, None, None, "all", ok))
+            else:
+                ok = bool(cond[c]) and all(cond[c])
+                rows.append(_row(p, c, "ALL", f"{sum(cond[c])} of {len(cond[c])} pass", None, None,
+                                 None, None, "all", ok))
+            res[c] = ok
+        summary[p] = res
+        log(f"p = {p}: " + ", ".join(f"({c}) {'pass' if res[c] else 'fail'}" for c in CONDITIONS_V3))
+        if p == 16 and screening_sub:
+            oks = []
+            for a, s, r, d in all_runs:
+                sp_ = d / screening_sub / "scores.json"
+                if not sp_.is_file():
+                    oks.append(False)
+                    rows.append(_row(16, "S", f"{a}/{s}", "stored screening score", None, None, None,
+                                     None, None, False, f"no {sp_}"))
+                    continue
+                st = SR.load_seed(sp_)
+                for q, ref, got in (("correction_v3", st["goals"]["correction"], subv[(a, s)]["v3"]),
+                                    ("correction_only", st.get("correction_only"), subv[(a, s)]["co"])):
+                    ok = (not _bad(ref) and not _bad(got)
+                          and (abs(float(ref) - float(got)) <= SCREENING_RTOL * abs(float(got))
+                               if float(got) != 0 else float(ref) == 0))
+                    oks.append(ok)
+                    rows.append(_row(16, "S", f"{a}/{s}", f"{q}: stored 16-region score - p 16 subset",
+                                     ref, got, None, None, f"rtol {SCREENING_RTOL}", ok))
+            screening = bool(oks) and all(oks)
+
+    passing = [p for p in sizes if all(summary[p].values())]
+    chosen = passing[0] if passing else None
+    cols = ("p", "condition", "scope", "quantity", "value", "value_all_regions", "lo", "hi",
+            "threshold", "pass", "note")
+    with open(out / "check_v3.tsv", "w", encoding="utf-8") as fh:
+        fh.write("\t".join(cols) + "\n")
+        for r in rows:
+            fh.write("\t".join(str(r[c]).replace("\t", " ").replace("\n", " ") for c in cols) + "\n")
+    first = (f"pair regions: {chosen}" if chosen else
+             f"pair regions: {R} (none of {', '.join(str(p) for p in sizes)} passes)")
+    settled = (16 in summary and all(summary[16].values()) and screening is True)
+    second = (f"16-region screening scores settled: {'yes' if settled else 'no'}"
+              + ("" if settled else " (" + ("p = 16 not tested" if 16 not in summary else
+                                            "p = 16 fails a condition" if not all(summary[16].values())
+                                            else "no stored-score comparison" if screening is None
+                                            else "stored 16-region scores differ from the p = 16 subset")
+                                     + ")"))
+    md = [first, second, "",
+          f"The check as amended on {AMENDED} ran on {len(all_runs)} runs of {len(runs)} arms "
+          f"({', '.join(runs)}) with {n_boot} region-bootstrap draws over {int(cl.max()) + 1} clusters "
+          f"of {R} regions.", "",
+          "| p | " + " | ".join(f"({c})" for c in CONDITIONS_V3) + " | all |",
+          "|---|" + "---|" * (len(CONDITIONS_V3) + 1)]
+    for p in sizes:
+        md.append(f"| {p} | " + " | ".join("pass" if summary[p][c] else "fail" for c in CONDITIONS_V3)
+                  + f" | {'pass' if all(summary[p].values()) else 'fail'} |")
+    md += ["", f"Amended constants: `{json.dumps(thresholds_v3(), sort_keys=True)}`.",
+           "D13 verdicts on all regions: " + "; ".join(f"{a} vs {b}: {v[0]}" for (a, b), v in v256.items()) + ".",
+           "Limit: CPU-trained models of three architectures; rungs 1, 5 and 6 are not tested.",
+           "The per-row values are in `check_v3.tsv`."]
+    (out / "PAIR_REGIONS_V3.md").write_text("\n".join(md) + "\n", encoding="utf-8")
+    log(first)
+    log(second)
+    return {"chosen": chosen, "summary": summary, "screening_settled": settled, "first_line": first,
+            "rows": rows, "verdicts_256": v256}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -508,10 +906,27 @@ def main(argv=None) -> int:
     r.add_argument("--sizes", default=",".join(str(s) for s in SIZES))
     r.add_argument("--n-boot", type=int, default=N_BOOT)
     r.add_argument("--out", required=True)
+    v = sub.add_parser("run-v3", help="the check as amended on 2026-11-16 (composite version 3)")
+    v.add_argument("--arm", action="append", required=True, help="arm dir of seed dirs")
+    v.add_argument("--sub", default="p256_sv", help="score sub-directory with all pair regions")
+    v.add_argument("--screening-sub", default="p16_sv", help="stored 16-region scores ('' = none)")
+    v.add_argument("--oracle", required=True, help="oracle_floor/seed0 of the all-regions baselines")
+    v.add_argument("--evalset", required=True)
+    v.add_argument("--sizes", default=",".join(str(s) for s in SIZES))
+    v.add_argument("--n-boot", type=int, default=N_BOOT)
+    v.add_argument("--out", required=True)
     sub.add_parser("thresholds")
+    sub.add_parser("thresholds-v3")
     a = ap.parse_args(argv)
     if a.cmd == "thresholds":
         print(json.dumps(thresholds(), indent=1, sort_keys=True))
+        return 0
+    if a.cmd == "thresholds-v3":
+        print(json.dumps(thresholds_v3(), indent=1, sort_keys=True))
+        return 0
+    if a.cmd == "run-v3":
+        run_check_v3(a.arm, a.evalset, a.oracle, a.out, sub=a.sub, screening_sub=a.screening_sub or None,
+                     sizes=[int(x) for x in a.sizes.split(",")], n_boot=a.n_boot)
         return 0
     run_check(a.arm, a.baselines, a.evalset, a.out, sizes=[int(x) for x in a.sizes.split(",")],
               n_boot=a.n_boot)
