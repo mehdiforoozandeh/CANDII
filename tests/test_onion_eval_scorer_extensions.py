@@ -191,6 +191,12 @@ def test_model_batch_rows(env, mode):
                 t = sc.C.TRACK_INDEX[sc.ds.rows[m]["assay"]]
                 avail = batch["x_avail" if sd == "in" else "y_avail"][:, t]
                 got, old = mb[key][:, t], before[key][:, t]
+                # the scale of the test is the window's own: the true row is encoded at it
+                true = sc.ds.rows[m]
+                tw = torch.as_tensor(sc.ds.encoder.c_in(true, sc.ds.qc_on_input, scale) if sd == "in"
+                                     else sc.ds.encoder.c_out(true, scale))
+                if bool(avail.all()):
+                    assert torch.equal(old, tw.expand_as(old))
                 if sd not in sides or not bool(avail.all()):
                     assert torch.equal(got, old)
                     continue
@@ -230,9 +236,10 @@ def test_trivial_model_keep_depth_scores_as_normal_swap_depth_does_not(env):
     assert k["scorer_settings"].pop(S.FOREIGN_KEY) == "out_keep_depth"
     assert k["scorer_settings"].pop("foreign_seed") == 0
     assert _clean(k) == _clean(n)
-    assert fk["mode"] == "out_keep_depth" and fk["n_without_donor"] == 0 and fk["n_measurements"] > 0
-    assert all("log2_depth" not in e["columns_changed"] for e in fk["assignment"].values())
-    assert w[S.FOREIGN_KEY]["n_changed_by_column"].get("log2_depth", 0) > 0
+    assert fk["mode"] == "out_keep_depth" and fk["n_without_donor"] == 0
+    assert set(fk["assignment"]) == {"out"} and fk["n_measurements"]["out"] > 0
+    assert all("log2_depth" not in e["columns_changed"] for e in fk["assignment"]["out"].values())
+    assert w[S.FOREIGN_KEY]["n_changed_by_column"]["out"].get("log2_depth", 0) > 0
     assert _all_assays(w["count_crps"]) != _all_assays(n["count_crps"])
     # the guardrail keeps the true covariates
     assert w["copy_leak"] == n["copy_leak"]
@@ -242,7 +249,10 @@ def test_real_model_both_modes_change_predictions_and_keys_separate(env):
     root = env["root"]
     n = _score(env, root / "real" / "seed0" / "p16")
     f = _score(env, root / "real" / "seed0" / "p16_foreign_bk", foreign_covariates="both_keep_depth")
-    assert f[S.FOREIGN_KEY]["n_changed_by_column"].get("lab_id", 0) > 0
+    fb = f[S.FOREIGN_KEY]
+    assert set(fb["assignment"]) == {"in", "out"}
+    assert fb["n_changed_by_column"]["in"].get("lab_id", 0) > 0
+    assert fb["n_changed_by_column"]["out"].get("lab_id", 0) > 0
     assert _all_assays(f["count_crps"]) != _all_assays(n["count_crps"])
     a, b = SR.scorer_keys(n), SR.scorer_keys(f)
     assert "foreign_covariates" not in a and b["foreign_covariates"] == "both_keep_depth:seed0"
@@ -257,9 +267,13 @@ def test_output_directory_guard(env):
         _score(env, env["root"] / "guard" / "p16_sv", foreign_covariates="in_keep_depth")
     d = env["root"] / "guard" / "p16_foreign_x"
     d.mkdir(parents=True)
-    (d / "scores.json").write_text(json.dumps({S.FOREIGN_KEY: {"mode": "out_keep_depth"}}))
+    (d / "scores.json").write_text(json.dumps({S.FOREIGN_KEY: {"mode": "out_keep_depth", "seed": 0}}))
     with pytest.raises(S.ScoreRefused, match="out_keep_depth"):
         _score(env, d, foreign_covariates="in_keep_depth")
+    with pytest.raises(S.ScoreRefused, match="seed"):         # the same mode, another donor seed
+        _score(env, d, foreign_covariates="out_keep_depth", foreign_seed=1)
+    with pytest.raises(S.ScoreRefused, match="normal score"):  # a normal score never goes over it
+        _score(env, d)
 
 
 def test_store_path_equals_legacy_and_guards_the_mode(env):
@@ -363,8 +377,8 @@ def test_submit_foreign(sub_env):
     lines = [ln for ln in p.stdout.splitlines() if ln.startswith("ONION_") and "sbatch" in ln]
     assert lines and all("ONION_FOREIGN_COVARIATES=out_keep_depth" in ln
                          and "ONION_FOREIGN_SEED=3" in ln for ln in lines)
-    assert all("/rung1_base/foreign_out_keep_depth_s3/seed0/p16_foreign_ok" in ln for ln in lines
-               if "ONION_PRED_STORE" in ln or "predict.sh" in ln)
+    st = [ln for ln in lines if "ONION_PRED_STORE" in ln or "predict.sh" in ln]
+    assert st and all("/rung1_base/foreign_out_keep_depth_s3/seed0/p16_foreign_ok" in ln for ln in st)
     assert not any("train.sh" in ln for ln in p.stdout.splitlines())
     # a real submission exports the switch; a shell value never leaks without FOREIGN_COVARIATES
     p = _submit(tmp, e, FOREIGN_COVARIATES="in_swap_depth", SCORE_SUBDIR="p16_foreign_is")
@@ -394,8 +408,12 @@ def test_per_stratum_pit_worst_and_report_time(env):
     rows = RX.table_strata({"dir": out, "scores": s})
     got = [r for r in rows if r["reason"] == "" or r["assay"] == "__macro__"]
     assert got and all(r["value"] == r["stored"] for r in got)
-    # accessibility table carries the key too
+    # accessibility table carries the key too, and the report-time values equal it (its macro
+    # does not require every scorable assay)
     assert S.PIT_STRATA_KEY in s["accessibility_only"]
+    rows = RX.table_strata({"dir": out, "scores": s}, "accessibility_only")
+    got = [r for r in rows if r["reason"] == "" or r["assay"] == "__macro__"]
+    assert got and all(r["value"] == r["stored"] for r in got)
 
 
 def test_variance_ratio_robust_aggregates():
@@ -499,6 +517,23 @@ def test_report_refuses_mixed_foreign_and_normal(env):
     b = env["root"] / "real" / "seed0" / "p16_foreign_bk"
     assert RX.main(["strata", "--dirs", str(a), str(b), "--out",
                     str(env["root"] / "mix.tsv")]) == 2
+    # two arms, one foreign and one normal, under one runs root: refused across arms too
+    runs = env["root"] / "mixruns"
+    for arm, src in (("armA", a), ("armB", b)):
+        dst = runs / arm / "seed0" / "p16x"
+        dst.mkdir(parents=True)
+        for f in ("scores.json", "suffstats.npz"):
+            (dst / f).write_bytes((src / f).read_bytes())
+    assert RX.main(["strata", "--runs", str(runs), "--sub", "p16x", "--out",
+                    str(env["root"] / "mix2.tsv")]) == 2
+
+
+def test_report_macro_follows_the_scorer_per_regime():
+    assert RX._macro({"A": 1.0}, ["A", "B"], require_all=True) is None
+    assert RX._macro({"A": 1.0}, ["A", "B"], require_all=False) == 1.0
+    assert RX._macro({"A": 1.0, "B": None}, ["A", "B"], require_all=False) is None
+    assert RX._macro({"C": 1.0}, ["A"], require_all=False) is None
+    assert RX._macro({"A": 1.0, "B": 3.0, "C": 9.0}, ["A", "B"], require_all=True) == 2.0
 
 
 def _mm_tables(tmp_path, platform_of, antibody=True):

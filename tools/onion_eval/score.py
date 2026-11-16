@@ -1586,33 +1586,41 @@ class Scorer:
             b[key] = c
         return b
 
-    def foreign_block(self, mids) -> dict:
-        """E5: scores.json `foreign_covariates`: the mode, the definition and, per measurement the
-        model read, its donor and the covariate columns whose raw value the swap changed (side C'
-        columns at depth scale 1; column 0 only under swap_depth)."""
-        from minicandi.contract import META_COLUMNS
+    def foreign_block(self, by_side: dict) -> dict:
+        """E5: scores.json `foreign_covariates`: the mode, the definition and, per swapped side
+        (`in` = the inputs' C, `out` = the targets' C') and measurement, its donor and the covariate
+        columns whose raw value the swap changed (C with its QC columns when the run reads them;
+        column 0, log2 depth, only under swap_depth). `by_side`: {side: measurement ids}; a side
+        that the mode does not swap is left out."""
+        from minicandi.contract import META_COLUMNS, QC_COLUMNS
         rows = self.ds.rows
-        assign, n_none = {}, 0
-        cols = list(META_COLUMNS)
-        for m in sorted(set(mids)):
-            d = self._donor(m)
-            if d is None:
-                n_none += 1
-                assign[m] = {"donor": None, "columns_changed": []}
-                continue
-            a, b = self.ds.encoder.c_out(rows[m]), self.ds.encoder.c_out(rows[d])
-            ch = [cols[i] for i in range(len(cols)) if a[i] != b[i]
-                  and (i > 0 or self.foreign["depth"] == "swap_depth")]
-            assign[m] = {"donor": d, "donor_cell": rows[d]["cell"], "columns_changed": ch}
-        n_ch = defaultdict(int)
-        for e in assign.values():
-            for k in e["columns_changed"]:
-                n_ch[k] += 1
-        return dict(self.foreign, definition=FOREIGN_DEFINITION, n_measurements=len(assign),
-                    n_without_donor=n_none,
-                    n_with_no_column_changed=sum(1 for e in assign.values()
-                                                 if e["donor"] is not None and not e["columns_changed"]),
-                    n_changed_by_column=dict(sorted(n_ch.items())), assignment=assign)
+        assign, n_ch, n_same = {}, {}, {}
+        n_none = 0
+        for side in self.foreign["sides"]:
+            cols = list(META_COLUMNS) + (list(QC_COLUMNS) if side == "in" and self.ds.qc_on_input
+                                         else [])
+            enc = ((lambda r: self.ds.encoder.c_in(r, self.ds.qc_on_input)) if side == "in"
+                   else self.ds.encoder.c_out)
+            per, cnt = {}, defaultdict(int)
+            for m in sorted(set(by_side.get(side, ()))):
+                d = self._donor(m)
+                if d is None:
+                    n_none += 1
+                    per[m] = {"donor": None, "columns_changed": []}
+                    continue
+                a, b = enc(rows[m]), enc(rows[d])
+                ch = [cols[i] for i in range(len(cols)) if a[i] != b[i]
+                      and (i > 0 or self.foreign["depth"] == "swap_depth")]
+                per[m] = {"donor": d, "donor_cell": rows[d]["cell"], "columns_changed": ch}
+                for k in ch:
+                    cnt[k] += 1
+            assign[side], n_ch[side] = per, dict(sorted(cnt.items()))
+            n_same[side] = sum(1 for e in per.values() if e["donor"] is not None
+                               and not e["columns_changed"])
+        return dict(self.foreign, definition=FOREIGN_DEFINITION,
+                    n_measurements={k: len(v) for k, v in assign.items()},
+                    n_without_donor=n_none, n_with_no_column_changed=n_same,
+                    n_changed_by_column=n_ch, assignment=assign)
 
     def _predicted_control(self, batch, t):
         """The model's control mean [B, L] with the control channel asked for at track t's C'
@@ -2758,7 +2766,7 @@ class Scorer:
                     "wall_seconds": round(time.time() - t0, 1)})
         if self.foreign is not None:              # E5: keys only with the switch
             res[FOREIGN_KEY] = self.foreign_block(
-                [m for j in cor + rep for m in (j["source"], j["target"])])
+                {"in": [j["source"] for j in cor + rep], "out": [j["target"] for j in cor + rep]})
         self._two_phase_keys(res)
         return res
 
@@ -2992,9 +3000,10 @@ class Scorer:
                         "explained_fraction_per_layer and per_target only, never a headline block, "
                         "a selection term or n_targets"}
         if self.foreign is not None:              # E5: keys only with the switch
-            mids = [m for j in imp + ctl for m in (j["target"], *j["inputs"])]
-            mids += [m for j in cor + rep + sv for m in (j["source"], j["target"])]
-            scores[FOREIGN_KEY] = self.foreign_block(mids)
+            pj = cor + rep + sv
+            scores[FOREIGN_KEY] = self.foreign_block({
+                "in": [m for j in imp + ctl for m in j["inputs"]] + [j["source"] for j in pj],
+                "out": [j["target"] for j in imp + ctl + pj]})
         self._two_phase_keys(scores)
         return scores
 
@@ -3453,17 +3462,22 @@ def _guard_foreign_out(out: Path, kw) -> None:
     """E5: a foreign-covariate score goes only to a directory whose name holds FOREIGN_DIR_TAG,
     and never over a scores.json of another foreign mode (or of a normal scoring)."""
     mode = kw.get("foreign_covariates")
+    prev = out / "scores.json"
+    old = (json.loads(prev.read_text(encoding="utf-8")).get(FOREIGN_KEY) or {}
+           if prev.is_file() else {})
     if mode is None:
+        if old:
+            raise ScoreRefused(f"{prev} holds a score with foreign covariates {old.get('mode')!r}; "
+                               f"a normal score never goes over it")
         return
     if FOREIGN_DIR_TAG not in out.name:
         raise ScoreRefused(f"--out {out}: a foreign-covariate score goes to a directory whose name "
                            f"holds '{FOREIGN_DIR_TAG}' (e.g. <seed dir>/p16_{FOREIGN_DIR_TAG}_"
                            f"{mode}), never beside normal scores")
-    prev = out / "scores.json"
-    if prev.is_file():
-        old = (json.loads(prev.read_text(encoding="utf-8")).get(FOREIGN_KEY) or {}).get("mode")
-        if old != mode:
-            raise ScoreRefused(f"{prev} holds a score with foreign covariates {old!r}, not {mode!r}")
+    seed = int(kw.get("foreign_seed") or 0)
+    if prev.is_file() and (old.get("mode"), old.get("seed")) != (mode, seed):
+        raise ScoreRefused(f"{prev} holds a score with foreign covariates {old.get('mode')!r} seed "
+                           f"{old.get('seed')!r}, not {mode!r} seed {seed}")
 
 
 def _score_with(sc, out: Path, *, run, pairs_only) -> dict:

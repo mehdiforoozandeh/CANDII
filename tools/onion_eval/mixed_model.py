@@ -399,7 +399,7 @@ def run(tables, evalset, band, out, layer=None, n_boot=200, seed=0, reader=None,
     ev = json.loads(Path(evalset).read_text())
     regions = [(c, int(s)) for c, s in ev["regions"]]
     meas = _read_tsv(tables / "measurements.tsv")
-    with open(tables / "measurements.tsv", newline="") as fh:
+    with open(tables / "measurements.tsv", newline="", encoding="utf-8") as fh:
         header = next(csv.reader(fh, delimiter="\t"))
     extra = tuple(extra)
     bad = [c for c in extra if c not in EXTRA_FACTORS]

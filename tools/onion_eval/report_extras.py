@@ -10,9 +10,9 @@ rewritten.
     python tools/onion_eval/report_extras.py <table> --dirs <score dir> [<score dir> ...] --out ...
 
 A score dir is `<runs>/<arm>/seed<k>/<sub>/` (or `<arm>/seed<k>/` with `--sub ''`). Comparability:
-every scores.json read must carry one `evalset_sha256`, and the scores of each arm one value of
-every select_rule comparability key (select_rule.check_scorer_keys), else the command refuses (exit
-2). `--summary` writes one row per (arm, key columns): mean and range (max minus min) over the
+every scores.json read must carry one `evalset_sha256` and one value of every select_rule
+comparability key (select_rule.check_scorer_keys, across every score read, so a foreign-covariate
+score never joins a normal one in a table), else the command refuses (exit 2). `--summary` writes one row per (arm, key columns): mean and range (max minus min) over the
 seeds, n_seeds and n_defined; the mean and range are empty unless every seed is defined.
 
 Tables (`<table>`):
@@ -118,14 +118,10 @@ def load(dirs) -> list[dict]:
     ev = {i["scores"].get("evalset_sha256") for i in items}
     if len(ev) != 1 or not next(iter(ev)):
         raise Refused(f"the scores carry {len(ev)} evaluation-set hashes; compare one eval set")
-    by = defaultdict(list)
-    for i in items:
-        by[i["arm"]].append(i)
-    for arm, its in by.items():
-        try:
-            SR.check_scorer_keys([(str(i["dir"]), SR.scorer_keys(i["scores"])) for i in its])
-        except SR.Refused as e:
-            raise Refused(f"arm {arm}: {e}") from None
+    try:                                  # across every score read, as arm_report does
+        SR.check_scorer_keys([(str(i["dir"]), SR.scorer_keys(i["scores"])) for i in items])
+    except SR.Refused as e:
+        raise Refused(str(e)) from None
     return items
 
 
@@ -153,11 +149,16 @@ def _table_block(s: dict, regime: str) -> dict:
     return s if regime == "leave_one_assay_out" else (s.get(regime) or {})
 
 
-def _macro(per: dict, scorable) -> float | None:
-    vals = [per.get(a) for a in sorted(scorable)]
-    if not vals or any(v is None for v in vals):
+def _macro(per: dict, scorable, require_all: bool) -> float | None:
+    """score.metric's macro: the mean over the scorable assays with an entry; None when one of them
+    is undefined, when none is present, or (require_all, the leave-one-assay-out table) when a
+    scorable assay has no target."""
+    present = [a for a in sorted(scorable) if a in per]
+    if not present or any(per[a] is None for a in present):
         return None
-    return float(np.mean(vals))
+    if require_all and len(present) < len(set(scorable)):
+        return None
+    return float(np.mean([per[a] for a in present]))
 
 
 # ------------------------------------------------------------------------------------------ tables
@@ -193,7 +194,8 @@ def table_strata(item, regime="leave_one_assay_out") -> list[dict]:
                          "stored": _f((st.get("per_assay") or {}).get(a, (st.get("non_scorable_per_assay")
                                                                           or {}).get(a))),
                          "reason": "" if a in scorable else "non-scorable assay"})
-        rows.append({"stratum": stratum, "assay": "__macro__", "value": _macro(per, scorable),
+        rows.append({"stratum": stratum, "assay": "__macro__",
+                     "value": _macro(per, scorable, regime == "leave_one_assay_out"),
                      "stored": _f(st.get("macro")), "reason": ""})
     return rows
 
@@ -226,7 +228,8 @@ def table_variance_ratio(item, regime="leave_one_assay_out") -> list[dict]:
                      "max_target": max((x for x in by[a] if x is not None), default=None),
                      "reason": "" if rob else NOT_STORED})
     rows.append({"assay": "__macro__", "n_targets": sum(len(v) for v in by.values()),
-                 "mean_of_targets": _f(h7.get("macro")), "median_of_targets": _macro(med, scorable),
+                 "mean_of_targets": _f(h7.get("macro")),
+                 "median_of_targets": _macro(med, scorable, regime == "leave_one_assay_out"),
                  "ratio_of_means": _f(rom.get("macro")) if rob else None, "max_target": None,
                  "reason": "" if rob else NOT_STORED})
     return rows
