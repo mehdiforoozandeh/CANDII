@@ -84,7 +84,7 @@ Root: [[candii]]
   - ◐ `h39` [H] [[h39_rung_1_base_beats_the_position_average_o|Rung 1 base beats the position average on imputation by more than 2 seed spreads on the composite's imputation term and closes part of the correction gap]] — *leaning* · moderate · supports
   - ◐ `q39` [Q] [[q39_do_the_context_rungs_2_to_6_convolution_|**Do the context rungs 2 to 6 (convolution, attention, U-Net, axial, Perceiver) beat the pointwise rung 1 and the baselines on each goal at equal training windows?**]] — *leaning* · moderate
     - ○ `q42` [Q] [[q42_why_does_rung_4_the_u_net_recover_the_mo|**Why does rung 4 (the U-Net) recover the most specific variance of the ladder but close the least correction gap of rungs 1 to 5?**]] — *open*
-    - ○ `q46` [Q] [[q46_why_does_the_held_out_nb_loss_rank_the_u|**Why does the held-out NB loss rank the U-Net first and the conv models third and fourth while the composite ranks the conv models first, and why does more training lower held-out loss without raising the composite?**]] — *open*
+    - ◐ `q46` [Q] [[q46_why_does_the_held_out_nb_loss_rank_the_u|**Why does the held-out NB loss rank the U-Net first and the conv models third and fourth while the composite ranks the conv models first, and why does more training lower held-out loss without raising the composite?**]] — *leaning* · moderate
 - ◐ `q23` [Q] [[q23_is_the_model_wired_as_designed_does_scra|**Is the model wired as designed: does scrambling the covariates, switching the DNA off, another injection form, a mask token, or matched compute move the scores (the wiring checks of rung 1)?**]] — *leaning* · weak
   - ◐ `h40` [H] [[h40_scrambled_covariates_lowers_the_correcti|scrambled_covariates lowers the correction term by more than 2 seed spreads and leaves imputation within 2; dna_off lowers imputation]] — *leaning* · weak · mixed
   - ○ `q43` [Q] [[q43_does_the_gain_of_scrambled_covariates_in|**Does the gain of scrambled covariates in gap closed at rung 4 come from the 84 headline pairs with a duplicate-keeping side, where source and target can share DNA fragments?**]] — *open*
@@ -95,7 +95,7 @@ Root: [[candii]]
 
 ## Dashboard
 
-- **Questions** (46): open 15 · leaning 23 · settled 8 · parked 0
+- **Questions** (46): open 14 · leaning 24 · settled 8 · parked 0
 - **Hypotheses** (40): open 10 · leaning 18 · settled 6 · parked 6
-- **Confidence**: weak 19 · moderate 22 · strong 14
-- **Findings**: 82
+- **Confidence**: weak 19 · moderate 23 · strong 14
+- **Findings**: 83
