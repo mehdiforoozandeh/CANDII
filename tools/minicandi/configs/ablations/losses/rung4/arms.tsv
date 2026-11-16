@@ -1,0 +1,4 @@
+arm	keys changed	comparison incumbent	d14_condition_1	needs	group	simpler_than_base	joins_design	status
+loss_poisson_mean	loss=poisson_mean_detached_size	incumbent	false		loss and head	null	yes	write
+loss_nb_crps	loss=nb_crps	incumbent	false		loss and head	null	yes	write
+loss_impute_x4	loss_weights={"base":1,"correct":1,"impute":4,"same":1}	incumbent	false		loss and head	null	yes	write

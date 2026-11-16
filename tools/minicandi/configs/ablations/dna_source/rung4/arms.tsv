@@ -1,0 +1,4 @@
+arm	keys changed	comparison incumbent	d14_condition_1	needs	group	simpler_than_base	joins_design	status
+dna_flashzoi	dna=precomputed;dna_embedding_dim=128;dna_embedding_h5=/scratch/mforooz/onion/dna_emb/flashzoi	incumbent	false	dna_embedding_h5=/scratch/mforooz/onion/dna_emb/flashzoi	DNA source	false	no: PI ruling 26: ablation only (Flashzoi training loci overlap EIC); judged on fold-3 loci only	write
+dna_gnlm	dna=precomputed;dna_embedding_dim=128;dna_embedding_h5=/scratch/mforooz/onion/dna_emb/ntv2	incumbent	false	dna_embedding_h5=/scratch/mforooz/onion/dna_emb/ntv2	DNA source	false	yes	write
+dna_shift5mb	dna_shift_bp=5000000	incumbent	false		DNA source	null	no: leakage control (--simpler incumbent)	write

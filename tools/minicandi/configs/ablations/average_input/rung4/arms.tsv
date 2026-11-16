@@ -1,0 +1,2 @@
+arm	keys changed	comparison incumbent	d14_condition_1	needs	group	simpler_than_base	joins_design	status
+average_input	average_h5=/scratch/mforooz/onion/aux/eic_v1_average.h5;average_input=true	incumbent	false	average_h5=/scratch/mforooz/onion/aux/eic_v1_average.h5	per-position average (D10)	false	yes	write

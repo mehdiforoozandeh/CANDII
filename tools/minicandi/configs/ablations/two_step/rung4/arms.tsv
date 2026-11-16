@@ -1,0 +1,3 @@
+arm	keys changed	comparison incumbent	d14_condition_1	needs	group	simpler_than_base	joins_design	status
+two_step_native	two_step=true	incumbent	true		correction route (D15)	false	yes	write
+two_step_fixed	base_depth=fixed;two_step=true	two_step_native	true		correction route (D15)	false	yes	write
