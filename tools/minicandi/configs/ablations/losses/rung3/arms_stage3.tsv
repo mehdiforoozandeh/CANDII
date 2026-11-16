@@ -1,0 +1,2 @@
+arm	keys changed	comparison incumbent	d14_condition_1	needs	group	simpler_than_base	joins_design	status
+loss_bin_equal	loss_bin_equal=true	incumbent	false		bin weighting	null	yes	write
