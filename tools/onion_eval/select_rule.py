@@ -430,10 +430,13 @@ def check_comparable(seeds: list[dict], split: str = "val") -> None:
 # 1 (the legacy scorer). Reference directories (baselines) are not arms: they are checked by
 # check_comparable only, so a scorer_version 1 baseline is a valid reference for version 2 runs.
 SCORER_KEYS = ("evalset_sha256", "tables_sha256", "scorer_version", "scorer_settings.device",
-               "scorer_settings.infer_batch", "refs.sha256_*", "fraglen_table.sha256")
+               "scorer_settings.infer_batch", "refs.sha256_*", "fraglen_table.sha256",
+               "foreign_covariates")
 #: FL: the fragment-length side table of `score.py --fraglen-table`; absent (a score made without
 #: the option, or before the key existed) is None
 FRAGLEN_KEY = "fraglen_table.sha256"
+#: E5: the comparability key of a score made with foreign covariates at scoring (`mode:seed<n>`)
+FOREIGN_KEY = "foreign_covariates"
 #: the keys `--allow-mix` may exempt (a cross-rung comparison of a GPU and a CPU forward; FL: a
 #: count-space comparison across scores with and without the fragment-length table)
 MIXABLE = ("scorer_settings.device", "scorer_settings.infer_batch", FRAGLEN_KEY)
@@ -454,6 +457,11 @@ def scorer_keys(s: dict) -> dict:
            FRAGLEN_KEY: (s.get("fraglen_table") or {}).get("sha256")}
     refs = s.get("refs") or {}
     out.update({f"refs.{k}": v for k, v in sorted(refs.items()) if k.startswith("sha256_")})
+    # E5: a score made with foreign covariates at scoring never compares with a normal score; the
+    # key is written only when present, so the keys of every normal score are unchanged
+    fc = s.get("foreign_covariates")
+    if fc:
+        out[FOREIGN_KEY] = f"{fc.get('mode')}:seed{fc.get('seed')}"
     t = s.get("__oracle__")             # arm_report: read with an oracle-floor reference (OF)
     if t:
         out.update(composite_version=t["composite_version"], gap_closed_floor=t["gap_closed_floor"])
@@ -767,11 +775,12 @@ def table(runs, prefix: str = "", sub: str = "", oracle="auto", composite_versio
     `correction_n_pairs` (what entered that term), and (CM)
     `correction_gap_closed_oracle_all`, `composite_v2` and `composite_v3` (clipped composites with
     either correction term). `correction_only` (CM) when the scores.json holds that term."""
-    rows = []
+    rows, fc_items = [], []
     for arm in sorted(p for p in Path(runs).iterdir() if p.is_dir() and p.name.startswith(prefix)):
         for d in seed_dirs(arm):
             st = seed_state(d, sub)
             comp, cl, flag = None, None, None
+            fc = None
             raw = clipped = dict.fromkeys(GOALS)
             v2 = {}
             sp = d / sub / "scores.json" if sub else d / "scores.json"
@@ -794,6 +803,8 @@ def table(runs, prefix: str = "", sub: str = "", oracle="auto", composite_versio
                              for v, c in s["correction_by_version"].items()}}
                 if s.get("correction_only") is not None:
                     v2["correction_only"] = s["correction_only"]
+                fc = (s.get("scorer_keys") or {}).get(FOREIGN_KEY)
+                fc_items.append((str(sp), {FOREIGN_KEY: fc}))
                 g = gate_status([s])            # the gate as select_rule applies it (old scores too)
                 comp, flag = s["composite"], s["copy_gain_flag"]
                 raw, clipped = s["raw_goals"], s["clipped_goals"]
@@ -802,7 +813,12 @@ def table(runs, prefix: str = "", sub: str = "", oracle="auto", composite_versio
                          "composite": comp,
                          **{f"{k}_raw": raw[k] for k in GOALS},
                          **{f"{k}_clipped": clipped[k] for k in GOALS},
-                         "copy_leak_pass": cl, "same_view_copy_gain_flag": flag, **v2})
+                         "copy_leak_pass": cl, "same_view_copy_gain_flag": flag, **v2,
+                         **({FOREIGN_KEY: fc} if fc else {})})
+    # E5: one table never holds scores made with foreign covariates beside normal ones, or two
+    # foreign modes or donor seeds (only this key is checked here, so the refusals of every
+    # existing normal table are unchanged)
+    check_scorer_keys(fc_items)
     return rows
 
 
@@ -836,6 +852,9 @@ def arm_summary(runs, prefix: str = "", sub: str = "", oracle="auto") -> list[di
             full = len(ok) == len(v)
             o[f"{name}.mean"] = _mean(ok) if ok and full else None
             o[f"{name}.range"] = spread(ok) if ok and full else None
+        fcs = {r.get(FOREIGN_KEY) for r in rs} - {None}
+        if fcs:                         # E5: only when a score carries it (table refuses a mix)
+            o[FOREIGN_KEY] = ",".join(sorted(fcs))
         out.append(o)
     return out
 
@@ -1203,6 +1222,8 @@ def main(argv=None) -> int:
         extra = list(TABLE_V2_COLUMNS) if vers else ["composite_version"]
         if any("correction_only" in r for r in rows):
             extra.append("correction_only")
+        if any(FOREIGN_KEY in r for r in rows):      # E5: absent for normal scores
+            extra.append(FOREIGN_KEY)
         done = [r for r in rows if r["state"] == "done"]
         if len({r.get("composite_version", 1) for r in done}) > 1:
             print("warning: composite versions differ across rows (version 1 rows have no oracle "
@@ -1215,7 +1236,9 @@ def main(argv=None) -> int:
                              *(f(row[t]) for t in terms), str(row["copy_leak_pass"]),
                              str(row["same_view_copy_gain_flag"]),
                              *((str(row.get(c, 1)) if row["state"] == "done" or c in row else "")
-                               if c == "composite_version" else f(row.get(c)) for c in extra)]))
+                               if c == "composite_version" else
+                               (row.get(c) or "") if c == FOREIGN_KEY else f(row.get(c))
+                               for c in extra)]))
         return 0
     if a.cmd == "arm-summary":
         try:
@@ -1225,10 +1248,12 @@ def main(argv=None) -> int:
             return 2
         cols = ["arm", "n_seeds", "composite_version"] + [
             f"{q}.{k}" for q in SUMMARY_QUANTITIES for k in ("mean", "range", "n_defined")]
+        if any(FOREIGN_KEY in r for r in rows):      # E5: absent for normal scores
+            cols.append(FOREIGN_KEY)
         print("\t".join(cols))
         f = lambda x: "" if x is None else (str(x) if isinstance(x, (int, str)) else f"{x:.4f}")  # noqa: E731
         for r in rows:
-            print("\t".join(f(r[c]) for c in cols))
+            print("\t".join(f(r.get(c)) for c in cols))
         return 0
     if a.cmd == "h1-status":
         print("\t".join(("scores",) + H1_COLUMNS))

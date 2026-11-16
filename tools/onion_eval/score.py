@@ -155,6 +155,23 @@ covariate_cost_closed` (`correction_only_block`: per headline pair d, m, s, f; p
 Composite versions (CM): computed at report time only (select_rule.py); the scorer writes no
 version key, so without the same-view switch every output is the pre-CM one.
 
+Close-out item E5 (scorer extensions, PI 2026-11-16). With every switch off, scores.json differs from
+the pre-E5 one only by these additive keys (no existing key changes value or meaning):
+`pit_deviation_per_stratum` and `predicted_over_replicate_variance_robust` in each imputation table
+(top level, `accessibility_only`, `predicted_control`; PIT_STRATA_DESCRIPTION, H7_ROBUST_DESCRIPTION), and `selection.composite_status` (COMPOSITE_STATUS:
+`selection.composite` is composite version 1, superseded; the current one is select_rule.py
+arm-summary). suffstats.npz and pairs_per_region.npz are unchanged. `drop_e5_keys` removes exactly
+these keys (the tests that pin pre-E5 outputs use it).
+Foreign covariates (off by default): `--foreign-covariates MODE [--foreign-seed N]` (or
+ONION_FOREIGN_COVARIATES / ONION_FOREIGN_SEED, which submit_arms.sh sets from FOREIGN_COVARIATES)
+give the model's forward the covariates of another experiment of the same assay (FOREIGN_DEFINITION,
+FOREIGN_MODES: side in | out | both, depth keep_depth | swap_depth). The predict and the metrics job
+must both have the switch: the prediction store records the mode and seed in STORE.json, and the
+metric phase refuses a store of another mode (or a normal store). Outputs: scores.json
+`foreign_covariates` (mode, seed, definition, per measurement the donor and the columns it changed)
+and `scorer_settings.foreign_covariates`, read by select_rule.scorer_keys, so a foreign score never
+compares with a normal one. `--out` must name a directory that holds 'foreign'.
+
 Add-on scoring (OXe, Amendment 4, PI ruling 33). `--addon` scores an add-on eval set
 (`evalset.py addon`, key `addon_of`) and is required for one; it is refused on any other eval set
 and on the blind split. The form is `score.sh $K $EVX <seed dir>/ox run <seed dir> --addon`: the
@@ -281,6 +298,76 @@ CORRECTION_ONLY_DEFINITION = (
     "macro and named (`pair_types_excluded`). Value = the unweighted mean over the other pair types "
     "(all assays); undefined when one of them is undefined or none is left. Reported beside the "
     "composite, never inside it (PI ruling 2026-11-16, review item 9)")
+#: E5: foreign covariates at scoring (module docstring); off unless --foreign-covariates or the env
+FOREIGN_ENV = "ONION_FOREIGN_COVARIATES"
+FOREIGN_SEED_ENV = "ONION_FOREIGN_SEED"
+FOREIGN_SIDES = {"in": ("in",), "out": ("out",), "both": ("in", "out")}
+FOREIGN_DEPTHS = ("keep_depth", "swap_depth")
+FOREIGN_MODES = tuple(f"{s}_{d}" for s in FOREIGN_SIDES for d in FOREIGN_DEPTHS)
+#: E5: a foreign-covariate scoring writes only into a directory whose name holds this text
+FOREIGN_DIR_TAG = "foreign"
+FOREIGN_KEY = "foreign_covariates"
+FOREIGN_DEFINITION = (
+    "E5 control for covariate use at scoring, with no new training. Each measurement that a model "
+    "window reads (an input on side C, a target on side C') gets a donor: another experiment of the "
+    "same assay, i.e. the base view of a measurement of the same assay in another cell (in_eic train "
+    "or val), drawn once per measurement with numpy default_rng(SeedSequence([seed, crc32(id)])) from "
+    "the candidates sorted by measurement id. Side `in` replaces the C rows of the inputs, side `out` "
+    "the C' rows of the targets, `both` both. Depth: `keep_depth` keeps column 0 (log2 depth) true, so "
+    "the count transform and the NB depth offset are unchanged and only the other covariates are "
+    "foreign; `swap_depth` also takes the donor's depth (at the same half-read scale), so the depth "
+    "offset moves with it. Only the model's forward reads the foreign rows: the reference predictors, "
+    "the truth, the pair depth ratio (headline 5) and the copy-leak guardrail keep the true covariates. "
+    "The two-step base leg (c_base) is not changed. A measurement whose assay has no base view in "
+    "another cell has no donor and keeps its true rows; such assays are listed per side under "
+    "`assays_without_donor` (and those whose donor changed no column under "
+    "`assays_with_no_column_changed`) and stay in every table and macro, so a foreign macro covers "
+    "the same assays as the normal one in every mode. Scores of this mode are never comparable with "
+    "normal scores (select_rule.scorer_keys key `foreign_covariates`).")
+FOREIGN_TRUTH_NOTE = ("scored against the true target's counts: the truth, the reference predictors and "
+                      "the noise floor never read foreign covariates; only the model's forward does")
+#: E5: headline 7 robust aggregates (beside the existing mean of per-target ratios, unchanged)
+H7_ROBUST_KEY = "predicted_over_replicate_variance_robust"
+H7_ROBUST_DESCRIPTION = (
+    "E5: robust aggregates of headline 7 at the pseudoreplicate rung, beside the existing key "
+    "predicted_over_replicate_variance (the mean of per-target ratios, unchanged). median_of_targets: "
+    "per assay, the median of the per-target ratios. ratio_of_means: per assay, the sum over its "
+    "targets of the mean predicted NB variance over the sum of the mean replicate variance (each "
+    "target's two means as metrics.variance_ratio pools them; with equal bins per target this is the "
+    "ratio of the means over all the assay's bins). Both: macro = mean over the scorable assays; "
+    "undefined for an assay when a target's ratio is undefined.")
+#: E5: PIT deviation in every region stratum (the existing key keeps only the worst stratum)
+PIT_STRATA_KEY = "pit_deviation_per_stratum"
+PIT_STRATA_DESCRIPTION = (
+    "E5: PIT deviation per region stratum of the eval set (strata.py masks), one metric block per "
+    "stratum, pooled over the assay's targets as pit_deviation_pooled is; pit_deviation_worst_stratum "
+    "is the per-assay maximum over these strata. The same values follow at report time from "
+    "suffstats.npz pit/<regime>/<target>/<stratum> (report_extras.py strata).")
+#: E5: the label of the superseded composite in `selection` (the value is unchanged)
+COMPOSITE_STATUS = (
+    "superseded: selection.composite is composite version 1 (correction term = the half-read gap "
+    "closed, selection.correction_gap_closed). The current composite (version 3) is computed at report "
+    "time: select_rule.py arm-summary --runs <runs root> --sub <score sub-directory>.")
+#: E5: the keys that the E5 scorer adds to every scores.json with its switches off: per imputation
+#: table (top level, `accessibility_only`, `predicted_control` when it is a table) and in `selection`
+E5_TABLE_KEYS = (PIT_STRATA_KEY, H7_ROBUST_KEY)
+E5_SELECTION_KEYS = ("composite_status",)
+
+
+def drop_e5_keys(scores: dict) -> dict:
+    """E5: a copy of a scores.json dict without the E5 additive keys (E5_TABLE_KEYS in each
+    imputation table, E5_SELECTION_KEYS in `selection`), for checks against outputs pinned before
+    E5. Every other key and value is the pre-E5 one (module docstring)."""
+    out = {k: v for k, v in scores.items() if k not in E5_TABLE_KEYS}
+    for t in ("accessibility_only", "predicted_control"):
+        if isinstance(out.get(t), dict):
+            out[t] = {k: v for k, v in out[t].items() if k not in E5_TABLE_KEYS}
+    if isinstance(out.get("selection"), dict):
+        out["selection"] = {k: v for k, v in out["selection"].items()
+                            if k not in E5_SELECTION_KEYS}
+    return out
+
+
 #: OXe: why an evaluation-only target (a second experiment) has no assay-level value
 FLAGGED_REASON = ("evaluation-only target (a second experiment, PI ruling 33): outside the "
                   "shared/specific split, the error budget and every headline block")
@@ -434,6 +521,29 @@ def _mean_of(key):
             return Mx.Undefined(f"{len(bad)} of {len(rs)} targets undefined: {_why(bad[0][key])}")
         return float(np.mean(v))
     return fn
+
+
+def _median_of(key):
+    """E5: the median of a per-target value over one assay's records; undefined as `_mean_of`."""
+    def fn(rs):
+        v = [r[key] for r in rs if not _undef(r[key])]
+        if len(v) < len(rs):
+            bad = [r for r in rs if _undef(r[key])]
+            return Mx.Undefined(f"{len(bad)} of {len(rs)} targets undefined: {_why(bad[0][key])}")
+        return float(np.median(v))
+    return fn
+
+
+def _ratio_of_means(rs):
+    """E5: headline 7 at the pseudoreplicate rung as a ratio of means over one assay's targets:
+    sum of the targets' mean predicted variances over the sum of their mean replicate variances."""
+    bad = [r for r in rs if r.get("variance_ratio_means") is None]
+    if bad:
+        return Mx.Undefined(f"{len(bad)} of {len(rs)} targets undefined: "
+                            f"{_why(bad[0].get('variance_ratio'))}")
+    pv = float(sum(r["variance_ratio_means"][0] for r in rs))
+    rv = float(sum(r["variance_ratio_means"][1] for r in rs))
+    return pv / rv if rv > 0 else Mx.Undefined("replicate variance is zero")
 
 
 def recovered_fn(prefix: str = "", no_floor: bool = False):
@@ -667,6 +777,51 @@ def same_view_from_env() -> bool:
     return os.environ.get(SAME_VIEW_ENV, "").strip() == "1"
 
 
+def foreign_from_env():
+    """E5: (mode or None, seed) from ONION_FOREIGN_COVARIATES and ONION_FOREIGN_SEED. The seed is
+    read only when a mode is set (a stray seed value never touches a normal scoring)."""
+    m = os.environ.get(FOREIGN_ENV, "").strip() or None
+    if m is None:
+        return None, 0
+    raw = os.environ.get(FOREIGN_SEED_ENV, "").strip() or "0"
+    try:
+        return m, int(raw)
+    except ValueError:
+        raise ValueError(f"{FOREIGN_SEED_ENV}={raw!r}: want an integer") from None
+
+
+def foreign_spec(mode, seed=0):
+    """E5: {"mode", "sides", "depth", "seed"} of a foreign-covariate mode, or None for None."""
+    if mode is None:
+        return None
+    if mode not in FOREIGN_MODES:
+        raise ValueError(f"foreign covariates {mode!r} not in {FOREIGN_MODES}")
+    side, _, depth = mode.partition("_")
+    return {"mode": mode, "sides": list(FOREIGN_SIDES[side]), "depth": depth, "seed": int(seed)}
+
+
+def foreign_donors(rows: dict, mids, seed: int) -> dict:
+    """E5: {measurement id: donor id or None} for `mids`. The donor is the base view of a measurement
+    of the same assay in another cell (in_eic train or val), drawn with a seeded generator per
+    measurement from the candidates sorted by id (FOREIGN_DEFINITION). Pure and order-free."""
+    from minicandi.dataset import view_of
+    pool = defaultdict(list)
+    for m in sorted(rows):
+        r = rows[m]
+        if r.get("in_eic") in ("train", "val") and view_of(r)[0] == "base":
+            pool[r["assay"]].append(m)
+    out = {}
+    for m in sorted(set(mids)):
+        r = rows[m]
+        cands = [c for c in pool[r["assay"]] if rows[c]["cell"] != r["cell"]]
+        if not cands:
+            out[m] = None
+            continue
+        rng = np.random.default_rng(np.random.SeedSequence([int(seed), zlib.crc32(m.encode())]))
+        out[m] = cands[int(rng.integers(len(cands)))]
+    return out
+
+
 def _headline_pair(p) -> bool:
     return (str(p.get("rung") or "") == "" and int(p.get("never_trained") or 0) == 1
             and int(p.get("subset_pair") or 0) == 0)
@@ -844,7 +999,8 @@ class Scorer:
                  log=print, region_cache=True, infer_batch=None, lambda_source="auto",
                  signal_override=None, addon=False, dump_signal=None, dump_targets=None,
                  dump_method=None, workers=1, stage_dir=None, pred_store=None, store_run=None,
-                 refs_from=None, fraglen_table=None, same_view=False):
+                 refs_from=None, fraglen_table=None, same_view=False, foreign_covariates=None,
+                 foreign_seed=0):
         from minicandi import contract as C
         from minicandi.dataset import OnionDataset, tables_sha256
         from onion_eval.evalset import tables_dir_of
@@ -881,6 +1037,13 @@ class Scorer:
         #: CM: the same-view pass (off by default) and its records (run() fills them)
         self.same_view = bool(same_view)
         self.same_view_records = []
+        #: E5: foreign covariates at scoring (None = off, the default); see FOREIGN_DEFINITION
+        self.foreign = foreign_spec(foreign_covariates, foreign_seed)
+        if self.foreign is not None and (main != "model" or not (model is not None
+                                                                  or pred_store is not None)):
+            raise ValueError("foreign covariates apply to a model's forward: give main='model' and "
+                             "a model or a prediction store")
+        self._foreign_donor, self._foreign_rows = None, {}
         self.C, self.log = C, log
         self.evalset_path = Path(evalset).resolve()
         self.ev = json.loads(self.evalset_path.read_text(encoding="utf-8"))
@@ -941,6 +1104,10 @@ class Scorer:
         self.tile_bs = int(infer_batch or self.bs)
         self._OnionDataset = OnionDataset
         self.ds = OnionDataset(self.tables, split, cfg, seed=0)
+        if (self.foreign is not None and self.foreign["depth"] == "swap_depth"
+                and "in" in self.foreign["sides"] and self.ds.config.get("input_depth") == "fixed"):
+            raise ValueError("foreign covariates: swap_depth on side C is not defined for a run with "
+                             "input_depth = fixed (its inputs are thinned by the true depth)")
         self.predict_control = bool(self.ds.config.get("predict_control")) and has_model
         self.regions = [(c, int(s)) for c, s in self.ev["regions"]]
         #: SF0 (Amendment 8, B.4): positions in `regions` that the pair jobs run on (all by default)
@@ -1400,6 +1567,103 @@ class Scorer:
                               for c, s in self.fit_regions]).astype(np.float64)
         return dos, _fit_size(np.maximum(pr1, PRED_FLOOR), pr2)
 
+    # -------------------------------------------------------------- E5 foreign covariates
+    def _donor(self, mid):
+        """E5: the donor of one measurement (foreign_donors), cached."""
+        if self._foreign_donor is None:
+            self._foreign_donor = {}
+        if mid not in self._foreign_donor:
+            self._foreign_donor[mid] = foreign_donors(self.ds.rows, [mid], self.foreign["seed"])[mid]
+        return self._foreign_donor[mid]
+
+    def _foreign_row(self, mid, side, scale):
+        """E5: the donor's raw covariate row for side `in` (C, with QC columns when the run reads
+        them) or `out` (C'), at the window's depth scale; None without a donor."""
+        key = (mid, side, float(scale))
+        if key not in self._foreign_rows:
+            d = self._donor(mid)
+            if d is None:
+                v = None
+            else:
+                dr = self.ds.rows[d]
+                v = (self.ds.encoder.c_in(dr, self.ds.qc_on_input, scale) if side == "in"
+                     else self.ds.encoder.c_out(dr, scale))
+            self._foreign_rows[key] = v
+        return self._foreign_rows[key]
+
+    def _model_batch(self, batch, job):
+        """E5: the batch the model reads. Without foreign covariates the batch itself (the same
+        object). With them, a copy whose C rows of the job's inputs (side `in`) and C' row of its
+        target (side `out`) are the donors' rows (column 0 kept true under keep_depth); a track that
+        is not available in the window (e.g. a control dropped by control_input) is left as it is.
+        A pair window reads pr1 / pr2 halves, so its rows are at depth scale 0.5, else 1."""
+        if self.foreign is None:
+            return batch
+        pair = job["kind"] in ("correction", "replicate")
+        scale = 0.5 if pair else 1.0
+        sides = {"in": ("c_in", "x_avail", [job["source"]] if pair else list(job["inputs"])),
+                 "out": ("c_out", "y_avail", [job["target"]])}
+        keep = self.foreign["depth"] == "keep_depth"
+        b = dict(batch)
+        for side in self.foreign["sides"]:
+            key, avail, mids = sides[side]
+            c = batch[key].clone()
+            for m in mids:
+                v = self._foreign_row(m, side, scale)
+                t = self.C.TRACK_INDEX[self.ds.rows[m]["assay"]]
+                av = batch[avail][:, t].bool()
+                if v is None or not bool(av.any()):
+                    continue
+                v = torch.as_tensor(np.asarray(v), dtype=c.dtype)
+                lo = 1 if keep else 0
+                c[av, t, lo:] = v[lo:]
+            b[key] = c
+        return b
+
+    def foreign_block(self, by_side: dict) -> dict:
+        """E5: scores.json `foreign_covariates`: the mode, the definition and, per swapped side
+        (`in` = the inputs' C, `out` = the targets' C') and measurement, its donor and the covariate
+        columns whose raw value the swap changed (C with its QC columns when the run reads them;
+        column 0, log2 depth, only under swap_depth). `by_side`: {side: measurement ids}; a side
+        that the mode does not swap is left out."""
+        from minicandi.contract import META_COLUMNS, QC_COLUMNS
+        rows = self.ds.rows
+        assign, n_ch, n_same, no_donor, no_change = {}, {}, {}, {}, {}
+        n_none = 0
+        for side in self.foreign["sides"]:
+            cols = list(META_COLUMNS) + (list(QC_COLUMNS) if side == "in" and self.ds.qc_on_input
+                                         else [])
+            enc = ((lambda r: self.ds.encoder.c_in(r, self.ds.qc_on_input)) if side == "in"
+                   else self.ds.encoder.c_out)
+            per, cnt = {}, defaultdict(int)
+            for m in sorted(set(by_side.get(side, ()))):
+                d = self._donor(m)
+                if d is None:
+                    n_none += 1
+                    per[m] = {"donor": None, "columns_changed": []}
+                    no_donor.setdefault(side, {}).setdefault(rows[m]["assay"], []).append(m)
+                    continue
+                a, b = enc(rows[m]), enc(rows[d])
+                ch = [cols[i] for i in range(len(cols)) if a[i] != b[i]
+                      and (i > 0 or self.foreign["depth"] == "swap_depth")]
+                per[m] = {"donor": d, "donor_cell": rows[d]["cell"], "columns_changed": ch}
+                if not ch:
+                    a_ = rows[m]["assay"]
+                    no_change.setdefault(side, {})[a_] = no_change.get(side, {}).get(a_, 0) + 1
+                for k in ch:
+                    cnt[k] += 1
+            assign[side], n_ch[side] = per, dict(sorted(cnt.items()))
+            n_same[side] = sum(1 for e in per.values() if e["donor"] is not None
+                               and not e["columns_changed"])
+        return dict(self.foreign, definition=FOREIGN_DEFINITION, truth=FOREIGN_TRUTH_NOTE,
+                    n_measurements={k: len(v) for k, v in assign.items()},
+                    n_without_donor=n_none, n_with_no_column_changed=n_same,
+                    assays_without_donor={k: {a: sorted(v) for a, v in sorted(d.items())}
+                                          for k, d in no_donor.items()},
+                    assays_with_no_column_changed={k: dict(sorted(d.items()))
+                                                   for k, d in no_change.items()},
+                    n_changed_by_column=n_ch, assignment=assign)
+
     def _predicted_control(self, batch, t):
         """The model's control mean [B, L] with the control channel asked for at track t's C'
         (a separate forward pass, so the target's own prediction is untouched)."""
@@ -1484,9 +1748,10 @@ class Scorer:
                         out["main.ctl_mu"].append(st["ctl_mu"][k, sl].astype(np.float64))
                     self.timing["store_read"] += time.perf_counter() - t2
                 else:
-                    preds["main"] = preds[self.main] if self.main in preds else self.model_pred(batch)
+                    mb = self._model_batch(batch, job) if self.main not in preds else batch
+                    preds["main"] = preds[self.main] if self.main in preds else self.model_pred(mb)
                     if want_ctl:
-                        out["main.ctl_mu"].append(self._predicted_control(batch, t).reshape(-1))
+                        out["main.ctl_mu"].append(self._predicted_control(mb, t).reshape(-1))
                     self.timing["model_forward"] += time.perf_counter() - t2
                 for name, p in preds.items():
                     if p is _FROM_STORE:
@@ -1695,12 +1960,17 @@ class Scorer:
             r["pit_marginal"] = ((pit_curve(mn, mm, y), y.size)
                                  if np.isfinite(mn).all() and np.isfinite(mm).all() else None)
             f = _half_shares(row) if halves else (0.5, 0.5)
+            vrd = None
             if not halves:
                 vr = no_halves
             else:                  # the prediction thinned to pr1's share; pr2 matched to pr1's depth
-                vr = (Mx.variance_ratio(n, f[0] * mu, A["pr1"], A["pr2"], self.strata or None,
-                                        depth_ratio_b=f[0] / f[1])["pooled"] if defined else nan)
+                vrd = (Mx.variance_ratio(n, f[0] * mu, A["pr1"], A["pr2"], self.strata or None,
+                                         depth_ratio_b=f[0] / f[1]) if defined else None)
+                vr = vrd["pooled"] if defined else nan
             r["variance_ratio"] = vr
+            # E5: the pooled numerator and denominator (H7_ROBUST_KEY's ratio of means)
+            r["variance_ratio_means"] = ((vrd["pred_var_mean"], vrd["rep_var_mean"])
+                                         if vrd is not None and not _undef(vr) else None)
             r.update(self._h7_per_rung(job, row, n, mu, defined, vr, y.size))
             # headline 1 / 2 in counts_log1p: prediction is the NB mean at the target's own C'
             ts = Mx.to_space(y, SPACE)
@@ -2282,6 +2552,14 @@ class Scorer:
                                f"checkpoint (ckpt_sha256 {have[:12]} != {want[:12]} of "
                                f"{self.store_run}); predict again")
         self.store_ckpt_sha256 = have
+        # E5: a store of foreign-covariate forwards is read only by the same foreign mode and seed,
+        # and a normal store only without the switch (the request lists are the same)
+        st_fc = info.get(FOREIGN_KEY)
+        want_fc = None if self.foreign is None else {"mode": self.foreign["mode"],
+                                                     "seed": self.foreign["seed"]}
+        if st_fc != want_fc:
+            raise ScoreRefused(f"{self.pred_store_dir}: the prediction store holds forwards with "
+                               f"foreign covariates {st_fc}, this scoring wants {want_fc}")
         self.store, self.store_info = st, info
         self._store_regions = {r["key"]: {ri: k for k, ri in enumerate(r["region_indices"])}
                                for r in reqs}
@@ -2528,6 +2806,9 @@ class Scorer:
                     "correction_pair_records": [jrec(r) for r in cor_recs],
                     "replicate_pair_records": [jrec(r) for r in rep_recs],
                     "wall_seconds": round(time.time() - t0, 1)})
+        if self.foreign is not None:              # E5: keys only with the switch
+            res[FOREIGN_KEY] = self.foreign_block(
+                {"in": [j["source"] for j in cor + rep], "out": [j["target"] for j in cor + rep]})
         self._two_phase_keys(res)
         return res
 
@@ -2543,15 +2824,17 @@ class Scorer:
         and inference batch are the store's. On the legacy model path: `scorer_settings` only (the
         device and batch of the forwards; TF32 off), so the comparability keys see the device. A
         baseline (no model) writes neither."""
+        fc = {} if self.foreign is None else {FOREIGN_KEY: self.foreign["mode"],
+                                              "foreign_seed": self.foreign["seed"]}
         if self.store is None:
             if isinstance(self.model_pred, ModelPredictor):
                 scores["scorer_settings"] = {"device": str(self.device), "infer_batch": self.tile_bs,
-                                             "tf32": False, "amp": False, "phase": "legacy"}
+                                             "tf32": False, "amp": False, "phase": "legacy", **fc}
             return
         info = self.store_info
         scores["scorer_version"] = SCORER_VERSION_TWO_PHASE
         scores["scorer_settings"] = {"device": info.get("device"), "infer_batch": info.get(
-            "infer_batch"), "tf32": info.get("tf32"), "amp": info.get("amp"), "phase": "metrics"}
+            "infer_batch"), "tf32": info.get("tf32"), "amp": info.get("amp"), "phase": "metrics", **fc}
         scores["pair_regions_n"] = len(self.pair_region_idx)
         scores["refs"] = (dict(self.refs) if self.refs is not None else
                           {"dir": None, "computed_in_run": True})
@@ -2693,6 +2976,7 @@ class Scorer:
             "space": SPACE, "imputation_gap_closed": _j(imp_t),
             "correction_gap_closed": _j(cor_t), "uncertainty_gap_closed": _j(unc),
             "composite": _j(comp), "reason": _why(comp) if _undef(comp) else "",
+            "composite_status": COMPOSITE_STATUS,          # E5: additive label; the value is unchanged
             "imputation_reason": _why(imp_t) if _undef(imp_t) else "",
             "uncertainty_reason": _why(unc) if _undef(unc) else "",
             "correction_reason": cor_m.get("reason", "") if _undef(cor_t) else "",
@@ -2757,6 +3041,11 @@ class Scorer:
                 "note": "add-on score (Amendment 4): reported only; evaluation-only targets enter "
                         "explained_fraction_per_layer and per_target only, never a headline block, "
                         "a selection term or n_targets"}
+        if self.foreign is not None:              # E5: keys only with the switch
+            pj = cor + rep + sv
+            scores[FOREIGN_KEY] = self.foreign_block({
+                "in": [m for j in imp + ctl for m in j["inputs"]] + [j["source"] for j in pj],
+                "out": [j["target"] for j in imp + ctl + pj]})
         self._two_phase_keys(scores)
         return scores
 
@@ -2863,6 +3152,17 @@ class Scorer:
             "pit_deviation_pooled": metric(recs, pit_fn(POOLED), scorable, nb, sd, require_all=ra),
             "pit_deviation_worst_stratum": metric(recs, worst_fn, scorable, nb, sd, require_all=ra),
             "predicted_over_replicate_variance": self._h7_metric(recs, scorable, require_all=ra),
+            # E5 (additive keys): every stratum's PIT deviation, and headline 7's robust aggregates
+            PIT_STRATA_KEY: dict(
+                {"description": PIT_STRATA_DESCRIPTION, "strata": list(self.strata),
+                 "per_stratum": {k: metric(recs, pit_fn(k), scorable, nb, sd, require_all=ra)
+                                 for k in self.strata}},
+                **({} if self.strata else {"reason": "no region strata in the evalset"})),
+            H7_ROBUST_KEY: {
+                "description": H7_ROBUST_DESCRIPTION, "rung": "pseudoreplicate",
+                "median_of_targets": metric(recs, _median_of("variance_ratio"), scorable, nb, sd,
+                                            require_all=ra),
+                "ratio_of_means": metric(recs, _ratio_of_means, scorable, nb, sd, require_all=ra)},
             "explained_fraction_per_layer": {
                 "description": "reported only, never a selection input (PI ruling 32): per layer, the share of "
                                "the layer term that the prediction difference of the pair captures, "
@@ -2906,7 +3206,8 @@ class Scorer:
     #: the count-space metrics of an imputation table (an external entry writes each undefined)
     COUNT_SPACE_KEYS = ("count_crps_skill_vs_position_average", "count_crps",
                         "count_crps_oracle_scaled", "count_crps_scale_error", "pit_deviation_pooled",
-                        "pit_deviation_worst_stratum", "predicted_over_replicate_variance")
+                        "pit_deviation_worst_stratum", "predicted_over_replicate_variance",
+                        PIT_STRATA_KEY, H7_ROBUST_KEY)
 
     def _blank_count_space(self, out, recs, scorable) -> None:
         """External entry (XE): every count-space metric undefined with EXTERNAL_REASON."""
@@ -3154,6 +3455,7 @@ def score(evalset, out, *, run=None, baseline=None, model=None, config=None,
     the fork hangs the workers (seen on Nibi when a model had run in the same process)."""
     if (run is not None or model is not None) and phase is None:
         tf32_off()
+    _guard_foreign_out(Path(out), kw)
     if phase not in (None, "metrics"):
         raise ValueError(f"phase {phase!r}: None (legacy) or 'metrics'")
     if (phase == "metrics") != (pred_store is not None):
@@ -3196,6 +3498,28 @@ def _guard_previous_evalset(out: Path, evalset, kw) -> None:
             if old != sha256_file(evalset):
                 raise ScoreRefused(f"{prev} holds a score of another eval set (evalset_sha256 "
                                    f"{str(old)[:12]}); an add-on score goes to <seed dir>/ox")
+
+
+def _guard_foreign_out(out: Path, kw) -> None:
+    """E5: a foreign-covariate score goes only to a directory whose name holds FOREIGN_DIR_TAG,
+    and never over a scores.json of another foreign mode (or of a normal scoring)."""
+    mode = kw.get("foreign_covariates")
+    prev = out / "scores.json"
+    old = (json.loads(prev.read_text(encoding="utf-8")).get(FOREIGN_KEY) or {}
+           if prev.is_file() else {})
+    if mode is None:
+        if old:
+            raise ScoreRefused(f"{prev} holds a score with foreign covariates {old.get('mode')!r}; "
+                               f"a normal score never goes over it")
+        return
+    if FOREIGN_DIR_TAG not in out.name:
+        raise ScoreRefused(f"--out {out}: a foreign-covariate score goes to a directory whose name "
+                           f"holds '{FOREIGN_DIR_TAG}' (e.g. <seed dir>/p16_{FOREIGN_DIR_TAG}_"
+                           f"{mode}), never beside normal scores")
+    seed = int(kw.get("foreign_seed") or 0)
+    if prev.is_file() and (old.get("mode"), old.get("seed")) != (mode, seed):
+        raise ScoreRefused(f"{prev} holds a score with foreign covariates {old.get('mode')!r} seed "
+                           f"{old.get('seed')!r}, not {mode!r} seed {seed}")
 
 
 def _score_with(sc, out: Path, *, run, pairs_only) -> dict:
@@ -3344,6 +3668,29 @@ def dump_kwargs(a) -> dict:
     return {"dump_signal": a.dump_signal, "dump_targets": ids}
 
 
+def add_foreign_arguments(ap) -> None:
+    """E5: --foreign-covariates MODE [--foreign-seed N] (score.py and predict_store.py run)."""
+    ap.add_argument("--foreign-covariates", default=None, choices=FOREIGN_MODES,
+                    help=f"E5: give the model the covariates of another experiment of the same assay "
+                         f"(side in = C, out = C', both; keep_depth or swap_depth); default off (also "
+                         f"{FOREIGN_ENV}=<mode>); the out dir name must hold '{FOREIGN_DIR_TAG}'")
+    ap.add_argument("--foreign-seed", type=int, default=None,
+                    help=f"E5: seed of the donor draw (default 0, or {FOREIGN_SEED_ENV})")
+
+
+def foreign_kwargs(a) -> dict:
+    """E5: the Scorer arguments of add_foreign_arguments and the environment; {} when off."""
+    env_mode, env_seed = foreign_from_env()
+    mode = a.foreign_covariates or env_mode
+    if mode is None:
+        if a.foreign_seed is not None:
+            raise SystemExit("--foreign-seed goes with --foreign-covariates")
+        return {}
+    foreign_spec(mode)                                  # a ValueError for an unknown mode
+    return {"foreign_covariates": mode,
+            "foreign_seed": a.foreign_seed if a.foreign_seed is not None else env_seed}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     g = ap.add_mutually_exclusive_group(required=True)
@@ -3403,6 +3750,7 @@ def main(argv=None) -> int:
                     help="CM: also score the model's same-view pair (target pr1 -> target pr2) of "
                          "every headline correction target and write the correction-only term; "
                          f"default off (also on with {SAME_VIEW_ENV}=1)")
+    add_foreign_arguments(ap)
     a = ap.parse_args(argv)
     if a.phase == "metrics" and not (a.run and a.pred_store and a.refs_from):
         ap.error("--phase metrics needs --run, --pred-store and --refs-from")
@@ -3437,7 +3785,8 @@ def main(argv=None) -> int:
                   **({"pairs_only": True} if a.pairs_only else {}),
                   **phase_kw, **dump_kwargs(a),
                   **({"fraglen_table": a.fraglen_table} if a.fraglen_table else {}),
-                  **({"same_view": True} if (a.score_same_view or same_view_from_env()) else {}))
+                  **({"same_view": True} if (a.score_same_view or same_view_from_env()) else {}),
+                  **foreign_kwargs(a))
     except (PermissionError, ScoreRefused) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2

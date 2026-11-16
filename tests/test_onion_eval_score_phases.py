@@ -553,6 +553,13 @@ ARMS_NEW_KEYS = {
     "/specific_variance_recovered_above_noise/signal_arcsinh/per_target/ENCSR000013.pooled.uniform.base/lambda_source_training_average",
     "/specific_variance_recovered_above_noise/signal_arcsinh_plug_in/per_target/ENCSR000008.pooled.uniform.base/lambda_source_training_average",
     "/specific_variance_recovered_above_noise/signal_arcsinh_plug_in/per_target/ENCSR000013.pooled.uniform.base/lambda_source_training_average",
+    # E5 (score.py drop_e5_keys): additive keys of every imputation table and of `selection`
+    "/pit_deviation_per_stratum", "/predicted_over_replicate_variance_robust",
+    "/accessibility_only/pit_deviation_per_stratum",
+    "/accessibility_only/predicted_over_replicate_variance_robust",
+    "/predicted_control/pit_deviation_per_stratum",
+    "/predicted_control/predicted_over_replicate_variance_robust",
+    "/selection/composite_status",
 }
 
 

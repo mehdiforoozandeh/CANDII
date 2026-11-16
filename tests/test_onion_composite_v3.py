@@ -359,6 +359,8 @@ def test_outputs_bit_identical_to_the_base_tree_with_an_oracle_reference(env, tm
     for tree, name in ((REPO, "new"), (old, "old")):
         e = dict(os.environ, PYTHONPATH=os.pathsep.join([str(tree / "src"), str(tree / "tools")]))
         e.pop("ONION_SCORE_SAME_VIEW", None)
+        e.pop("ONION_FOREIGN_COVARIATES", None)      # E5: a shell value never reaches either tree
+        e.pop("ONION_FOREIGN_SEED", None)
         for what, r in (("pa", "-"), ("model", str(run))):
             d = env["bdir"] / f"cmp_{name}_{what}" / "seed0"     # beside the oracle reference
             p = subprocess.run([sys.executable, "-c", SCORE_RUN, str(env["evalset"]), str(d), r],
@@ -374,6 +376,8 @@ def test_outputs_bit_identical_to_the_base_tree_with_an_oracle_reference(env, tm
         for s in (sa, sb):
             for k in ("wall_seconds", "timing_seconds", "torch_threads"):
                 s.pop(k, None)
+        from onion_eval import score as S
+        sa = S.drop_e5_keys(sa)          # E5: only its additive keys are new (score.py docstring)
         assert sa == sb
         for f in ("suffstats.npz", "pairs_per_region.npz"):
             with np.load(a / f) as za, np.load(b / f) as zb:

@@ -197,6 +197,8 @@ def request_arrays(scorer, req, B: int, timing=None) -> dict:
             wins.append(scorer._pair_window(job, c, s) if pair
                         else scorer.ds.window(c, s, job["inputs"], [job["target"]]))
         batch = scorer.C.collate(wins)
+        if getattr(scorer, "foreign", None) is not None:   # E5: the model reads foreign covariates
+            batch = scorer._model_batch(batch, job)
         t1 = time.perf_counter()
         p = scorer.model_pred(batch)
         t2 = time.perf_counter()
@@ -308,6 +310,9 @@ def predict(scorer, reqs, out_dir, infer_batch, shard=(0, 1), *, run=None, guard
     settings = {"device": str(scorer.device), "infer_batch": B, "tf32": False, "amp": False}
     ck = ckpt_sha256(run)
     ck_head = {CKPT_KEY: ck} if ck is not None else {}
+    fc = getattr(scorer, "foreign", None)        # E5: only with foreign covariates
+    if fc is not None:
+        ck_head[S.FOREIGN_KEY] = {"mode": fc["mode"], "seed": fc["seed"]}
     _claim_store(out_dir, {"format": STORE_FORMAT, **ident, **settings, "n_shards": N,
                            "region_bins": scorer.rb, "n_requests_total": len(reqs),
                            "requests_sha256": requests_sha256(reqs), **ck_head})
@@ -638,6 +643,7 @@ def run(argv=None) -> int:
         python tools/onion_eval/predict_store.py run --run <run dir> --evalset <json>
             --pred-store <dir> [--shard i/N] [--infer-batch B] [--device auto|cuda|cpu]
             [--stage-dir <dir>] [--guardrail-windows 256] [--score-same-view]
+            [--foreign-covariates MODE [--foreign-seed N]]
 
     Builds the scorer of the run as `score.py --run` does (the same evaluation-set and tables
     checks; score.py's defaults), calls `requests` and `predict` for shard i of N, and exits 0 once
@@ -645,7 +651,10 @@ def run(argv=None) -> int:
     `--infer-batch` defaults to the run's batch_size (the legacy batch). `--stage-dir` copies the
     h5 files the shard reads to local disk first (byte copies: the same values). `--score-same-view`
     (or ONION_SCORE_SAME_VIEW=1; CM) adds the same-view requests; the metric phase must have the
-    same switch (the request hash differs)."""
+    same switch (the request hash differs). `--foreign-covariates` (or ONION_FOREIGN_COVARIATES;
+    E5) predicts with the covariates of another experiment of the same assay (score.py
+    FOREIGN_DEFINITION); STORE.json and PREDICTED_<i>of<N>.json record the mode and seed, and
+    the metric phase must have the same switch."""
     ap = argparse.ArgumentParser(prog="predict_store.py run", description="forwards of one run "
                                  "into a prediction store")
     ap.add_argument("--run", required=True)
@@ -658,6 +667,7 @@ def run(argv=None) -> int:
     ap.add_argument("--guardrail-windows", type=int, default=256)
     ap.add_argument("--score-same-view", action="store_true",
                     help=f"CM: also predict the same-view pairs (default off; also {S.SAME_VIEW_ENV}=1)")
+    S.add_foreign_arguments(ap)
     a = ap.parse_args(argv)
     for k in ("run", "evalset", "pred_store", "stage_dir"):            # "$SLURM_TMPDIR/..." works
         if getattr(a, k):
@@ -681,7 +691,8 @@ def run(argv=None) -> int:
         model, config = load_run(a.run)
         sc = S.Scorer(a.evalset, main="model", model=model, config=config, device=device,
                       run_tables_sha256=run_sha, guardrail_windows=a.guardrail_windows, log=log,
-                      **({"same_view": True} if (a.score_same_view or S.same_view_from_env()) else {}))
+                      **({"same_view": True} if (a.score_same_view or S.same_view_from_env()) else {}),
+                      **S.foreign_kwargs(a))
         phases["build_seconds"] = time.perf_counter() - t0
         t1 = time.perf_counter()
         reqs = requests(sc)
