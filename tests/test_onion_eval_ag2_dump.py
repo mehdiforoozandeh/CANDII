@@ -537,3 +537,24 @@ def test_run_dump_predicted_control_writes_ctl_pred(dumped, tmp_path):
     assert seen >= 2
     assert not list((dumped["dump"] / "val_model_auto").glob("*/*.ctl_pred.npy"))
     assert not list((dumped["dump"] / "val_pa_pc").glob("*/*.ctl_pred.npy"))
+
+
+def test_nb_signal_checks_on_the_fixture(dumped, tmp_path):
+    """E2: `lambda` reads the ctl_pred dump; `formula` and `table` run on the fixture."""
+    from onion_eval import nb_signal_checks as NC
+    env = dumped["env"]
+    out, dump = tmp_path / "pc", tmp_path / "pc_dump"
+    _score(env, out, config=dict(CFG, predict_control=True), lambda_source="predicted_control",
+           dump_signal=dump)
+    o = tmp_path / "checks"
+    assert NC.main(["lambda", "--evalset", str(env["evalset"]), "--out", str(o),
+                    "--dump", f"m={dump / 'accessibility_only'}",
+                    "--dump", str(dump / "leave_one_assay_out")]) == 0
+    summ = json.loads((o / "lambda_check.json").read_text())
+    assert [s["dump"] for s in summ][0] == "m" and len(summ) == 2
+    assert NC.main(["formula", "--evalset", str(env["evalset"]), "--out", str(o)]) == 0
+    rows = _tsv(o / "formula_check.tsv")
+    assert rows and all(r["target"] for r in rows)
+    assert NC.main(["table", "--run", f"r={out / 'scores.json'}", "--out", str(o)]) == 0
+    macro = _tsv(o / "signal_space_macro.tsv")
+    assert {r["regime"] for r in macro} == {"leave_one_assay_out", "accessibility_only"}

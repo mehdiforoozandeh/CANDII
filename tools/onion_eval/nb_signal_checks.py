@@ -4,9 +4,12 @@
         [--fraglen-table <tsv>] [--dnase-route macs2_no_control|hotspot2_density] [--targets a,b]
     -> <out>/formula_check.tsv (one row per validation imputation target) and formula_check.json
 
-    python tools/onion_eval/nb_signal_checks.py lambda --evalset <json> --dump <regime dir> --out <dir>
-        [--fraglen-table <tsv>]
-    -> <out>/lambda_check_<regime>.tsv and lambda_check_<regime>.json
+    python tools/onion_eval/nb_signal_checks.py lambda --evalset <json> --dump [name=]<regime dir>
+        [--dump ...] --out <dir> [--fraglen-table <tsv>]
+    -> <out>/lambda_check.tsv (one row per dump and ChIP-seq target) and lambda_check.json
+
+    python tools/onion_eval/nb_signal_checks.py table --run <name>=<scores.json> [--run ...] --out <dir>
+    -> <out>/signal_space_macro.tsv, signal_space_per_target.tsv, signal_space_reasons.json
 
 `formula`: the formula of `signal_from_counts` applied to the OBSERVED counts of each target, against
 the pipeline's own p-value track (`signal.h5`, the truth of the signal space). Observed counts in,
@@ -31,6 +34,10 @@ has r = N_treat / N_control). Per target: the median of lambda_pred / lambda_obs
 bins within 10% (|ratio - 1| <= 0.1), the Pearson of log lambda, and the fraction of bins where each
 lambda sits at its genome background floor lambda_bg. In regime `accessibility_only` the model sees
 no control (the control is hidden); in `leave_one_assay_out` the control is one of its inputs.
+
+`table`: headline 1 (specific variance recovered above noise) and r_spec per run, in count space
+(`counts_log1p`) beside the signal space (`signal_arcsinh`, its plug-in, and the predicted-control
+variant), macro per regime, and per target with the lambda source of each signal variant.
 """
 from __future__ import annotations
 
@@ -196,8 +203,21 @@ def cmd_formula(a) -> int:
 
 def cmd_lambda(a) -> int:
     sc = _scorer(a.evalset, a.fraglen_table, None)
+    rows, summ = [], []
+    for name, d in (x.split("=", 1) if "=" in x else (x, x) for x in a.dump):
+        r, s = _lambda_one(sc, Path(d))
+        rows += [dict(x, dump=name) for x in r]
+        summ.append(dict(s, dump=name))
+        print(json.dumps(summ[-1], sort_keys=True), flush=True)
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    _write_tsv(out / "lambda_check.tsv", ["dump"] + LAMBDA_COLS, rows)
+    (out / "lambda_check.json").write_text(json.dumps(summ, indent=1, sort_keys=True) + "\n")
+    return 0
+
+
+def _lambda_one(sc, d: Path):
     rb, regions = sc.rb, sc.regions
-    d = Path(a.dump)
     meta = json.loads((d / "tracks.json").read_text(encoding="utf-8"))
     regime = meta["regime"]
     rows = []
@@ -234,17 +254,70 @@ def cmd_lambda(a) -> int:
         bg = float(row["frag_len"]) * float(row["depth_reads"]) / MACS2_GSIZE_HS
         rec.update(lambda_compare(np.concatenate(lp), np.concatenate(lo), bg, bg), reason="")
         rows.append(rec)
-    out = Path(a.out)
-    out.mkdir(parents=True, exist_ok=True)
-    _write_tsv(out / f"lambda_check_{regime}.tsv", LAMBDA_COLS, rows)
     ok = [r for r in rows if not r.get("reason")]
-    summ = {"dump": str(d.resolve()), "method": meta.get("method"), "regime": regime,
+    summ = {"path": str(d.resolve()), "method": meta.get("method"), "regime": regime,
             "n_chip_targets": len(rows), "n_compared": len(ok),
+            "n_cells_compared": len({r["cell"] for r in ok}),
             "n_within_10pct_median": int(sum(r["within_10pct_median"] for r in ok)),
             "median_of_median_ratio": float(np.median([r["median_ratio"] for r in ok])) if ok else None,
             "median_frac_within_10pct": float(np.median([r["frac_within_10pct"] for r in ok])) if ok else None}
-    (out / f"lambda_check_{regime}.json").write_text(json.dumps(summ, indent=1, sort_keys=True) + "\n")
-    print(json.dumps(summ, indent=1, sort_keys=True))
+    return rows, summ
+
+
+#: (scores.json block, space key) pairs of the signal-space table; headline 1 and r_spec
+TABLE_KEYS = [(blk, sp) for blk in ("specific_variance_recovered_above_noise", "r_spec")
+              for sp in ("counts_log1p", "signal_arcsinh", "signal_arcsinh_plug_in",
+                         "signal_arcsinh_predicted_control")]
+
+
+def _macro(scores: dict, regime: str, blk: str, sp: str):
+    src = scores if regime == "leave_one_assay_out" else scores.get(regime, {})
+    v = src.get(blk, {}).get(sp)
+    if not isinstance(v, dict):
+        return None, "absent"
+    return v.get("macro"), (v.get("reason") or "")
+
+
+def cmd_table(a) -> int:
+    """Signal-space metric 1 beside count space, per run (`--run name=<scores.json>`, repeated):
+    the macro of headline 1 and r_spec in each space and regime; and one row per (run, target) with
+    the headline-1 `recovered` value per space and the target's lambda source."""
+    runs, per = [], []
+    for spec in a.run:
+        name, path = spec.split("=", 1)
+        s = json.loads(Path(path).read_text(encoding="utf-8"))
+        for regime in ("leave_one_assay_out", "accessibility_only"):
+            row = {"run": name, "regime": regime, "scores": path}
+            for blk, sp in TABLE_KEYS:
+                m, why = _macro(s, regime, blk, sp)
+                row[f"{blk}.{sp}"] = m
+                if m is None:
+                    row[f"{blk}.{sp}.reason"] = why[:200]
+            runs.append(row)
+            src = s if regime == "leave_one_assay_out" else s.get(regime, {})
+            h = src.get("specific_variance_recovered_above_noise", {})
+            for mid, rec in (h.get("counts_log1p", {}).get("per_target") or {}).items():
+                r = {"run": name, "regime": regime, "target": mid, "assay": rec.get("assay"),
+                     "cell": rec.get("cell"), "counts_log1p": rec.get("recovered")}
+                for sp in ("signal_arcsinh", "signal_arcsinh_plug_in",
+                           "signal_arcsinh_predicted_control"):
+                    t = (h.get(sp, {}).get("per_target") or {}).get(mid, {})
+                    r[sp] = t.get("recovered")
+                    r[f"lambda_source.{sp}"] = t.get("lambda_source")
+                per.append(r)
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    cols = ["run", "regime"] + [f"{b}.{s}" for b, s in TABLE_KEYS] + ["scores"]
+    _write_tsv(out / "signal_space_macro.tsv", cols, runs)
+    pcols = ["run", "regime", "target", "assay", "cell", "counts_log1p", "signal_arcsinh",
+             "signal_arcsinh_plug_in", "signal_arcsinh_predicted_control",
+             "lambda_source.signal_arcsinh", "lambda_source.signal_arcsinh_plug_in",
+             "lambda_source.signal_arcsinh_predicted_control"]
+    _write_tsv(out / "signal_space_per_target.tsv", pcols, per)
+    (out / "signal_space_reasons.json").write_text(json.dumps(
+        [{k: v for k, v in r.items() if k.endswith(".reason") or k in ("run", "regime")} for r in runs],
+        indent=1) + "\n")
+    print(f"{len(runs)} macro rows, {len(per)} per-target rows -> {out}")
     return 0
 
 
@@ -259,11 +332,15 @@ def main(argv=None) -> int:
     f.add_argument("--targets", default=None, help="comma list of target ids (default: all)")
     lm = sub.add_parser("lambda")
     lm.add_argument("--evalset", required=True)
-    lm.add_argument("--dump", required=True, help="one regime dir of a --dump-signal output")
+    lm.add_argument("--dump", required=True, action="append",
+                    help="[name=]<regime dir of a --dump-signal output>; repeat for several")
     lm.add_argument("--out", required=True)
     lm.add_argument("--fraglen-table", default=None)
+    tb = sub.add_parser("table")
+    tb.add_argument("--run", required=True, action="append", help="name=<scores.json>; repeat")
+    tb.add_argument("--out", required=True)
     a = ap.parse_args(argv)
-    return cmd_formula(a) if a.cmd == "formula" else cmd_lambda(a)
+    return {"formula": cmd_formula, "lambda": cmd_lambda, "table": cmd_table}[a.cmd](a)
 
 
 if __name__ == "__main__":
