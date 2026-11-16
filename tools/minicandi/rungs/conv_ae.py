@@ -37,6 +37,11 @@ Component arm keys (pinned interface E, chunk A3) reach every component through
 `head = nb_shared_size`. With every key at its default the model is today's, parameter for
 parameter and output for output (tests/test_minicandi_rung_arms.py).
 
+DNA fusion (item A11, `tools/minicandi/dna_fusion.py`): `dna_fusion = film` (the DNA features
+FiLM the stem output; the stem reads counts only) or `late` (DNA joins at the bottleneck through a
+learned patch pooling; the encoder reads counts only). Absent = the early concatenation above, bit
+for bit (tests/test_ablation_dna_fusion.py).
+
 Resolution keys (chunk RM): `res_bp` reaches the DnaTower and the count transform through
 `component_kwargs`. `res_in_sub = 5`: the per-track lift reads the five 5 bp sub-bin counts of
 each 25 bp token (batch key `x_counts_sub` [B, L, A, 5], each through the count transform), a
@@ -78,6 +83,7 @@ from minicandi.components import (ConvBlock, CountTransform, CovariateInjector, 
                                   Upsample, component_kwargs, fine_to_sub, res_subs_of,
                                   sub_output, sub_to_fine)
 from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
+from minicandi.dna_fusion import DnaFiLM, DnaPatchDown, fusion_of  # noqa: E402
 
 RUNG = 2
 NAME = "conv_ae"
@@ -176,12 +182,13 @@ class Model(C.MiniCandi):
         self.mask = MaskHandler(mask_mode, D_TRACK)
         self.inj_in = CovariateInjector(inj, D_TRACK, k_in, D_COV, **kw["injector"])
         self.dna = DnaTower(cfg["dna"], D_DNA, **kw["dna"])
+        self.fusion = fusion_of(cfg, NAME)                 # item A11; None = early concatenation
 
         n_lev, K, nb = _structure(cfg)
         self.n_levels = n_lev
         widths = _level_widths(W, n_lev)
         c_stem = A * D_TRACK + (A if mask_mode == "drop" else 0) \
-            + (D_DNA if cfg["dna"] != "off" else 0)
+            + (D_DNA if cfg["dna"] != "off" and self.fusion is None else 0)
         self.stem = nn.Conv1d(c_stem, widths[0], 1)
         self.enc = nn.ModuleList()
         self.down = nn.ModuleList()
@@ -206,6 +213,11 @@ class Model(C.MiniCandi):
         self.head = NBHead(D_OUT, self.transform, **kw["head"])
         if self.out_sub > 1:
             self.out_sub_emb = nn.Parameter(torch.randn(self.out_sub, D_OUT) * 0.02)
+        # DNA fusion arms (item A11), built last so the base modules keep their draws
+        if self.fusion == "film":
+            self.dna_film = DnaFiLM(D_DNA, widths[0])
+        elif self.fusion == "late":
+            self.dna_down = DnaPatchDown(D_DNA, wb, 2 ** n_lev)
 
     # ------------------------------------------------------------------ forward
 
@@ -242,20 +254,29 @@ class Model(C.MiniCandi):
         feats = [h.reshape(B, L, A * D_TRACK)]
         if self.mask_mode == "drop":
             feats.append(vis.to(h.dtype))
+        dna = None
         if self.dna.mode != "off":
             dna_key = "x_dna_emb" if self.dna.mode == "precomputed" else "x_dna"
-            feats.append(self.add_extra_track(self.dna(batch[dna_key]), batch).to(h.dtype))
+            dna = self.add_extra_track(self.dna(batch[dna_key]), batch).to(h.dtype)
+            if self.fusion is None:
+                feats.append(dna)
         z = torch.cat(feats, dim=-1).transpose(1, 2)                       # [B, C, L]
 
         f = 2 ** self.n_levels
         pad = (-L) % f
         if pad:
             z = F.pad(z, (0, pad))
+        if self.fusion is not None:                                        # [B, D_DNA, L + pad]
+            dna = F.pad(dna.transpose(1, 2), (0, pad))
         z = self.stem(z)
+        if self.fusion == "film":
+            z = self.dna_film(z, dna)
         for blocks, down in zip(self.enc, self.down):
             for blk in blocks:
                 z = blk(z)
             z = down(z)
+        if self.fusion == "late":
+            z = z + self.dna_down(dna)
         for blk in self.mid:
             z = blk(z)
         for up, blocks in zip(self.up, self.dec):

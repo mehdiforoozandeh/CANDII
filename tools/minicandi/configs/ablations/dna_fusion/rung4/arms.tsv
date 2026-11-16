@@ -1,0 +1,5 @@
+arm	keys changed	comparison incumbent	d14_condition_1	needs	group	simpler_than_base	joins_design	status
+fusion_film	dna_fusion=film	incumbent	false		DNA fusion	false	yes	write
+fusion_late	dna_fusion=late	incumbent	false		DNA fusion	false	yes	not applicable: base join (bottleneck concatenation + DNA skips)
+fusion_xattn	dna_fusion=xattn	incumbent	false		DNA fusion	false	yes	write
+fusion_early	dna_fusion=early	incumbent	false		DNA fusion	true	yes	write

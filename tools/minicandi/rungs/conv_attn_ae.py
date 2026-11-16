@@ -44,6 +44,12 @@ Component arm keys (pinned interface E, chunk A3) reach every component through
 `batch["x_dna_emb"]`; needs `dna_embedding_dim`), `offset_eps`, `count_transform = soft_clip` and
 `head = nb_shared_size`. With every key at its default the model is today's, parameter for
 parameter and output for output (tests/test_minicandi_rung_arms.py).
+
+DNA fusion (item A11, `tools/minicandi/dna_fusion.py`): `dna_fusion = film` (the DNA features
+FiLM the track-fusion output, which then reads counts only), `late` (DNA joins after the conv
+encoder through a learned patch pooling) or `xattn` (the coarse count tokens cross-attend to the
+pooled DNA tokens before the self-attention). Absent = the early concatenation, bit for bit
+(tests/test_ablation_dna_fusion.py).
 """
 from __future__ import annotations
 
@@ -63,6 +69,7 @@ from minicandi.components import NotApplicable  # noqa: E402
 from minicandi.contract import (A, K_META, LOG2_DEPTH_COL, MiniCandi, k_input,  # noqa: E402
                                 without_extras)
 from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
+from minicandi.dna_fusion import DnaCrossAttn, DnaFiLM, DnaPatchDown, fusion_of  # noqa: E402
 
 RUNG = 3
 NAME = "conv_attn_ae"
@@ -152,7 +159,8 @@ class Model(MiniCandi):
         if self.average_input:
             self.avg_lift = nn.Linear(1, D_TRACK)
         self.dna = M.DnaTower(cfg["dna"], D_DNA, **kw["dna"])
-        d_fuse = A * D_TRACK + (D_DNA if cfg["dna"] != "off" else 0)
+        self.fusion = fusion_of(cfg, NAME)                 # item A11; None = early concatenation
+        d_fuse = A * D_TRACK + (D_DNA if cfg["dna"] != "off" and self.fusion is None else 0)
         self.fuse = nn.Linear(d_fuse, W)
 
         if W % n_heads:
@@ -169,6 +177,13 @@ class Model(MiniCandi):
         self.track_emb = nn.Parameter(torch.zeros(A, D_OUT))
         nn.init.normal_(self.track_emb, std=0.02)
         self.head = M.NBHead(D_OUT, self.transform, **kw["head"])
+        # DNA fusion arms (item A11), built last so the base modules keep their draws
+        if self.fusion == "film":
+            self.dna_film = DnaFiLM(D_DNA, W)
+        elif self.fusion in ("late", "xattn"):
+            self.dna_down = DnaPatchDown(D_DNA, W, 2 ** n_down)
+            if self.fusion == "xattn":
+                self.dna_xattn = DnaCrossAttn(W, n_heads)
         # extra inputs (chunk XI), constructed last; dna = off leaves no DNA features
         self.build_extras(cfg, D_DNA if cfg["dna"] != "off" else None, ("cov_in", "cov_out"))
 
@@ -189,14 +204,24 @@ class Model(MiniCandi):
             h = h + self.avg_lift(torch.log1p(batch["avg"].float().clamp_min(0.0))[..., None])
         feats = [h.reshape(B, L, Ac * D_TRACK)]
         if self.dna.mode != "off":
-            feats.append(self.add_extra_track(
+            dna = self.add_extra_track(
                 self.dna(batch["x_dna_emb" if self.dna.mode == "precomputed" else "x_dna"]),
-                batch))
+                batch)
+            if self.fusion is None:
+                feats.append(dna)
+            else:
+                dna = dna.to(h.dtype).transpose(1, 2)                      # [B, D_DNA, L]
         z = self.fuse(torch.cat(feats, dim=-1)).transpose(1, 2)            # [B, W, L]
+        if self.fusion == "film":
+            z = self.dna_film(z, dna)
 
         for blk, dn in zip(self.enc, self.down):
             z = dn(blk(z))
+        if self.fusion == "late":
+            z = z + self.dna_down(dna)
         seq = z.transpose(1, 2)                                            # [B, L', W]
+        if self.fusion == "xattn":
+            seq = self.dna_xattn(seq, self.dna_down(dna).transpose(1, 2))
         Lc = seq.shape[1]
         seq = seq + M.sinusoidal_positions(Lc, self.width, seq.device).to(seq.dtype)
         pad = None

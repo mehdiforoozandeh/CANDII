@@ -35,6 +35,8 @@ EXPECTED = {
                       "cov_numeric_per_value": {"covariate_embedding", "param_budget"}},
     "depth_input": {"input_depth_fixed": {"input_depth"}},
     "cov_injection": {"inject_adaln_zero": {"covariate_injection"}},
+    "dna_fusion": {"fusion_film": {"dna_fusion"}, "fusion_late": {"dna_fusion"},
+                   "fusion_xattn": {"dna_fusion"}, "fusion_early": {"dna_fusion"}},
     "losses": {"loss_impute_x4": {"loss_weights"}, "loss_poisson_mean": {"loss"},
                "loss_nb_crps": {"loss"}, "loss_bin_equal": {"loss_bin_equal"}},
 }
