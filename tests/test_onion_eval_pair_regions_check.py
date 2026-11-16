@@ -246,9 +246,14 @@ NND = {"0": 0, "1": 0, "2": 1, "3": 1}      # pairs k = 0, 1 have no duplicate-k
 SV_GAIN = 0.3                        # the same-view CRPS is the cross-view CRPS minus this
 
 
-def write_oracle(d, ev, R, cols=None, o=0.5):
-    """An oracle reference (oracle_floor.load_oracle form) for the headline correction pairs."""
+def write_oracle(d, ev, R, cols=None, o=0.5, extra_assay=None):
+    """An oracle reference (oracle_floor.load_oracle form) for the headline correction pairs;
+    `extra_assay` adds one crop pair of that assay that no run scores."""
     head, _ = pairs()                # every correction pair, as the scorer's reference holds
+    if extra_assay:
+        head = head + [{"pair_id": f"c_{extra_assay}0", "assay": extra_assay, "cell": "cellX",
+                        "knob": "lab", "never_trained": 1, "subset_pair": 0, "source": "xs",
+                        "target": "xt"}]
     ri = np.arange(R) if cols is None else np.asarray(cols)
     n = len(head)
     d.mkdir(parents=True, exist_ok=True)
@@ -315,17 +320,54 @@ def screening_copy(src, dst, ev, p, refs_dir):
     (dst / "scores.json").write_text(json.dumps(s))
 
 
-def build_v3(tmp, R, effects, screening=True):
-    """Arms named in `effects` {arm: (level, region effect [R])}, 3 seeds, scored into p256_sv."""
+D_B = 4.0                            # assay B: depth-only CRPS 4.0 (assay A: 3.0)
+SHIFT_B, SHIFT_NND = 0.4, 0.8        # model CRPS added to assay B pairs and to duplicate-keeping pairs
+
+
+def distinguish(d, assay_eff=None):
+    """Make pairs differ: assay B has another depth-only CRPS and model level, the duplicate-keeping
+    pairs (k = 2, 3) a much worse model; `assay_eff` {assay: [R]} adds a per-region model effect."""
+    z = dict(np.load(d / "pairs_per_region.npz"))
+    b = z["bins"]
+    for i, pid in enumerate(z["pair_ids"]):
+        pid, a = str(pid), str(z["assay"][i])
+        if not pid.startswith("c_"):
+            continue
+        if a == "B":
+            z["crps_sum_depth_only"][i] *= D_B / 3.0
+            z["crps_sum_model"][i] += SHIFT_B * b[i]
+        if pid[-1] in "23":
+            z["crps_sum_model"][i] += SHIFT_NND * b[i]
+        if assay_eff and a in assay_eff:
+            z["crps_sum_model"][i] += np.asarray(assay_eff[a]) * b[i]
+    np.savez(d / "pairs_per_region.npz", **z)
+
+
+def expected_v3(d, o=0.5):
+    """The version-3 term computed here from the npz: crop pairs (k = 0, 1) only, per assay."""
+    z = np.load(d / "pairs_per_region.npz")
+    out = []
+    for a in ASSAYS:
+        rows = [i for i, pid in enumerate(z["pair_ids"]) if str(pid) in (f"c_{a}0", f"c_{a}1")]
+        m = np.mean([z["crps_sum_model"][i].sum() / z["bins"][i].sum() for i in rows])
+        dd = np.mean([z["crps_sum_depth_only"][i].sum() / z["bins"][i].sum() for i in rows])
+        out.append((dd - m) / (dd - o))
+    return float(np.mean(out))
+
+
+def build_v3(tmp, R, effects, screening=True, assay_eff=None, extra_assay=None):
+    """Arms named in `effects` {arm: (level, region effect [R] or f(seed) -> [R])}, 3 seeds,
+    scored into p256_sv, with the distinguished pairs."""
     p, ev = evalset(tmp, R)
-    write_oracle(tmp / "oracle_floor" / "seed0", ev, R)
+    write_oracle(tmp / "oracle_floor" / "seed0", ev, R, extra_assay=extra_assay)
     write_oracle(tmp / "baselines_p16" / "oracle_floor" / "seed0", ev, R,
-                 cols=PC.pair_region_positions(R, 16))
+                 cols=PC.pair_region_positions(R, 16), extra_assay=extra_assay)
     for arm, (lvl, eff) in effects.items():
         for s in range(3):
-            m = lvl + 0.02 * s + eff
+            m = lvl + 0.02 * s + (eff(s) if callable(eff) else eff)
             d = tmp / arm / f"seed{s}" / "p256_sv"
             write_run(d, ev, m, imp=0.6 + 0.01 * s, unc=0.5 + 0.01 * s)
+            distinguish(d, (assay_eff or {}).get(arm))
             add_v3(d, ev, m, gain=SV_GAIN + 0.01 * s)      # seeds differ in the term
             if screening:
                 screening_copy(d, tmp / arm / f"seed{s}" / "p16_sv", ev, 16, tmp / "baselines_p16")
@@ -349,11 +391,11 @@ def test_v3_uniform_regions_pass_and_settle(tmp_path):
     assert lines[0] == "pair regions: 8" and lines[1] == "16-region screening scores settled: yes"
     cons = [r for r in res["rows"] if r["condition"] == "consistency"]
     assert cons and all(r["value"] != "" and float(r["value"]) < 1e-9 for r in cons), cons
-    # the version-3 term uses the 4 pairs with no duplicate-keeping side: (3 - m) / (3 - 0.5)
-    v3 = [r for r in res["rows"] if r["condition"] == "1" and r["quantity"] == "correction_v3"]
-    assert v3 and abs(float(v3[0]["value_all_regions"]) - (3 - 2.0) / 2.5) < 0.03
-    co = [r for r in res["rows"] if r["condition"] == "1" and r["quantity"] == "correction_only"]
-    assert co and abs(float(co[0]["value_all_regions"]) - (1 - SV_GAIN / 2.0)) < 0.02
+    # the version-3 term uses only the crop pairs, per assay (computed here from the files)
+    v3 = [r for r in res["rows"] if r["condition"] == "1" and r["quantity"] == "correction_v3"
+          and r["scope"] == "armA/seed0"]
+    assert v3 and abs(float(v3[0]["value_all_regions"])
+                      - expected_v3(tmp_path / "armA" / "seed0" / "p256_sv")) < 1e-9
     rank = [r for r in res["rows"] if r["condition"] == "6" and r["scope"] != "ALL"]
     assert rank and all(r["pass"] == "pass" for r in rank if r["pass"])
 
@@ -396,3 +438,133 @@ def test_thresholds_v3_equal_the_amended_preregistration():
     if not m:
         pytest.skip("the preregistration in this checkout has no amendment")
     assert json.loads(m.group(1)) == PC.thresholds_v3()
+
+
+SUB8 = lambda R: np.isin(np.arange(R), PC.pair_region_positions(R, 8)).astype(float)  # noqa: E731
+
+
+def test_v3_term_takes_crop_pairs_per_assay():
+    """A wrong pair subset (duplicate-keeping pairs in) or a pooled assay grouping moves the term."""
+    import tempfile
+    tmp = Path(tempfile.mkdtemp())
+    build_v3(tmp, 32, {"armA": (2.0, np.zeros(32))}, screening=False)
+    d = tmp / "armA" / "seed0" / "p256_sv"
+    ev = json.loads((tmp / "evalset.json").read_text())
+    from onion_eval import oracle_floor as OF
+    r = PC.RunV3(d, ev, OF.load_oracle(tmp / "oracle_floor" / "seed0"))
+    t = r.terms(np.ones(32), pmfr_double, ev["scorable"])
+    assert abs(t["v3"] - expected_v3(d)) < 1e-12
+    assert len(r.v3_rows) == 4 and set(t["v3_assay"]) == {"A", "B"}
+    assert abs(t["v3_assay"]["A"] - t["v3_assay"]["B"]) > 0.01      # assays differ in the fixture
+
+
+def test_v3_missing_assay_makes_the_term_undefined_and_fails(tmp_path):
+    R = 64
+    p = build_v3(tmp_path, R, {"armA": (2.0, np.zeros(R)), "armB": (2.3, np.zeros(R))},
+                 screening=False, extra_assay="C")
+    for d in tmp_path.glob("arm*/seed*/p256_sv"):
+        s = json.loads((d / "scores.json").read_text())
+        s["scorable"] = dict(s["scorable"], correction=list(ASSAYS) + ["C"])
+        (d / "scores.json").write_text(json.dumps(s))
+    ev = json.loads(p.read_text())
+    from onion_eval import oracle_floor as OF
+    r = PC.RunV3(tmp_path / "armA" / "seed0" / "p256_sv", ev, OF.load_oracle(tmp_path / "oracle_floor" / "seed0"))
+    t = r.terms(np.ones(R), pmfr_double, ev["scorable"])
+    assert t["v3"] is None and "C" in t["v3_reason"]
+    res = check_v3(tmp_path, p, ["armA", "armB"], (("armA", "armB"),), sizes=(8,))
+    assert res["summary"][8]["1"] is False and res["summary"][8]["2"] is False
+
+
+def test_v3_per_assay_effect_fails_condition_2(tmp_path):
+    R = 64
+    X = 0.3        # per-assay ratio moves +-X on the 8-subset regions; the macro does not move
+    eff = {"A": X * 2.5 * SUB8(R), "B": -X * 3.5 * SUB8(R)}
+    p = build_v3(tmp_path, R, {"armA": (2.0, np.zeros(R)), "armB": (2.3, np.zeros(R))},
+                 screening=False, assay_eff={"armA": eff, "armB": eff})
+    res = check_v3(tmp_path, p, ["armA", "armB"], (("armA", "armB"),), sizes=(8,))
+    assert res["summary"][8]["2"] is False
+
+
+def test_v3_verdict_flip_fails_condition_3(tmp_path):
+    R = 64
+    p = build_v3(tmp_path, R, {"armA": (2.0, np.zeros(R)), "armB": (2.6, -1.2 * SUB8(R))},
+                 screening=False)
+    res = check_v3(tmp_path, p, ["armA", "armB"], (("armA", "armB"),), sizes=(8,))
+    assert res["verdicts_256"][("armA", "armB")][0] == "INCUMBENT"
+    assert res["summary"][8]["3"] is False
+
+
+def test_v3_seed_spread_on_subset_fails_condition_4(tmp_path):
+    R = 64
+    p = build_v3(tmp_path, R, {"armA": (2.0, lambda s: 0.3 * s * SUB8(R)), "armB": (2.3, np.zeros(R))},
+                 screening=False)
+    res = check_v3(tmp_path, p, ["armA", "armB"], (("armA", "armB"),), sizes=(8,))
+    assert res["summary"][8]["4"] is False
+
+
+@pytest.mark.parametrize("eps", [1e-3, 8e-7])     # 8e-7: inside 1e-6 absolute, outside 1e-6 relative
+def test_v3_stored_scores_that_differ_fail_condition_s(tmp_path, eps):
+    R = 64
+    arms = {"armA": (2.0, np.zeros(R)), "armB": (2.3, np.zeros(R))}
+    p = build_v3(tmp_path, R, arms)
+    f = tmp_path / "armA" / "seed0" / "p16_sv" / "pairs_per_region.npz"
+    z = dict(np.load(f))
+    z["crps_sum_model"] = z["crps_sum_model"] * (1 + eps)
+    np.savez(f, **z)
+    res = check_v3(tmp_path, p, list(arms), (("armA", "armB"),), sizes=(16,))
+    assert all(res["summary"][16].values()) and res["screening_settled"] is False
+    assert [r for r in res["rows"] if r["condition"] == "S" and r["pass"] == "fail"]
+
+
+def test_v3_refuses_inconsistent_terms_other_oracle_and_seed_sets(tmp_path):
+    import shutil
+    R = 64
+    arms = {"armA": (2.0, np.zeros(R)), "armB": (2.3, np.zeros(R))}
+    p = build_v3(tmp_path, R, arms, screening=False)
+    shutil.copytree(tmp_path / "oracle_floor", tmp_path / "other" / "oracle_floor")
+    with pytest.raises(SystemExit, match="oracle reference"):
+        PC.run_check_v3([tmp_path / a for a in arms], p, tmp_path / "other" / "oracle_floor" / "seed0",
+                        tmp_path / "out", comparisons=(("armA", "armB"),), sizes=(8,), n_boot=20,
+                        pmfr=pmfr_double, log=lambda *a: None)
+    sj = tmp_path / "armA" / "seed1" / "p256_sv" / "scores.json"
+    s = json.loads(sj.read_text())
+    s["correction_only_covariate_cost_closed"]["value"] += 1e-6
+    sj.write_text(json.dumps(s))
+    with pytest.raises(SystemExit, match="refuses"):
+        check_v3(tmp_path, p, list(arms), (("armA", "armB"),), sizes=(8,))
+    s["correction_only_covariate_cost_closed"]["value"] -= 1e-6
+    sj.write_text(json.dumps(s))
+    (tmp_path / "armB" / "seed3").mkdir()
+    with pytest.raises(SystemExit, match="seeds"):
+        check_v3(tmp_path, p, list(arms), (("armA", "armB"),), sizes=(8,))
+    (tmp_path / "armB" / "seed3").rmdir()
+    (tmp_path / "armB" / "seed2" / "CAPPED").write_text("")
+    with pytest.raises(SystemExit, match="capped"):
+        check_v3(tmp_path, p, list(arms), (("armA", "armB"),), sizes=(8,))
+
+
+def test_v3_condition_2_needs_72_cells_on_the_registered_arms(tmp_path):
+    R = 64
+    names = [x for ab in PC.COMPARISONS_V3 for x in ab]
+    arms = {a: (2.0 + 0.1 * i, np.zeros(R)) for i, a in enumerate(dict.fromkeys(names))}
+    p = build_v3(tmp_path, R, arms, screening=False)
+    res = check_v3(tmp_path, p, list(arms), PC.COMPARISONS_V3, sizes=(8,))
+    row = [r for r in res["rows"] if r["condition"] == "2" and r["scope"] == "ALL"][0]
+    assert res["summary"][8]["2"] is False and "72" in row["note"]     # 4 x 3 x 2 = 24 cells
+
+
+def test_v3_bootstrap_values_drop_the_aggregation(tmp_path, monkeypatch):
+    R = 64
+    arms = {"armA": (2.0, np.zeros(R)), "armB": (2.3, np.zeros(R))}
+    p = build_v3(tmp_path, R, arms, screening=False)
+    kept, orig = [], PC.RunV3.terms
+
+    def spy(self, *a, **k):
+        v = orig(self, *a, **k)
+        kept.append(v)
+        return v
+    monkeypatch.setattr(PC.RunV3, "terms", spy)
+    check_v3(tmp_path, p, list(arms), (("armA", "armB"),), sizes=(8,))
+    # only the 6 subset evaluations (p = 8) keep the aggregation; all-region and bootstrap ones drop it
+    assert sum("_out" in v for v in kept) == 6 and len(kept) == 6 * (1 + N_BOOT + 1)
+

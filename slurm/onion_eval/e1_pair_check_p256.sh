@@ -6,7 +6,7 @@
 #   bash slurm/onion_eval/e1_pair_check_p256.sh check   # step 2: one CPU job, after all 12 are SCORED
 #
 # DRY RUN BY DEFAULT: prints the sbatch lines and submits nothing. GO=1 submits. Run it on a Fir
-# login node from any directory. KIT (default: kit COE1) must hold `pair_regions_check.py run-v3`.
+# login node from any directory. The kit (below) must hold `pair_regions_check.py run-v3`.
 #
 # Step 1 scores conv autoencoder, conv + attention and U-Net base recipes and the U-Net with DNA-only
 # skip connections (3 seeds each) on eval/eic_v1/evalset.json (all 256 pair regions) into
@@ -22,13 +22,16 @@ set -u
 MODE="${1:-score}"
 module load python/3.10.13 >/dev/null 2>&1; unset EBPYTHONPREFIXES
 O=/project/def-maxwl/mforooz/ONION
-K="${KIT:-/project/def-maxwl/mforooz/onion_kit/COE1}"
+# score mode: kit COE1 (submitted 2026-11-16, Fir jobs 4451177 to 4451301); check mode: kit COE1b,
+# which holds the reviewed run-v3 (consistency gates, pinned seeds, 72 cells). KIT overrides both.
+case "$MODE" in check) K="${KIT:-/project/def-maxwl/mforooz/onion_kit/COE1b}" ;;
+  *) K="${KIT:-/project/def-maxwl/mforooz/onion_kit/COE1}" ;; esac
 EV=$O/eval/eic_v1/evalset.json
 B=$O/eval/eic_v1/baselines
 OUT="${OUT:-$O/pair_check/e1_v3}"
 ARMS=(rung2_base_heldout rung3_base_heldout rung4_base_heldout final_rung4_mech_skip_dna)
 [ -f "$K/tools/onion_eval/pair_regions_check.py" ] && grep -q "def run_check_v3" "$K/tools/onion_eval/pair_regions_check.py" \
-  || { echo "kit $K has no run_check_v3; push kit COE1 first" >&2; exit 2; }
+  || { echo "kit $K has no run_check_v3; push it first" >&2; exit 2; }
 GO="${GO:-0}"
 
 case "$MODE" in

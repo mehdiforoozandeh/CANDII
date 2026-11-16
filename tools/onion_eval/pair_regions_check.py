@@ -504,6 +504,9 @@ def run_check(arms, baselines, evalset, out, *, sizes=SIZES, n_boot=N_BOOT, pmfr
 # crop pairs with no duplicate-keeping side as its correction term; the correction-only term
 # (score.correction_only_block, same-view pass) is reported beside it. `run-v3` tests those terms;
 # `run` above is unchanged. The text is the amendment section of PAIR_CHECK_PREREGISTRATION.md.
+# Condition 6 passes vacuously when no arm pair differs beyond its seed ranges on all regions; that
+# set is decided by the 256-region values alone, and condition 4 still bounds the subset seed spreads,
+# so a vacuous pass of condition 6 cannot hide a subset that distorts the correction terms.
 AMENDED = "2026-11-16"
 CONDITIONS_V3 = ("1", "2", "3", "4", "5", "6")
 #: the D13 comparisons of condition 3 and the arms of condition 6 (incumbent first): conv
@@ -515,6 +518,9 @@ COMPARISONS_V3 = (("rung2_base_heldout", "rung3_base_heldout"),
 VERDICT_SIMPLER = "none"        # condition 3 reads the D13 outcome with no arm called simpler
 RANK_QUANTITIES = ("composite_v3", "correction_v3", "correction_only")
 SCREENING_RTOL = 1e-6           # condition S: the stored 16-region scores equal the p = 16 subset
+SEEDS_V3 = ("seed0", "seed1", "seed2")   # the pre-registered seeds of every arm
+V3_CELLS = 72                   # condition 2 on the pre-registered arms: 12 runs x 6 assays
+CONSISTENCY_ABS = 1e-9          # recomputed terms against select_rule / scores.json: else refuse
 
 
 def thresholds_v3() -> dict:
@@ -549,7 +555,8 @@ class RunV3(Run):
         self.scorable_cor = list((self.scores.get("scorable") or {}).get("correction") or [])
         nnd = ((oracle["rung"] == "") & (oracle["never_trained"] == 1) & (oracle["subset_pair"] == 0)
                & (oracle["nodedup_side"] == 0))
-        self.want = sorted({str(a) for a in oracle["assay"][nnd]} & set(self.scorable_cor))
+        self.oracle_assays = sorted({str(a) for a in oracle["assay"][nnd]})
+        self.want = sorted(set(self.oracle_assays) & set(self.scorable_cor))
         ri, oj, why = [], [], []
         for i, m in enumerate(self.meta):
             if m["kind"] != "correction" or m["never_trained"] != 1 or m["subset_pair"] != 0:
@@ -662,6 +669,12 @@ def run_check_v3(arms, evalset, oracle_dir, out, *, sub="p256_sv", screening_sub
                 raise SystemExit(f"comparison arm {x} not among --arm")
     runs = {}
     for a, ad in arm_dirs.items():
+        names = sorted(d.name for d in SR.seed_dirs(ad))
+        if tuple(names) != SEEDS_V3:
+            raise SystemExit(f"arm {a}: seeds {names}; the amended check needs exactly {list(SEEDS_V3)}")
+        capped = [d.name for d in SR.seed_dirs(ad) if (d / SR.CAPPED).exists()]
+        if capped:
+            raise SystemExit(f"arm {a}: capped seeds {capped} never count")
         rs = [(d.name, RunV3(d / sub if sub else d, ev, orc), d) for d in SR.seed_dirs(ad)
               if ((d / sub if sub else d) / "pairs_per_region.npz").is_file()]
         if len(rs) < SR.MIN_SEEDS:
@@ -682,17 +695,27 @@ def run_check_v3(arms, evalset, oracle_dir, out, *, sub="p256_sv", screening_sub
     ones = np.ones(R)
     for a, s, r, _ in all_runs:
         v = r.terms(ones, pmfr, scorable)
+        v.pop("_out", None)
         full[(a, s)] = v
         b0 = SR.load_seed(r.dir / "scores.json")          # oracle "auto": the run's own reference
         base[(a, s)] = b0
-        for q, ref, got in (("correction_v3 recomputed - select_rule", b0["goals"]["correction"], v["v3"]),
-                            ("correction_only recomputed - scores.json", b0.get("correction_only"), v["co"]),
-                            ("h5 recomputed - scores.json", (r.scores.get(H5) or {}).get("macro"), v["h5"])):
+        od = b0.get("oracle_dir")
+        if not od or Path(od).resolve() != Path(oracle_dir).resolve():
+            raise SystemExit(f"{r.dir}: select_rule reads the oracle reference {od!r}, not --oracle "
+                             f"{oracle_dir}")
+        for q, ref, got, gate in (
+                ("correction_v3 recomputed - select_rule", b0["goals"]["correction"], v["v3"], True),
+                ("correction_only recomputed - scores.json", b0.get("correction_only"), v["co"], True),
+                ("h5 recomputed - scores.json", (r.scores.get(H5) or {}).get("macro"), v["h5"], False)):
             d = None if _bad(ref) or _bad(got) else abs(float(ref) - float(got))
             rows.append(_row("", "consistency", f"{a}/{s}", q, d, ref, None, None, None, None))
+            if gate and (_bad(ref) != _bad(got) or (d is not None and d > CONSISTENCY_ABS)):
+                raise SystemExit(f"{r.dir}: {q} = {d} (tool {got}, stored {ref}); the check refuses")
         bv = []
         for b in range(n_boot):
-            bv.append(r.terms(W[b], pmfr, scorable))
+            t = r.terms(W[b], pmfr, scorable)
+            t.pop("_out", None)
+            bv.append(t)
         boot[(a, s)] = bv
         log(f"bootstrap done: {a}/{s}")
 
@@ -724,19 +747,24 @@ def run_check_v3(arms, evalset, oracle_dir, out, *, sub="p256_sv", screening_sub
                        [x["rep"].get(g) for x in bv]) for g in sorted(v2["rep"]) if not _bad(v2["rep"][g])]
             for q, ref, val, bl in items:
                 if _bad(ref):
-                    rows.append(_row(p, "1", f"{a}/{s}", q, val, ref, None, None, None, None,
-                                     "undefined on all regions: not checked"))
+                    must = q in ("correction_v3", "correction_only")      # (a) and (c) must exist
+                    if must:
+                        cond["1"].append(False)
+                    rows.append(_row(p, "1", f"{a}/{s}", q, val, ref, None, None, None,
+                                     False if must else None, "undefined on all regions: "
+                                     + ("fail" if must else "not checked")))
                     continue
                 lo, hi = _interval(bl)
                 ok = _inside(val, lo, hi)
                 cond["1"].append(ok)
                 rows.append(_row(p, "1", f"{a}/{s}", q, val, ref, lo, hi, "inside 95% interval", ok))
-            for asy in r.want:
+            for asy in r.oracle_assays:
                 ref = v2["v3_assay"].get(asy)
                 if _bad(ref):
+                    cond["2"].append(False)
                     rows.append(_row(p, "2", f"{a}/{s}/{asy}", "correction_v3 per assay",
-                                     vs["v3_assay"].get(asy), ref, None, None, None, None,
-                                     "undefined on all regions: not counted"))
+                                     vs["v3_assay"].get(asy), ref, None, None, None, False,
+                                     "undefined on all regions: counted as a fail"))
                     continue
                 lo, hi = _interval([x["v3_assay"].get(asy) for x in bv])
                 ok = _inside(vs["v3_assay"].get(asy), lo, hi)
@@ -775,8 +803,9 @@ def run_check_v3(arms, evalset, oracle_dir, out, *, sub="p256_sv", screening_sub
                     (ma, ra), (mb, rb_) = av256[a][q], av256[b][q]
                     (sa, _), (sb, _) = avp[a][q], avp[b][q]
                     if any(_bad(x) for x in (ma, mb, ra, rb_)):
-                        rows.append(_row(p, "6", f"{a} vs {b}", q, None, None, None, None, None, None,
-                                         "undefined on all regions: not checked"))
+                        cond["6"].append(False)
+                        rows.append(_row(p, "6", f"{a} vs {b}", q, None, None, None, None, None, False,
+                                         "undefined on all regions: counted as a fail"))
                         continue
                     d0, bar = mb - ma, max(ra, rb_)
                     if abs(d0) <= bar:
@@ -794,8 +823,11 @@ def run_check_v3(arms, evalset, oracle_dir, out, *, sub="p256_sv", screening_sub
             if c == "2":
                 share = (sum(cond[c]) / len(cond[c])) if cond[c] else None
                 ok = share is not None and share >= PER_ASSAY_SHARE_MIN
+                note = f"{len(cond[c])} cells"
+                if set(runs) == {x for ab in COMPARISONS_V3 for x in ab} and len(cond[c]) != V3_CELLS:
+                    ok, note = False, f"{len(cond[c])} cells; the amendment names {V3_CELLS}"
                 rows.append(_row(p, "2", "ALL", "share of cells inside", share, None, None, None,
-                                 f">= {PER_ASSAY_SHARE_MIN}", ok))
+                                 f">= {PER_ASSAY_SHARE_MIN}", ok, note))
             elif c == "6" and not cond[c]:
                 ok = True
                 rows.append(_row(p, "6", "ALL", "no arm pair differs beyond its seed ranges", None,
@@ -820,7 +852,8 @@ def run_check_v3(arms, evalset, oracle_dir, out, *, sub="p256_sv", screening_sub
                 for q, ref, got in (("correction_v3", st["goals"]["correction"], subv[(a, s)]["v3"]),
                                     ("correction_only", st.get("correction_only"), subv[(a, s)]["co"])):
                     ok = (not _bad(ref) and not _bad(got)
-                          and abs(float(ref) - float(got)) <= SCREENING_RTOL * max(1.0, abs(float(got))))
+                          and (abs(float(ref) - float(got)) <= SCREENING_RTOL * abs(float(got))
+                               if float(got) != 0 else float(ref) == 0))
                     oks.append(ok)
                     rows.append(_row(16, "S", f"{a}/{s}", f"{q}: stored 16-region score - p 16 subset",
                                      ref, got, None, None, f"rtol {SCREENING_RTOL}", ok))
