@@ -703,6 +703,14 @@ def compare(incumbent, challenger, simpler=None, name=None, settlements=None, *,
             raise Refused(f"composite version 3 needs an oracle-floor reference for every seed; "
                           f"{len(bad)} seeds have none (e.g. {bad[0]}); nothing written. Use "
                           f"--composite-version 2 for the legacy comparison")
+    if settlements:                      # an explicit path must not cross the version boundary
+        base = Path(settlements).name
+        if v3 and base != SETTLEMENTS_FILE[3]:
+            raise Refused(f"composite version 3 writes only a file named {SETTLEMENTS_FILE[3]}; "
+                          f"got --settlements {base}; nothing written")
+        if not v3 and base == SETTLEMENTS_FILE[3]:
+            raise Refused(f"{SETTLEMENTS_FILE[3]} holds version-3 rows only; a version-2 "
+                          f"comparison cannot write there; nothing written")
     res = decide(inc, ch, simpler, clip=clip, allow_mix=allow_mix)
     name = name or f"{inc_dir.name}__vs__{ch_dir.name}"
     row = {"comparison": name, "incumbent": inc_dir.name, "challenger": ch_dir.name,
