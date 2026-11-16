@@ -74,6 +74,8 @@ The ranges are the seed ranges of the reference (`FINAL_ROUND_EQUAL.md`) and of 
 ## 7. Readiness
 
 - Conv autoencoder: ready. Conv + attention: ready. U-Net: ready. `dna: off` is read on all three (`conv_ae.py` lines 150, 178-184, 245; `conv_attn_ae.py` lines 154-155, 173, 191; `unet.py` lines 165, 183, 210-215, 289), and all three build at seed 0 on the laptop.
-- Configs: 3 new files, no code, no shared file. The cluster `eic_v1` genome holds the sequence, which the dataset still loads. `dna_off` itself needs no new data.
+- Configs (Phase 2, written): `tools/minicandi/configs/ablations/dna_off/rung{2,3,4}/dna_off.json`. A json diff against `reference_equal.json` shows exactly `dna` and `simpler_than_base`. `registry.build_model` at seed 0 gives 1,037,586 (conv autoencoder, width 60), 1,031,682 (conv + attention, width 104) and 996,232 (U-Net, width 30). The reference configs still build to 1,042,514 / 1,038,018 / 993,599.
+- Submit options: defaults. FLOPs per window (`train.flops_per_window`, one synthetic batch of 8) fall with DNA off: 2.11e9 -> 1.90e9, 2.54e9 -> 2.31e9, 1.66e9 -> 1.46e9. So the default training limit (5,856 s) is no tighter than for the reference.
+- No code and no shared file. The cluster `eic_v1` genome holds the sequence, which the dataset still loads. `dna_off` itself needs no new data.
 - Cost per run, read with `sacct` on Fir (train + predict + metrics, 10 jobs per seed, including one repeated prediction pass): reference runs `rung{2,3,4}_base_heldout`, 3 seeds each: 99.8, 68.1 and 99.7 CPU-h. One single-pass U-Net seed (`final_rung4_mech_skip_counts` seed 0: train 69,264 s + predict 41,504 s + metrics 35,104 s = 145,872 s) = 40.5 CPU-h.
 - Total: 9 runs, about 99.8 + 68.1 + 99.7 = 268 CPU-h (23 to 41 CPU-h per run). Wall: about 1.5 h training and 1 h scoring per seed, in parallel.
