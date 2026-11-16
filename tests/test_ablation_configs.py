@@ -35,7 +35,12 @@ EXPECTED = {
     "depth_input": {"input_depth_fixed": {"input_depth"}},
     "losses": {"loss_impute_x4": {"loss_weights"}, "loss_poisson_mean": {"loss"},
                "loss_nb_crps": {"loss"}, "loss_bin_equal": {"loss_bin_equal"}},
+    # close-out A3: the U-Net counterfactual-view arms (configs/views/rung4) on the conv models
+    "views": {"base_only": {"train_views"}, "base_depth": {"train_views"},
+              "base_fastq": {"train_views"}, "base_alignment": {"train_views"},
+              "all_same_view_only": {"same_view_prob"}},
 }
+UNET_VIEWS = _ROOT / "tools/minicandi/configs/views/rung4"
 ON_DISK = sorted(ABL.glob("*/rung*/*.json"))
 
 
@@ -60,3 +65,13 @@ def test_config_is_reference_plus_declared_keys_and_in_band(path):
     torch.manual_seed(0)
     n = sum(p.numel() for p in R.build_model(cfg).parameters() if p.requires_grad)
     assert abs(n - 1.0e6) <= 1.0e5, n
+
+
+@pytest.mark.parametrize("path", sorted(ABL.glob("views/rung*/*.json")),
+                         ids=lambda p: "/".join(p.parts[-2:]))
+def test_view_arm_matches_the_unet_arm(path):
+    """Each conv-model view arm sets the view keys exactly as the U-Net arm of the same name."""
+    cfg = json.loads(path.read_text())
+    unet = json.loads((UNET_VIEWS / f"views_{path.stem}.json").read_text())
+    for k in ("train_views", "same_view_prob"):
+        assert cfg.get(k) == unet.get(k), k
