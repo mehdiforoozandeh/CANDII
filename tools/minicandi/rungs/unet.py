@@ -50,6 +50,14 @@ Component arm keys (pinned interface E, chunk A3) reach every component through
 `head = nb_shared_size`. With every key at its default the model is today's, parameter for
 parameter and output for output (tests/test_minicandi_rung_arms.py). `dna = precomputed` feeds the DNA skips too.
 
+DNA fusion (item A11, `tools/minicandi/dna_fusion.py`): `dna_fusion = film` (the DNA bottleneck
+FiLMs the count bottleneck in place of cat + `fuse`), `xattn` (the count bottleneck tokens
+cross-attend to the DNA bottleneck tokens in place of cat + `fuse`) or `early` (the DNA features
+join the count stem; no DNA tower, no `fuse`, no DNA skip). Under film and xattn the DNA skips stay
+and a 1x1 conv (`count_proj`, the count half of `fuse`) stays on the count bottleneck. Every arm
+keeps the base width (the search reads the config without `dna_fusion`; the 10% budget check is
+not applied to an arm). Absent = the base, bit for bit (tests/test_ablation_dna_fusion.py).
+
 Resolution keys (chunk RM): `res_bp` reaches the DnaTower and the count transform through
 `component_kwargs`. `res_in_sub = 5`: the per-track input MLP reads the five 5 bp sub-bin counts
 of each 25 bp token (batch key `x_counts_sub` [B, L, A, 5], each through the count transform), its
@@ -82,6 +90,7 @@ from minicandi.components import (ConvBlock, CountTransform, CovariateInjector, 
                                   sinusoidal_positions, sub_output, sub_to_fine)
 from minicandi.contract import A, K_META, LOG2_DEPTH_COL, MiniCandi, k_input  # noqa: E402
 from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
+from minicandi.dna_fusion import DnaCrossAttn, DnaFiLM, fusion_of, without_fusion  # noqa: E402
 
 RUNG = 4
 NAME = "unet"
@@ -154,10 +163,11 @@ class Model(MiniCandi):
         self.config = dict(config or {})
         width = cfg.get("width")
         if width is None:
-            width = fit_width(cfg)
+            width = fit_width(without_fusion(cfg))         # A11: the base width in every arm
         self._build(cfg, int(width))
         budget = float(cfg["param_budget"])
-        if "width" not in (config or {}) and abs(self.param_count() - budget) > 0.10 * budget:
+        if "width" not in (config or {}) and cfg.get("dna_fusion") is None \
+                and abs(self.param_count() - budget) > 0.10 * budget:
             raise ValueError(f"rung 4: no width brings the parameter count within 10% of "
                              f"param_budget {budget:.0f} (got {self.param_count()})")
         # extra inputs (chunk XI), constructed last (after the budget check, which they do not
@@ -179,8 +189,12 @@ class Model(MiniCandi):
         self.k_in = k_input(cfg)
         kw = component_kwargs(cfg)
         self.cov_dropout = kw["covariate_dropout"]
+        self.fusion = fusion_of(cfg, NAME)    # item A11; None = late concatenation + DNA skips
+        if self.fusion == "early" and self.skip_source == "dna":
+            raise NotApplicable("rung 4: dna_fusion = early has no DNA tower, so no DNA skip")
         self.skip_counts = self.skip_source in ("counts", "both")
-        self.skip_dna = self.skip_source in ("dna", "both") and self.dna_mode != "off"
+        self.skip_dna = self.skip_source in ("dna", "both") and self.dna_mode != "off" \
+            and self.fusion != "early"
         # round-2 tuning knobs, default-off (absent = N_LEVELS and dropout 0.0, today's model)
         self.n_levels = nl = int(cfg.get("n_levels", N_LEVELS))
         attn_dropout = float(cfg.get("attn_dropout", 0.0))
@@ -205,12 +219,22 @@ class Model(MiniCandi):
         self.mask = MaskHandler(cfg["mask_mode"], D_TRACK)
 
         # towers
-        self.stem = nn.Conv1d(A * (D_TRACK + 1), chans[0], 1)
+        early = self.fusion == "early"
+        self.stem = nn.Conv1d(A * (D_TRACK + 1) + (chans[0] if early else 0), chans[0], 1)
         self.count_tower = _Tower(chans)
-        if self.dna_mode != "off":
+        if early:
+            self.dna = DnaTower(self.dna_mode, chans[0], **kw["dna"])
+        elif self.dna_mode != "off":
             self.dna = DnaTower(self.dna_mode, chans[0], **kw["dna"])
             self.dna_tower = _Tower(chans)
-            self.fuse = nn.Conv1d(2 * d_model, d_model, 1)
+            if self.fusion is None:
+                self.fuse = nn.Conv1d(2 * d_model, d_model, 1)
+            else:                    # the count half of `fuse` stays: the arm changes the join
+                self.count_proj = nn.Conv1d(d_model, d_model, 1)
+                if self.fusion == "film":
+                    self.dna_film = DnaFiLM(d_model, d_model)
+                else:
+                    self.dna_xattn = DnaCrossAttn(d_model, N_HEADS)
         else:
             self.dna = DnaTower("off", chans[0])
 
@@ -284,14 +308,25 @@ class Model(MiniCandi):
         Lp = -(-L // stride) * stride
         fused = h_track.reshape(B, L, -1).transpose(1, 2)                   # [B, A*(d+1), L]
         fused = F.pad(fused, (0, Lp - L))
+        if self.fusion == "early":                       # DNA joins the counts at the stem
+            x_dna = batch["x_dna_emb" if self.dna_mode == "precomputed" else "x_dna"]
+            dna = F.pad(self.add_extra_track(self.dna(x_dna), batch).transpose(1, 2),
+                        (0, Lp - L))
+            fused = torch.cat([fused, dna.to(fused.dtype)], dim=1)
         c_skips, bottom = self.count_tower(self.stem(fused))
         d_skips = None
-        if self.dna_mode != "off":
+        if self.dna_mode != "off" and self.fusion != "early":
             x_dna = batch["x_dna_emb" if self.dna_mode == "precomputed" else "x_dna"]
             dna = F.pad(self.add_extra_track(self.dna(x_dna), batch).transpose(1, 2),
                         (0, Lp - L))
             d_skips, d_bottom = self.dna_tower(dna)
-            bottom = self.fuse(torch.cat([bottom, d_bottom], dim=1))
+            if self.fusion is None:
+                bottom = self.fuse(torch.cat([bottom, d_bottom], dim=1))
+            elif self.fusion == "film":
+                bottom = self.dna_film(self.count_proj(bottom), d_bottom)
+            else:
+                bottom = self.dna_xattn(self.count_proj(bottom).transpose(1, 2),
+                                        d_bottom.transpose(1, 2)).transpose(1, 2)
 
         # bottleneck attention, with covariate tokens under `tokens`
         seq = bottom.transpose(1, 2)                                        # [B, Lb, d_model]

@@ -35,6 +35,8 @@ EXPECTED = {
                       "cov_numeric_per_value": {"covariate_embedding", "param_budget"}},
     "depth_input": {"input_depth_fixed": {"input_depth"}},
     "cov_injection": {"inject_adaln_zero": {"covariate_injection"}},
+    "dna_fusion": {"fusion_film": {"dna_fusion"}, "fusion_late": {"dna_fusion"},
+                   "fusion_xattn": {"dna_fusion"}, "fusion_early": {"dna_fusion"}},
     "losses": {"loss_impute_x4": {"loss_weights"}, "loss_poisson_mean": {"loss"},
                "loss_nb_crps": {"loss"}, "loss_bin_equal": {"loss_bin_equal"}},
     # close-out item A2: the basic controls on the three architectures
@@ -52,6 +54,9 @@ EXPECTED = {
         "offset_eps0.1": {"offset_eps"}, "offset_eps0.01": {"offset_eps"}},
 }
 UNET_VIEWS = _ROOT / "tools/minicandi/configs/views/rung4"
+#: arms outside 10% of 1.0e6 by design, with their exact count: the DNA-fusion arms keep the base
+#: trunk width (item A11), and U-Net `fusion_early` drops the DNA tower (base 993,599, -24.5%)
+OUT_OF_BAND = {("dna_fusion", 4, "fusion_early"): 750_149}
 ON_DISK = sorted(ABL.glob("*/rung*/*.json"))
 
 
@@ -75,6 +80,9 @@ def test_config_is_reference_plus_declared_keys_and_in_band(path):
     assert changed == EXPECTED[ab][arm]
     torch.manual_seed(0)
     n = sum(p.numel() for p in R.build_model(cfg).parameters() if p.requires_grad)
+    if (ab, r, arm) in OUT_OF_BAND:     # the arm keeps the base width by rule; count stated
+        assert n == OUT_OF_BAND[(ab, r, arm)], n
+        return
     assert abs(n - 1.0e6) <= 1.0e5, n
 
 

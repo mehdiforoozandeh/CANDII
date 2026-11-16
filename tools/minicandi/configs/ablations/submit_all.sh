@@ -6,6 +6,8 @@
 #   bash submit_all.sh            # dry run (DRY_RUN=1)
 #   DRY_RUN=0 bash submit_all.sh  # real submission -- the foreman's call only
 #   ABLATIONS="control_input dna_off" bash submit_all.sh   # a subset
+#   ABLATIONS=dna_fusion bash submit_all.sh   # close-out item A11 (not in the default list): 8 arm x
+#                                             # architecture pairs = 24 runs; needs a kit with dna_fusion.py
 #
 # Run directory: $O/runs_fir/abl_<ablation>_<arm>_<convae|convattn|unet>/seed<s>.
 # The reference is the existing base run rung{2,3,4}_base_heldout (no new run).

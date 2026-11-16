@@ -150,6 +150,9 @@ def build_model(config: dict) -> C.MiniCandi:
     if (res_bp_of(config) != C.RES or max(res_subs_of(config)) > 1) and (
             config.get("model_file") or module_name(config["rung"]) not in ("conv_ae", "unet")):
         raise NotApplicable("res_bp, res_in_sub and res_out_sub are built in rungs 2 and 4 only")
+    if config.get("dna_fusion") is not None and not config.get("model_file"):
+        from minicandi.dna_fusion import fusion_of        # item A11: rungs 2, 3 and 4 only
+        fusion_of(config, module_name(config["rung"]))
     inner_cfg = {k: v for k, v in config.items() if k not in WRAPPER_KEYS}
     model = model_class(config)(inner_cfg)
     if not isinstance(model, C.MiniCandi):
