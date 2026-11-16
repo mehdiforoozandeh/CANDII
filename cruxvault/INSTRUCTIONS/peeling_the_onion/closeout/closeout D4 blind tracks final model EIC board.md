@@ -38,7 +38,7 @@ Build the blind-side data, freeze and train the final EIC model, run the single 
 ## 5. Work
 
 1. PI decision first: build only the blind subset of priority 4 (the 51 blind base rows and the 3 blind-only controls), or all 722 rows. E4 needs the per-library and per-lane rows; the board does not.
-2. Build the chosen rows on Nibi (kit KF4, 3 batches if all 722), collect, and build the blind tables and `evalset_blind.json`. Leak check: no blind row readable in training or validation mode.
+2. Build the chosen rows. PI ruling 2026-11-16/17: blind only (batch 1: 62 blind rows and the 10 outage reruns), on Fir (Nibi refuses every /scratch write since the soft-quota grace ran out; checked 2026-11-16T22:47Z). Fir script `slurm/onion_data/closeout_d4_submit_fir.sh` (kit COD4b) after the Globus copies of `results/closeout_D4b/FIR_PORT.md` section 3. Then collect, and build the blind tables and `evalset_blind.json`. Leak check: no blind row readable in training or validation mode.
 3. Fix the platform id of blind rows (D1) before training, so C' of a blind target uses a training-seen vocabulary.
 4. Write the freeze file: the M1 design, budgets, dataset and evaluation-set versions, seed 0 as the board entry.
 5. Train the final model on training plus validation tracks, 3 seeds; train the training-only model beside it, 3 seeds. Fir CPU.
