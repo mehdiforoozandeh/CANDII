@@ -40,12 +40,12 @@ Specification and readiness: `run_state/ablation_specs/16_dna_fusion.md`. Arms (
 
 | arm | conv autoencoder | conv + attention | U-Net |
 |---|---|---|---|
-| `fusion_film` (DNA scales and shifts the count features) | at the stem output | at the track-fusion output | at the bottleneck, in place of cat + `fuse` |
-| `fusion_late` (DNA joins at the bottleneck by a learned patch pooling, added) | yes | yes | not built: the base join |
-| `fusion_xattn` (count tokens cross-attend to DNA tokens at the bottleneck) | not built: no attention in the model | yes | yes, in place of cat + `fuse` |
-| `fusion_early` (DNA into the count stem; no DNA tower, no DNA skip) | not built: the base join | not built: the base join | yes |
+| `fusion_film` (DNA scales and shifts the count features) | at the stem output | at the track-fusion output | at the bottleneck, in place of cat + `fuse`; the count half of `fuse` stays |
+| `fusion_late` (DNA joins at the bottleneck: block mean over 16 bins, 1x1 conv, added) | yes | yes | not built: the base already joins at the bottleneck stage (a late-only arm would also have to remove the DNA skips) |
+| `fusion_xattn` (count tokens cross-attend to DNA tokens at the bottleneck) | not built: no attention in the model | yes | yes, in place of cat + `fuse`; the count half of `fuse` stays |
+| `fusion_early` (DNA into the count stem; no DNA tower, no DNA skip) | not built: the base join | not built: the base join | yes (changes the stage, the DNA tower and the DNA skips at once) |
 
-8 arm-architecture pairs x 3 seeds = 24 runs, Fir CPU, `ABLATIONS=dna_fusion` through `submit_all.sh` with kit COA11 or later.
+8 arm-architecture pairs x 3 seeds = 24 runs, Fir CPU, `ABLATIONS=dna_fusion` through `submit_all.sh` with kit COA11b or later.
 
 ## 6. How the result answers the question
 
@@ -64,8 +64,9 @@ Specification and readiness: `run_state/ablation_specs/16_dna_fusion.md`. Arms (
 
 - Depends on nothing. Reads better after DNA off and DNA shifted by 5 Mb are scored.
 - Cost (per-seed train + predict + metrics on Fir CPU, `5_dna_source.md` section 7): 26.89 / 23.85 / 28.18 CPU-h. 3 x (2 x 26.89 + 3 x 23.85 + 3 x 28.18) = 3 x 209.87 = 629.6 CPU-h; 144 jobs.
-- Risk: width refit. `fusion_late` takes width 60 -> 56 (conv autoencoder) and 104 -> 96 (conv + attention); the U-Net `fusion_early` takes 25 -> 30. A small effect can come from the width.
-- Risk: FiLM is zero-initialized (identity), so the DNA tower gets no gradient at step 0 on the conv models; it gets one after the first update.
+- Width rule: every arm keeps the base trunk width (60, 104, 25); an arm differs from the base in the join only. U-Net `fusion_early` therefore has 750,149 parameters against the base 993,599 (-24.5%), because it drops the DNA tower; the other arms are within +0.0% to +4.3% of their base (spec 16, section 2).
+- Risk: U-Net `fusion_early` changes three things at once (the stage, the DNA tower, the DNA skips); a difference cannot be assigned to one of them.
+- Risk: the NB head's last layer starts at zero, so step 0 sends no gradient upstream of the head. Under `fusion_film` (also zero-initialized) the FiLM projection first gets gradient at step 1 and the DNA path at step 2. At initialization the conv models ignore DNA under film; the U-Net still reads it through the DNA skips.
 
 ## 8. Done when
 

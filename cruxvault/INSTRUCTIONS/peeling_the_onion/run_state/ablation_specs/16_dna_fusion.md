@@ -93,12 +93,12 @@ The DNA tower is 0.3% of the conv models' parameters, and DNA off at the pointwi
 
 ## 7. Readiness
 
-- Code: `tools/minicandi/dna_fusion.py` (new), `rungs/conv_ae.py`, `rungs/conv_attn_ae.py`, `rungs/unet.py`, `registry.py`. Tests: `tests/test_ablation_dna_fusion.py` (48 tests), `tests/test_ablation_configs.py` (8 new configs).
+- Code: `tools/minicandi/dna_fusion.py` (new), `rungs/conv_ae.py`, `rungs/conv_attn_ae.py`, `rungs/unet.py`, `registry.py`. Tests: `tests/test_ablation_dna_fusion.py` (66 tests), `tests/test_ablation_configs.py` (8 new configs).
 - Configs: `tools/minicandi/configs/ablations/dna_fusion/rung{2,3,4}/fusion_<arm>.json` and `arms.tsv` (the not-built pairs are rows with their reason). Each json differs from `reference_equal.json` in `dna_fusion` and `simpler_than_base` only.
 - FLOPs per training window (`train.flops_per_window`, batch of 8, 1,024 bins), base -> arm: conv autoencoder 2.11e9 -> 2.12e9 (film), 2.10e9 (late); conv + attention 2.54e9 -> 2.56e9 (film), 2.52e9 (late), 2.53e9 (xattn); U-Net 1.66e9 -> 1.67e9 (film), 1.67e9 (xattn), 1.40e9 (early). The 03:00:00 training limit of `submit_all.sh` holds.
-- Kit: COA11 on Fir (git 49c45ee). Smoke: section 8.
-- Submission (the foreman's call), on a Fir login node: `K=/project/def-maxwl/mforooz/onion_kit/COA11 ABLATIONS=dna_fusion DRY_RUN=0 bash $K/tools/minicandi/configs/ablations/submit_all.sh`. Dry run (2026-11-16): 8 arms x architectures, 144 sbatch lines (24 runs x (1 train + 4 predict shards + 1 metrics)), 0 blocked. Run directories `runs_fir/abl_dna_fusion_fusion_<arm>_<convae|convattn|unet>/seed{0,1,2}`.
-- Cost (per-seed train + predict + metrics, Fir `sacct`, `5_dna_source.md` section 7): conv autoencoder 26.89, conv + attention 23.85, U-Net 28.18 CPU-h. Total 3 x (2 x 26.89 + 3 x 23.85 + 3 x 28.18) = 3 x (53.78 + 71.55 + 84.54) = 3 x 209.87 = 629.6 CPU-h.
+- Kit: COA11b on Fir (git 81cfbc3, after the review fixes); COA11 (git 49c45ee) is superseded. Smoke: section 8.
+- Submission (the foreman's call), on a Fir login node: `K=/project/def-maxwl/mforooz/onion_kit/COA11b ABLATIONS=dna_fusion DRY_RUN=0 bash $K/tools/minicandi/configs/ablations/submit_all.sh`. Dry run (2026-11-16): 8 arms x architectures, 144 sbatch lines (24 runs x (1 train + 4 predict shards + 1 metrics)), 0 blocked. Run directories `runs_fir/abl_dna_fusion_fusion_<arm>_<convae|convattn|unet>/seed{0,1,2}`.
+- Cost (per-seed train + predict + metrics, Fir `sacct`, `5_dna_source.md` section 7): conv autoencoder 26.89, conv + attention 23.85, U-Net 28.18 CPU-h. Total 3 x (2 x 26.89 + 3 x 23.85 + 3 x 28.18) = 3 x (53.78 + 71.55 + 84.54) = 3 x 209.87 = 629.6 CPU-h. This is an upper bound: U-Net `fusion_early` trains with 16% fewer FLOPs per window.
 - Reference: the existing base runs `runs_fir/rung{2,3,4}_base_heldout` (no new run).
 
 ## 8. Smoke (kit COA11)
