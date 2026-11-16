@@ -14,8 +14,12 @@
 # $O/eval/$V/evalset_p16.json into $O/eval/$V/baselines_p16/<name>/seed0 (the sbatch line of the
 # eic_v1 screening baselines, kit I2a, 2026-11-14; skip when SCORED exists). The oracle reference
 # (baselines_p16/oracle_floor/seed0) is not a job here: it is built beside the eval set.
-# The baselines read no covariate, so their scores must equal the eic_v1 scores. Check each one,
-# from a worktree, after stage 1 ends (exit 0 and "differences: 0" expected):
+# The baselines read no covariate, so their scores must equal the eic_v1 scores up to
+# floating-point summation order. Measured on eic_v1_1 (Fir jobs 4455820-4455823 against the
+# eic_v1 baselines): pairs_per_region.npz identical; suffstats max abs diff 8e-16; no scores.json
+# leaf with |x| > 1e-3 differs by more than 1e-9 relative; the largest absolute difference,
+# 1.6e-7, is on r_spec values that are themselves ~1e-8 (zero for a baseline). Check each one,
+# from a worktree, after stage 1 ends (only such floating-point differences expected):
 #   bash tools/onion_kit/remote_check.sh --cluster fir COD1 tools/onion_eval/compare_scores.py \
 #     /project/def-maxwl/mforooz/ONION/eval/eic_v1/baselines_p16/<name>/seed0 \
 #     /project/def-maxwl/mforooz/ONION/eval/$V/baselines_p16/<name>/seed0 \
