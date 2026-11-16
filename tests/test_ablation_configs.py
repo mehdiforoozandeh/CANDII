@@ -31,7 +31,7 @@ EXPECTED = {
     "dna_off": {"dna_off": {"dna"}},
     "cov_embedding": {"cov_numeric_only": {"covariate_embedding"},
                       "cov_dropout": {"covariate_dropout"},
-                      "cov_numeric_per_value": {"covariate_embedding"}},
+                      "cov_numeric_per_value": {"covariate_embedding", "param_budget"}},
     "depth_input": {"input_depth_fixed": {"input_depth"}},
     "losses": {"loss_impute_x4": {"loss_weights"}, "loss_poisson_mean": {"loss"},
                "loss_nb_crps": {"loss"}, "loss_bin_equal": {"loss_bin_equal"}},
