@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -199,3 +200,153 @@ def test_store_path_matches_legacy_and_refuses_a_store_without_the_switch(env, m
         S.score(env["evalset"], env["root"] / "metrics_bad", phase="metrics", pred_store=store0,
                 config=cfg, run_tables_sha256=env["sha"], refs_from=env["refs"], same_view=True,
                 **MKW)
+
+
+# ------------------------------------------------------------------------------------------ review fixes
+
+def test_pair_type_below_the_denominator_tolerance_is_left_out_and_named():
+    from onion_eval.select_rule import CORRECTION_DENOM_REL_TOL as tol
+    cor = [_rec("crop", 0.7, 1.0, 0.8, "t1"),
+           _rec("tiny", 0.5, 1.0, 1.0 - tol / 2, "t2")]           # (d - f) / d = tol / 2
+    same = [{"target": "t1", "crps_model_same_view": 0.6}, {"target": "t2", "crps_model_same_view": 0.1}]
+    b = S.correction_only_block(cor, same)
+    assert set(b["pair_types_excluded"]) == {"tiny"} and b["pair_types_in_macro"] == ["crop"]
+    assert b["value"] == pytest.approx(1 - (0.7 - 0.6) / (1.0 - 0.8))
+    assert b["per_pair_type"]["tiny"]["below_tolerance"] is True
+    only = S.correction_only_block(cor[1:], same[1:])
+    assert only["value"] is None and "below the denominator tolerance" in only["reason"]
+
+
+def _cli(args, extra_env=None):
+    e = dict(os.environ, PYTHONPATH=os.pathsep.join([str(REPO / "src"), str(REPO / "tools")]),
+             OMP_NUM_THREADS="2", OMP_WAIT_POLICY="PASSIVE")
+    e.pop(S.SAME_VIEW_ENV, None)
+    e.update(extra_env or {})
+    return subprocess.run([sys.executable, str(REPO / "tools/onion_eval/score.py"), *args], env=e,
+                          capture_output=True, text=True, timeout=1200)
+
+
+def test_parallel_same_view_equals_serial(env):
+    """Forked workers (fresh processes, as score.sh runs them) give the serial same-view result."""
+    outs = {}
+    for w in (1, 2):
+        d = env["root"] / f"par{w}"
+        p = _cli(["--baseline", "position_average", "--evalset", str(env["evalset"]), "--out", str(d),
+                  "--n-boot", "5", "--guardrail-windows", "4", "--workers", str(w),
+                  "--score-same-view"])
+        assert p.returncode == 0, p.stderr[-2000:]
+        outs[w] = d
+    a, b = (json.loads((outs[w] / "scores.json").read_text()) for w in (1, 2))
+    assert a[S.CORRECTION_ONLY_KEY] == b[S.CORRECTION_ONLY_KEY]
+    assert a[S.CORRECTION_ONLY_KEY]["n_same_view_targets"] > 0
+    for k in VOLATILE:
+        a.pop(k, None), b.pop(k, None)
+    assert a == b
+    assert _same_npz(outs[1] / "same_view_per_region.npz", outs[2] / "same_view_per_region.npz")
+
+
+# ------------------------------------------------------------------------------------------ submit_arms
+
+FAKE_SBATCH = """#!/bin/bash
+n=$(( $(wc -l < "$FAKE_LOG" 2>/dev/null || echo 0) + 1000 ))
+echo "$n SV=${ONION_SCORE_SAME_VIEW:-unset} $*" >> "$FAKE_LOG"
+echo "$n"
+"""
+FAKE_SQUEUE = "#!/bin/bash\nexit 0\n"
+SUBMIT = REPO / "slurm/minicandi/submit_arms.sh"
+
+
+@pytest.fixture()
+def sub_env(tmp_path):
+    b = tmp_path / "bin"
+    b.mkdir()
+    for name, text in (("sbatch", FAKE_SBATCH), ("squeue", FAKE_SQUEUE)):
+        (b / name).write_text(text)
+        (b / name).chmod(0o755)
+    for d in ("tables", "refs"):
+        (tmp_path / d).mkdir()
+    (tmp_path / "evalset.json").write_text("{}")
+    e = {k: v for k, v in os.environ.items() if not k.startswith(("SCORE_", "ONION_", "PRED_"))}
+    e.update(PATH=f"{b}:{e['PATH']}", PYTHON=sys.executable, CLUSTER="nibi", USER="tester",
+             FAKE_LOG=str(tmp_path / "sbatch.log"), PRED_STORE_ROOT=str(tmp_path / "ps"),
+             SEEDS="0", SCORE_PHASES="1", REFS_FROM=str(tmp_path / "refs"), SCORE_ONLY="1")
+    run = tmp_path / "runs" / "rung1_base" / "seed0"
+    run.mkdir(parents=True)
+    (run / "DONE").write_text("")
+    return tmp_path, e
+
+
+def _submit(tmp, e, **over):
+    p = subprocess.run(["bash", str(SUBMIT), str(REPO), str(tmp / "tables"), str(tmp / "evalset.json"),
+                        str(tmp / "runs"), "1", "base"], env={**e, **over}, capture_output=True,
+                       text=True)
+    assert p.returncode == 0, p.stderr
+    return p.stdout
+
+
+def test_submit_dry_run_names_the_switch_on_predict_and_metrics_only_when_set(sub_env):
+    tmp, e = sub_env
+    out = _submit(tmp, e, DRY_RUN="1", SCORE_SAME_VIEW="1")
+    pred = [ln for ln in out.splitlines() if "predict.sh" in ln]
+    met = [ln for ln in out.splitlines() if "ONION_SCORE_PHASE=metrics" in ln]
+    assert pred and met and all("ONION_SCORE_SAME_VIEW=1" in ln for ln in pred + met)
+    assert all("/rung1_base/same_view/seed0" in ln for ln in pred + met)
+    out = _submit(tmp, e, DRY_RUN="1", ONION_SCORE_SAME_VIEW="1")        # unset; shell has a value
+    lines = [ln for ln in out.splitlines() if "predict.sh" in ln or "metrics" in ln]
+    assert lines and not any("SAME_VIEW" in ln or "same_view" in ln for ln in lines)
+
+
+def test_submit_never_leaks_the_shell_value_into_jobs(sub_env):
+    tmp, e = sub_env
+    _submit(tmp, e, ONION_SCORE_SAME_VIEW="1")                          # SCORE_SAME_VIEW unset
+    log = (tmp / "sbatch.log").read_text().splitlines()
+    assert log and all(" SV=unset " in ln for ln in log)
+    (tmp / "sbatch.log").unlink()
+    _submit(tmp, e, SCORE_SAME_VIEW="1", PRED_STORE_ROOT=str(tmp / "ps2"))
+    log = (tmp / "sbatch.log").read_text().splitlines()
+    assert log and all(" SV=1 " in ln for ln in log)
+
+
+def _complete_store(d: Path, sha="abc"):
+    d.mkdir(parents=True)
+    (d / "STORE.json").write_text(json.dumps({"format": 1, "n_shards": 1, "requests_sha256": sha}))
+    (d / "PREDICTED_0of1.json").write_text("{}")
+
+
+def _py_stub(tmp, rc: int) -> str:
+    """A $PYTHON whose `predict_store.py check` exits rc (the real interpreter otherwise)."""
+    p = tmp / "bin" / "pystub"
+    p.write_text(f'#!/bin/bash\nif [ "$2" = check ]; then exit {rc}; fi\nexec {sys.executable} "$@"\n')
+    p.chmod(0o755)
+    return str(p)
+
+
+def test_store_of_another_request_set_is_skipped_and_a_matching_one_is_used(sub_env):
+    tmp, e = sub_env
+    st = tmp / "ps" / "runs" / "rung1_base" / "seed0"
+    _complete_store(st)
+    out = _submit(tmp, e, DRY_RUN="1", PYTHON=_py_stub(tmp, 1))
+    assert "holds another request set" in out and "predict.sh" not in out and "metrics" not in out.split("skip")[0]
+    out = _submit(tmp, e, DRY_RUN="1", PYTHON=_py_stub(tmp, 0))
+    assert "is complete; no predict job" in out and "predict.sh" not in out
+    # a kept store made without the switch is not the switch's store: new predict jobs
+    out = _submit(tmp, e, DRY_RUN="1", SCORE_SAME_VIEW="1", PYTHON=_py_stub(tmp, 1))
+    assert "predict.sh" in out and "/same_view/seed0" in out
+
+
+def test_store_check_command_compares_the_request_hash(env, tmp_path):
+    """predict_store.py check on a saved run: 0 for its own store, 1 with the switch flipped."""
+    from minicandi import registry as R
+    from onion_eval import predict_store as P
+    m, cfg = _model()
+    run = tmp_path / "run"
+    run.mkdir()
+    torch.save({"state_dict": m.state_dict(), "config": cfg, "param_count": m.param_count(),
+                "windows_seen": 0, "tables_sha256": env["sha"], "git_sha": "test"}, run / R.CKPT_NAME)
+    sc = S.Scorer(env["evalset"], main="model", model=m, config=cfg, run_tables_sha256=env["sha"], **KW)
+    st = tmp_path / "store"
+    st.mkdir()
+    (st / "STORE.json").write_text(json.dumps({"requests_sha256": P.requests_sha256(P.requests(sc))}))
+    args = ["--run", str(run), "--evalset", str(env["evalset"]), "--pred-store", str(st)]
+    assert P.check(args) == 0
+    assert P.check(args + ["--score-same-view"]) == 1

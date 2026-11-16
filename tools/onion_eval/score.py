@@ -152,11 +152,8 @@ model's CRPS per pair region, bins, target, assay, cell) and scores.json `correc
 covariate_cost_closed` (`correction_only_block`: per headline pair d, m, s, f; per pair type
 (`knob`) the pooled term and the means; the macro over pair types). Never inside the composite.
 
-Composite versions (CM). When the scored output dir has an oracle-floor reference
-(`oracle_floor.find_oracle`) the scorer also writes `composite_version` 3 and the clipped
-composites `composite_v3` and `composite_v2` with their correction terms (select_rule.py:
-version 3 takes the oracle-floor gap closed on the pairs with no duplicate-keeping side). No
-reference: none of these keys. select_rule always recomputes them at report time.
+Composite versions (CM): computed at report time only (select_rule.py); the scorer writes no
+version key, so without the same-view switch every output is the pre-CM one.
 
 Add-on scoring (OXe, Amendment 4, PI ruling 33). `--addon` scores an add-on eval set
 (`evalset.py addon`, key `addon_of`) and is required for one; it is refused on any other eval set
@@ -279,9 +276,11 @@ CORRECTION_ONLY_DEFINITION = (
     "type (the pair's knob label), pooled as means over its pairs: term = 1 - (mean m - mean s) / "
     "(mean d - mean f), i.e. the share of a raw copy's covariate cost (d - f) that the model closes, "
     "its excess over its own same-view score (m - s) counting against it. 1 when m = s, 0 when the "
-    "model is depth-only scaling (m = d, s = f). Value = the unweighted mean over pair types (all "
-    "assays); undefined when a pair type's term is undefined. Reported beside the composite, never "
-    "inside it (PI ruling 2026-11-16, review item 9)")
+    "model is depth-only scaling (m = d, s = f). A pair type whose relative denominator "
+    "(mean d - mean f) / mean d is below select_rule.CORRECTION_DENOM_REL_TOL is left out of the "
+    "macro and named (`pair_types_excluded`). Value = the unweighted mean over the other pair types "
+    "(all assays); undefined when one of them is undefined or none is left. Reported beside the "
+    "composite, never inside it (PI ruling 2026-11-16, review item 9)")
 #: OXe: why an evaluation-only target (a second experiment) has no assay-level value
 FLAGGED_REASON = ("evaluation-only target (a second experiment, PI ruling 33): outside the "
                   "shared/specific split, the error budget and every headline block")
@@ -702,18 +701,27 @@ def correction_only_block(cor_recs, sv_recs) -> dict:
             continue
         rows.append(dict({k: float(x) for k, x in v.items()}, knob=r.get("knob") or ""))
 
+    from onion_eval.select_rule import CORRECTION_DENOM_REL_TOL as tol
+
     def pooled(rs):
         mean = {k: float(np.mean([x[k] for x in rs])) for k in "dmsf"}
         den = mean["d"] - mean["f"]
+        rel = den / mean["d"] if mean["d"] > 0 else None
         val = 1.0 - (mean["m"] - mean["s"]) / den if den > 0 else None
         return {"value": val, "n_pairs": len(rs), "d_mean": mean["d"], "m_mean": mean["m"],
-                "s_mean": mean["s"], "f_mean": mean["f"],
+                "s_mean": mean["s"], "f_mean": mean["f"], "denominator_relative": rel,
+                "below_tolerance": rel is None or rel < tol,
                 "reason": "" if val is not None else "depth-only is not above the floor"}
     knobs = defaultdict(list)
     for x in rows:
         knobs[x["knob"]].append(x)
     per = {k: pooled(rs) for k, rs in sorted(knobs.items())}
+    excl = {k: f"relative denominator {v['denominator_relative']} below {tol}"
+            for k, v in per.items() if v["below_tolerance"]}
+    used = {k: v for k, v in per.items() if k not in excl}
     out = {"definition": CORRECTION_ONLY_DEFINITION, "value": None, "per_pair_type": per,
+           "denominator_relative_tolerance": tol, "pair_types_excluded": excl,
+           "pair_types_in_macro": sorted(used),
            "pooled_all_pairs": pooled(rows) if rows else None,
            "n_pairs": len(head), "n_pairs_defined": len(rows), "n_pairs_undefined": len(bad),
            "n_same_view_targets": len(sv), "n_pairs_by_type": {k: v["n_pairs"] for k, v in per.items()},
@@ -724,11 +732,13 @@ def correction_only_block(cor_recs, sv_recs) -> dict:
         out["reason"] = f"{len(bad)} headline pairs with an undefined CRPS or no same-view score (first: {bad[0]})"
     elif not per:
         out["reason"] = "no headline correction pair"
-    elif any(v["value"] is None for v in per.values()):
+    elif not used:
+        out["reason"] = "every pair type is below the denominator tolerance: " + ", ".join(sorted(excl))
+    elif any(v["value"] is None for v in used.values()):
         out["reason"] = "undefined for pair types " + ", ".join(
-            k for k, v in per.items() if v["value"] is None)
+            k for k, v in used.items() if v["value"] is None)
     else:
-        out["value"] = float(np.mean([v["value"] for v in per.values()]))
+        out["value"] = float(np.mean([v["value"] for v in used.values()]))
     return out
 
 
@@ -3090,39 +3100,11 @@ def write_same_view_per_region(sc, out):
     return p
 
 
-def add_composite_versions(scores: dict, out) -> None:
-    """CM: with an oracle-floor reference for `<out>/scores.json` (pairs_per_region.npz written
-    first), `composite_version` 3 and `composite_v3` / `composite_v2` (select_rule's clipped
-    composite and its terms, raw and clipped). No reference: nothing is added. A reference that
-    select_rule refuses: `composite_version_reason` only (the scoring never fails on it)."""
-    from onion_eval import select_rule as SR
-    path = Path(out) / "scores.json"
-    blocks = {}
-    try:
-        for v in SR.COMPOSITE_VERSIONS:
-            s = SR.screen_terms([SR.seed_from_scores(scores, path, "auto", v)])[1][0]
-            if s["composite_version"] == 1:
-                return                           # no oracle reference: the keys stay absent
-            blocks[v] = {"composite": s["composite"], "terms_raw": s["raw_goals"],
-                         "terms_clipped": s["clipped_goals"],
-                         "correction_reason": s["goal_reasons"]["correction"],
-                         "correction_subset": SR.CORRECTION_SUBSET[v], "oracle_dir": s["oracle_dir"]}
-    except Exception as e:                       # noqa: BLE001  (report-time keys, never fatal)
-        scores["composite_version_reason"] = f"composite versions not computed: {e}"
-        return
-    scores["composite_version"] = max(blocks)
-    for v, b in blocks.items():
-        scores[f"composite_v{v}"] = b
-
-
 def _write_all(scores: dict, sc, out) -> None:
-    """The output files of one scoring: pairs_per_region.npz first (CM: the composite versions
-    read it), the composite-version keys, scores.json + suffstats.npz + SCORED, and the same-view
-    records (only with the switch)."""
-    Path(out).mkdir(parents=True, exist_ok=True)
-    write_pairs_per_region(sc, out)
-    add_composite_versions(scores, out)
+    """The output files of one scoring, in the pre-CM order (scores.json + suffstats.npz + SCORED,
+    then pairs_per_region.npz), then the same-view records (only with the switch, CM)."""
     write_outputs(scores, sc.suff, out)
+    write_pairs_per_region(sc, out)
     write_same_view_per_region(sc, out)
 
 

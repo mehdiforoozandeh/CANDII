@@ -168,7 +168,7 @@ def test_depth_only_scores_exactly_zero_and_found_by_discovery(env, oracle):
 
 def test_select_rule_reads_v2_and_keeps_v1_without_reference(env, oracle):
     p = env["bdir"] / "position_average" / "seed0" / "scores.json"
-    v2 = R.load_seed(p)
+    v2 = R.load_seed(p, composite_version=2)     # CM: version 2 is explicit (default 3)
     v1 = R.load_seed(p, oracle=None)
     assert v2["composite_version"] == 2 and v1["composite_version"] == 1
     assert v2["scorer_keys"]["composite_version"] == 2
@@ -190,7 +190,7 @@ def test_missing_records_give_undefined_with_reason(env, oracle, tmp_path):
     d = env["bdir"] / "position_average_norecords" / "seed0"
     d.mkdir(parents=True)
     shutil.copy(src / "scores.json", d / "scores.json")
-    s = R.load_seed(d / "scores.json")
+    s = R.load_seed(d / "scores.json", composite_version=2)
     assert s["composite_version"] == 2
     assert s["goals"]["correction"] is None and s["composite"] is None
     assert "no per-pair records" in s["goal_reasons"]["correction"]
@@ -204,7 +204,7 @@ def test_table_columns_only_with_a_reference(env, oracle, tmp_path):
         d.mkdir(parents=True)
         for f in ("scores.json", "pairs_per_region.npz", "SCORED"):
             shutil.copy(env["bdir"] / "position_average" / "seed0" / f, d / f)
-    rows = R.table(runs)
+    rows = R.table(runs, composite_version=2)
     assert rows and all(r["composite_version"] == 2 for r in rows)
     assert all("correction_gap_closed_halfread_superseded" in r for r in rows)
     rows1 = R.table(runs, oracle=None)
@@ -218,19 +218,19 @@ def test_arm_report_headline_adds_oracle_columns(env, oracle, tmp_path):
     d.mkdir(parents=True)
     for f in ("scores.json", "pairs_per_region.npz", "SCORED"):
         shutil.copy(env["bdir"] / "position_average" / "seed0" / f, d / f)
-    rows, cols = AR.headline(runs, "", env["bdir"])
+    rows, cols = AR.headline(runs, "", env["bdir"], composite_version=2)
     assert "correction_gap_closed_oracle.mean" in cols
     assert "correction_gap_closed_oracle.numerator.mean" in cols
     r = next(x for x in rows if x["arm"] == "depth_only_scaling")
     assert r["correction_gap_closed_oracle.n_defined"] == 1 or r["composite_version"] == 2
-    krows, kcols = AR.per_knob(runs, "", env["bdir"])
+    krows, kcols = AR.per_knob(runs, "", env["bdir"], composite_version=2)
     assert any(x["pair_kind"] == "never_trained_non_subset_oracle" for x in krows)
 
 
 def test_report_cli_prints_both_subsets_and_composites(env, oracle, tmp_path, capsys):
     p = env["bdir"] / "pseudoreplicate_floor" / "seed0" / "scores.json"
     po = tmp_path / "pairs.tsv"
-    assert OF.main(["report", str(p), "--pairs-out", str(po)]) == 0
+    assert OF.main(["report", str(p), "--pairs-out", str(po), "--composite-version", "2"]) == 0
     out = capsys.readouterr().out.strip().splitlines()
     assert out[0].startswith("scores\tcomposite_version\tsubset") and len(out) == 3
     assert {ln.split("\t")[2] for ln in out[1:]} == {"all", "no_nodedup_side"}
@@ -290,7 +290,7 @@ def test_sha256_mismatch_or_unreadable_reference_is_refused(env, oracle, tmp_pat
     with pytest.raises(R.Refused, match="unreadable"):
         R.load_seed(p)
     shutil.rmtree(own)                     # absent in its own place: the sibling one is found
-    assert R.load_seed(p)["composite_version"] == 2
+    assert R.load_seed(p, composite_version=2)["composite_version"] == 2
     assert R.main(["table", "--runs", str(tmp_path / "bl")]) in (0, 2)
 
 

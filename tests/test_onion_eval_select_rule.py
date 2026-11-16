@@ -225,7 +225,8 @@ def test_check_rung(tmp_path):
         fh.write("\t".join(R.SETTLEMENT_COLUMNS) + "\n")
         fh.write("\t".join(["r1_tok", "a", "b", "c", "", "", "", "", "", "INCUMBENT", "t1"]) + "\n")
         fh.write("\t".join(["r1_dna", "a", "b", "c", "", "", "", "", "", "TIE_ASK_PI", "t1"]) + "\n")
-    assert R.check_rung(runs, 1, lad) == []
+    # CM: rows without composite_version are version 2; check_rung reads version 3 by default
+    assert R.check_rung(runs, 1, lad, composite_version=2) == []
 
 
 def _full_ladder(tmp_path, runs, verdict="INCUMBENT", final_goals=None, base_goals=None):
@@ -264,18 +265,18 @@ def test_check_done_both_conditions(tmp_path, capsys):
     make_arm(runs, "final", BASE)
     bl = tmp_path / "baselines"
     _baselines(bl, GOOD_BASELINES)
-    res = R.check_done(runs, lad, baselines=bl)
+    res = R.check_done(runs, lad, baselines=bl, composite_version=2)   # CM: rows without the field
     assert res["condition_1"] == "PASS"
     assert res["validation"][0] == "PASS" and res["condition_2"] == "PENDING"   # blind not scored
     for k in range(3):
         write_seed(runs / "final" / f"seed{k}", *BASE[k], sub="blind")
     _baselines(bl, GOOD_BASELINES, sub="blind")
-    res = R.check_done(runs, lad, baselines=bl)
+    res = R.check_done(runs, lad, baselines=bl, composite_version=2)
     assert res["condition_2"] == "PENDING"      # blind baselines default beside the blind evalset
-    res = R.check_done(runs, lad, baselines=bl, blind_baselines=bl)
+    res = R.check_done(runs, lad, baselines=bl, blind_baselines=bl, composite_version=2)
     assert res["condition_2"] == "PASS"
     rc = R.main(["check-done", "--runs", str(runs), "--ladder", str(lad), "--baselines", str(bl),
-                 "--blind-baselines", str(bl)])
+                 "--blind-baselines", str(bl), "--composite-version", "2"])
     out = capsys.readouterr().out
     assert rc == 0 and "D14 condition 1: PASS" in out and "D14 condition 2: PASS" in out
     assert "margin" in out
@@ -485,13 +486,13 @@ def test_f8_hand_written_verdicts_need_settlements_or_pi_reference(tmp_path):
         make_arm(runs, f"rung{r}_dna_off", BASE)
         R.ladder_add(lad, f"r{r}", f"rung{r}_base", f"rung{r}_dna_off", "challenger", True,
                      "CHALLENGER")
-    ok, probs = R.done_condition_1(runs, lad)
+    ok, probs = R.done_condition_1(runs, lad, composite_version=2)
     assert not ok and len(probs) == 6 and all("does not match" in p for p in probs)
     # a matching settlements row makes them settlements
     for r in range(1, 7):
         R.append_settlement(runs / "settlements.tsv", {"comparison": f"r{r}", "verdict": "CHALLENGER",
                                                        "time": "2026-11-11T00:00:00+00:00"})
-    assert R.done_condition_1(runs, lad) == (True, [])
+    assert R.done_condition_1(runs, lad, composite_version=2) == (True, [])   # CM: legacy rows
     # "PI_" and a PI verdict without its notepad reference are not settlements
     with pytest.raises(R.Refused):
         R.ladder_add(lad, "r1", "rung1_base", "rung1_dna_off", "challenger", True, "PI_")
@@ -503,7 +504,7 @@ def test_f8_hand_written_verdicts_need_settlements_or_pi_reference(tmp_path):
     raw["comparisons"][0]["verdict"] = "PI_"
     raw["comparisons"][1]["verdict"] = "PI_INCUMBENT"          # no notepad_ref
     lad.write_text(json.dumps(raw))
-    ok, probs = R.done_condition_1(runs, lad)
+    ok, probs = R.done_condition_1(runs, lad, composite_version=2)
     assert not ok and any(p.startswith("r1:") for p in probs) and any(p.startswith("r2:") for p in probs)
     assert R.main(["ladder-add", "--ladder", str(lad), "--name", "r1", "--incumbent", "rung1_base",
                    "--challenger", "rung1_dna_off", "--simpler", "challenger", "--d14", "true",
@@ -521,16 +522,20 @@ def test_f12_simpler_than_base_must_be_bool_or_null(tmp_path):
 def test_f17_latest_settlement_is_newest_in_time(tmp_path):
     """Finding 17: the newest row wins, not the last file in sorted-path order."""
     runs = tmp_path / "runs"
+    # CM: these arms have no oracle reference, so compare writes composite_version 1 rows; the
+    # hand-written rows say the same version, and every read names it
     R.append_settlement(runs / "a" / "settlements.tsv",
-                        {"comparison": "c", "verdict": "INCUMBENT", "time": "2026-11-02T00:00:00+00:00"})
+                        {"comparison": "c", "verdict": "INCUMBENT", "time": "2026-11-02T00:00:00+00:00",
+                         "composite_version": "1"})
     R.append_settlement(runs / "b" / "settlements.tsv",
-                        {"comparison": "c", "verdict": "CHALLENGER", "time": "2026-11-01T00:00:00+00:00"})
-    assert R.latest_settlements(runs) == {"c": "INCUMBENT"}
+                        {"comparison": "c", "verdict": "CHALLENGER", "time": "2026-11-01T00:00:00+00:00",
+                         "composite_version": "1"})
+    assert R.latest_settlements(runs, 1) == {"c": "INCUMBENT"}
     inc = make_arm(runs, "rung1_base", BASE)
     ch = make_arm(runs, "rung1_x", shift(BASE, di=0.1))
     R.compare(inc, ch, "none", name="c", settlements=runs / "a" / "settlements.tsv")
     rows = _rows(runs / "a" / "settlements.tsv")
-    assert rows[-1]["time"] > "2026-11-02" and R.latest_settlements(runs)["c"] == "CHALLENGER"
+    assert rows[-1]["time"] > "2026-11-02" and R.latest_settlements(runs, 1)["c"] == "CHALLENGER"
 
 
 def test_ladder_simpler_explicit_off_the_rung_base(tmp_path):

@@ -39,6 +39,14 @@ Predict command (chunk SP2a; `run` below; job script slurm/onion_eval/predict.sh
     python tools/onion_eval/predict_store.py run --run <run dir> --evalset <json>
         --pred-store <dir> --shard i/N --infer-batch B --device cuda|cpu [--stage-dir <dir>]
 
+Store check (CM; submit_arms.sh `store_complete` calls it):
+
+    python tools/onion_eval/predict_store.py check --run <run dir> --evalset <json>
+        --pred-store <dir> [--score-same-view]
+    exit 0 when the store's STORE.json `requests_sha256` equals the hash of the request set this
+    run and switch would make now, 1 when it differs (the store holds another request set), 2 when
+    the scorer refuses or STORE.json is unreadable.
+
 Measurement (chunk SP1, results/<task>/FORWARD_SPEED.md):
 
     python tools/onion_eval/predict_store.py bench --run <run dir> --evalset <json> --out <json>
@@ -709,7 +717,38 @@ def run(argv=None) -> int:
     return 0
 
 
+def check(argv=None) -> int:
+    """Store check (module docstring): compare the store's request hash with the current one."""
+    ap = argparse.ArgumentParser(prog="predict_store.py check", description="does a prediction "
+                                 "store hold the request set of this run and switch")
+    ap.add_argument("--run", required=True)
+    ap.add_argument("--evalset", required=True)
+    ap.add_argument("--pred-store", required=True)
+    ap.add_argument("--score-same-view", action="store_true")
+    a = ap.parse_args(argv)
+    try:
+        head = json.loads((Path(a.pred_store) / STORE_FILE).read_text(encoding="utf-8"))
+        from minicandi.registry import load_run
+        model, config = load_run(a.run)
+        sc = S.Scorer(a.evalset, main="model", model=model, config=config, device="cpu",
+                      run_tables_sha256=S.run_tables_sha256(a.run), log=lambda *m: None,
+                      **({"same_view": True} if (a.score_same_view or S.same_view_from_env())
+                         else {}))
+        want = requests_sha256(requests(sc))
+    except (OSError, ValueError, KeyError, PermissionError, S.ScoreRefused) as e:
+        print(f"refused: {e}", file=sys.stderr)
+        return 2
+    if head.get("requests_sha256") != want:
+        print(f"differs: {a.pred_store} holds requests_sha256 {str(head.get('requests_sha256'))[:12]}"
+              f", this run and switch make {want[:12]}")
+        return 1
+    print(f"same: {a.pred_store} holds the current request set")
+    return 0
+
+
 if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "check":
+        sys.exit(check(sys.argv[2:]))
     if len(sys.argv) > 1 and sys.argv[1] == "bench":
         sys.exit(bench(sys.argv[2:]))
     if len(sys.argv) > 1 and sys.argv[1] == "run":

@@ -53,11 +53,20 @@
 #   train|predict|metrics; shard i/N or -; a dry run prints <...> placeholders as ids).
 # TRAIN_TIME=<[d-]hh:mm:ss> (chunk TRa; unset = the lines above, byte for byte) overrides the
 #   training --time of ladder_arms.py plan, whose speeds are Fir's.
-# SCORE_SAME_VIEW=1 (chunk CM; unset or 0 = the lines above, byte for byte): exports
-#   ONION_SCORE_SAME_VIEW=1 to every job (and names it on the predict and metrics lines), so
-#   score.py and predict_store.py also predict and score the same-view pair of every headline
-#   correction target and write the correction-only term (score.py, "Same-view pass"). Predict and
-#   metrics jobs of one store must agree on it (the store's request hash differs).
+# SCORE_SAME_VIEW=1 (chunk CM; unset or 0 = the lines above, byte for byte, and
+#   ONION_SCORE_SAME_VIEW is removed from the environment the jobs inherit, so a value in the
+#   submitting shell never leaks): exports ONION_SCORE_SAME_VIEW=1 to every job (and names it on
+#   the predict and metrics lines), so score.py and predict_store.py also predict and score the
+#   same-view pair of every headline correction target and write the correction-only term
+#   (score.py, "Same-view pass"). Its prediction store is
+#   $PRED_STORE_ROOT/<runs root name>/<run name>/same_view/seed<s>[/<SUB>], apart from the store
+#   without the switch (the two hold different request sets). A seed already SCORED in a score dir
+#   is skipped as before: to get the term for it, score into a new SCORE_SUBDIR (e.g. p16_sv).
+# Store check (CM): a store complete by its files whose STORE.json records `requests_sha256` is
+#   also checked with `predict_store.py check` against the request set this run and switch make
+#   now; a store of another request set is skipped with the reason (remove it, or use another
+#   PRED_STORE_ROOT), never handed to a metrics job. When the check cannot run (exit other than
+#   0 or 1, e.g. no torch on the login node) the store counts as complete, with a note.
 #
 # Idempotent. Per (arm, seed): skip when <run dir>/SCORED exists (training only: DONE), or when a
 # queued or running job of this user is named mc_<run dir name>_s<seed>; when DONE exists but not
@@ -86,7 +95,9 @@ SDEV="${SCORE_DEVICE:-}"
 case "$SDEV" in ""|cpu|gpu) ;; *) echo "SCORE_DEVICE must be cpu or gpu" >&2; exit 2 ;; esac
 [ -z "${NICE:-}" ] || [[ "$NICE" =~ ^-?[0-9]+$ ]] || { echo "NICE must be an integer" >&2; exit 2; }
 case "${SCORE_SAME_VIEW:-0}" in 0|"") SV=0 ;; 1) SV=1 ;; *) echo "SCORE_SAME_VIEW must be 0 or 1" >&2; exit 2 ;; esac
-[ "$SV" != 1 ] || export ONION_SCORE_SAME_VIEW=1   # CM: read by score.py and predict_store.py
+if [ "$SV" = 1 ]; then export ONION_SCORE_SAME_VIEW=1   # CM: read by score.py and predict_store.py
+else unset ONION_SCORE_SAME_VIEW; fi                    # never leaks from the submitting shell
+SV_DIR=""; [ "$SV" != 1 ] || SV_DIR=/same_view
 SONLY="${SCORE_ONLY:-0}"
 [ "$SONLY" != 1 ] || [ -n "$EVALSET" ] || { echo "SCORE_ONLY=1 needs an eval set" >&2; exit 2; }
 # two-phase scoring (SP3)
@@ -125,6 +136,21 @@ except Exception:
     sys.exit(1)
 sys.exit(0 if all((d / f"PREDICTED_{i}of{n}.json").is_file() for i in range(n)) else 1)
 PYEOF
+}
+# CM: does a complete store hold the request set of this run and switch? 0 yes (or not checkable:
+# no requests_sha256 in STORE.json, or the check cannot run), 1 another request set
+store_matches() {
+  local st="$1" run="$2" rc=0
+  grep -q '"requests_sha256"' "$st/STORE.json" 2> /dev/null || return 0
+  local args=(check --run "$run" --evalset "$EVALSET" --pred-store "$st")
+  [ "$SV" != 1 ] || args+=(--score-same-view)
+  "$PY" "$KIT/tools/onion_eval/predict_store.py" "${args[@]}" > /dev/null 2>&1 || rc=$?
+  case "$rc" in
+    0) return 0 ;;
+    1) return 1 ;;
+    *) echo "note: request hash of the store $st not checked (predict_store.py check exit $rc)" >&2
+       return 0 ;;
+  esac
 }
 read -r -a SCORE_EXTRA <<< "${EXTRA_SCORE_ARGS:-}"
 [ "$#" -gt 0 ] || read -r -a ARGS_ARMS <<< "$("$PY" "$LADDER" arms --rung "$RUNG")"
@@ -233,8 +259,12 @@ for spec in "${ARGS_ARMS[@]}"; do
     TRAIN_EXTRA="--workers $WORKERS${EXTRA_TRAIN_ARGS:+ $EXTRA_TRAIN_ARGS}"
     if [ "$PHASES" = 1 ]; then   # SP3: training (as above), predict jobs, one metrics job
       RNAME="$(basename "$ARMDIR")"
-      STORE="$PS_ROOT/$(basename "$ROOT")/$RNAME/seed$SEED${SUB:+/$SUB}"
+      STORE="$PS_ROOT/$(basename "$ROOT")/$RNAME${SV_DIR}/seed$SEED${SUB:+/$SUB}"
       COMPLETE=0; store_complete "$STORE" && COMPLETE=1
+      if [ "$COMPLETE" = 1 ] && ! store_matches "$STORE" "$RUN"; then
+        echo "skip $JOB: the store $STORE holds another request set (requests_sha256 differs from this run and SCORE_SAME_VIEW=$SV); remove it or use another PRED_STORE_ROOT"
+        n_skip=$((n_skip + 1)); continue
+      fi
       if [ "$MONLY" = 1 ] && [ "${#PRED_IDS[@]}" = 0 ] && [ "$COMPLETE" != 1 ]; then
         echo "skip $JOB: METRICS_ONLY and the store $STORE is not complete (set PRED_JOBS)"
         n_skip=$((n_skip + 1)); continue
