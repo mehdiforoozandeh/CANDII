@@ -430,7 +430,8 @@ def check_comparable(seeds: list[dict], split: str = "val") -> None:
 # 1 (the legacy scorer). Reference directories (baselines) are not arms: they are checked by
 # check_comparable only, so a scorer_version 1 baseline is a valid reference for version 2 runs.
 SCORER_KEYS = ("evalset_sha256", "tables_sha256", "scorer_version", "scorer_settings.device",
-               "scorer_settings.infer_batch", "refs.sha256_*", "fraglen_table.sha256")
+               "scorer_settings.infer_batch", "refs.sha256_*", "fraglen_table.sha256",
+               "foreign_covariates")
 #: FL: the fragment-length side table of `score.py --fraglen-table`; absent (a score made without
 #: the option, or before the key existed) is None
 FRAGLEN_KEY = "fraglen_table.sha256"
@@ -454,6 +455,11 @@ def scorer_keys(s: dict) -> dict:
            FRAGLEN_KEY: (s.get("fraglen_table") or {}).get("sha256")}
     refs = s.get("refs") or {}
     out.update({f"refs.{k}": v for k, v in sorted(refs.items()) if k.startswith("sha256_")})
+    # E5: a score made with foreign covariates at scoring never compares with a normal score; the
+    # key is written only when present, so the keys of every normal score are unchanged
+    fc = s.get("foreign_covariates")
+    if fc:
+        out["foreign_covariates"] = f"{fc.get('mode')}:seed{fc.get('seed')}"
     t = s.get("__oracle__")             # arm_report: read with an oracle-floor reference (OF)
     if t:
         out.update(composite_version=t["composite_version"], gap_closed_floor=t["gap_closed_floor"])

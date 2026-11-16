@@ -32,6 +32,14 @@ each level holds one observation (it is then the residual). A non-estimable fact
 fit; its variance sits in the row its note names. Lab is never fitted: EIC has one lab per cell and
 assay, so lab is not separable from cell; its row says so (estimable = 0).
 
+Artifact factors (close-out item E5; off by default, so every output above is unchanged):
+`--extra-factors lab,platform,antibody` adds those measurements.tsv columns as factors after the four
+above, crossed with cell (a bootstrap draw keeps their labels). A column that the table lacks, or that
+is empty for some observation of the assay, is not fitted: its row has estimable = 0 and the note
+"not available in this table version" with the reason. A filled column goes through the same
+estimability rule (in EIC, one lab or antibody per experiment is confounded with experiment or cell,
+and its row says so). With lab among the extra factors, its row replaces the fixed lab row.
+
 Observations: the measurements of the assay with `in_eic` train or val (never blind), `arm_knob` empty
 or `base`, of one layer (`--layer`, default: uniform when the assay has it, else native), at the finest
 unit that each experiment has (libraries `br<i>tr<j>`, else replicates `br<i>`, else `pooled`), so that
@@ -64,6 +72,10 @@ from eic_decomp import errdecomp  # noqa: E402
 J = errdecomp.J
 BANDS = {name.split(" ")[0]: list(idx) for name, idx in errdecomp.BANDS.items()}
 FACTORS = ["cell", "experiment", "replicate", "library"]
+#: E5: artifact columns of measurements.tsv that `--extra-factors` may add (crossed with cell)
+EXTRA_FACTORS = ("lab", "platform", "antibody")
+EXTRA_PREFIX = "x_"
+NOT_AVAILABLE = "not available in this table version"
 COLUMNS = ["assay", "band", "factor", "variance_fraction", "ci_low", "ci_high", "n_levels",
            "estimable", "note"]
 METHOD = "REML (scipy L-BFGS-B, log variance components; mu and beta profiled)"
@@ -188,14 +200,18 @@ def reml_fit(S, ysum, K, Zs, depth=None, theta0=None):
     return np.exp(theta), beta, theta
 
 
-def decompose(S, ysum, K, labels, depth=None, n_boot=200, seed=0):
+def decompose(S, ysum, K, labels, depth=None, n_boot=200, seed=0, factors=None, crossed=()):
     """Variance fractions with a cluster-bootstrap interval over cells.
 
-    labels: {factor: list of level labels per observation} for every factor of FACTORS (cell first).
-    Returns (rows, beta): rows is a list of dicts with factor, variance_fraction, ci_low, ci_high,
-    n_levels, estimable, note (factors of FACTORS, then residual)."""
-    est = estimability(labels)
-    fit_f = [f for f in FACTORS if est[f][0]]
+    labels: {factor: list of level labels per observation} for every factor of `factors` (default
+    FACTORS; cell first). Returns (rows, beta): rows is a list of dicts with factor,
+    variance_fraction, ci_low, ci_high, n_levels, estimable, note (factors, then residual).
+    `crossed` (E5): factors whose levels are shared across cells (an artifact factor such as
+    platform); a bootstrap draw keeps their labels, where a factor nested in cell gets new levels
+    per drawn cell."""
+    factors = list(FACTORS if factors is None else factors)
+    est = estimability(labels, order=factors)
+    fit_f = [f for f in factors if est[f][0]]
     n = S.shape[0]
     Zs = [_incidence(labels[f]) for f in fit_f]
     sig, beta, theta = reml_fit(S, ysum, K, Zs, depth)
@@ -214,7 +230,7 @@ def decompose(S, ysum, K, labels, depth=None, n_boot=200, seed=0):
                 for i in by_cell[cells[ci]]:
                     idx.append(i)
                     for f in fit_f:
-                        lab[f].append((j, labels[f][i]))
+                        lab[f].append(labels[f][i] if f in crossed else (j, labels[f][i]))
             idx = np.array(idx)
             Zb = [_incidence(lab[f]) for f in fit_f]
             db = None if depth is None else np.asarray(depth, float)[idx]
@@ -230,7 +246,7 @@ def decompose(S, ysum, K, labels, depth=None, n_boot=200, seed=0):
         return max(0.0, frac[k] - t * se), min(1.0, frac[k] + t * se)
 
     rows, k = [], 0
-    for f in FACTORS:
+    for f in factors:
         n_lev = len(set(labels[f]))
         if est[f][0]:
             lo, hi = interval(k)
@@ -265,9 +281,9 @@ def _unit_rank(unit):
     return -1  # lanes and anything else: not used
 
 
-def select_observations(meas_rows, assay, layer=None):
+def select_observations(meas_rows, assay, layer=None, extra=()):
     """Observations of one assay: list of dicts with counts_path, depth, cell, experiment, replicate,
-    library, lab (see the module docstring for the rule)."""
+    library, lab (see the module docstring for the rule), and each column of `extra` (E5) as read."""
     rows = [m for m in meas_rows if m["assay"] == assay and m.get("in_eic") in ("train", "val")
             and m.get("arm_knob", "") in ("", "base") and _unit_rank(m.get("unit", "")) >= 0]
     if layer is None:
@@ -290,6 +306,8 @@ def select_observations(meas_rows, assay, layer=None):
         depth = float(m.get("depth_reads") or m.get("depth_fragments") or "nan")
         base = dict(cell=m["cell"], experiment=exp, replicate=rep, library=lib, lab=m.get("lab", ""),
                     measurement_id=m["measurement_id"])
+        for c in extra:                         # E5: artifact factors, only when asked for
+            base[EXTRA_PREFIX + c] = (m.get(c) or "").strip()
         kind, _, path = m["counts_path"].partition(":")
         if m.get("has_pseudoreps") == "1" and kind == "h5":
             for h in ("pr1", "pr2"):
@@ -353,17 +371,44 @@ def lab_row(obs):
                 n_levels=n_lev, estimable=0, note=note)
 
 
-def run(tables, evalset, band, out, layer=None, n_boot=200, seed=0, reader=None):
+def extra_factor_rows(obs, extra, header):
+    """E5: (factors to fit, rows for the others) for the artifact columns `extra` of one assay's
+    observations. A column absent from measurements.tsv, or empty for some observation, gets a row
+    with estimable 0 and the note \"not available in this table version\" (and why)."""
+    fit, rows = [], []
+    for c in extra:
+        vals = [o.get(EXTRA_PREFIX + c, "") for o in obs]
+        n_empty = sum(1 for v in vals if not v)
+        if c not in header:
+            why = f"column {c} absent from measurements.tsv"
+        elif n_empty:
+            why = f"column {c} empty for {n_empty} of {len(obs)} observations"
+        else:
+            fit.append(c)
+            continue
+        rows.append(dict(factor=c, variance_fraction=float("nan"), ci_low=float("nan"),
+                         ci_high=float("nan"), n_levels=len({v for v in vals if v}), estimable=0,
+                         note=f"{NOT_AVAILABLE}: {why}"))
+    return fit, rows
+
+
+def run(tables, evalset, band, out, layer=None, n_boot=200, seed=0, reader=None, extra=()):
     if band not in BANDS:
         raise ValueError(f"band {band!r} not in {sorted(BANDS)}")
     tables = Path(tables)
     ev = json.loads(Path(evalset).read_text())
     regions = [(c, int(s)) for c, s in ev["regions"]]
     meas = _read_tsv(tables / "measurements.tsv")
+    with open(tables / "measurements.tsv", newline="") as fh:
+        header = next(csv.reader(fh, delimiter="\t"))
+    extra = tuple(extra)
+    bad = [c for c in extra if c not in EXTRA_FACTORS]
+    if bad:
+        raise ValueError(f"extra factors {bad} not in {EXTRA_FACTORS}")
     assays = sorted({m["assay"] for m in meas if m.get("assay_class") != "control"})
     rows = []
     for assay in assays:
-        obs, used_layer = select_observations(meas, assay, layer)
+        obs, used_layer = select_observations(meas, assay, layer, extra)
         if len(obs) < 3 or len({o["cell"] for o in obs}) < 2:
             rows.append(dict(assay=assay, band=band, factor="all", variance_fraction=float("nan"),
                              ci_low=float("nan"), ci_high=float("nan"), n_levels=len(obs), estimable=0,
@@ -373,14 +418,23 @@ def run(tables, evalset, band, out, layer=None, n_boot=200, seed=0, reader=None)
         S, ysum, K = sufficient_stats(obs, regions, band, reader, depth=D)
         labels = {f: [o[f] for o in obs] for f in FACTORS}
         depth = None                            # thinned to one depth: no slope left to fit
-        fr, beta = decompose(S, ysum, K, labels, depth, n_boot=n_boot, seed=seed)
+        if extra:                               # E5: the artifact factors that this table fills
+            fit_x, na_rows = extra_factor_rows(obs, extra, header)
+            labels.update({c: [o[EXTRA_PREFIX + c] for o in obs] for c in fit_x})
+            fr, beta = decompose(S, ysum, K, labels, depth, n_boot=n_boot, seed=seed,
+                                 factors=FACTORS + fit_x, crossed=set(fit_x))
+            res = fr.pop()                      # residual last, after every factor row
+            fr += na_rows + [res]
+        else:
+            fr, beta = decompose(S, ysum, K, labels, depth, n_boot=n_boot, seed=seed)
         halves = sum(1 for o in obs if o["half"])
         for r in fr:
             if r["factor"] == "residual":
                 r["note"] += (f"; layer {used_layer}; {halves} of {len(obs)} observations are"
                               " pseudoreplicate halves")
             rows.append(dict(assay=assay, band=band, **r))
-        rows.append(dict(assay=assay, band=band, **lab_row(obs)))
+        if "lab" not in extra:                  # E5: with lab as an extra factor its row is above
+            rows.append(dict(assay=assay, band=band, **lab_row(obs)))
         rows.append(dict(assay=assay, band=band, factor="log2_depth", variance_fraction=float("nan"),
                          ci_low=float("nan"), ci_high=float("nan"), n_levels=len(obs), estimable=0,
                          note=(f"every observation thinned to {D:.6g} reads before log1p; no depth slope fitted"
@@ -411,8 +465,13 @@ def main(argv=None):
     r.add_argument("--layer", default=None, choices=["uniform", "native", "testbed"])
     r.add_argument("--n-boot", type=int, default=200)
     r.add_argument("--seed", type=int, default=0)
+    r.add_argument("--extra-factors", default="",
+                   help=f"E5: comma list of artifact columns of measurements.tsv to add as crossed "
+                        f"factors ({', '.join(EXTRA_FACTORS)}); default none (the rows above, unchanged)")
     args = ap.parse_args(argv)
-    rows = run(args.tables, args.evalset, args.band, args.out, args.layer, args.n_boot, args.seed)
+    extra = tuple(x for x in args.extra_factors.split(",") if x)
+    rows = run(args.tables, args.evalset, args.band, args.out, args.layer, args.n_boot, args.seed,
+               extra=extra)
     n_ne = sum(1 for x in rows if x["estimable"] == 0 and x["factor"] in FACTORS)
     print(f"mixed_model: {len(rows)} rows -> {args.out}; {n_ne} non-estimable factor rows; {METHOD}")
     return 0

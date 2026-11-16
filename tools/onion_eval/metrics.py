@@ -599,4 +599,6 @@ def variance_ratio(n, mu, rep_a, rep_b, strata=None, *, depth_ratio_b: float = 1
     worst = max(fin, key=lambda k: abs(np.log2(fin[k]))) if fin else ""
     return {"pooled": pooled, "per_stratum": per,
             "worst_stratum": fin[worst] if worst else Undefined("no stratum with a defined ratio"),
-            "worst_stratum_name": worst, "n_dropped": dropped, "reason": getattr(pooled, "reason", "")}
+            "worst_stratum_name": worst, "n_dropped": dropped, "reason": getattr(pooled, "reason", ""),
+            # E5: the pooled numerator and denominator (score.py's ratio of means across targets)
+            "pred_var_mean": float(pv.mean()), "rep_var_mean": float(rv.mean())}

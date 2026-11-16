@@ -65,6 +65,15 @@
 #   The path alone separates the two: a complete store under the same_view path is reused, the
 #   store without the switch is never used for a same-view scoring. The metrics job refuses a
 #   store whose requests_sha256 differs from its own request set (the safety net).
+# FOREIGN_COVARIATES=<mode> [FOREIGN_SEED=<n>, default 0] (close-out item E5; unset = the lines above,
+#   byte for byte, and ONION_FOREIGN_COVARIATES / ONION_FOREIGN_SEED are removed from the environment
+#   the jobs inherit): scores with the covariates of another experiment of the same assay (score.py
+#   FOREIGN_MODES: in|out|both _ keep_depth|swap_depth). Needs SCORE_SUBDIR naming a directory that
+#   holds 'foreign' (score.py refuses any other --out), implies SCORE_ONLY=1 (never a training job),
+#   exports ONION_FOREIGN_COVARIATES and ONION_FOREIGN_SEED to every job (and names them on the
+#   predict and metrics lines). Its prediction store is $PRED_STORE_ROOT/<runs root name>/<run
+#   name>[/same_view]/foreign_<mode>_s<seed>/seed<s>/<SUB>, apart from every other store; the metric
+#   phase also refuses a store whose STORE.json records another mode or seed.
 #
 # Idempotent. Per (arm, seed): skip when <run dir>/SCORED exists (training only: DONE), or when a
 # queued or running job of this user is named mc_<run dir name>_s<seed>; when DONE exists but not
@@ -96,7 +105,19 @@ case "${SCORE_SAME_VIEW:-0}" in 0|"") SV=0 ;; 1) SV=1 ;; *) echo "SCORE_SAME_VIE
 if [ "$SV" = 1 ]; then export ONION_SCORE_SAME_VIEW=1   # CM: read by score.py and predict_store.py
 else unset ONION_SCORE_SAME_VIEW; fi                    # never leaks from the submitting shell
 SV_DIR=""; [ "$SV" != 1 ] || SV_DIR=/same_view
+FC="${FOREIGN_COVARIATES:-}"; FCS="${FOREIGN_SEED:-0}"
+if [ -n "$FC" ]; then   # E5: foreign covariates at scoring
+  [[ "$FC" =~ ^(in|out|both)_(keep|swap)_depth$ ]] || { echo "FOREIGN_COVARIATES must be (in|out|both)_(keep|swap)_depth" >&2; exit 2; }
+  [[ "$FCS" =~ ^[0-9]+$ ]] || { echo "FOREIGN_SEED must be a non-negative integer" >&2; exit 2; }
+  [[ "${SCORE_SUBDIR:-}" == *foreign* ]] || { echo "FOREIGN_COVARIATES needs SCORE_SUBDIR holding 'foreign'" >&2; exit 2; }
+  export ONION_FOREIGN_COVARIATES="$FC" ONION_FOREIGN_SEED="$FCS"
+  SV_DIR="$SV_DIR/foreign_${FC}_s$FCS"
+else
+  [ -z "${FOREIGN_SEED:-}" ] || { echo "FOREIGN_SEED goes with FOREIGN_COVARIATES" >&2; exit 2; }
+  unset ONION_FOREIGN_COVARIATES ONION_FOREIGN_SEED   # never leaks from the submitting shell
+fi
 SONLY="${SCORE_ONLY:-0}"
+[ -z "$FC" ] || SONLY=1
 [ "$SONLY" != 1 ] || [ -n "$EVALSET" ] || { echo "SCORE_ONLY=1 needs an eval set" >&2; exit 2; }
 # two-phase scoring (SP3)
 PHASES="${SCORE_PHASES:-0}"; PONLY="${PREDICT_ONLY:-0}"; MONLY="${METRICS_ONLY:-0}"
@@ -273,6 +294,7 @@ for spec in "${ARGS_ARMS[@]}"; do
         for ((i = 0; i < NSH; i++)); do
           PENV=("ONION_SHARD=$i/$NSH" "ONION_INFER_BATCH=$PB" "ONION_DEVICE=$PD")
           [ "$SV" != 1 ] || PENV+=(ONION_SCORE_SAME_VIEW=1)
+          [ -z "$FC" ] || PENV+=("ONION_FOREIGN_COVARIATES=$FC" "ONION_FOREIGN_SEED=$FCS")
           PRED=(sbatch "${COMMON[@]}" "--job-name=$JOB" "--time=$PTIME" "--cpus-per-task=$PCPUS"
                 "--mem=${PMEM}M" "--gres=$PG" "--output=$SOUT/predict_${i}of${NSH}_%j.out"
                 ${DEP[@]+"${DEP[@]}"} --export=ALL
@@ -297,6 +319,7 @@ for spec in "${ARGS_ARMS[@]}"; do
         MENV=(ONION_SCORE_PHASE=metrics "ONION_PRED_STORE=$STORE" "ONION_REFS_FROM=$REFS_FROM")
         [ "${KEEP_PRED_STORE:-0}" != 1 ] || MENV+=(ONION_KEEP_PRED_STORE=1)
         [ "$SV" != 1 ] || MENV+=(ONION_SCORE_SAME_VIEW=1)
+        [ -z "$FC" ] || MENV+=("ONION_FOREIGN_COVARIATES=$FC" "ONION_FOREIGN_SEED=$FCS")
         MET=(sbatch "${COMMON[@]}" "--job-name=$JOB" "--time=$MTIME" "--cpus-per-task=$MCPUS"
              "--mem=${MMEM}M" --gres=none "--output=$SOUT/metrics_%j.out"
              ${MDEP[@]+"${MDEP[@]}"} --export=ALL
