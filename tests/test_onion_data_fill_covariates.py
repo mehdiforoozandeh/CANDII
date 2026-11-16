@@ -1,7 +1,8 @@
 """Close-out D1: `fill_covariates.py` fills lab, antibody, donor and a code-only platform into a new
 tables version built from the tiny tree of `test_onion_data_build_tables.py`; every other cell and
-file stays byte-identical, the relaxed superset check passes, the strict one fails, and the
-filled ids reach the model's covariate vectors."""
+file stays byte-identical, the relaxed superset check passes, the strict one fails, the
+vocabularies hold training values only (a value seen only in validation or blind rows encodes to
+0), and the training ids reach the model's covariate vectors."""
 from __future__ import annotations
 
 import csv
@@ -42,9 +43,10 @@ def _catalog(d: Path, exps: list) -> Path:
         for br in ("1", "2"):
             libs.append({"experiment": x, "library": f"LIB{x[-3:]}{br}", "donor":
                          "DON1" if (x != VAL or br == "1") else "DON2", "bio_rep": br,
-                         "antibody": "" if x == CTL else "AB1"})
+                         "antibody": "" if x == CTL else ("AB2" if (x, br) == (VAL, "2") else "AB1")})
             files.append({"file": f"F{x[-3:]}{br}", "experiment": x, "file_format": "fastq",
-                          "platform": "Illumina HiSeq 4000", "status": "released"})
+                          "platform": "Illumina HiSeq 4000", "status": "released",
+                          "bio_reps": br})
     _write(d / "libraries.tsv", libs)
     _write(d / "files.tsv", files)
     return d
@@ -81,6 +83,9 @@ def test_columns_filled_and_rest_identical(filled):
             assert n["platform"] == r["platform"]
         if r["experiment"] == CTL:
             assert n["antibody"] == ""                   # a control has no antibody
+        elif r["experiment"] == VAL:                     # bio-rep filter; the pool is mixed
+            want = {"br1": "AB1", "br2": "AB2"}.get(r["unit"], FC.MIXED)
+            assert n["antibody"] == want, r["measurement_id"]
         else:
             assert n["antibody"] == "AB1"
         if r["experiment"] == VAL:                       # two donors: br2 differs
@@ -91,8 +96,9 @@ def test_columns_filled_and_rest_identical(filled):
     for name in (BT.PAIRS, BT.WITHHELD, BT.MISSING):
         assert (new / name).read_bytes() == (base / name).read_bytes(), name
     vocab = json.loads((new / BT.COVARIATES).read_text())["vocab"]
-    assert vocab["antibody"] == ["AB1"]
-    assert vocab["donor"] == ["DON1", "DON2", FC.MIXED]
+    assert vocab["antibody"] == ["AB1"]                  # AB2 and mixed occur in VAL rows only
+    assert vocab["donor"] == ["DON1"]                    # DON2 and mixed: VAL rows only
+    assert vocab["lab"] == ["Lab A"]                     # Lab B: blind rows only
     assert (new / FC.CHANGES).is_file() and (new / FC.SIDE_NAME).is_file()
     assert json.loads((new / BT.BUILD_INFO).read_text())["covariates_of"] == str(base.resolve())
 
@@ -111,16 +117,48 @@ def test_relaxed_superset_check(filled, capsys):
     assert code == 0 and c["rows of the older tables changed or missing"] == 0, txt
 
 
-def test_filled_ids_reach_the_covariate_vector(filled):
+def test_value_outside_training_encodes_to_zero(filled):
+    """D1 review finding 1: a value that only validation or blind rows hold gets id 0 (unknown),
+    never an embedding row that no training gradient reaches; training values get ids > 0."""
     _, _, new, _ = filled
-    spec = json.loads((new / BT.COVARIATES).read_text())
-    enc = CovariateEncoder(spec)
-    for r in read_tsv(new / BT.MEASUREMENTS, MEASUREMENT_COLUMNS):
+    enc = CovariateEncoder(json.loads((new / BT.COVARIATES).read_text()))
+    rows = read_tsv(new / BT.MEASUREMENTS, MEASUREMENT_COLUMNS)
+    train = {f: {r[f] for r in rows if r["in_eic"] == "train"} for f in CATEGORICAL.values()}
+    n_zero = 0
+    for r in rows:
         v = enc.c_in(r)
         for col, field in CATEGORICAL.items():
             i = int(v[META_COLUMNS.index(col)])
             assert 0 <= i < CAT_TABLE
-            assert (i > 0) == bool(r[field]), (r["measurement_id"], field)
+            assert (i > 0) == (bool(r[field]) and r[field] in train[field]), (r["measurement_id"], field)
+            n_zero += r["in_eic"] != "train" and bool(r[field]) and i == 0
+    assert n_zero > 0
+    blind = next(r for r in rows if r["experiment"] == BLD)
+    assert enc.cat_id("lab", blind["lab"]) == 0 and blind["lab"] == "Lab B"
+    val = next(r for r in rows if r["experiment"] == VAL and r["unit"] == "br2")
+    assert enc.cat_id("donor", val["donor"]) == 0 and enc.cat_id("antibody", val["antibody"]) == 0
+
+
+def test_derived_rows_inherit_their_unit(filled):
+    """A derived arm (depth thinning) of a unit carries the unit's base-view values."""
+    _, _, new, _ = filled
+    rows = read_tsv(new / BT.MEASUREMENTS, MEASUREMENT_COLUMNS)
+    base = {(r["experiment"], r["unit"]): r for r in rows if r["arm_knob"] == ""
+            and r["layer"] == "uniform"}
+    n = 0
+    for r in rows:
+        b = base.get((r["experiment"], r["unit"]))
+        if r["arm_knob"] and b is not None:
+            assert all(r[c] == b[c] for c in FC.FILLED), r["measurement_id"]
+            n += 1
+    assert n > 0
+
+
+def test_covariate_columns_refuse_a_non_covariate_field(filled, capsys):
+    t, base, new, _ = filled
+    code, _, txt = _run(t, new, capsys, "--superset-of", str(base), "--no-widths",
+                        "--covariate-columns", "lab,in_eic")
+    assert code == 2 and "must be categorical covariate fields" in txt
 
 
 def test_platform_of():
@@ -134,3 +172,7 @@ def test_platform_of():
     assert FC.platform_of({"platform": "Illumina HiSeq 4000"}, []) == ("OBI:0002049", "")
     v, note = FC.platform_of({"platform": ""}, fq[2:])
     assert v == "" and "no code" in note
+    rep = [dict(fq[0], bio_reps="1"), dict(fq[1], bio_reps="2")]       # native br rows: own FASTQs
+    assert FC.platform_of({"platform": "", "unit": "br2", "bio_rep": "2"}, rep)[0] == "OBI:0002000"
+    assert FC.platform_of({"platform": "", "unit": "pooled", "bio_rep": ""}, rep)[0] == \
+        "OBI:0002000,OBI:0002001"

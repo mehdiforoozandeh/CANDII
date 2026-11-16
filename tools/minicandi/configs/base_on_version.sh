@@ -1,7 +1,9 @@
 #!/bin/bash
 # Close-out D1 (PI ruling of 2026-11-16): retrain and score the 3 base recipes, 3 seeds each, on a
-# new tables version (default eic_v1_1: eic_v1 with lab, antibody, donor and a code-only platform,
-# tools/onion_data/fill_covariates.py). Run on a Fir login node. DRY RUN BY DEFAULT.
+# new tables version (default eic_v1_2: eic_v1 with lab, antibody, donor and a code-only platform,
+# vocabularies from the training rows only; tools/onion_data/fill_covariates.py). eic_v1_1 has
+# untrained embedding ids for values outside training: never train on it. Run on a Fir login
+# node. DRY RUN BY DEFAULT.
 #
 #   STAGE=baselines bash base_on_version.sh            # dry run of stage 1
 #   STAGE=baselines DRY_RUN=0 bash base_on_version.sh  # stage 1: the 4 screening baselines
@@ -9,9 +11,17 @@
 #   STAGE=runs DRY_RUN=0 bash base_on_version.sh       # stage 2: 9 trainings + their scoring
 #
 # Stage 1 scores marginal_nb, position_average, depth_only_scaling and pseudoreplicate_floor on
-# $O/eval/$V/evalset_p16.json into $O/eval/$V/baselines_p16/<name>/seed0 (the lines of
-# cruxvault/results/t311/SUBMITTED.md; skip when SCORED exists). The oracle reference
+# $O/eval/$V/evalset_p16.json into $O/eval/$V/baselines_p16/<name>/seed0 (the sbatch line of the
+# eic_v1 screening baselines, kit I2a, 2026-11-14; skip when SCORED exists). The oracle reference
 # (baselines_p16/oracle_floor/seed0) is not a job here: it is built beside the eval set.
+# The baselines read no covariate, so their scores must equal the eic_v1 scores. Check each one,
+# from a worktree, after stage 1 ends (exit 0 and "differences: 0" expected):
+#   bash tools/onion_kit/remote_check.sh --cluster fir COD1 tools/onion_eval/compare_scores.py \
+#     /project/def-maxwl/mforooz/ONION/eval/eic_v1/baselines_p16/<name>/seed0 \
+#     /project/def-maxwl/mforooz/ONION/eval/$V/baselines_p16/<name>/seed0 \
+#     --ignore wall_seconds --ignore timing_seconds --ignore scorer_settings
+# The scorer refuses a reference whose evalset_sha256 or tables_sha256 differs from the eval set,
+# so the baselines of one version are never reused for another; they are rerun per version.
 # Stage 2 refuses unless the 4 baselines are SCORED and the oracle reference exists. It then
 # submits rung{2,3,4}/base_heldout.json (conv autoencoder, conv + attention, U-Net; the configs of
 # the reference runs runs_fir/rung{2,3,4}_base_heldout, identical key for key) as
@@ -21,7 +31,7 @@ set -u
 module load python/3.10.13 >/dev/null 2>&1; unset EBPYTHONPREFIXES
 O=/project/def-maxwl/mforooz/ONION
 K="${K:-/project/def-maxwl/mforooz/onion_kit/COD1}"
-V="${V:-eic_v1_1}"
+V="${V:-eic_v1_2}"
 T=$O/tables/$V
 EV=$O/eval/$V/evalset_p16.json
 B=$O/eval/$V/baselines_p16

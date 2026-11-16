@@ -28,9 +28,11 @@ It prints one count per rule and exits 1 when any count is nonzero (2 on a missi
                                                other side (`build_tables.SplitSignature`)
   sha256 mismatches                            counts.h5 missing, or its sha256 != the row's
   pairs naming an unknown measurement, duplicate ids
-  rows of the older tables changed or missing  (with --superset-of; `--covariate-columns c1,c2`
-                                               ignores those measurements.tsv cells and their
-                                               covariates.json vocabularies: fill_covariates.py)
+  rows of the older tables changed or missing  (with --superset-of; `--covariate-columns c1,c2`,
+                                               categorical fields only, ignores those
+                                               measurements.tsv cells and skips the vocabulary
+                                               prefix rule, since fill_covariates.py rebuilds every
+                                               vocabulary from the training rows)
 Add-on tables (Amendment 4, chunk OXt; `--addon-of` and `--other-experiments` default to
 `build_info.json`). A second-experiment row is a row with `in_eic = evalonly` or whose experiment
 is in the reviewed list `$OXL`; such an experiment is exempt from the two ledger lines above only
@@ -465,9 +467,10 @@ def check(a) -> int:
     if a.superset_of:
         old = Path(a.superset_of)
         cov = [c for c in a.covariate_columns.split(",") if c]
-        bad_cols = [c for c in cov if c not in MEASUREMENT_COLUMNS]
+        bad_cols = [c for c in cov if c not in BT.VOCAB_FIELDS]
         if bad_cols:
-            print(f"FAIL --covariate-columns not in measurements.tsv: {bad_cols}")
+            print(f"FAIL --covariate-columns must be categorical covariate fields "
+                  f"{list(BT.VOCAB_FIELDS)}: {bad_cols}")
             return 2
         blank = [MEASUREMENT_COLUMNS.index(c) for c in cov]
 
@@ -485,8 +488,8 @@ def check(a) -> int:
             n_bad += 1
         ov = json.loads((old / BT.COVARIATES).read_text()).get("vocab", {})
         nv = json.loads((T / BT.COVARIATES).read_text()).get("vocab", {})
-        n_bad += sum(1 for f, vals in ov.items()
-                     if f not in cov and nv.get(f, [])[:len(vals)] != list(vals))
+        if not cov:            # a covariate refill rebuilds every vocabulary (training rows only)
+            n_bad += sum(1 for f, vals in ov.items() if nv.get(f, [])[:len(vals)] != list(vals))
         V["rows of the older tables changed or missing"] = n_bad
 
     # ---- report
@@ -541,7 +544,7 @@ def main(argv=None) -> int:
     ap.add_argument("--tables", required=True)
     ap.add_argument("--superset-of", default="")
     ap.add_argument("--covariate-columns", default="",
-                    help="with --superset-of: comma list of measurements.tsv columns (e.g. "
+                    help="with --superset-of: comma list of categorical covariate fields (e.g. "
                          "lab,antibody,donor,platform) whose cells, and whose covariates.json "
                          "vocabulary, may differ from the older tables (fill_covariates.py)")
     ap.add_argument("--addon-of", default="", help="base tables; default build_info's addon_of")

@@ -326,3 +326,12 @@ def test_same_view_store_is_apart_from_the_plain_store(sub_env):
     out = _submit(tmp, e, DRY_RUN="1", SCORE_SAME_VIEW="1")
     assert "is complete; no predict job" in out and "predict.sh" not in out
     assert "predict_store.py" not in SUBMIT.read_text().replace("score.py and predict_store.py", "")
+
+
+def test_checkpoint_of_another_tables_version_is_refused(env):
+    """Close-out D1 finding 6: a run trained on one tables version (its tables_sha256) is never
+    scored on validation against an eval set of another version."""
+    m, cfg = _model()
+    with pytest.raises(S.ScoreRefused, match="trained on tables sha256"):
+        S.Scorer(env["evalset"], main="model", model=m, config=cfg, run_tables_sha256="0" * 64,
+                 **KW)

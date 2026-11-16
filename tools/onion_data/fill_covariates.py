@@ -16,13 +16,16 @@ row (`SIDE_COLUMNS`). Per row:
             codes keeps them (the codes of the FASTQs it aligned); a name (the testbed rows) is
             mapped through `PLATFORM_CODE`; an empty cell (the native layer, built from ENCODE's
             own alignments) takes the sorted codes of the experiment's released FASTQs
-            (`files.tsv`, all FASTQs when none is released).
+            (`files.tsv`, all FASTQs when none is released); a `br<i>` row takes only the FASTQs
+            whose `bio_reps` holds i.
 Every empty or mixed cell gets its cause in `note`. `PLATFORM_CODE` was read from the portal
 (`/platforms/<id>/`, 2026-11-16) and agrees with every eic_v1 row that holds a single code.
 
 `apply` writes a new tables directory: `measurements.tsv` with the four columns of the side table
-written in (every other cell of every row byte-identical), `covariates.json` with fresh sorted
-vocabularies (`build_tables.covariates_spec`), every other table file copied byte for byte,
+written in (every other cell of every row byte-identical), `covariates.json` whose vocabularies
+are built from the TRAINING rows only (`in_eic = train`; `build_tables.covariates_spec` over those
+rows), so every categorical value that no training row holds encodes to id 0 (unknown) and never
+reaches an embedding row that no gradient trained, every other table file copied byte for byte,
 `covariates_fill.tsv` (a copy of the side table; not hashed by `tables_sha256`), `CHANGES.md`
 (coverage per split, causes, unseen ids per split) and `build_info.json` (`covariates_of`, the
 base's own build_info under `base_build_info`). `--out` must not exist. Check the result with
@@ -45,6 +48,7 @@ if str(TOOLS) not in sys.path:
 
 from minicandi import contract as C  # noqa: E402
 from minicandi.dataset import MEASUREMENT_COLUMNS, read_tsv  # noqa: E402
+from onion_data import build_list as BL  # noqa: E402
 from onion_data import build_tables as BT  # noqa: E402
 
 FILLED = ("lab", "antibody", "donor", "platform")
@@ -88,6 +92,9 @@ def _is_code(token: str) -> bool:
 def platform_of(row: dict, fastqs: list):
     """(new platform cell, note)."""
     before = row.get("platform", "")
+    if row.get("unit", "").startswith("br") and row.get("bio_rep"):
+        fastqs = [f for f in fastqs if row["bio_rep"] in BL.split_acc(
+            f.get("bio_reps", "").strip("[]"))]
     if before:
         toks = [t for t in before.split(",") if t]
         unknown = [t for t in toks if not _is_code(t) and t not in PLATFORM_CODE]
@@ -198,6 +205,23 @@ def unseen_lines(rows: list) -> list:
     return out
 
 
+#: column combinations that may single out an EIC split (D1 review, finding 2)
+COMBOS = (("assay_class", "pipeline", "pipeline_version", "platform", "lab"),
+          ("pipeline", "read_length", "dedup", "mapq_threshold"))
+
+
+def combo_lines(rows: list) -> list:
+    out = ["| combination | split | rows | rows whose combination no training row holds |",
+           "|---|---|---|---|"]
+    for cols in COMBOS:
+        train = {tuple(r[c] for c in cols) for r in rows if r["in_eic"] == "train"}
+        for s in ("val", "blind"):
+            have = [r for r in rows if r["in_eic"] == s]
+            n = sum(1 for r in have if tuple(r[c] for c in cols) not in train)
+            out.append(f"| {', '.join(cols)} | {s} | {len(have)} | {n} |")
+    return out
+
+
 def cmd_apply(a) -> int:
     base, out, side_path = Path(a.base), Path(a.out), Path(a.side)
     if out.exists():
@@ -220,7 +244,8 @@ def cmd_apply(a) -> int:
             n[col] = side[r["measurement_id"]][col]
         new_rows.append(n)
     texts = {BT.MEASUREMENTS: BT.tsv_text(MEASUREMENT_COLUMNS, new_rows),
-             BT.COVARIATES: json.dumps(BT.covariates_spec(new_rows), indent=1) + "\n"}
+             BT.COVARIATES: json.dumps(BT.covariates_spec(
+                 [r for r in new_rows if r["in_eic"] == "train"]), indent=1) + "\n"}
     stage = out.with_name(out.name + ".part")
     if stage.exists():
         print(f"refused: {stage} exists")
@@ -240,6 +265,8 @@ def cmd_apply(a) -> int:
     vocab = json.loads(texts[BT.COVARIATES])["vocab"]
     blind_only = sorted(set(vocab["platform"]) - {r["platform"] for r in new_rows
                                                  if r["in_eic"] != "blind"})
+    unseen = {f: [sum(1 for r in new_rows if r["in_eic"] == s and r[f] and r[f] not in vocab[f])
+                  for s in ("val", "blind")] for f in BT.VOCAB_FIELDS}
     lines = [f"# Tables {out.name}: lab, antibody and donor filled; one platform vocabulary",
              "", f"Base: `{base}` (left untouched). Side table: `{SIDE_NAME}` "
              f"(sha256 {BT.sha256_bytes(side_path.read_bytes())}).",
@@ -251,8 +278,19 @@ def cmd_apply(a) -> int:
              *[f"- {k}: {v} rows" for k, v in sorted(notes.items())], "",
              "## Values of validation and blind rows that training rows never hold", "",
              *unseen_lines(new_rows), "",
-             "## Vocabulary sizes (embedding table rows: 1024)", "",
-             *[f"- {f}: {len(v)}" for f, v in vocab.items()], "",
+             "## Vocabularies (embedding table rows: 1024)", "",
+             "Every vocabulary holds the values of the training rows only (`in_eic = train`). A "
+             "value that no training row holds encodes to id 0 (unknown), the id an empty cell "
+             "gets, so no validation or blind row reads an untrained embedding row.", "",
+             *[f"- {f}: {len(v)} values; rows encoded as 0 although non-empty: validation "
+               f"{unseen[f][0]}, blind {unseen[f][1]}" for f, v in vocab.items()], "",
+             "The ids are a property of this version: a checkpoint trained on one tables version "
+             "must never be scored on another. The scorer refuses it on validation (`score.py`: "
+             "the run's `tables_sha256` must equal the eval set's).", "",
+             "## Combinations that single out an EIC split", "",
+             "These come from the blind test-bed layer and the native layer, not from the filled "
+             "columns. A model can still tell these rows apart from training rows.", "",
+             *combo_lines(new_rows), "",
              f"Platform ids that occur only in blind rows: {len(blind_only)}"
              + (f" ({', '.join(blind_only)})" if blind_only else "") + "."]
     BT.write_text(stage / CHANGES, "\n".join(lines) + "\n")
