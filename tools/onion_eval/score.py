@@ -158,9 +158,10 @@ version key, so without the same-view switch every output is the pre-CM one.
 Close-out item E5 (scorer extensions, PI 2026-11-16). With every switch off, scores.json differs from
 the pre-E5 one only by these additive keys (no existing key changes value or meaning):
 `pit_deviation_per_stratum` and `predicted_over_replicate_variance_robust` in each imputation table
-(PIT_STRATA_DESCRIPTION, H7_ROBUST_DESCRIPTION), and `selection.composite_status` (COMPOSITE_STATUS:
+(top level, `accessibility_only`, `predicted_control`; PIT_STRATA_DESCRIPTION, H7_ROBUST_DESCRIPTION), and `selection.composite_status` (COMPOSITE_STATUS:
 `selection.composite` is composite version 1, superseded; the current one is select_rule.py
-arm-summary). suffstats.npz and pairs_per_region.npz are unchanged.
+arm-summary). suffstats.npz and pairs_per_region.npz are unchanged. `drop_e5_keys` removes exactly
+these keys (the tests that pin pre-E5 outputs use it).
 Foreign covariates (off by default): `--foreign-covariates MODE [--foreign-seed N]` (or
 ONION_FOREIGN_COVARIATES / ONION_FOREIGN_SEED, which submit_arms.sh sets from FOREIGN_COVARIATES)
 give the model's forward the covariates of another experiment of the same assay (FOREIGN_DEFINITION,
@@ -341,6 +342,26 @@ COMPOSITE_STATUS = (
     "superseded: selection.composite is composite version 1 (correction term = the half-read gap "
     "closed, selection.correction_gap_closed). The current composite (version 3) is computed at report "
     "time: select_rule.py arm-summary --runs <runs root> --sub <score sub-directory>.")
+#: E5: the keys that the E5 scorer adds to every scores.json with its switches off: per imputation
+#: table (top level, `accessibility_only`, `predicted_control` when it is a table) and in `selection`
+E5_TABLE_KEYS = (PIT_STRATA_KEY, H7_ROBUST_KEY)
+E5_SELECTION_KEYS = ("composite_status",)
+
+
+def drop_e5_keys(scores: dict) -> dict:
+    """E5: a copy of a scores.json dict without the E5 additive keys (E5_TABLE_KEYS in each
+    imputation table, E5_SELECTION_KEYS in `selection`), for checks against outputs pinned before
+    E5. Every other key and value is the pre-E5 one (module docstring)."""
+    out = {k: v for k, v in scores.items() if k not in E5_TABLE_KEYS}
+    for t in ("accessibility_only", "predicted_control"):
+        if isinstance(out.get(t), dict):
+            out[t] = {k: v for k, v in out[t].items() if k not in E5_TABLE_KEYS}
+    if isinstance(out.get("selection"), dict):
+        out["selection"] = {k: v for k, v in out["selection"].items()
+                            if k not in E5_SELECTION_KEYS}
+    return out
+
+
 #: OXe: why an evaluation-only target (a second experiment) has no assay-level value
 FLAGGED_REASON = ("evaluation-only target (a second experiment, PI ruling 33): outside the "
                   "shared/specific split, the error budget and every headline block")
