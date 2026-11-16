@@ -71,7 +71,8 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 | Count transforms | [[closeout A8 count transforms]] | none | spec (item agent started 2026-11-16) |
 | Final tuning round: matched-compute runs | [[closeout A9 matched-compute runs]] | none | running (12 trainings pending on Fir) |
 | Pointwise MLP under the corrected composite | [[closeout A10 pointwise MLP corrected score]] | GPU | not started |
-| Settle the miniCANDI design: one document, ready for scaling | [[closeout M1 settled miniCANDI design]] | A1 to A10, E1 | not started |
+| DNA fusion: how the DNA features join the count features | [[closeout A11 DNA fusion]] | none | spec (item agent started 2026-11-16) |
+| Settle the miniCANDI design: one document, ready for scaling | [[closeout M1 settled miniCANDI design]] | A1 to A11, E1 | not started |
 
 ### Records and close-out
 
@@ -92,7 +93,8 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 - Two-step fixed reference depth: one per assay class.
 - adaLN-zero covariate injection: an extra arm.
 - DNA embeddings: Globus transfer Nibi to Fir started 2026-11-16.
+- DNA fusion is a separate ablation on the 3 models (item A11).
 
 ## Open PI decisions
 
-- DNA-fusion arms (how the DNA features join the count features): needed, or covered by the DNA-source ablation?
+- None.
