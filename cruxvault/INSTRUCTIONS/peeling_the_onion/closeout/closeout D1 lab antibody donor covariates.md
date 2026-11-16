@@ -41,6 +41,7 @@ Fill lab, antibody and donor for every row of the EIC tables, and use one platfo
 3. Write the columns into a side table and a new tables version. Coordinate with D3: one version build carries both the D1 columns and the D3 tail rows, so the models retrain once. Run `check_dataset.py` (every leak rule at 0).
 4. Encode each new covariate as a categorical id with an "unknown" token. Count, per split, how many validation and blind ids are unseen in training.
 5. Ablation on conv autoencoder, conv + attention and U-Net, 3 seeds each, on Fir CPU: arm "metadata with lab, antibody, donor" against the reference recipe on the new version. Score into `p16_sv`, composite version 3.
+   Amended by the PI ruling of 2026-11-16: only the 3 base recipes (3 seeds each) and the final model are retrained on the new version. The base recipe reads every covariate column, so on the new version it IS the "metadata with lab, antibody, donor" arm. No separate ablation arm runs. The comparison against `eic_v1` crosses two versions, so the scorer refuses it (hash chain); it is read only as a descriptive table of the two versions side by side, with the seed ranges. Tool: `tools/onion_data/fill_covariates.py`; submit script: `tools/minicandi/configs/base_on_version.sh`.
 6. Record a finding in the crux tree; log the D13 outcome in the notepad.
 
 ## 6. How the result answers the question
@@ -69,4 +70,4 @@ Ablation ("beyond" = difference of seed means larger than the larger seed range,
 
 ## 8. Done when
 
-The new tables version passes `check_dataset.py` with lab, antibody, donor and a unified platform filled as in section 6, and the 9-run ablation is scored and logged in the notepad with its D13 outcome.
+The new tables version passes `check_dataset.py` with lab, antibody, donor and a unified platform filled as in section 6, and the 3 base recipes x 3 seeds on it are prepared as one dry-run submit script for the foreman (amended by the PI ruling of 2026-11-16).
