@@ -34,10 +34,10 @@ Is a correction-pair score on 16 of the 256 evaluation regions (the screening ti
 
 ## 5. Work
 
-1. Amend the preregistration before any 256-region score exists: add the version-3 correction term (18 pairs) and the correction-only term to conditions 1 and 4; name the runs (U-Net base and U-Net scrambled covariates, 3 seeds each, one cluster). Commit it.
+1. Amend the preregistration before any 256-region score exists: add the version-3 correction term (18 pairs) and the correction-only term to conditions 1 and 4; name the runs (U-Net base and U-Net scrambled covariates, 3 seeds each, one cluster). Commit it. **Done 2026-11-16 (section 9): the runs are 4 arms x 3 seeds (foreman's brief), and a rank-order condition 6 and a stored-score condition S are added.**
 2. Verify that the 16-region screening set (`evalset_p16.json`, sha a82cdfd1) uses the preregistered subset rule; if not, the check must also score p = 16 under the rule.
-3. Score the 6 runs with all 256 pair regions (kit CM, same-view pass), on one device type for all 6 (notepad L322).
-4. Run `pair_regions_check.py`; write `PAIR_CHECK.md` with the pass or fail of each condition for p = 8, 16, 32.
+3. Score the 12 runs with all 256 pair regions (kit COE1 = kit AB scorer plus `run-v3`, same-view pass), on CPU with inference batch 8 for all 12, as the stored `p16_sv` scores (notepad L322). Script: `slurm/onion_eval/e1_pair_check_p256.sh` (dry run by default).
+4. Run `pair_regions_check.py run-v3` (the script's step 2, after the scorings); write `PAIR_CHECK.md` with the pass or fail of each condition for p = 8, 16, 32.
 5. If p = 16 passes: label the existing `p16_sv` scores "settled". Else rescore at the chosen p every run that enters a settlement: the final-round arms (A9), the nine ablations (A1), the controls (A2, A3) and the new arms of A4 to A8.
 6. Run `select_rule.py` settlements on the settled scores; log each D13 outcome in the notepad; record findings in the crux tree.
 
@@ -60,3 +60,15 @@ Is a correction-pair score on 16 of the 256 evaluation regions (the screening ti
 ## 8. Done when
 
 `PAIR_CHECK.md` reports the chosen pair-region count under the amended preregistration, every run in a settlement has a score at that count, and each D13 outcome is logged in the notepad as settled.
+
+## 9. Amendment of 2026-11-16 to the preregistration (PI ruling of 2026-11-16)
+
+The full text, dated, with the reason and below the unchanged original, is the section "Amendment of 2026-11-16" of `cruxvault/results/pair_region_check/PAIR_CHECK_PREREGISTRATION.md` (git-ignored; this branch's copy). The constants are `pair_regions_check.thresholds_v3()`; the test `test_thresholds_v3_equal_the_amended_preregistration` holds the two equal. In short:
+
+- Terms: the version-3 correction term (gap closed with the oracle reference, 18 crop pairs with no duplicate-keeping side) and the correction-only term replace headline 4 in conditions 1, 2 and 4. Headline 5 and the replicate rows stay.
+- Runs: conv autoencoder, conv + attention and U-Net base recipes, and the U-Net with DNA-only skip connections; 3 seeds each; scored into `p256_sv` on `evalset.json` on Fir CPU.
+- Condition 3: the D13 verdicts (composite version 3, no arm called simpler) of conv AE vs conv + attention, conv AE vs U-Net, conv + attention vs U-Net, U-Net vs U-Net DNA-only skip are equal on the subset and on 256 regions.
+- Condition 6 (new, the decision rule): for each arm pair and for the composite, the correction term and the correction-only term, a 256-region difference of arm means larger than the larger seed range keeps its sign on the subset; a smaller difference is a tie and is not tested.
+- Settled: the stored 16-region scores are settled when p = 16 passes all six conditions AND the stored `p16_sv` values equal the p = 16 subset of the 256-region scoring within relative 1e-6 (condition S).
+- Expectation: on 16 regions all four comparisons are composite ties (TIE_ASK_PI); condition 6 carries the trade-offs (U-Net lower on the correction term by 0.17 to 0.21 and on the correction-only term by 0.34 to 0.37).
+

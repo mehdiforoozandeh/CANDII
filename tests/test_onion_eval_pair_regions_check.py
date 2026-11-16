@@ -239,3 +239,160 @@ def test_thresholds_equal_the_preregistration():
         pytest.skip("no PAIR_CHECK_PREREGISTRATION.md in this checkout")
     m = re.search(r"^Constants: `(\{.*\})`$", pre[0].read_text(), re.M)
     assert m and json.loads(m.group(1)) == PC.thresholds()
+
+
+# ------------------------------------------------------------------ the amended check (2026-11-16)
+NND = {"0": 0, "1": 0, "2": 1, "3": 1}      # pairs k = 0, 1 have no duplicate-keeping side (crop pairs)
+SV_GAIN = 0.3                        # the same-view CRPS is the cross-view CRPS minus this
+
+
+def write_oracle(d, ev, R, cols=None, o=0.5):
+    """An oracle reference (oracle_floor.load_oracle form) for the headline correction pairs."""
+    head, _ = pairs()                # every correction pair, as the scorer's reference holds
+    ri = np.arange(R) if cols is None else np.asarray(cols)
+    n = len(head)
+    d.mkdir(parents=True, exist_ok=True)
+    np.savez(d / "oracle_per_region.npz", pair_ids=np.array([p["pair_id"] for p in head]),
+             region_indices=ri, crps_sum_oracle=np.full((n, len(ri)), o * RB),
+             bins=np.full((n, len(ri)), float(RB)),
+             **{k: np.zeros((n, len(ri))) for k in ("sq_half_sum", "pr1_sum", "pr2_sum")},
+             assay=np.array([p["assay"] for p in head]), cell=np.array([p["cell"] for p in head]),
+             rung=np.array([""] * n), knob=np.array([p["knob"] for p in head]),
+             source=np.array([p["source"] for p in head]), target=np.array([p["target"] for p in head]),
+             oracle_reason=np.array([""] * n), never_trained=np.array([p["never_trained"] for p in head]),
+             subset_pair=np.array([p["subset_pair"] for p in head]), source_dedup=np.ones(n, int),
+             target_dedup=np.ones(n, int),
+             nodedup_side=np.array([NND.get(p["pair_id"][-1], 0) for p in head]))
+    (d / "oracle_floor.json").write_text(json.dumps({"evalset_sha256": "e" * 64,
+                                                     "tables_sha256": "t" * 64}))
+
+
+def add_v3(d, ev, model_crps, gain=SV_GAIN, refs_dir=None):
+    """Same-view file, scorable and the correction-only term on a write_run seed directory."""
+    from onion_eval import score as S
+    cor, _ = pairs()
+    targets = [p["target"] for p in cor if p["never_trained"] == 1 and p["subset_pair"] == 0]
+    R = len(model_crps)
+    np.savez(d / "same_view_per_region.npz", pair_ids=np.array(["same_view/" + t for t in targets]),
+             region_indices=np.arange(R), target=np.array(targets),
+             assay=np.array([t[2] for t in targets]), cell=np.array(["c"] * len(targets)),
+             crps_sum_model=np.tile((np.asarray(model_crps) - gain) * RB, (len(targets), 1)),
+             bins=np.full((len(targets), R), float(RB)),
+             crps_model_same_view=np.full(len(targets), float(np.mean(model_crps)) - gain))
+    s = json.loads((d / "scores.json").read_text())
+    s["scorable"] = ev["scorable"]
+    run = PC.Run(d, ev)
+    cr, _ = run.records({k: run.arr[k].sum(1) for k in PC.SUM_KEYS})
+    s[S.CORRECTION_ONLY_KEY] = S.correction_only_block(
+        cr, [{"target": t, "crps_model_same_view": float(np.mean(model_crps)) - gain} for t in targets])
+    if refs_dir is not None:
+        s["refs"] = {"dir": str(refs_dir)}
+    (d / "scores.json").write_text(json.dumps(s))
+
+
+def screening_copy(src, dst, ev, p, refs_dir):
+    """The p-region screening score of a seed: the npz columns of the subset, as a p16_sv dir."""
+    from onion_eval import score as S
+    pos = PC.pair_region_positions(len(ev["regions"]), p)
+    dst.mkdir(parents=True, exist_ok=True)
+    for f in ("pairs_per_region.npz", "same_view_per_region.npz"):
+        z = dict(np.load(src / f))
+        R = len(z["region_indices"])
+        for k, v in list(z.items()):
+            if v.ndim == 2 and v.shape[1] == R:
+                z[k] = v[:, pos]
+        z["region_indices"] = np.asarray(pos)
+        np.savez(dst / f, **z)
+    s = json.loads((src / "scores.json").read_text())
+    s["refs"] = {"dir": str(refs_dir)}
+    (dst / "scores.json").write_text(json.dumps(s))
+    run = PC.Run(dst, ev)
+    cr, _ = run.records({k: run.arr[k].sum(1) for k in PC.SUM_KEYS})
+    z = np.load(dst / "same_view_per_region.npz")
+    sv = [{"target": str(t), "crps_model_same_view": float(c.sum() / b.sum())}
+          for t, c, b in zip(z["target"], z["crps_sum_model"], z["bins"])]
+    s[S.CORRECTION_ONLY_KEY] = S.correction_only_block(cr, sv)
+    (dst / "scores.json").write_text(json.dumps(s))
+
+
+def build_v3(tmp, R, effects, screening=True):
+    """Arms named in `effects` {arm: (level, region effect [R])}, 3 seeds, scored into p256_sv."""
+    p, ev = evalset(tmp, R)
+    write_oracle(tmp / "oracle_floor" / "seed0", ev, R)
+    write_oracle(tmp / "baselines_p16" / "oracle_floor" / "seed0", ev, R,
+                 cols=PC.pair_region_positions(R, 16))
+    for arm, (lvl, eff) in effects.items():
+        for s in range(3):
+            m = lvl + 0.02 * s + eff
+            d = tmp / arm / f"seed{s}" / "p256_sv"
+            write_run(d, ev, m, imp=0.6 + 0.01 * s, unc=0.5 + 0.01 * s)
+            add_v3(d, ev, m, gain=SV_GAIN + 0.01 * s)      # seeds differ in the term
+            if screening:
+                screening_copy(d, tmp / arm / f"seed{s}" / "p16_sv", ev, 16, tmp / "baselines_p16")
+    return p
+
+
+def check_v3(tmp, p, arms, comparisons, sizes=(8, 16, 32)):
+    return PC.run_check_v3([tmp / a for a in arms], p, tmp / "oracle_floor" / "seed0", tmp / "out",
+                           screening_sub="p16_sv", comparisons=comparisons, sizes=sizes,
+                           n_boot=N_BOOT, pmfr=pmfr_double, log=lambda *a: None)
+
+
+def test_v3_uniform_regions_pass_and_settle(tmp_path):
+    R = 64
+    arms = {"armA": (2.0, np.zeros(R)), "armB": (2.3, np.zeros(R))}
+    p = build_v3(tmp_path, R, arms)
+    res = check_v3(tmp_path, p, list(arms), (("armA", "armB"),))
+    assert all(res["summary"][8].values()), res["summary"]
+    assert res["chosen"] == 8 and res["screening_settled"] is True
+    lines = (tmp_path / "out" / "PAIR_REGIONS_V3.md").read_text().splitlines()
+    assert lines[0] == "pair regions: 8" and lines[1] == "16-region screening scores settled: yes"
+    cons = [r for r in res["rows"] if r["condition"] == "consistency"]
+    assert cons and all(r["value"] != "" and float(r["value"]) < 1e-9 for r in cons), cons
+    # the version-3 term uses the 4 pairs with no duplicate-keeping side: (3 - m) / (3 - 0.5)
+    v3 = [r for r in res["rows"] if r["condition"] == "1" and r["quantity"] == "correction_v3"]
+    assert v3 and abs(float(v3[0]["value_all_regions"]) - (3 - 2.0) / 2.5) < 0.03
+    co = [r for r in res["rows"] if r["condition"] == "1" and r["quantity"] == "correction_only"]
+    assert co and abs(float(co[0]["value_all_regions"]) - (1 - SV_GAIN / 2.0)) < 0.02
+    rank = [r for r in res["rows"] if r["condition"] == "6" and r["scope"] != "ALL"]
+    assert rank and all(r["pass"] == "pass" for r in rank if r["pass"])
+
+
+def test_v3_region_effect_fails_at_8_passes_at_32(tmp_path):
+    R = 64
+    e = planted_region_effect(R)
+    arms = {"armA": (2.0, e), "armB": (2.3, e)}
+    p = build_v3(tmp_path, R, arms, screening=False)
+    res = check_v3(tmp_path, p, list(arms), (("armA", "armB"),))
+    assert not res["summary"][8]["1"]
+    assert all(res["summary"][32].values()), res["summary"][32]
+    assert res["chosen"] == 32 and res["screening_settled"] is False
+
+
+def test_v3_rank_flip_fails_condition_6(tmp_path):
+    R = 64
+    ch = np.zeros(R)
+    ch[::R // 8] = -0.6        # armB beats armA on the 8-subset only; it is worse on all regions
+    arms = {"armA": (2.0, np.zeros(R)), "armB": (2.3, ch)}
+    p = build_v3(tmp_path, R, arms, screening=False)
+    res = check_v3(tmp_path, p, list(arms), (("armA", "armB"),), sizes=(8,))
+    assert res["summary"][8]["6"] is False and res["chosen"] is None
+    flip = [r for r in res["rows"] if r["condition"] == "6" and r["pass"] == "fail"]
+    assert flip and float(flip[0]["value"]) * float(flip[0]["value_all_regions"]) < 0
+
+
+def test_v3_off_leaves_the_original_check_unchanged():
+    assert PC.CONDITIONS == ("1", "2", "3", "4", "5")
+    t = PC.thresholds()
+    assert "amended" not in t and set(PC.thresholds_v3()) > set(t)
+    assert {k: PC.thresholds_v3()[k] for k in t} == t
+
+
+def test_thresholds_v3_equal_the_amended_preregistration():
+    pre = list((REPO / "cruxvault" / "results").glob("*/PAIR_CHECK_PREREGISTRATION.md"))
+    if not pre:
+        pytest.skip("no PAIR_CHECK_PREREGISTRATION.md in this checkout")
+    m = re.search(r"^Amended constants: `(\{.*\})`$", pre[0].read_text(), re.M)
+    if not m:
+        pytest.skip("the preregistration in this checkout has no amendment")
+    assert json.loads(m.group(1)) == PC.thresholds_v3()
