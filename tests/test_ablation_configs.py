@@ -35,6 +35,11 @@ EXPECTED = {
     "depth_input": {"input_depth_fixed": {"input_depth"}},
     "losses": {"loss_impute_x4": {"loss_weights"}, "loss_poisson_mean": {"loss"},
                "loss_nb_crps": {"loss"}, "loss_bin_equal": {"loss_bin_equal"}},
+    # close-out item A2: the basic controls on the three architectures
+    "scrambled_covariates": {"scrambled_covariates": {"scramble_covariates"}},
+    "mask_mode": {"mask_drop": {"mask_mode"}},
+    "cov_injection_form": {"inject_concat": {"covariate_injection"},
+                           "inject_tokens": {"covariate_injection"}},
 }
 ON_DISK = sorted(ABL.glob("*/rung*/*.json"))
 
@@ -60,3 +65,13 @@ def test_config_is_reference_plus_declared_keys_and_in_band(path):
     torch.manual_seed(0)
     n = sum(p.numel() for p in R.build_model(cfg).parameters() if p.requires_grad)
     assert abs(n - 1.0e6) <= 1.0e5, n
+
+
+def test_inject_tokens_is_not_applicable_on_the_conv_autoencoder():
+    """A2: the conv autoencoder has no attention that reads covariate tokens, so the tokens arm
+    exists only for conv + attention and U-Net."""
+    from minicandi.components import NotApplicable
+    assert not (ABL / "cov_injection_form/rung2/inject_tokens.json").exists()
+    ref = json.loads((FINAL / "rung2" / "reference_equal.json").read_text())
+    with pytest.raises(NotApplicable):
+        R.build_model({**ref, "covariate_injection": "tokens"})

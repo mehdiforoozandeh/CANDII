@@ -1,0 +1,3 @@
+arm	keys changed	comparison incumbent	d14_condition_1	needs	group	simpler_than_base	joins_design	status
+inject_concat	covariate_injection=concat	incumbent	false		covariate injection form	true	yes	write
+inject_tokens	covariate_injection=tokens	incumbent	false		covariate injection form	false	yes	not_applicable: rung 2 (conv autoencoder) has no attention to read covariate tokens; covariate_injection = tokens does not apply
