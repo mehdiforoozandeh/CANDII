@@ -98,4 +98,4 @@ The DNA tower is 0.3% of the conv models' parameters, and DNA off at the pointwi
 
 ## 8. Smoke (kit COA11)
 
-See `cruxvault/results/closeout_A11/SMOKE.md` (git-ignored; foreman's copy in the slip).
+Fir job 4449584 (4 CPUs, 245 s = 0.27 CPU-h, exit 0): each of the 8 arm configs trained 320 windows on the real `eic_v1` tables (seed 0), reloaded through `registry.load_run` with the expected parameter count, and logged finite losses (first 1.553, last 1.325 to 1.327 for every arm). Outputs `/project/def-maxwl/mforooz/ONION/smoke_COA11/rung{2,3,4}_<arm>`. Notes: `cruxvault/results/closeout_A11/SMOKE.md` (git-ignored).
