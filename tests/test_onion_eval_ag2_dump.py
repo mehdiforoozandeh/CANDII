@@ -513,3 +513,27 @@ def test_round_trip_through_the_ag2_score_loader(dumped, tmp_path):
     assert tv["trained_on_roles"] == ["train", "val"] and G._roles(tv) == {"train", "val"}
     assert G._trained("run", G._roles(tv), "val", "unseen")
     assert not G._trained("run", G._roles(tv), "blind", "unseen")
+
+
+def test_run_dump_predicted_control_writes_ctl_pred(dumped, tmp_path):
+    """E2: a run under predicted_control dumps its control mean (`ctl_pred.npy`) for every ChIP
+    target that got a control prediction, and nothing else changes; auto never writes it."""
+    env = dumped["env"]
+    out, dump = tmp_path / "pc", tmp_path / "pc_dump"
+    _score(env, out, config=dict(CFG, predict_control=True), lambda_source="predicted_control",
+           dump_signal=dump)
+    rows = _rows(env)
+    seen = 0
+    for regime in ("leave_one_assay_out", "accessibility_only"):
+        d = dump / regime
+        for mid in _meta(d)["targets"]:
+            p = d / f"{mid}.ctl_pred.npy"
+            if rows[mid]["assay"] == "DNase-seq":
+                assert not p.is_file()
+                continue
+            a = np.load(p)
+            assert a.shape == (2 * RB,) and np.all(np.isfinite(a)) and np.all(a > 0)
+            seen += 1
+    assert seen >= 2
+    assert not list((dumped["dump"] / "val_model_auto").glob("*/*.ctl_pred.npy"))
+    assert not list((dumped["dump"] / "val_pa_pc").glob("*/*.ctl_pred.npy"))

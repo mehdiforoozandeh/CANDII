@@ -1107,6 +1107,10 @@ class Scorer:
                     src["signal_pc"] = pc_src
                 else:
                     m["signal_pc_left_out"][mid] = why or "no predicted control for this target"
+                if A.get("main.ctl_mu") is not None:
+                    # E2: the model's control mean at the target's C' (counts), read only by the
+                    # predicted-control lambda diagnostic (nb_signal_checks.py lambda)
+                    arrays["ctl_pred"] = A["main.ctl_mu"]
             if defined:
                 ctl = self._dump_ctl
                 try:
