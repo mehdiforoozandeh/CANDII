@@ -37,18 +37,18 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 
 | Item | File | Depends on | Status |
 |---|---|---|---|
-| Fill the lab, antibody and donor covariates | [[closeout D1 lab antibody donor covariates]] | none | not started |
+| Fill the lab, antibody and donor covariates | [[closeout D1 lab antibody donor covariates]] | none | spec (item agent started 2026-11-16) |
 | Second experiments: table, evaluation set, cross-lab pairs | [[closeout D2 second experiments and cross-lab pairs]] | D1 | not started |
 | Data set update with DNase-seq in the headline | [[closeout D3 dataset update with DNase-seq]] | D1 | not started |
-| Blind tracks, final model, blind pass, EIC board row | [[closeout D4 blind tracks final model EIC board]] | D1, D3, M1 | not started |
+| Blind tracks, final model, blind pass, EIC board row | [[closeout D4 blind tracks final model EIC board]] | D1, D3, M1 | spec (item agent started 2026-11-16) |
 
 ### Evaluation (success criterion 3)
 
 | Item | File | Depends on | Status |
 |---|---|---|---|
-| The 16-versus-256 region check and settled scores | [[closeout E1 256-region check and settled scores]] | none | not started |
-| Signal p-value and peaks from the predicted NB; AlphaGenome 2 board row; signal-space score | [[closeout E2 p-value and peaks from the predicted NB]] | none | not started |
-| Report the metrics that are computed and never reported | [[closeout E3 report the computed metrics]] | none | not started |
+| The 16-versus-256 region check and settled scores | [[closeout E1 256-region check and settled scores]] | none | spec (item agent started 2026-11-16) |
+| Signal p-value and peaks from the predicted NB; AlphaGenome 2 board row; signal-space score | [[closeout E2 p-value and peaks from the predicted NB]] | none | spec (item agent started 2026-11-16) |
+| Report the metrics that are computed and never reported | [[closeout E3 report the computed metrics]] | none | spec (item agent started 2026-11-16) |
 | Complete the replicate ladder and the crossed mixed model | [[closeout E4 complete the replicate ladder]] | D2 | not started |
 
 ### Training objective (success criterion 2)
@@ -62,13 +62,13 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 | Item | File | Depends on | Status |
 |---|---|---|---|
 | The nine named ablations on three architectures | [[closeout A1 nine named ablations]] | none | running (126 runs submitted 2026-11-16; 3 arms held or blocked) |
-| Basic controls on all three models (scrambled covariates, mask mode, injection form) | [[closeout A2 basic controls on three models]] | none | not started |
-| Counterfactual views on the two conv models | [[closeout A3 counterfactual views on conv models]] | none | not started |
+| Basic controls on all three models (scrambled covariates, mask mode, injection form) | [[closeout A2 basic controls on three models]] | none | spec (item agent started 2026-11-16) |
+| Counterfactual views on the two conv models | [[closeout A3 counterfactual views on conv models]] | none | spec (item agent started 2026-11-16) |
 | Read-derived QC metrics on the input side | [[closeout A4 QC metrics on the input side]] | QC table fill | not started |
 | RNA-seq input | [[closeout A5 RNA-seq input]] | RNA fetch | not started |
 | Learned cell-type embedding | [[closeout A6 learned cell-type embedding]] | none | not started |
 | Resolution 1 to 125 bp | [[closeout A7 resolution]] | 1 bp region store | not started |
-| Count transforms | [[closeout A8 count transforms]] | none | not started |
+| Count transforms | [[closeout A8 count transforms]] | none | spec (item agent started 2026-11-16) |
 | Final tuning round: matched-compute runs | [[closeout A9 matched-compute runs]] | none | running (12 trainings pending on Fir) |
 | Pointwise MLP under the corrected composite | [[closeout A10 pointwise MLP corrected score]] | GPU | not started |
 | Settle the miniCANDI design: one document, ready for scaling | [[closeout M1 settled miniCANDI design]] | A1 to A10, E1 | not started |
