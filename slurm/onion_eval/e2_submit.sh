@@ -12,7 +12,9 @@
 #
 # Step 1, Fir, kit $KIT_ID:
 #   9 score jobs: score.py legacy path (one process, model on CPU, 2 threads) on
-#     eval/eic_v1/evalset_p16.json (the 256 regions of the AG2 comparison; pair jobs on 16 regions),
+#     e2/evalset_e2_targets_only.json: evalset_p16.json (the 256 regions of the AG2 comparison) with
+#     no correction or replicate pair (sha256 22c300ab...; written once by E2; the pair jobs are not
+#     needed here and would double the cost),
 #     --lambda-source predicted_control (every ChIP-seq target also gets the model's predicted
 #     control: signal_pc.npy, ctl_pred.npy), --fraglen-table e2/eic_v1_fraglen.tsv (sha256
 #     4f2efdb6..., the side table of t308), --dump-signal e2/tracks/<run>/seed<k>.
@@ -32,9 +34,9 @@ O=/project/def-maxwl/mforooz/ONION
 K=/project/def-maxwl/mforooz/onion_kit/$KIT_ID
 ARCH=(conv_ae:rung2_base_heldout conv_attn:rung3_base_heldout unet:rung4_base_heldout)
 SSH=(ssh -o BatchMode=yes -o ConnectTimeout=15)
-# score job shape: measured by the timing job (see SCORE_TIME in the slip); 2 CPUs, 12 GB
+# score job shape: 2 CPUs, 20 GB (the timing job reached 12.3 GB RSS under a 12 GB limit)
 SCORE_TIME="${SCORE_TIME:-12:00:00}"
-SCORE_MEM="${SCORE_MEM:-12000M}"
+SCORE_MEM="${SCORE_MEM:-20000M}"
 
 remote() {   # run one command on the cluster, or print it
   if [ "$DRY" = 1 ]; then echo "[dry-run $WHERE] $1"; else "${SSH[@]}" "$WHERE" "$1"; fi
@@ -42,7 +44,8 @@ remote() {   # run one command on the cluster, or print it
 
 case "$WHERE" in
 fir)
-  remote "test -d $K && test -f $O/e2/eic_v1_fraglen.tsv && test -f $O/eval/eic_v1/evalset_p16.json"
+  EV=$O/e2/evalset_e2_targets_only.json
+  remote "test -d $K && test -f $O/e2/eic_v1_fraglen.tsv && test -f $EV"
   SB="sbatch --parsable --account=def-maxwl --gres=none --exclude=fc10713,fc10715"
   DEPS=()
   LDUMPS=""; TRUNS=""
@@ -56,13 +59,13 @@ fir)
       if [ "$DRY" != 1 ] && "${SSH[@]}" fir "test -f $out/SCORED"; then
         echo "skip $run seed$s: $out/SCORED exists"; continue
       fi
-      cmd="mkdir -p $out $dump && module load python/3.10.13 >/dev/null 2>&1; $SB --job-name=e2_score_${run}_s$s --time=$SCORE_TIME --cpus-per-task=2 --mem=$SCORE_MEM --output=$O/e2/logs/%x_%j.out $K/slurm/onion_eval/score.sh $K $O/eval/eic_v1/evalset_p16.json $out run $O/runs_fir/$run/seed$s --dump-signal $dump --fraglen-table $O/e2/eic_v1_fraglen.tsv --lambda-source predicted_control --device cpu"
+      cmd="mkdir -p $out $dump && module load python/3.10.13 >/dev/null 2>&1; $SB --job-name=e2_score_${run}_s$s --time=$SCORE_TIME --cpus-per-task=2 --mem=$SCORE_MEM --output=$O/e2/logs/%x_%j.out $K/slurm/onion_eval/score.sh $K $EV $out run $O/runs_fir/$run/seed$s --dump-signal $dump --fraglen-table $O/e2/eic_v1_fraglen.tsv --lambda-source predicted_control --device cpu"
       if [ "$DRY" = 1 ]; then remote "$cmd"; else
         jid="$("${SSH[@]}" fir "$cmd" | tail -1)"; echo "score $run seed$s: job $jid"; DEPS+=("$jid"); fi
     done
   done
   DEP=""; [ ${#DEPS[@]} -eq 0 ] || DEP="--dependency=afterok:$(IFS=:; echo "${DEPS[*]}")"
-  remote "$SB $DEP --job-name=e2_lambda --time=04:00:00 --cpus-per-task=1 --mem=16000M --output=$O/e2/logs/%x_%j.out $K/slurm/onion_kit/run.sh $K tools/onion_eval/nb_signal_checks.py lambda --evalset $O/eval/eic_v1/evalset_p16.json --fraglen-table $O/e2/eic_v1_fraglen.tsv --out $O/e2/checks/lambda$LDUMPS"
+  remote "$SB $DEP --job-name=e2_lambda --time=04:00:00 --cpus-per-task=1 --mem=16000M --output=$O/e2/logs/%x_%j.out $K/slurm/onion_kit/run.sh $K tools/onion_eval/nb_signal_checks.py lambda --evalset $EV --fraglen-table $O/e2/eic_v1_fraglen.tsv --out $O/e2/checks/lambda$LDUMPS"
   remote "$SB $DEP --job-name=e2_table --time=00:30:00 --cpus-per-task=1 --mem=4000M --output=$O/e2/logs/%x_%j.out $K/slurm/onion_kit/run.sh $K tools/onion_eval/nb_signal_checks.py table --out $O/e2/checks/table$TRUNS"
   ;;
 nibi)

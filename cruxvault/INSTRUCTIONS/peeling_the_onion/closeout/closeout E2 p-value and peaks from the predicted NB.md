@@ -64,3 +64,11 @@ Acceptance checks:
 ## 8. Done when
 
 The AlphaGenome 2 board and a signal-space metric-1 table hold rows for 3 architectures x 3 seeds, with expectation and plug-in values and a λ source per track, and the predicted-control diagnostic is reported.
+
+## 9. Specification as worked (E2 agent, 2026-11-16)
+
+- State today, checked: the base recipes exist only on Fir (`runs_fir/rung{2,3,4}_base_heldout/seed{0,1,2}`; the Nibi seed directories are empty). The AG2 pack, the AG2 audit, the ENCODE peak files and the t308 method tracks exist only on Nibi. Fir had no fragment-length side table (E2 copied the t308 table, sha256 4f2efdb6..., to Fir `e2/eic_v1_fraglen.tsv`). The prediction stores of the base recipes are gone, so a new forward pass is needed.
+- Fair-set numbers, recomputed from `results/t308/ag2_per_target_val.tsv` (11 tracks, 9 cells): rspec_cal AG2 0.438, noise floor 0.333, position average 0.222.
+- Formula check (new, step 0): the formula on the OBSERVED counts against the pipeline's p-value track (`tools/onion_eval/nb_signal_checks.py formula`). A model can do no better than this agreement in the signal space.
+- Predicted-control diagnostic: in regime `leave_one_assay_out` the observed control is a model input, so its predicted control is a reconstruction. The hidden-control test is regime `accessibility_only` (inputs: the accessibility track only). Both are reported (`nb_signal_checks.py lambda`).
+- Scoring: `score.py --lambda-source predicted_control --fraglen-table --dump-signal` (legacy path); the dump now also holds `ctl_pred.npy`. Eval set: the 256 regions of the AG2 comparison without pair jobs (`e2/evalset_e2_targets_only.json`). Board: `ag2_score.py` on Nibi, tables `headline` and `control_free`. Submit script: `slurm/onion_eval/e2_submit.sh` (dry run by default).
