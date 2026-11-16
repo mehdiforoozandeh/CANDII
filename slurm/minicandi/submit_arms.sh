@@ -53,6 +53,11 @@
 #   train|predict|metrics; shard i/N or -; a dry run prints <...> placeholders as ids).
 # TRAIN_TIME=<[d-]hh:mm:ss> (chunk TRa; unset = the lines above, byte for byte) overrides the
 #   training --time of ladder_arms.py plan, whose speeds are Fir's.
+# SCORE_SAME_VIEW=1 (chunk CM; unset or 0 = the lines above, byte for byte): exports
+#   ONION_SCORE_SAME_VIEW=1 to every job (and names it on the predict and metrics lines), so
+#   score.py and predict_store.py also predict and score the same-view pair of every headline
+#   correction target and write the correction-only term (score.py, "Same-view pass"). Predict and
+#   metrics jobs of one store must agree on it (the store's request hash differs).
 #
 # Idempotent. Per (arm, seed): skip when <run dir>/SCORED exists (training only: DONE), or when a
 # queued or running job of this user is named mc_<run dir name>_s<seed>; when DONE exists but not
@@ -80,6 +85,8 @@ fi
 SDEV="${SCORE_DEVICE:-}"
 case "$SDEV" in ""|cpu|gpu) ;; *) echo "SCORE_DEVICE must be cpu or gpu" >&2; exit 2 ;; esac
 [ -z "${NICE:-}" ] || [[ "$NICE" =~ ^-?[0-9]+$ ]] || { echo "NICE must be an integer" >&2; exit 2; }
+case "${SCORE_SAME_VIEW:-0}" in 0|"") SV=0 ;; 1) SV=1 ;; *) echo "SCORE_SAME_VIEW must be 0 or 1" >&2; exit 2 ;; esac
+[ "$SV" != 1 ] || export ONION_SCORE_SAME_VIEW=1   # CM: read by score.py and predict_store.py
 SONLY="${SCORE_ONLY:-0}"
 [ "$SONLY" != 1 ] || [ -n "$EVALSET" ] || { echo "SCORE_ONLY=1 needs an eval set" >&2; exit 2; }
 # two-phase scoring (SP3)
@@ -256,6 +263,7 @@ for spec in "${ARGS_ARMS[@]}"; do
       elif [ "$MONLY" != 1 ]; then
         for ((i = 0; i < NSH; i++)); do
           PENV=("ONION_SHARD=$i/$NSH" "ONION_INFER_BATCH=$PB" "ONION_DEVICE=$PD")
+          [ "$SV" != 1 ] || PENV+=(ONION_SCORE_SAME_VIEW=1)
           PRED=(sbatch "${COMMON[@]}" "--job-name=$JOB" "--time=$PTIME" "--cpus-per-task=$PCPUS"
                 "--mem=${PMEM}M" "--gres=$PG" "--output=$SOUT/predict_${i}of${NSH}_%j.out"
                 ${DEP[@]+"${DEP[@]}"} --export=ALL
@@ -279,6 +287,7 @@ for spec in "${ARGS_ARMS[@]}"; do
         fi
         MENV=(ONION_SCORE_PHASE=metrics "ONION_PRED_STORE=$STORE" "ONION_REFS_FROM=$REFS_FROM")
         [ "${KEEP_PRED_STORE:-0}" != 1 ] || MENV+=(ONION_KEEP_PRED_STORE=1)
+        [ "$SV" != 1 ] || MENV+=(ONION_SCORE_SAME_VIEW=1)
         MET=(sbatch "${COMMON[@]}" "--job-name=$JOB" "--time=$MTIME" "--cpus-per-task=$MCPUS"
              "--mem=${MMEM}M" --gres=none "--output=$SOUT/metrics_%j.out"
              ${MDEP[@]+"${MDEP[@]}"} --export=ALL
