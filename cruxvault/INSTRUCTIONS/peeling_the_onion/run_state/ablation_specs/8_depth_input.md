@@ -71,12 +71,14 @@ Judged per architecture against the larger of the two seed ranges.
 
 ## 7. Readiness
 
-| architecture | state |
-|---|---|
-| conv autoencoder | ready (config from `stage2_arms.py write`; no code) |
-| conv + attention | ready |
-| U-Net | ready |
+| architecture | config (written by `stage2_arms.py write`, with `arms.tsv`) | parameters |
+|---|---|---|
+| conv autoencoder | `tools/minicandi/configs/ablations/depth_input/rung2/input_depth_fixed.json` | 1,042,514 |
+| conv + attention | `.../depth_input/rung3/input_depth_fixed.json` | 1,038,018 |
+| U-Net | `.../depth_input/rung4/input_depth_fixed.json` | 993,599 |
 
-Shared files to edit in Phase 2: none.
+A json diff against each `final/rung<r>/reference_equal.json` showed one changed key, `input_depth: fixed`. `simpler_than_base` stays null, as in the reference. No code changed. No shared file was edited.
+
+Submit option: `TRAIN_TIME=03:00:00` is recommended. The default limit is 5,856 s, and the conv-autoencoder base seed 2 trained for 5,691 s (Fir sacct job 4246989). The thinning adds dataset work that I did not measure.
 
 Cost (Fir `sacct` of the seed-0 reference jobs, allocated CPU-seconds = CPUs x elapsed): conv autoencoder: train 30,252 + predict 10,392 + 7,728 + 8,208 + 6,680 + metrics 29,616 = 92,876 s. Conv + attention: 21,264 + 9,408 + 6,384 + 6,528 + 6,344 + 30,896 = 80,824 s. U-Net: 31,920 + 9,408 + 9,952 + 10,432 + 9,576 + 28,992 = 100,280 s. Per seed over three architectures: 273,980 s = 76.1 CPU-h. Total: 9 runs, 3 x 76.1 = 228 CPU-h. The reference needs no new runs. The thinning adds dataset work; I expect it to be small against the model cost, but I did not measure it.
