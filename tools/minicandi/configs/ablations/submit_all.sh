@@ -1,5 +1,5 @@
 #!/bin/bash
-# Nine named ablations of miniCANDI (chunk AB): train and score every arm config under
+# Ten named ablations of miniCANDI (chunks AB and AB2; cov_injection added last): train and score every arm config under
 # $K/tools/minicandi/configs/ablations/<ablation>/rung{2,3,4}/<arm>.json, 3 seeds, on Fir CPU.
 # Run on a Fir login node. DRY RUN BY DEFAULT: it prints the sbatch lines and submits nothing.
 #
@@ -29,7 +29,7 @@ export ONION_STAGE=1 CLUSTER=fir NICE=100 SEEDS="${SEEDS:-0 1 2}"
 export SCORE_SAME_VIEW=1 SCORE_PHASES=1 SCORE_SUBDIR=p16_sv SCORE_SHARDS=4 SCORE_PRED_DEVICE=cpu SCORE_PRED_CPUS=8 SCORE_PRED_MEM=32000 SCORE_INFER_BATCH=8 SCORE_PRED_TIME=06:00:00 SCORE_CPUS=16 SCORE_MEM=64000 REFS_FROM=$O/eval/eic_v1/baselines_p16 KEEP_PRED_STORE=0
 [ -d "$A" ] || { echo "no ablation configs in kit $K" >&2; exit 2; }
 declare -A ARCH=([2]=convae [3]=convattn [4]=unet)
-ABL="${ABLATIONS:-control_input predict_control average_input two_step dna_source dna_off cov_embedding depth_input losses}"
+ABL="${ABLATIONS:-control_input predict_control average_input two_step dna_source dna_off cov_embedding depth_input losses cov_injection}"
 n=0
 for ab in $ABL; do
   for r in 2 3 4; do

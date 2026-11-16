@@ -26,7 +26,11 @@ L = 64
 ABL = _ROOT / "tools/minicandi/configs/ablations/two_step"
 FINAL = _ROOT / "tools/minicandi/configs/final"
 ARMS = {"two_step_native": {"two_step": True},
-        "two_step_fixed": {"two_step": True, "base_depth": "fixed"}}
+        "two_step_fixed": {"two_step": True, "base_depth": "fixed",
+                           "base_ref_log2_depth": {"accessibility_dnase": 24.5,
+                                                   "accessibility_atac": 25.0,
+                                                   "broad_histone": 24.0, "narrow_histone": 23.5,
+                                                   "control": 23.5}}}
 
 
 def _small(r: int, arm: str) -> dict:
@@ -74,3 +78,28 @@ def test_wrapper_on_rungs_3_and_4(r, arm, tables):
     assert torch.isfinite(loss) and "base" in parts
     w = C.wiring_check(m, b)
     assert w["pass"] and w["n_perturbed"] > 0, w
+
+
+def test_per_class_base_reference_depth(tables):
+    """`base_ref_log2_depth` sets the fixed base depth per assay class; without it the base leg is
+    byte-identical to the constant FIXED_BASE_LOG2_DEPTH; a map that misses a class is refused."""
+    from minicandi import dataset as D
+    base = {"context_bins": L, "two_step": True, "base_depth": "fixed"}
+    rng = lambda: np.random.default_rng(3)  # noqa: E731
+    old = OnionDataset(tables, "train", base, 3).batch(8, rng())
+    same = OnionDataset(tables, "train", dict(base, base_ref_log2_depth=None), 3).batch(8, rng())
+    const = dict(D.FIXED_BASE_LOG2_DEPTH)
+    explicit = OnionDataset(tables, "train", dict(base, base_ref_log2_depth=const), 3).batch(8, rng())
+    for b in (same, explicit):
+        assert torch.equal(b["y_base"], old["y_base"]) and torch.equal(b["c_base"], old["c_base"])
+    low = {k: 10.0 for k in C.ASSAY_CLASSES}
+    low["narrow_histone"] = 12.0
+    ds = OnionDataset(tables, "train", dict(base, base_ref_log2_depth=low), 3)
+    b = ds.batch(8, rng())
+    for bi, m in enumerate(b["meta"]):
+        for t in np.nonzero(b["y_avail"][bi].numpy())[0]:
+            want = low[C.assay_class(C.TRACKS[t])]
+            assert float(b["c_base"][bi, t, C.LOG2_DEPTH_COL]) == pytest.approx(want)
+    assert b["y_base"].sum() < old["y_base"].sum()
+    with pytest.raises(ValueError):
+        OnionDataset(tables, "train", dict(base, base_ref_log2_depth={"control": 20.0}), 3)

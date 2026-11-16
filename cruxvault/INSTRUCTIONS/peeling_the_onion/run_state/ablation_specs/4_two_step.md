@@ -12,13 +12,52 @@ Does miniCANDI correct covariate artifacts better on never-trained (C, C') pairs
 |---|---|---|
 | reference (base recipe) | none (`two_step: false`) | -- (existing runs `rung{2,3,4}_base_heldout`, Fir, already scored in `p16_sv`) |
 | `two_step_native` | `two_step: true` (`base_depth: native`) | reference |
-| `two_step_fixed` | `two_step: true`, `base_depth: fixed` | `two_step_native` (`stage2_arms.py` `COMPARISON`) |
+| `two_step_fixed` | `two_step: true`, `base_depth: fixed`, `base_ref_log2_depth` (one value per assay class, section 2.1) | `two_step_native` (`stage2_arms.py` `COMPARISON`) |
 
 What the code does (`tools/minicandi/two_step.py`, `registry.build_model`, `dataset.py` `_base_leg`, `losses.py`):
 - `registry.build_model` builds the rung without the key `two_step`, then wraps it in `TwoStep`. Leg 1 is the rung on the batch's own inputs, decoded at C_base; it predicts the base view of every target track. Leg 2 is the same rung (shared weights) and reads leg 1's predicted mean (not detached) as its input counts, at C_in = C_base, decoded at the target's C'. The output is leg 2's NB. No parameter is added. The forward pass runs the rung twice.
 - The loss adds the NB negative log-likelihood of the real base view `y_base` under leg 1's NB, on the same masked bins, weight 1 (`loss_weights.base`).
 - C_base is the base view of the target's own (cell, assay): a measurement with `arm_knob` empty or `base`, preferring layer `uniform`, then unit `pooled` (`_base_rank`). This is D15's "uniform pipeline of D5, at default settings". A target with no base view uses its own C' in leg 1. An `evalonly` target is its own base view.
-- `base_depth: fixed` binomially thins the base counts `y_base` to `FIXED_BASE_LOG2_DEPTH` = log2 23.0 (2^23 = 8,388,608 reads) for every assay class, and C_base states that depth. A base below it is not changed. The value is an agent decision (comment at `dataset.py` line 246), not the PI's. On Fir `eic_v1/measurements.tsv`, 758 of 785 non-evaluation-only base rows are deeper than 2^23 (mean log2 depth 24.55 narrow histone, 24.72 broad histone, 25.24 DNase, 26.22 ATAC, 24.92 control), so the fixed arm thins about 97% of the bases by a factor of about 3 to 9.
+- `base_depth: fixed` binomially thins the base counts `y_base` to the reference depth of the base's assay class, and C_base states that depth. A base at or below the reference depth is not changed, so no base is up-sampled. The reference depths come from the config key `base_ref_log2_depth` (section 2.1). A config without that key uses the constant `FIXED_BASE_LOG2_DEPTH` (log2 depth 23.0 for every class), as before.
+
+### 2.1 Reference depth per assay class
+
+The PI ruled on 2026-11-16 that the fixed arm uses one reference depth per assay class, as D15 states ("The base is thinned to one reference depth per assay class"). This replaces the earlier agent choice of one depth, 2^23 reads, for every class.
+
+Rule. For each training (cell, assay), take the base view that the dataset picks (`_base_view`: `in_eic` = `train`, `arm_knob` empty or `base`, lowest `_base_rank`, i.e. layer `uniform` first, then unit `pooled`). The reference depth of a class is the 10th percentile (linear interpolation) of log2 `depth_reads` over the picked bases of that class, rounded down to a multiple of 0.5. About 90% of the bases are then thinned, and the rest are kept at their native depth.
+
+| assay class | picked bases | min log2 | 10th percentile | reference log2 depth (reads) | bases thinned | median thinning |
+|---|---|---|---|---|---|---|
+| ATAC | 4 | 25.142 | 25.429 | 25.0 (33,554,432) | 4 of 4 | 2^1.38 = 2.6x |
+| DNase | 16 | 24.712 | 24.827 | 24.5 (23,726,566) | 16 of 16 | 2^1.33 = 2.5x |
+| broad histone | 91 | 22.835 | 24.162 | 24.0 (16,777,216) | 86 of 91 | 2^1.08 = 2.1x |
+| narrow histone | 138 | 22.414 | 23.930 | 23.5 (11,863,283) | 132 of 138 | 2^1.54 = 2.9x |
+| control | 38 | 22.834 | 23.763 | 23.5 (11,863,283) | 37 of 38 | 2^1.62 = 3.1x |
+
+The median thinning is 2 to the power (median log2 depth minus reference). The medians are 26.381 (ATAC), 25.834 (DNase), 25.084 (broad histone), 25.042 (narrow histone) and 25.116 (control). In all, 275 of 287 picked bases are thinned. The ATAC value rests on 4 bases only.
+
+Source: Fir `/project/def-maxwl/mforooz/ONION/tables/eic_v1/measurements.tsv` (2,741 lines, md5 93edae8a0bdb089073e9bd7976b29fb8), read on 2026-11-16 with this read-only command (`ssh -o BatchMode=yes fir 'python3 -' < refdepth.py`):
+
+```python
+import csv, math, collections
+rows = list(csv.DictReader(open("/project/def-maxwl/mforooz/ONION/tables/eic_v1/measurements.tsv"), delimiter="\t"))
+LP = {"uniform": 0, "native": 1, "testbed": 2}
+rank = lambda r: (LP.get(r["layer"], 9), 0 if r["unit"] == "pooled" else 1, r["measurement_id"])
+def q(v, p):
+    v = sorted(v); h = (len(v) - 1) * p; lo = math.floor(h)
+    return v[lo] + (v[min(lo + 1, len(v) - 1)] - v[lo]) * (h - lo)
+groups = collections.defaultdict(list)
+for r in rows:
+    if r["in_eic"] == "train" and r["arm_knob"].strip() in ("", "base"):
+        groups[(r["cell"], r["assay"])].append(r)
+by_class = collections.defaultdict(list)
+for c in groups.values():
+    b = min(c, key=rank); by_class[b["assay_class"]].append(math.log2(float(b["depth_reads"])))
+for k, v in sorted(by_class.items()):
+    print(k, len(v), min(v), q(v, .1), math.floor(q(v, .1) * 2) / 2)
+```
+
+The values are in `stage2_arms.py` (`BASE_REF_LOG2_DEPTH`) and in the three `two_step_fixed.json` configs.
 
 One reading only. "Fixed reference depth" could also mean that the input is thinned (`input_depth: fixed`); that is ablation-scope of the depth-control arm, not D15. I take the code's reading, which matches D15's text ("The base is thinned to one reference depth per assay class").
 
@@ -65,11 +104,11 @@ Judge each architecture separately; "beyond" = difference of means larger than t
 3. **Reference reuse.** The reference runs were trained from an earlier kit. Control: the off-switch is the base itself (`two_step: false` builds the unwrapped rung); Phase 2 checks bit-identity of the base under the new kit with `golden.py`.
 4. **Scorer input.** The scorer builds `OnionDataset` with the run's config, so `c_base` is present; no two-step run has ever been scored. Control: Phase-2 dry run plus the first-seed metrics job log.
 5. **Compute.** About 2x the training FLOPs per window; the composite does not price compute. Report FLOPs beside the result.
-6. **Fixed depth value.** 2^23 is an agent choice; a null result for `fixed` says nothing about other reference depths.
+6. **Fixed depth value.** The per-class values come from the rule in section 2.1 (10th percentile, rounded down). A null result for `fixed` says nothing about other reference depths.
 
 ## 7. Readiness
 
-Per architecture: **ready**, no code. Phase 2 wrote 6 configs, `tools/minicandi/configs/ablations/two_step/rung{2,3,4}/{two_step_native,two_step_fixed}.json` plus `arms.tsv`, with `stage2_arms.py write --arms two_step_native,two_step_fixed` on each `final/rung<r>/reference_equal.json`. The key diff against the reference is `two_step`, `simpler_than_base` (null -> false) and, for the fixed arm, `base_depth`. `registry.build_model` gives `TwoStep` with the reference's parameter count on both arms: conv autoencoder 1,042,514; conv + attention 1,038,018; U-Net 993,599. The repo test `tests/test_minicandi_two_step.py` covers rungs 1, 2 and 5 only. The new test `tests/test_ablation_two_step.py` (10 tests, pass) checks the key diff of all 6 configs. On rungs 3 and 4 with synthetic tables, it also checks the wrapper, the shared weights, the `base` loss part and `contract.wiring_check`.
+Per architecture: **ready**, no code. Phase 2 wrote 6 configs, `tools/minicandi/configs/ablations/two_step/rung{2,3,4}/{two_step_native,two_step_fixed}.json` plus `arms.tsv`, with `stage2_arms.py write --arms two_step_native,two_step_fixed` on each `final/rung<r>/reference_equal.json`. The key diff against the reference is `two_step`, `simpler_than_base` (null -> false) and, for the fixed arm, `base_depth` and `base_ref_log2_depth`. On 2026-11-16 (branch `chunk/onion-AB2`), the fixed configs were written again with the per-class depths; the native configs did not change. Code: `dataset.py` reads the optional key `base_ref_log2_depth` in the base leg only and refuses a map that does not name every assay class; `tests/test_ablation_two_step.py::test_per_class_base_reference_depth` checks that a config without the key gives byte-identical batches and that the key sets C_base to the class value. `registry.build_model` gives `TwoStep` with the reference's parameter count on both arms: conv autoencoder 1,042,514; conv + attention 1,038,018; U-Net 993,599. The repo test `tests/test_minicandi_two_step.py` covers rungs 1, 2 and 5 only. The new test `tests/test_ablation_two_step.py` (10 tests, pass) checks the key diff of all 6 configs. On rungs 3 and 4 with synthetic tables, it also checks the wrapper, the shared weights, the `base` loss part and `contract.wiring_check`.
 
 **Submit option:** `TRAIN_TIME=06:00:00` (the lead's value). The conv-autoencoder base seed 2 trained for 5,691 s (Fir job 4246989), so a 2x run needs about 11,400 s. Data: base views exist for the training cells (785 base rows, Fir `/project/def-maxwl/mforooz/ONION/tables/eic_v1/measurements.tsv`); the rung-1 run read them with staging on Nibi.
 

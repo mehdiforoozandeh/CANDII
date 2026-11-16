@@ -21,5 +21,12 @@
  "heldout_loss": {
   "batches": 16,
   "every": 20
+ },
+ "base_ref_log2_depth": {
+  "accessibility_dnase": 24.5,
+  "accessibility_atac": 25.0,
+  "broad_histone": 24.0,
+  "narrow_histone": 23.5,
+  "control": 23.5
  }
 }
