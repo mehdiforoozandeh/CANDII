@@ -6,6 +6,8 @@ Phase 1 specification, 2026-11-16. Worktree branch `chunk/onion-AB-6`, base fb57
 
 Does the DNA sequence input S add anything to imputation, correction or calibration, when the model has the same parameter budget and the same training windows? The PI's line, `miniCANDI architecture ablations.md`, section "Ablations at every rung", line 77: "DNA off." The constitution (`peeling the onion.md`, section "# miniCANDI") lists S as a model input ("S: DNA sequence for the context length W").
 
+Relation to ablation 5 (DNA source). I did not coordinate with that agent. Ablation 5 asks which source of S is best (own tower, Flashzoi, nucleotide transformer, and the controls `dna_shuffled`, `dna_shift5mb` in `stage2_arms.ARMS`). This ablation asks whether any S is needed. `dna_off` is the zero point for every arm of ablation 5, and both use the same reference (`dna: own`). The two controls keep the tower and its parameters but break the alignment. So own minus shuffled measures aligned sequence at a fixed capacity, and shuffled minus off measures the tower without information. If `dna_off` equals own, a pretrained-source gain in ablation 5 needs the leakage check of PI ruling 26 before anyone believes it. If ablation 5 also plans a `dna_off` arm, the lead should run it once.
+
 ## 2. Arms
 
 One arm per architecture, against the reference arm `reference_equal` (`tools/minicandi/configs/final/rung{2,3,4}/reference_equal.json`, `dna: "own"`).
