@@ -35,7 +35,8 @@ If the composite is at fault (the gap-closed term), the ladder order must be re-
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+**0 children** · open 0, leaning 0, settled 0, parked 0 · 2 finding(s) on this question
 
 - `f85` finding (moderate) [[f85_recomputed_from_stored_per_pair_records_|recomputed from stored per-pair records for 78 seeds, matching the scorer to…]]
+- `f88` finding (moderate) [[f88_3_seeds_per_recipe_at_equal_windows_winn|3 seeds per recipe at equal windows; winners were chosen on seed 0 held-out…]]
 <!-- crux:ledger:end -->

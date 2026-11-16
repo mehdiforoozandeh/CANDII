@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recap of Max's sprints 10 and 15</title>
+
+<!-- built by build_deck.py; chrome from the prezit template -->
+
+<style>
+  :root{
+    /* --- chrome ------------------------------------------------------- */
+    --paper:#faf9f7;
+    --ink:#1a1a1a;
+    --muted:#77736c;
+    --faint:#a6a29a;
+    --hair:#e6e3dd;
+    --accent:#b5462e;
+
+    /* --- semantic series colours -------------------------------------- */
+    /* One colour per arm, reused identically in chart, legend and bullets.
+       Rename the tokens to your arms; never colour by chart. */
+    --baseline:#8d8f98;
+    --arm-a:#3f7d7a;
+    --arm-b:#b5462e;
+
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--paper);color:var(--ink);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+    overflow:hidden;
+  }
+
+  #progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);
+    width:0;transition:width .5s ease;z-index:50}
+
+  #deck{position:fixed;inset:0}
+  .slide{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column;justify-content:center;
+    padding:5.5vh 8vw 8.5vh;   /* bottom pad clears the fixed foot / counter / nav */
+    opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .6s ease,visibility .6s ease;   /* fade only — no slide, no zoom */
+  }
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+
+  .wrap{width:100%;max-width:1160px;margin:0 auto}
+
+  /* --- typography ----------------------------------------------------- */
+  .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin-bottom:22px}
+  h1{font-family:var(--serif);font-weight:400;line-height:1.12;
+    font-size:clamp(30px,4.6vw,58px);letter-spacing:-.01em}
+  h2{font-weight:600;line-height:1.14;font-size:clamp(24px,3.4vw,42px);
+    letter-spacing:-.015em;margin-bottom:26px}
+  .lead{font-family:var(--serif);font-weight:400;line-height:1.32;
+    font-size:clamp(22px,2.9vw,36px);letter-spacing:-.005em}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;
+    margin-top:22px;max-width:56ch}
+  .note{color:var(--faint);font-size:13px;line-height:1.5;margin-top:26px}
+
+  ul.pts{list-style:none;margin-top:26px;max-width:70ch}
+  ul.pts li{position:relative;padding-left:26px;margin:14px 0;
+    font-size:clamp(15px,1.55vw,19px);line-height:1.5;color:#333}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.62em;
+    width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  .em{color:var(--accent);font-weight:600}
+
+  ul.pts.lg li{font-size:clamp(16px,1.65vw,21px);margin:11px 0}
+  ul.pts.cols{display:grid;grid-template-columns:1fr 1fr;gap:2px 48px;
+    max-width:none;margin-top:18px}
+  @media (max-width:900px){ul.pts.cols{grid-template-columns:1fr}}
+
+  /* numbers the vault owns render in tabular figures so a --refresh that
+     changes a digit does not reflow the sentence around it */
+  [data-src],[data-derived]{font-variant-numeric:tabular-nums;font-weight:600}
+
+  /* --- lineage chain -------------------------------------------------- */
+  .chain{display:flex;align-items:stretch;gap:0;margin-top:34px;flex-wrap:wrap}
+  .node{flex:1;min-width:180px;border:1px solid var(--hair);border-radius:10px;
+    padding:18px 20px;background:#fff}
+  .node .lab{font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);margin-bottom:8px}
+  .node .txt{font-size:15px;line-height:1.4;color:#2a2a2a}
+  .node.now{border-color:var(--accent);box-shadow:0 1px 0 var(--accent)}
+  .node.now .lab{color:var(--accent)}
+  .arrow{display:flex;align-items:center;padding:0 12px;color:var(--faint);font-size:20px}
+
+  /* --- method pipeline ------------------------------------------------ */
+  .pipe{display:flex;align-items:flex-start;gap:0;margin-top:22px;flex-wrap:wrap}
+  .step{flex:1;min-width:150px;padding:14px 16px;text-align:left}
+  .step .n{font-family:var(--serif);font-size:22px;color:var(--accent);line-height:1}
+  .step .t{font-size:14.5px;line-height:1.4;color:#2a2a2a;margin-top:8px}
+  .psep{color:var(--faint);font-size:18px;padding:24px 4px 0}
+
+  /* --- target callout ------------------------------------------------- */
+  .target{border-left:3px solid var(--accent);background:#fff;border-radius:0 8px 8px 0;
+    padding:16px 22px;margin-top:6px}
+  .target .tlab{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin-bottom:8px}
+  .target .ttxt{font-size:clamp(15px,1.55vw,19px);line-height:1.5;color:#333}
+  .target .ttxt b{color:var(--ink);font-weight:600}
+
+  .cols2{display:grid;grid-template-columns:1fr 1.05fr;gap:44px;margin-top:26px;
+    align-items:start}
+  @media (max-width:900px){.cols2{grid-template-columns:1fr}}
+  .blk .blab{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);font-weight:600;margin-bottom:14px}
+
+  /* --- chips: a short fixed list, when a table would be overkill ------ */
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{border:1px solid var(--hair);background:#fff;border-radius:8px;padding:10px 14px;line-height:1.2}
+  .chip .cn{font-size:15px;font-weight:600;color:var(--ink)}
+  .chip .cc{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:3px}
+
+  /* --- tables --------------------------------------------------------- */
+  table.dtable{border-collapse:collapse;width:100%;font-size:15px}
+  table.dtable th{font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--faint);font-weight:600;text-align:left;padding:0 14px 10px 0;
+    border-bottom:1px solid var(--hair)}
+  table.dtable td{padding:11px 14px 11px 0;border-bottom:1px solid var(--hair);
+    color:#333;line-height:1.35}
+  table.dtable td:first-child{font-weight:600;color:var(--ink);white-space:nowrap}
+  table.dtable td.num{font-variant-numeric:tabular-nums}
+  table.dtable td .role{color:var(--muted);font-size:13px}
+
+  /* --- chart ---------------------------------------------------------- */
+  .chartbox{margin:8px 0}
+  .fig{display:flex;justify-content:center}
+  /* Cap chart height so a tall figure can never crowd out its caption bullets.
+     A full-width chart + a legend + four two-line bullets + a footnote is the
+     ceiling for one slide — check the fit after every content edit. */
+  .fig svg{width:100%;height:auto;max-height:44vh;display:block}
+  .fig.wide svg{max-width:1160px}
+  .fig.mid svg{max-width:960px}
+  .legend{display:flex;gap:24px;flex-wrap:wrap;margin-top:10px;justify-content:center;
+    font-size:15px;color:var(--muted)}
+  .legend.big{font-size:16px;gap:30px}
+  .legend .item{display:flex;align-items:center;gap:9px}
+  .legend .sw{width:16px;height:16px;border-radius:3px;flex:none}
+
+  /* SVG text lives in viewBox units and gets scaled DOWN when the svg is placed
+     in a column — so everything here is sized for a projector, ~1.5x what looks
+     right on a laptop. Do not shrink these to taste. */
+  .axlbl{font:500 17px var(--sans);fill:#3a3a3a}
+  .ptitle{font:600 22px var(--sans);fill:#1a1a1a;letter-spacing:.02em}
+  .psub{font:400 14px var(--sans);fill:#8a8a8a}
+  .tick{font:400 15px var(--sans);fill:#9a9a9a}
+  .val{font:600 16px var(--sans)}
+  .cap{font:400 14px var(--sans);fill:#9a9a9a}
+  .grid{stroke:#ececea;stroke-width:1}
+  .axis{stroke:#cfccc6;stroke-width:1.2}
+  .zero{stroke:#bbb;stroke-width:1.6;stroke-dasharray:5 4}
+  .sep{stroke:#e6e3dd;stroke-width:1}
+  .barval{font:600 20px var(--sans)}
+  .mult{font:600 19px var(--sans);fill:#1a1a1a}
+  .xlab{font:600 22px var(--sans);fill:#1a1a1a}
+  .xsub{font:400 15px var(--sans);fill:#8a8a8a}
+  .ylab{font:500 18px var(--sans);fill:#8a8a8a}
+
+  /* --- chrome --------------------------------------------------------- */
+  .foot{position:fixed;bottom:20px;left:8vw;font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:8vw;font-size:12px;color:var(--faint);
+    font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:16px;right:calc(8vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:#fff;color:var(--muted);
+    width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;
+    transition:border-color .2s,color .2s}
+  .nav button:hover{border-color:var(--accent);color:var(--accent)}
+  .hint{margin-top:40px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;
+    border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:#fff}
+
+  /* --- speaker notes ---------------------------------------------------
+     Optional: an <aside class="notes"> inside a slide, written in <p> (an <li>
+     there counts toward the slide's 7 units). Hidden; `n` overlays the active
+     slide's notes; print puts them under each slide. A deck without notes is
+     unaffected. */
+  aside.notes{display:none}
+  body.shownotes .slide.active aside.notes{display:block;position:fixed;left:7vw;right:7vw;
+    bottom:58px;max-height:52vh;overflow:auto;background:#fff;border:1px solid var(--hair);
+    border-left:4px solid var(--accent);border-radius:10px;padding:16px 22px;font-size:16.5px;
+    line-height:1.55;color:#333;z-index:60;box-shadow:0 10px 40px rgba(0,0,0,.18)}
+  aside.notes::before{content:"Speaker notes · n to close";display:block;font-size:11px;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+  aside.notes p{margin:0 0 6px}
+
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint{display:none}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;
+      height:100vh;transition:none}
+    aside.notes{display:block;margin-top:18px;border-top:1px solid #bbb;padding-top:10px;
+      font-size:12.5px;line-height:1.5;color:#333}
+  }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="deck">
+  <!-- 1 · job: title
+       source: Max's repo @ f5f6efb, sprints 10 and 15 (see build_deck.py)
+       numbers: Max's, copied; not vault-addressed
+       cut: whole slide -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">Recap · Max's sprints 10 and 15 · read 2026-11-15</div>
+      <h1>Covariate correction found no easy win.<br>The paper plan found two leaks.</h1>
+      <p class="sub">Sprint 10 (Nov 11 to 13): how much experiment-specific variation is predictable. Sprint 15 (Nov 13 to 14): a paper plan with three independent reviews. Every number on these slides is Max's.</p><p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd></p>
+    </div>
+  </section>
+  <!-- 2 · job: sprint 10 questions
+       source: Max's repo @ f5f6efb, sprints 10 and 15 (see build_deck.py)
+       numbers: Max's, copied; not vault-addressed
+       cut: whole slide -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">Sprint 10 · covariate correction · the questions</div>
+      <h2>Two experiments on the same cell type and assay differ. Max asked two things.</h2>
+      <div class="chain">
+  <div class="node"><div class="lab">Question A</div><div class="txt">How much of the experiment-specific variation is predictable, even in principle?</div></div>
+  <div class="arrow">&rarr;</div>
+  <div class="node"><div class="lab">Question B</div><div class="txt">How do we impute in its presence? The candidate was a covariate artifact correction (CAC) module, i.e. remove an experiment's own patterns at the input and add them back at the output.</div></div>
+  <div class="arrow">&rarr;</div>
+  <div class="node now"><div class="lab">Outcome</div><div class="txt">A has an answer with ranges. B has a partial answer. No CAC module was built.</div></div>
+ </div>
+ <ul class="pts"><li><b>Replicate</b>: a second library of the same experiment. <b>Second experiment</b>: a separate ENCODE experiment on the same cell type and assay.</li></ul>
+    </div>
+  </section>
+  <!-- 3 · job: error budget
+       source: Max's repo @ f5f6efb, sprints 10 and 15 (see build_deck.py)
+       numbers: Max's, copied; not vault-addressed
+       cut: whole slide -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">Sprint 10 · question A · result</div>
+      <h2>About 44% of the error is noise, 26% belongs to the experiment, 28% is reachable.</h2>
+      <div class="fig wide"><svg viewBox="0 0 1100 300" role="img"><rect x="20.0" y="150" width="450.2" height="110" fill="#8d8f98" stroke="#faf9f7" stroke-width="2"/><text class="val" fill="#fff" x="245.1" y="211.0" text-anchor="middle">0.282</text><rect x="470.2" y="150" width="20.8" height="110" fill="#8d8f98" stroke="#faf9f7" stroke-width="2"/><rect x="490.9" y="150" width="17.6" height="110" fill="#4a78b0" stroke="#faf9f7" stroke-width="2"/><rect x="508.5" y="150" width="47.9" height="110" fill="#d08a3c" stroke="#faf9f7" stroke-width="2"/><rect x="556.4" y="150" width="81.4" height="110" fill="#d08a3c" stroke="#faf9f7" stroke-width="2"/><text class="val" fill="#fff" x="597.1" y="211.0" text-anchor="middle">0.051</text><rect x="637.8" y="150" width="146.9" height="110" fill="#d08a3c" stroke="#faf9f7" stroke-width="2"/><text class="val" fill="#fff" x="711.2" y="211.0" text-anchor="middle">0.092</text><rect x="784.7" y="150" width="89.4" height="110" fill="#3f7d7a" stroke="#faf9f7" stroke-width="2"/><text class="val" fill="#fff" x="829.4" y="211.0" text-anchor="middle">0.056</text><rect x="874.1" y="150" width="43.1" height="110" fill="#3f7d7a" stroke="#faf9f7" stroke-width="2"/><rect x="917.2" y="150" width="154.8" height="110" fill="#3f7d7a" stroke="#faf9f7" stroke-width="2"/><text class="val" fill="#fff" x="994.6" y="211.0" text-anchor="middle">0.097</text><rect x="1072.0" y="150" width="8.0" height="110" fill="#3f7d7a" stroke="#faf9f7" stroke-width="2"/><text class="barval" fill="#8d8f98" x="255.5" y="40" text-anchor="middle">44%</text><text class="axlbl" x="255.5" y="64" text-anchor="middle">0.295</text><line class="axis" x1="255.5" y1="72" x2="255.5" y2="146"/><text class="barval" fill="#4a78b0" x="499.7" y="95" text-anchor="middle">2%</text><text class="axlbl" x="499.7" y="119" text-anchor="middle">0.011</text><line class="axis" x1="499.7" y1="127" x2="499.7" y2="146"/><text class="barval" fill="#d08a3c" x="646.6" y="40" text-anchor="middle">26%</text><text class="axlbl" x="646.6" y="64" text-anchor="middle">0.173</text><line class="axis" x1="646.6" y1="72" x2="646.6" y2="146"/><text class="barval" fill="#3f7d7a" x="932.3" y="40" text-anchor="middle">28%</text><text class="axlbl" x="932.3" y="64" text-anchor="middle">0.185</text><line class="axis" x1="932.3" y1="72" x2="932.3" y2="146"/><text class="cap" x="20" y="288">Normalized error of the previous CANDII recipe = 0.664 (1 = no better than the track mean). One run, 282 targets.</text></svg></div><div class="legend"><span class="item"><span class="sw" style="background:#8d8f98"></span>Not predictable: a replicate does not reproduce it</span><span class="item"><span class="sw" style="background:#4a78b0"></span>Explained by recorded covariates and depth</span><span class="item"><span class="sw" style="background:#d08a3c"></span>Belongs to the individual experiment</span><span class="item"><span class="sw" style="background:#3f7d7a"></span>Reachable by a better model</span></div>
+ <ul class="pts"><li>Recorded covariates and depth explain only <b>2%</b>.</li>
+ <li>The parts were measured on different subsets of targets, and the noise floor comes from replicates that were not matched. Max's report rounds the noise share to 45%.</li></ul>
+    </div>
+  </section>
+  <!-- 4 · job: negative: covariates
+       source: Max's repo @ f5f6efb, sprints 10 and 15 (see build_deck.py)
+       numbers: Max's, copied; not vault-addressed
+       cut: whole slide -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">Sprint 10 · question B · the negative result</div>
+      <h2>No recorded covariate predicted the experiment's part.</h2>
+      <div class="cols2"><div class="blk"><div class="blab">What was tried</div>
+ <ul class="pts"><li><b>Single-end against paired-end reads</b>: no detectable effect across 31 pairs of experiments. Effects up to about 0.08 in level error are not excluded.</li>
+ <li><b>A corrector between real experiments</b> gained nothing from seeing their covariates.</li>
+ <li><b>A planted-effect check</b>: the test detects a GC-shaped effect from 0.014 of a track's variance, so that null is real. For level it has no power below about 0.07.</li></ul></div>
+ <div class="blk"><div class="blab">What it means for CAC</div>
+ <div class="target"><div class="tlab">Observed experiment</div><div class="ttxt">A per-experiment level curve plus a GC-dependent term recovers up to about <b>0.08</b> of the 0.17 that belongs to the experiment.</div></div>
+ <div class="target" style="margin-top:14px"><div class="tlab">Experiment never done</div><div class="ttxt">This is the imputation task. Max found <b>no way to predict</b> the experiment's part: a typical value recovers nothing of the GC term and about a tenth of level error.</div></div></div></div>
+    </div>
+  </section>
+  <!-- 5 · job: control leak
+       source: Max's repo @ f5f6efb, sprints 10 and 15 (see build_deck.py)
+       numbers: Max's, copied; not vault-addressed
+       cut: whole slide -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">Sprint 10 · the ChIP-seq control</div>
+      <h2>The model uses the ChIP-seq control to predict the experiment, not the cell.</h2>
+      <div class="fig wide"><svg viewBox="0 0 1100 246" role="img"><line class="grid" x1="470.0" y1="20" x2="470.0" y2="182"/><text class="tick" x="470.0" y="202" text-anchor="middle">-0.09</text><line class="grid" x1="565.0" y1="20" x2="565.0" y2="182"/><text class="tick" x="565.0" y="202" text-anchor="middle">-0.06</text><line class="grid" x1="660.0" y1="20" x2="660.0" y2="182"/><text class="tick" x="660.0" y="202" text-anchor="middle">-0.03</text><line class="grid" x1="755.0" y1="20" x2="755.0" y2="182"/><text class="tick" x="755.0" y="202" text-anchor="middle">+0.00</text><line class="grid" x1="850.0" y1="20" x2="850.0" y2="182"/><text class="tick" x="850.0" y="202" text-anchor="middle">+0.03</text><line class="grid" x1="945.0" y1="20" x2="945.0" y2="182"/><text class="tick" x="945.0" y="202" text-anchor="middle">+0.06</text><line class="grid" x1="1040.0" y1="20" x2="1040.0" y2="182"/><text class="tick" x="1040.0" y="202" text-anchor="middle">+0.09</text><line class="zero" x1="755.0" y1="20" x2="755.0" y2="182"/><text class="axlbl" x="446" y="57.0" text-anchor="end">Control from the target experiment's own lab</text><text class="psub" x="446" y="77.0" text-anchor="end">243 targets</text><line x1="523.8" y1="59.0" x2="612.5" y2="59.0" stroke="#d08a3c" stroke-width="5" stroke-linecap="round"/><circle cx="568.2" cy="59.0" r="10" fill="#d08a3c"/><text class="val" fill="#d08a3c" x="626.5" y="65.0">-0.059 [-0.073, -0.045]</text><text class="axlbl" x="446" y="135.0" text-anchor="end">Control from another lab</text><text class="psub" x="446" y="155.0" text-anchor="end">26 targets</text><line x1="720.2" y1="137.0" x2="894.3" y2="137.0" stroke="#8d8f98" stroke-width="5" stroke-linecap="round"/><circle cx="808.8" cy="137.0" r="10" fill="#8d8f98"/><text class="val" fill="#8d8f98" x="908.3" y="143.0">+0.017 [-0.011, +0.044]</text><text class="ylab" x="755.0" y="232" text-anchor="middle">Change in r_spec when the control is hidden from the model (95% interval)</text></svg></div>
+ <ul class="pts"><li>The control helps only when it comes from the target experiment's own lab.</li>
+ <li>Training with the control hidden at random roughly halved the loss when the control is missing. Four runs could not tell whether it costs anything when the control is present.</li>
+ <li>Single-cell populations and most new datasets have no control, so the setting without the control is the realistic one.</li></ul>
+    </div>
+  </section>
+  <!-- 6 · job: count route
+       source: Max's repo @ f5f6efb, sprints 10 and 15 (see build_deck.py)
+       numbers: Max's, copied; not vault-addressed
+       cut: whole slide -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">Sprint 10 · counts to p-values · bears on our count-only model</div>
+      <h2>The formula from counts to p-values is now exact. Predicted counts are not yet good enough.</h2>
+      <div class="fig wide"><svg viewBox="0 0 1100 246" role="img"><line class="grid" x1="470.0" y1="20" x2="470.0" y2="182"/><text class="tick" x="470.0" y="202" text-anchor="middle">-0.12</text><line class="grid" x1="565.0" y1="20" x2="565.0" y2="182"/><text class="tick" x="565.0" y="202" text-anchor="middle">-0.08</text><line class="grid" x1="660.0" y1="20" x2="660.0" y2="182"/><text class="tick" x="660.0" y="202" text-anchor="middle">-0.04</text><line class="grid" x1="755.0" y1="20" x2="755.0" y2="182"/><text class="tick" x="755.0" y="202" text-anchor="middle">+0.00</text><line class="grid" x1="850.0" y1="20" x2="850.0" y2="182"/><text class="tick" x="850.0" y="202" text-anchor="middle">+0.04</text><line class="grid" x1="945.0" y1="20" x2="945.0" y2="182"/><text class="tick" x="945.0" y="202" text-anchor="middle">+0.08</text><line class="grid" x1="1040.0" y1="20" x2="1040.0" y2="182"/><text class="tick" x="1040.0" y="202" text-anchor="middle">+0.12</text><line class="zero" x1="755.0" y1="20" x2="755.0" y2="182"/><text class="axlbl" x="446" y="57.0" text-anchor="end">Counts and p-values from the same reads</text><text class="psub" x="446" y="77.0" text-anchor="end">102 single-replicate targets</text><line x1="607.8" y1="59.0" x2="790.6" y2="59.0" stroke="#8d8f98" stroke-width="5" stroke-linecap="round"/><circle cx="709.9" cy="59.0" r="10" fill="#8d8f98"/><text class="val" fill="#8d8f98" x="804.6" y="65.0">-0.019 [-0.062, +0.015]</text><text class="axlbl" x="446" y="135.0" text-anchor="end">Whole benchmark</text><text class="psub" x="446" y="155.0" text-anchor="end">283 targets, most pooled from two replicates</text><line x1="812.0" y1="137.0" x2="978.2" y2="137.0" stroke="#d08a3c" stroke-width="5" stroke-linecap="round"/><circle cx="892.8" cy="137.0" r="10" fill="#d08a3c"/><text class="val" fill="#d08a3c" x="992.2" y="143.0">+0.058 [+0.024, +0.094]</text><text class="ylab" x="755.0" y="232" text-anchor="middle">Normalized error, count route minus direct p-value output (right = count route worse)</text></svg></div>
+ <ul class="pts"><li>Max's copy of the MACS2 formula (the ENCODE peak caller) had two details wrong. With them fixed it reproduces reprocessed tracks exactly from read positions.</li>
+ <li>On pooled targets the count route loses: the model predicts one replicate, and its counts draw peaks too weak or too strong relative to background.</li>
+ <li>On single-replicate targets a generic control (the mean of the training controls) works as well as the target's own.</li></ul>
+    </div>
+  </section>
+  <!-- 7 · job: paper plan grid
+       source: Max's repo @ f5f6efb, sprints 10 and 15 (see build_deck.py)
+       numbers: Max's, copied; not vault-addressed
+       cut: whole slide -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">Sprint 15 · paper planning · the plan on one page</div>
+      <h2>Seven sections, one frozen model. The accuracy figure is the least settled.</h2>
+      <table class="dtable"><tr><th>Figure</th><th>Claim</th><th>Largest gap</th><th>Odds (Max's agent)</th></tr>
+ <tr><td>1 · Model</td><td>One recipe, about 20 ablations</td><td>No single frozen network serves every section</td><td>High</td></tr>
+ <tr><td>2 · Accuracy</td><td>Beats earlier imputers; open against AlphaGenome 2</td><td>No current model on the challenge split; two leaks; no retrained rival</td><td>Low to medium</td></tr>
+ <tr><td>3 · Error breakdown</td><td>Most error is noise or the experiment's</td><td>Parts measured on different subsets</td><td>High</td></tr>
+ <tr><td>4 · Confidence</td><td>90% intervals cover 90.7%</td><td>No calibration against replicates</td><td>High</td></tr>
+ <tr><td>5 · Chromatin states</td><td>Annotation with a confidence per label</td><td>Nothing run yet</td><td>Pilot</td></tr>
+ <tr><td>6 · Variant effects</td><td>Histone QTL Spearman 0.32 against 0.40 to 0.45</td><td>No held-out assay test</td><td>Pilot</td></tr>
+ <tr><td>Single cell</td><td>A pseudobulk works as input</td><td>Old model only</td><td>Extended data</td></tr></table>
+ <p class="note">Recommended scope: four figures at full depth, two pilots. Realistic date: early to mid January 2027. Proposed model freeze: Friday 2026-11-27.</p>
+    </div>
+  </section>
+  <!-- 8 · job: AG2 leaks
+       source: Max's repo @ f5f6efb, sprints 10 and 15 (see build_deck.py)
+       numbers: Max's, copied; not vault-addressed
+       cut: whole slide -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">Sprint 15 · the referee-style review · AlphaGenome 2</div>
+      <h2>The control alone is worth about three times the gap to AlphaGenome 2.</h2>
+      <div class="fig wide"><svg viewBox="0 0 1100 246" role="img"><line class="grid" x1="560.0" y1="20" x2="560.0" y2="182"/><text class="tick" x="560.0" y="202" text-anchor="middle">-0.03</text><line class="grid" x1="640.0" y1="20" x2="640.0" y2="182"/><text class="tick" x="640.0" y="202" text-anchor="middle">+0.00</text><line class="grid" x1="720.0" y1="20" x2="720.0" y2="182"/><text class="tick" x="720.0" y="202" text-anchor="middle">+0.03</text><line class="grid" x1="800.0" y1="20" x2="800.0" y2="182"/><text class="tick" x="800.0" y="202" text-anchor="middle">+0.06</text><line class="grid" x1="880.0" y1="20" x2="880.0" y2="182"/><text class="tick" x="880.0" y="202" text-anchor="middle">+0.09</text><line class="grid" x1="960.0" y1="20" x2="960.0" y2="182"/><text class="tick" x="960.0" y="202" text-anchor="middle">+0.12</text><line class="grid" x1="1040.0" y1="20" x2="1040.0" y2="182"/><text class="tick" x="1040.0" y="202" text-anchor="middle">+0.15</text><line class="zero" x1="640.0" y1="20" x2="640.0" y2="182"/><text class="axlbl" x="536" y="57.0" text-anchor="end">AlphaGenome 2 lead over the CANDI four-run ensemble</text><text class="psub" x="536" y="77.0" text-anchor="end">178 tracks AlphaGenome 2 never trained on</text><line x1="650.7" y1="59.0" x2="738.7" y2="59.0" stroke="#4a78b0" stroke-width="5" stroke-linecap="round"/><circle cx="696.0" cy="59.0" r="10" fill="#4a78b0"/><text class="val" fill="#4a78b0" x="752.7" y="65.0">+0.021 [+0.004, +0.037]</text><text class="axlbl" x="536" y="135.0" text-anchor="end">What the same-lab control is worth to CANDI</text><text class="psub" x="536" y="155.0" text-anchor="end">243 targets of our own benchmark</text><line x1="760.0" y1="137.0" x2="834.7" y2="137.0" stroke="#d08a3c" stroke-width="5" stroke-linecap="round"/><circle cx="797.3" cy="137.0" r="10" fill="#d08a3c"/><text class="val" fill="#d08a3c" x="848.7" y="143.0">+0.059 [+0.045, +0.073]</text><text class="ylab" x="800.0" y="232" text-anchor="middle">r_spec (95% interval)</text></svg></div>
+ <ul class="pts"><li><b>Leak 1, the control.</b> It is not recorded whether CANDI had the target's own control in that comparison. Headline numbers will give CANDI no control from the target's lab.</li>
+ <li><b>Leak 2, the sequence encoder.</b> Borzoi trained on 132 of the 178 test tracks. The main figure will show the subset the encoder never saw.</li>
+ <li><b>The fix:</b> one primary comparison written down before scoring, on tracks and chromosomes not yet scored, with a plain sentence for a loss.</li></ul>
+    </div>
+  </section>
+  <!-- 9 · job: review good points
+       source: Max's repo @ f5f6efb, sprints 10 and 15 (see build_deck.py)
+       numbers: Max's, copied; not vault-addressed
+       cut: whole slide -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">Sprint 15 · what the three reviews changed</div>
+      <h2>The reviews removed claims that could not lose.</h2>
+      <ul class="pts lg cols">
+ <li><b>Benchmark v3 is spent.</b> It was used to design the model. A fresh train, validation and test split is needed, and test is touched once at the end.</li>
+ <li><b>Retrained rivals never drop.</b> Each rival must first reproduce its published numbers.</li>
+ <li><b>Two challenge rows.</b> One with only what entrants had (no pretrained encoder, no blind controls), one with the encoder. No blending with the training average in the headline row.</li>
+ <li><b>"Only CANDI predicts donor differences" was false.</b> Classic imputers also predict per sample. The claim now needs baselines and a second donor set.</li>
+ <li><b>Model chosen on validation only.</b> Acceptance tests are written and dated before any candidate is trained.</li>
+ <li><b>Fact check.</b> About 160 statements traced; 2 wrong, 16 had lost a qualifier.</li></ul>
+    </div>
+  </section>
+  <!-- 10 · job: asks of Mehdi
+       source: Max's repo @ f5f6efb, sprints 10 and 15 (see build_deck.py)
+       numbers: Max's, copied; not vault-addressed
+       cut: whole slide -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">Sprint 15 · what the plan expects from us</div>
+      <h2>Three of our deliverables sit on Max's critical path.</h2>
+      <table class="dtable"><tr><th>Deliverable</th><th>Detail</th><th>Proposed date</th></tr>
+ <tr><td>Count likelihood in CANDII</td><td>Ported and passing the freeze tests, or it enters a later version</td><td>Nov 25</td></tr>
+ <tr><td>Challenge data view</td><td>For training on challenge data only; say whether the reprocessed set holds the blind tracks</td><td>Week of Nov 16</td></tr>
+ <tr><td>Retrained rivals</td><td>ChromImpute, Avocado, eDICE on the 51 blind experiments and the fresh split</td><td>Week of Nov 30</td></tr>
+ <tr><td>Pseudoreplicate halves</td><td>Depth-thinned halves and their sample list, for the denoising panel</td><td>Not set</td></tr>
+ <tr><td>Variance layers</td><td>Results, one shared vocabulary, and which document carries which decomposition</td><td>Not set</td></tr></table>
+ <div class="target" style="margin-top:22px"><div class="tlab">Conflict to settle with Max</div><div class="ttxt">The frozen model must keep a <b>signal output with a trained variance</b> and <b>variant-effect ability</b>. Our current prototype predicts counts only and rules population-level variation out of scope.</div></div>
+    </div>
+  </section>
+  <!-- 11 · job: Max's three evaluations
+       source: Max's repo @ f5f6efb, sprints 10 and 15 (see build_deck.py)
+       numbers: Max's, copied; not vault-addressed
+       cut: whole slide -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">Max's message · 2026-11-15 · the paper's evaluations</div>
+      <h2>Max now wants three evaluations.</h2>
+      <table class="dtable"><tr><th>Evaluation</th><th>Split and units</th><th>Metrics</th><th>Compared with</th></tr>
+ <tr><td>ENCODE Imputation Challenge</td><td>Challenge train, validation and test; log p-value signal; original and reprocessed</td><td>The 8 challenge metrics, without mse1imp</td><td>Challenge entrants, ChromImpute, eDICE. No pretrained sequence encoder.</td></tr>
+ <tr><td>AlphaGenome 2</td><td>AlphaGenome 2's train and test split, as far as its API allows; fold change</td><td>Pearson, peak AUPRC, challenge metrics</td><td>AlphaGenome 2</td></tr>
+ <tr><td>Our large dataset</td><td>A shared train, validation and test split, agreed once the new tracks exist</td><td>To agree</td><td>AlphaGenome 2 with its RNA encoder; Corgi+; CANDI with RNA; CANDI with RNA and ATAC</td></tr></table>
+ <p class="note">Also from Max: no control track for single-cell or new datasets, so impute the control or predict signal directly. Test is touched only at the very end.</p>
+    </div>
+  </section>
+</div>
+
+<div class="foot">Recap · Max's sprints 10 and 15</div>
+<div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+
+<script>
+/* ===========================================================================
+   NAVIGATION — slide count read from the DOM, so adding or cutting a
+   <section class="slide"> needs no other edit.
+   =========================================================================== */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length; let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){
+  cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+}
+const next=()=>show(cur+1), prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;
+document.getElementById('prev').onclick=prev;
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='Home'){show(0);}
+  else if(e.key==='End'){show(tot-1);}
+  else if(e.key==='n'||e.key==='N'){e.preventDefault();document.body.classList.toggle('shownotes');}
+  else if(e.key==='Escape'){document.body.classList.remove('shownotes');}
+});
+show(0);
+</script>
+</body>
+</html>
