@@ -61,9 +61,9 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 
 | Item | File | Depends on | Status |
 |---|---|---|---|
-| The nine named ablations on three architectures | [[closeout A1 nine named ablations]] | none | running (126 runs submitted 2026-11-16; 3 arms held or blocked) |
-| Basic controls on all three models (scrambled covariates, mask mode, injection form) | [[closeout A2 basic controls on three models]] | none | spec (item agent started 2026-11-16) |
-| Counterfactual views on the two conv models | [[closeout A3 counterfactual views on conv models]] | none | spec (item agent started 2026-11-16) |
+| The nine named ablations on three architectures | [[closeout A1 nine named ablations]] | none | running (144 runs submitted 2026-11-16; 2 DNA-source arms wait on the Globus transfer) |
+| Basic controls on all three models (scrambled covariates, mask mode, injection form) | [[closeout A2 basic controls on three models]] | none | running (33 runs submitted on Fir 2026-11-16) |
+| Counterfactual views on the two conv models | [[closeout A3 counterfactual views on conv models]] | none | running (30 runs and 15 U-Net score passes submitted on Fir 2026-11-16) |
 | Read-derived QC metrics on the input side | [[closeout A4 QC metrics on the input side]] | QC table fill | not started |
 | RNA-seq input | [[closeout A5 RNA-seq input]] | RNA fetch | not started |
 | Learned cell-type embedding | [[closeout A6 learned cell-type embedding]] | none | not started |
