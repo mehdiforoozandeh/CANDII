@@ -46,7 +46,7 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 
 | Item | File | Depends on | Status |
 |---|---|---|---|
-| The 16-versus-256 region check and settled scores | [[closeout E1 256-region check and settled scores]] | none | running (256-region scoring of 12 runs submitted on Fir 2026-11-16; check tool in review) |
+| The 16-versus-256 region check and settled scores | [[closeout E1 256-region check and settled scores]] | none | running (256-region scoring of 12 runs on Fir; check tool reviewed, fixed and merged) |
 | Signal p-value and peaks from the predicted NB; AlphaGenome 2 board row; signal-space score | [[closeout E2 p-value and peaks from the predicted NB]] | none | spec (item agent started 2026-11-16) |
 | Report the metrics that are computed and never reported | [[closeout E3 report the computed metrics]] | none | done 2026-11-16 for the screening scores ([[computed metrics report]]); rerun on settled scores after E1 |
 | Complete the replicate ladder and the crossed mixed model | [[closeout E4 complete the replicate ladder]] | D2 | not started |
@@ -72,7 +72,7 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 | Count transforms | [[closeout A8 count transforms]] | none | running (90 runs on Fir incl. pseudocount 0.01; 5 arms also change the output link, see specification 15) |
 | Final tuning round: matched-compute runs | [[closeout A9 matched-compute runs]] | none | running (12 trainings pending on Fir) |
 | Pointwise MLP under the corrected composite | [[closeout A10 pointwise MLP corrected score]] | GPU | not started |
-| DNA fusion: how the DNA features join the count features | [[closeout A11 DNA fusion]] | none | built (8 arm-architecture pairs, 24 runs ready); code in review before merge |
+| DNA fusion: how the DNA features join the count features | [[closeout A11 DNA fusion]] | none | running (24 runs submitted on Fir 2026-11-17, after review fixes; every arm keeps the base trunk width) |
 | Settle the miniCANDI design: one document, ready for scaling | [[closeout M1 settled miniCANDI design]] | A1 to A11, E1 | not started |
 
 ### Records and close-out
