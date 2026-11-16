@@ -1,0 +1,3 @@
+arm	keys changed	comparison incumbent	d14_condition_1	needs	group	simpler_than_base	joins_design	status
+cov_dropout	covariate_dropout=0.1	incumbent	false		covariate embedding and injection	null	yes	write
+cov_numeric_only	covariate_embedding=numeric_only	incumbent	false		covariate embedding and injection	true	yes	write

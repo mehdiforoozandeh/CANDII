@@ -57,6 +57,10 @@ NUMERIC = {"log2_depth": (24.0, 2.0), "run_type_pe": (0.5, 0.5), "read_length": 
            "pbc2": (5.0, 5.0), "frip": (0.2, 0.15), "frag_len": (200.0, 100.0)}
 #: rows in every categorical embedding table; ids at or above it map to 0 (unknown)
 CAT_TABLE = 1024
+#: the `numeric_per_value` arm: discrete numeric column -> multiplier of its id (id = round(m x v))
+PER_VALUE = {"run_type_pe": 2.0, "read_length": 1.0, "dedup_on": 2.0, "mapq_threshold": 1.0}
+#: rows in every per-value table; ids outside 0..PV_TABLE-1 map to 0
+PV_TABLE = 256
 _TRUE = {"1", "true", "yes", "on", "t", "y"}
 _PE = {"paired-ended", "paired-end", "paired", "pe", "1"}
 
@@ -131,23 +135,31 @@ class CovariateEmbedding(nn.Module):
 
     Numeric columns are standardised with the fixed `NUMERIC` constants; each categorical column
     has its own `nn.Embedding(CAT_TABLE, d_cat)`; the concatenation goes through a 2-layer MLP.
+    `per_value=True` (the `numeric_per_value` arm) reads the `PER_VALUE` columns through one
+    `nn.Embedding(PV_TABLE, d_cat)` each, id = round(multiplier x raw value), in place of a
+    standardised scalar; log2 depth and the QC columns stay scalars.
     The scrambled-covariates control is applied by the caller (`model_covariates`), not here.
     """
 
     def __init__(self, k_in: int, d_out: int, d_cat: int = 8, hidden: int = 64, *,
-                 numeric_only: bool = False, null_vector: bool = False):
+                 numeric_only: bool = False, null_vector: bool = False, per_value: bool = False):
         super().__init__()
         self.numeric_only = bool(numeric_only)
         if k_in not in (K_META, K_META + K_QC):
             raise ValueError(f"k_in {k_in}; want {K_META} or {K_META + K_QC}")
         cols = list(META_COLUMNS) + (list(QC_COLUMNS) if k_in > K_META else [])
         self.k_in = k_in
-        self.num_idx = [i for i, c in enumerate(cols) if c in NUMERIC]
+        pv = PER_VALUE if per_value else {}
+        self.num_idx = [i for i, c in enumerate(cols) if c in NUMERIC and c not in pv]
+        self.pv_idx = [i for i, c in enumerate(cols) if c in pv]
         self.cat_idx = [i for i, c in enumerate(cols) if c in CATEGORICAL]
         self.register_buffer("centre", torch.tensor([NUMERIC[cols[i]][0] for i in self.num_idx]))
         self.register_buffer("scale", torch.tensor([NUMERIC[cols[i]][1] for i in self.num_idx]))
         self.tables = nn.ModuleList(nn.Embedding(CAT_TABLE, d_cat) for _ in self.cat_idx)
-        n_feat = len(self.num_idx) + d_cat * len(self.cat_idx)
+        if self.pv_idx:   # only for the per-value arm, so a default build keeps today's state_dict
+            self.register_buffer("pv_mult", torch.tensor([pv[cols[i]] for i in self.pv_idx]))
+            self.pv_tables = nn.ModuleList(nn.Embedding(PV_TABLE, d_cat) for _ in self.pv_idx)
+        n_feat = len(self.num_idx) + d_cat * (len(self.pv_idx) + len(self.cat_idx))
         self.mlp = nn.Sequential(nn.Linear(n_feat, hidden), nn.GELU(), nn.Linear(hidden, d_out))
         # created only for the covariate-dropout arm, so a default build keeps today's state_dict
         self.null = nn.Parameter(torch.zeros(d_out)) if null_vector else None
@@ -165,6 +177,10 @@ class CovariateEmbedding(nn.Module):
                              "built without null_vector=True")
         num = (c[..., self.num_idx] - self.centre) / self.scale
         feats = [num]
+        for j, i in enumerate(self.pv_idx):
+            ids = (c[..., i] * self.pv_mult[j]).round().long()
+            ids = torch.where((ids >= 0) & (ids < PV_TABLE), ids, torch.zeros_like(ids))
+            feats.append(self.pv_tables[j](ids))
         for j, i in enumerate(self.cat_idx):
             ids = c[..., i].round().long()
             ids = torch.where((ids >= 0) & (ids < CAT_TABLE), ids, torch.zeros_like(ids))

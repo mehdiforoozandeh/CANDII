@@ -65,7 +65,7 @@ The calibration seed ranges (0.108 to 0.178) are wide, so a calibration effect s
 
 ## 6. Controls and traps
 
-- **Parameter count.** `cov_numeric_only` keeps the 6 tables, so the count is unchanged, but only row 0 of each table trains. `cov_dropout` adds 2 null vectors of 32 = 64 parameters. `cov_numeric_per_value` adds about 36,000 (estimate: 2 embeddings x (4 tables x 512 rows x 8 + 28 x 64 in the first MLP layer)); measure it in Phase 2. All stay within 10% of 1.0e6.
+- **Parameter count.** `cov_numeric_only` keeps the 6 tables, so the count is unchanged, but only row 0 of each table trains. `cov_dropout` adds 2 null vectors of 32 = 64 parameters. `cov_numeric_per_value` adds 19,968 = 2 embeddings x (4 tables x 256 rows x 8 + 28 x 64 in the first MLP layer). Every architecture fits its trunk width to `param_budget`. At the default budget, the conv autoencoder dropped from width 60 to 56 (956,034 parameters), which is a trunk change. The arm therefore sets `param_budget` to 1,019,968 (1.0e6 + 19,968), so all three trunks keep their base widths (60, 104, 25) and only the embeddings grow. All arms stay within 10% of 1.0e6.
 - **Off-switch identity.** Checked today: the base config and the base with `covariate_embedding: full, covariate_dropout: 0.0` give identical `state_dict` tensors and identical eval forward passes on all three architectures.
 - **FiLM is identity at initialization.** At initialization, every arm gives the same output and the categorical tables get no gradient. A wiring test must therefore perturb the weights first. After a perturbation, `cov_numeric_only` equals the base on a batch with its categorical columns set to 0, and all 12 tables get a gradient in the base.
 - **A platform value seen only in evaluation.** `OBI:0002000,OBI:0002002` occurs in 9 rows of one experiment (ENCSR000APD, H3K79me2, cell C24) and in no training measurement. Its table row stays at its random initialization. It touches 1 of 63 imputation targets (as the target) and 30 of 1,480 correction pairs, and none of the 40 crop pairs. `cov_numeric_only` removes this row. Control: report the imputation term with and without that target.
@@ -74,15 +74,17 @@ The calibration seed ranges (0.108 to 0.178) are wide, so a calibration effect s
 
 ## 7. Readiness
 
+All three arms are ready on all three architectures. The configs are in `tools/minicandi/configs/ablations/cov_embedding/rung{2,3,4}/<arm>.json`. Parameter counts are from `registry.build_model` on the written configs:
+
 | architecture | `cov_numeric_only` | `cov_dropout` | `cov_numeric_per_value` |
 |---|---|---|---|
-| conv autoencoder | ready: 1,042,514 parameters | ready: 1,042,578 | needs code |
-| conv + attention | ready: 1,038,018 | ready: 1,038,082 | needs code |
-| U-Net | ready: 993,599 | ready: 993,663 | needs code |
+| conv autoencoder | 1,042,514 | 1,042,578 | 1,062,482 (width 60) |
+| conv + attention | 1,038,018 | 1,038,082 | 1,057,986 (width 104) |
+| U-Net | 993,599 | 993,663 | 1,013,567 (width 25) |
 
-The two ready arms are in `stage2_arms.py` `ARMS`. All three architectures read both keys: `component_kwargs` passes them to every `CovariateInjector`, and each `forward` passes `covariate_dropout` to `model_covariates` (`rungs/conv_ae.py` lines 161 to 222, `conv_attn_ae.py` 137 to 181, `unet.py` 180 to 257). Parameter counts are from `registry.build_model` on the local worktree, 2026-11-16. A training-mode forward and backward pass ran on a synthetic batch (`synth.py`) for each arm and architecture. The null vectors received gradients when a dropped row was an available track.
+`stage2_arms.py write` wrote `cov_numeric_only` and `cov_dropout`, with `arms.tsv`. I wrote `cov_numeric_per_value` by hand: `covariate_embedding: numeric_per_value`, `param_budget: 1019968`, `simpler_than_base: false`. A JSON diff against `reference_equal.json` showed only these keys. All three architectures read the keys: `component_kwargs` passes them to every `CovariateInjector`, and each `forward` passes `covariate_dropout` to `model_covariates` (`rungs/conv_ae.py` lines 161 to 222, `conv_attn_ae.py` 137 to 181, `unet.py` 180 to 257). A training-mode forward and backward pass on a synthetic batch reached the null vectors and all 8 per-value tables. No arm needs a non-default submit option, because no arm changes the trunk or the data path.
 
-`cov_numeric_per_value` needs about 25 lines in `covariates.py` (`CovariateEmbedding`: per-value tables for the 4 discrete numeric columns; id = round(value), or round(2 x value) for the flags, which hold 0, 0.5 or 1; read lengths in `eic_v1` are 27 to 101) and about 3 lines in `components.py` (`COVARIATE_EMBEDDINGS`). Both are shared files. It also needs one unit test and, optionally, 2 lines in `stage2_arms.py` `ARMS`.
+Code: `covariates.py` +19 lines (`PER_VALUE`, `PV_TABLE` = 256, `per_value` in `CovariateEmbedding`; id = round(value), or round(2 x value) for the flags, which hold 0, 0.5 or 1); `components.py`, 3 lines changed (`COVARIATE_EMBEDDINGS`, the `per_value` flag). Test: `tests/test_ablation_cov_embedding.py`. Off switch: I built the base configs with the changed code and with the unchanged code of the lead worktree. Both builds gave identical `state_dict` tensors and identical forward passes (weights perturbed, one synthetic batch) on all three architectures.
 
 Cost per run, from Fir `sacct` (jobs COMPLETED since 2026-11-15, the base and final runs of each architecture). Training uses 12 CPUs; prediction uses 4 shards x 8 CPUs; metrics use 16 CPUs.
 
@@ -92,4 +94,4 @@ Cost per run, from Fir `sacct` (jobs COMPLETED since 2026-11-15, the base and fi
 | conv + attention | 12 x 1,956 s = 6.52 | 32 x 956 s = 8.50 | 16 x 1,921 s = 8.54 | 23.56 CPU-h |
 | U-Net | 12 x 4,322 s = 14.41 | 32 x 1,275 s = 11.33 | 16 x 2,050 s = 9.11 | 34.85 CPU-h |
 
-One seed of each architecture costs 87.39 CPU-h. One arm (3 seeds) costs 262.2 CPU-h. The two ready arms are 18 runs, 524.4 CPU-h. All three arms are 27 runs, 786.5 CPU-h. The reference runs exist and cost nothing.
+One seed of each architecture costs 87.39 CPU-h. One arm (3 seeds) costs 262.2 CPU-h. The two arms from `ARMS` are 18 runs, 524.4 CPU-h. All three arms are 27 runs, 786.5 CPU-h. The reference runs exist and cost nothing.
