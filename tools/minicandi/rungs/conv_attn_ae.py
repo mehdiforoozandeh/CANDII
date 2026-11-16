@@ -48,7 +48,8 @@ parameter and output for output (tests/test_minicandi_rung_arms.py).
 DNA fusion (item A11, `tools/minicandi/dna_fusion.py`): `dna_fusion = film` (the DNA features
 FiLM the track-fusion output, which then reads counts only), `late` (DNA joins after the conv
 encoder through a learned patch pooling) or `xattn` (the coarse count tokens cross-attend to the
-pooled DNA tokens before the self-attention). Absent = the early concatenation, bit for bit
+pooled DNA tokens before the self-attention). The width is the base width (the search reads the
+config without `dna_fusion`). Absent = the early concatenation, bit for bit
 (tests/test_ablation_dna_fusion.py).
 """
 from __future__ import annotations
@@ -69,7 +70,8 @@ from minicandi.components import NotApplicable  # noqa: E402
 from minicandi.contract import (A, K_META, LOG2_DEPTH_COL, MiniCandi, k_input,  # noqa: E402
                                 without_extras)
 from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
-from minicandi.dna_fusion import DnaCrossAttn, DnaFiLM, DnaPatchDown, fusion_of  # noqa: E402
+from minicandi.dna_fusion import (DnaCrossAttn, DnaFiLM, DnaPatchDown, fusion_of,  # noqa: E402
+                                  without_fusion)
 
 RUNG = 3
 NAME = "conv_attn_ae"
@@ -134,7 +136,7 @@ class Model(MiniCandi):
         if L % (2 ** n_down):
             raise ValueError(f"context_bins {L} must be a multiple of {2 ** n_down}")
         if width is None:
-            width = fit_width(without_extras(cfg))
+            width = fit_width(without_fusion(without_extras(cfg)))   # A11: base width
         self.config = cfg
         self.width = W = int(width)
         self.k_in = k_input(cfg)

@@ -53,8 +53,10 @@ parameter and output for output (tests/test_minicandi_rung_arms.py). `dna = prec
 DNA fusion (item A11, `tools/minicandi/dna_fusion.py`): `dna_fusion = film` (the DNA bottleneck
 FiLMs the count bottleneck in place of cat + `fuse`), `xattn` (the count bottleneck tokens
 cross-attend to the DNA bottleneck tokens in place of cat + `fuse`) or `early` (the DNA features
-join the count stem; no DNA tower, no `fuse`, no DNA skip). The DNA skips stay under film and
-xattn. Absent = the base, bit for bit (tests/test_ablation_dna_fusion.py).
+join the count stem; no DNA tower, no `fuse`, no DNA skip). Under film and xattn the DNA skips stay
+and a 1x1 conv (`count_proj`, the count half of `fuse`) stays on the count bottleneck. Every arm
+keeps the base width (the search reads the config without `dna_fusion`; the 10% budget check is
+not applied to an arm). Absent = the base, bit for bit (tests/test_ablation_dna_fusion.py).
 
 Resolution keys (chunk RM): `res_bp` reaches the DnaTower and the count transform through
 `component_kwargs`. `res_in_sub = 5`: the per-track input MLP reads the five 5 bp sub-bin counts
@@ -88,7 +90,7 @@ from minicandi.components import (ConvBlock, CountTransform, CovariateInjector, 
                                   sinusoidal_positions, sub_output, sub_to_fine)
 from minicandi.contract import A, K_META, LOG2_DEPTH_COL, MiniCandi, k_input  # noqa: E402
 from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
-from minicandi.dna_fusion import DnaCrossAttn, DnaFiLM, fusion_of  # noqa: E402
+from minicandi.dna_fusion import DnaCrossAttn, DnaFiLM, fusion_of, without_fusion  # noqa: E402
 
 RUNG = 4
 NAME = "unet"
@@ -161,10 +163,11 @@ class Model(MiniCandi):
         self.config = dict(config or {})
         width = cfg.get("width")
         if width is None:
-            width = fit_width(cfg)
+            width = fit_width(without_fusion(cfg))         # A11: the base width in every arm
         self._build(cfg, int(width))
         budget = float(cfg["param_budget"])
-        if "width" not in (config or {}) and abs(self.param_count() - budget) > 0.10 * budget:
+        if "width" not in (config or {}) and cfg.get("dna_fusion") is None \
+                and abs(self.param_count() - budget) > 0.10 * budget:
             raise ValueError(f"rung 4: no width brings the parameter count within 10% of "
                              f"param_budget {budget:.0f} (got {self.param_count()})")
         # extra inputs (chunk XI), constructed last (after the budget check, which they do not
@@ -226,10 +229,12 @@ class Model(MiniCandi):
             self.dna_tower = _Tower(chans)
             if self.fusion is None:
                 self.fuse = nn.Conv1d(2 * d_model, d_model, 1)
-            elif self.fusion == "film":
-                self.dna_film = DnaFiLM(d_model, d_model)
-            else:
-                self.dna_xattn = DnaCrossAttn(d_model, N_HEADS)
+            else:                    # the count half of `fuse` stays: the arm changes the join
+                self.count_proj = nn.Conv1d(d_model, d_model, 1)
+                if self.fusion == "film":
+                    self.dna_film = DnaFiLM(d_model, d_model)
+                else:
+                    self.dna_xattn = DnaCrossAttn(d_model, N_HEADS)
         else:
             self.dna = DnaTower("off", chans[0])
 
@@ -318,9 +323,9 @@ class Model(MiniCandi):
             if self.fusion is None:
                 bottom = self.fuse(torch.cat([bottom, d_bottom], dim=1))
             elif self.fusion == "film":
-                bottom = self.dna_film(bottom, d_bottom)
+                bottom = self.dna_film(self.count_proj(bottom), d_bottom)
             else:
-                bottom = self.dna_xattn(bottom.transpose(1, 2),
+                bottom = self.dna_xattn(self.count_proj(bottom).transpose(1, 2),
                                         d_bottom.transpose(1, 2)).transpose(1, 2)
 
         # bottleneck attention, with covariate tokens under `tokens`

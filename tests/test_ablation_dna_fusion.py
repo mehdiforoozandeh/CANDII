@@ -3,8 +3,10 @@
 (a) Without `dna_fusion` (absent or null) every rung of 2, 3, 4 is the model of the umbrella commit
     before the change (`BASE_COMMIT`), state_dict and outputs to 0 difference, under the base DNA
     modes own, off, shuffled and precomputed.
-(b) Every arm builds on its rungs within 10% of 1.0e6 parameters, passes the copy-leak wiring
-    check, reads the DNA, and joins it where the arm says (the base join modules are gone).
+(b) Every arm keeps the base trunk width, passes the copy-leak wiring check, reads the DNA, joins
+    it at the stage the arm says (forward-hook probes before and after the join; the U-Net
+    bottleneck join is also checked with the DNA skips off), and sends gradient to every parameter
+    of its join layer.
 (c) The arms a rung cannot express, `dna = off`, unknown values and rungs 1, 5, 6 are refused.
 (d) The three layers: FiLM starts as the identity; patch pooling and cross-attention shapes.
 """
@@ -144,23 +146,87 @@ def test_without_the_key_the_model_is_the_pre_change_model(r, over, old_modules)
 
 @pytest.mark.parametrize("r,arm", ARMS, ids=lambda v: str(v))
 @pytest.mark.parametrize("dna", ["own", "precomputed"])
-def test_arm_builds_in_band_reads_dna_and_keeps_the_mask(r, arm, dna):
+def test_arm_keeps_the_base_width_reads_dna_and_keeps_the_mask(r, arm, dna):
     cfg = {**_ref(r), "dna_fusion": arm, "dna": dna}
     if dna == "precomputed":
         cfg["dna_embedding_dim"] = D_EMB
     m = _build(cfg)
-    n = sum(p.numel() for p in m.parameters() if p.requires_grad)
-    assert abs(n - 1.0e6) <= 1.0e5, n
+    base = _build({k: v for k, v in cfg.items() if k != "dna_fusion"})
+    assert m.width == base.width, (m.width, base.width)
     _perturb(m)
     b = _batch()
     assert C.wiring_check(m, b)["pass"]
-    key = "x_dna_emb" if dna == "precomputed" else "x_dna"
-    b2 = dict(b)
-    b2[key] = torch.randn_like(b[key]) if dna == "precomputed" else \
-        torch.randint(0, 5, b[key].shape, generator=torch.Generator().manual_seed(9)).to(b[key].dtype)
-    assert not torch.allclose(_out(m, b)[1], _out(m, b2)[1]), "the arm does not read the DNA"
+    assert not torch.allclose(_out(m, b)[1], _out(m, _other_dna(b, dna))[1]), \
+        "the arm does not read the DNA"
     n_, mu = _out(m, b)
     assert n_.shape == mu.shape == (2, L, C.A) and bool((mu > 0).all() and (n_ > 0).all())
+
+
+def _other_dna(b: dict, dna: str = "own") -> dict:
+    key = "x_dna_emb" if dna == "precomputed" else "x_dna"
+    b2 = dict(b)
+    g = torch.Generator().manual_seed(9)
+    b2[key] = torch.randn(b[key].shape, generator=g) if dna == "precomputed" else \
+        torch.randint(0, 5, b[key].shape, generator=g).to(b[key].dtype)
+    return b2
+
+
+#: (rung, arm) -> (does the probe BEFORE the join stage see the DNA, does the probe after it).
+#: Probes (module whose first input is captured): before = the first encoder block (conv models)
+#: or the count tower (U-Net); after = the bottleneck (`mid[0]` / the self-attention `attn`).
+STAGE = {(2, "film"): (True, True), (2, "late"): (False, True),
+         (3, "film"): (True, True), (3, "late"): (False, True), (3, "xattn"): (False, True),
+         (4, "film"): (False, True), (4, "xattn"): (False, True), (4, "early"): (True, True)}
+
+
+def _probes(m, r):
+    if r == 2:
+        return m.enc[0][0], m.mid[0]
+    if r == 3:
+        return m.enc[0], m.attn
+    return m.count_tower, m.attn
+
+
+def _captured(m, r, b):
+    seen = []
+    hooks = [mod.register_forward_pre_hook(lambda _m, a: seen.append(a[0].detach().clone()))
+             for mod in _probes(m, r)]
+    _out(m, b)
+    for h in hooks:
+        h.remove()
+    return seen
+
+
+@pytest.mark.parametrize("r,arm", ARMS, ids=lambda v: str(v))
+def test_arm_joins_dna_at_its_stage(r, arm):
+    m = _perturb(_build({**_ref(r), "dna_fusion": arm}))
+    b = _batch()
+    (pre1, post1), (pre2, post2) = _captured(m, r, b), _captured(m, r, _other_dna(b))
+    before, after = STAGE[(r, arm)]
+    assert (not torch.equal(pre1, pre2)) == before, "DNA reaches the stage before the join"
+    assert (not torch.equal(post1, post2)) == after, "DNA does not reach the bottleneck"
+
+
+@pytest.mark.parametrize("arm", ["film", "xattn"])
+def test_unet_bottleneck_join_is_live_without_dna_skips(arm):
+    """With `skip_source: counts`, the bottleneck join is the only DNA path: dropping it must
+    leave the output blind to the DNA."""
+    m = _perturb(_build({**_ref(4), "dna_fusion": arm, "skip_source": "counts"}))
+    b = _batch()
+    assert not torch.allclose(_out(m, b)[1], _out(m, _other_dna(b))[1])
+
+
+@pytest.mark.parametrize("r,arm", ARMS, ids=lambda v: str(v))
+def test_join_layer_gets_gradient(r, arm):
+    m = _perturb(_build({**_ref(r), "dna_fusion": arm}))
+    out = m(_batch())
+    (out["mu"].log().mean() + out["n"].log().mean()).backward()
+    names = {"film": ["dna_film"], "late": ["dna_down"], "xattn": ["dna_xattn"],
+             "early": ["dna", "stem"]}[arm] + (["dna_down"] if (r, arm) == (3, "xattn") else []) \
+        + (["count_proj"] if r == 4 and arm in ("film", "xattn") else [])
+    for name in names:
+        for pn, p in getattr(m, name).named_parameters():
+            assert p.grad is not None and p.grad.abs().sum() > 0, f"{name}.{pn} has no gradient"
 
 
 @pytest.mark.parametrize("r", [2, 3])
@@ -179,6 +245,7 @@ def test_unet_arms_replace_the_bottleneck_join():
     for arm, mod in (("film", "dna_film"), ("xattn", "dna_xattn")):
         m = _build({**_ref(4), "dna_fusion": arm})
         assert not hasattr(m, "fuse") and hasattr(m, mod) and hasattr(m, "dna_tower")
+        assert hasattr(m, "count_proj")                     # the count half of `fuse` stays
         assert m.skip_dna                                   # the DNA skips stay
     m = _build({**_ref(4), "dna_fusion": "early"})
     assert not hasattr(m, "fuse") and not hasattr(m, "dna_tower") and not m.skip_dna
@@ -237,6 +304,7 @@ def test_patch_down_and_cross_attention_shapes():
     torch.manual_seed(0)
     down = DnaPatchDown(8, 12, 4)
     assert down(torch.randn(2, 8, 16)).shape == (2, 12, 4)
+    assert sum(p.numel() for p in down.parameters()) == 8 * 12 + 12
     with pytest.raises(ValueError):
         down(torch.randn(2, 8, 18))
     xa = DnaCrossAttn(16, 4)

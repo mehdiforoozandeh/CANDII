@@ -38,9 +38,10 @@ Component arm keys (pinned interface E, chunk A3) reach every component through
 parameter and output for output (tests/test_minicandi_rung_arms.py).
 
 DNA fusion (item A11, `tools/minicandi/dna_fusion.py`): `dna_fusion = film` (the DNA features
-FiLM the stem output; the stem reads counts only) or `late` (DNA joins at the bottleneck through a
-learned patch pooling; the encoder reads counts only). Absent = the early concatenation above, bit
-for bit (tests/test_ablation_dna_fusion.py).
+FiLM the stem output; the stem reads counts only) or `late` (DNA joins at the bottleneck through
+average pooling and a 1x1 conv; the encoder reads counts only). The width is the base width (the
+search reads the config without `dna_fusion`). Absent = the early concatenation above, bit for
+bit (tests/test_ablation_dna_fusion.py).
 
 Resolution keys (chunk RM): `res_bp` reaches the DnaTower and the count transform through
 `component_kwargs`. `res_in_sub = 5`: the per-track lift reads the five 5 bp sub-bin counts of
@@ -83,7 +84,7 @@ from minicandi.components import (ConvBlock, CountTransform, CovariateInjector, 
                                   Upsample, component_kwargs, fine_to_sub, res_subs_of,
                                   sub_output, sub_to_fine)
 from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
-from minicandi.dna_fusion import DnaFiLM, DnaPatchDown, fusion_of  # noqa: E402
+from minicandi.dna_fusion import DnaFiLM, DnaPatchDown, fusion_of, without_fusion  # noqa: E402
 
 RUNG = 2
 NAME = "conv_ae"
@@ -149,7 +150,7 @@ class Model(C.MiniCandi):
                                 "tokens; covariate_injection = tokens does not apply")
         self.config = cfg
         if width is None:
-            width = choose_width(C.without_extras(cfg))
+            width = choose_width(without_fusion(C.without_extras(cfg)))   # A11: base width
         self.width = int(width)
         self._build(cfg, self.width)
         # extra inputs (chunk XI), constructed last; dna = off leaves no DNA features

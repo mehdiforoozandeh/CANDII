@@ -15,16 +15,30 @@ Arms (one change from the base; the DNA source, the skips and the trunk stay):
          point: (gamma, beta) = Conv1d(d_dna, 2C, 1)(DNA), z * (1 + gamma) + beta, initialized to
          the identity. conv models: after the stem (the stem reads counts only). U-Net: the DNA
          bottleneck modulates the count bottleneck in place of the concatenation and `fuse`.
-  late   conv models only: DNA joins at the bottleneck instead of the input. A learned patch
-         pooling Conv1d(32, C_bottleneck, f, stride f), f = the downsampling factor, is added to
-         the bottleneck features. The encoder sees counts only.
+  late   conv models only: DNA joins at the bottleneck instead of the input. The DNA features are
+         average-pooled over f bins (f = the downsampling factor), projected by a 1x1
+         Conv1d(32, C_bottleneck) and added to the bottleneck features. The encoder sees counts
+         only.
   xattn  conv + attention and U-Net: the count bottleneck tokens cross-attend to the DNA tokens of
          the same resolution (one residual pre-norm cross-attention layer; the same sinusoidal
-         positions on queries and keys). conv + attention: the DNA tokens come from the patch
-         pooling of `late`, and the layer sits before the self-attention. U-Net: the DNA tokens
-         are the DNA tower's bottleneck; the layer replaces the concatenation and `fuse`.
+         positions on queries and keys). conv + attention: the DNA tokens come from the pooling
+         of `late`, and the layer sits before the self-attention. U-Net: the DNA tokens are the
+         DNA tower's bottleneck; the layer replaces the concatenation and `fuse`.
   early  U-Net only: the DNA features (width C0) are concatenated into the count stem; the DNA
          tower, `fuse` and the DNA skips are gone, so every skip carries the joint features.
+         This contrast changes three things at once: the stage, the DNA tower and the DNA skips.
+
+U-Net film and xattn keep a learned 1x1 Conv1d(d, d) on the count bottleneck (`count_proj`), the
+count half of the base's `fuse`, so those arms change the join only.
+
+Trunk width rule: an arm differs from the base in the join only. Every rung picks its trunk
+width from the config without `dna_fusion` (`without_fusion`), so each arm keeps the base width
+and its parameter count differs from the base by the join's own parameters.
+
+Gradient at the start: NBHead's last layer is zero-initialized, so step 0 sends no gradient
+upstream of the head. With FiLM (also zero-initialized) the FiLM projection first gets gradient
+at step 1 and the DNA path behind it at step 2. On the conv models the model ignores DNA at
+initialization under film; on the U-Net the DNA skips still feed it.
 
 Not built, with the reason (`NOT_APPLICABLE`):
   addition, every rung: a linear map of a concatenation equals the sum of two linear maps, so
@@ -53,9 +67,16 @@ NOT_APPLICABLE = {
     ("conv_attn_ae", "early"): _EARLY_BASE,
     ("conv_ae", "xattn"): ("the conv autoencoder has no attention; one cross-attention layer "
                            "would add the global context that defines the conv + attention model"),
-    ("unet", "late"): ("the base already joins DNA at the bottleneck (concatenation + 1x1 conv) "
-                       "and through the DNA skips"),
+    ("unet", "late"): ("the base already joins DNA at the bottleneck stage (concatenation + 1x1 "
+                       "conv); it also joins through the DNA skips, which a late-only arm would "
+                       "have to remove, a second change"),
 }
+
+
+def without_fusion(cfg: dict) -> dict:
+    """`cfg` without `dna_fusion`: the config each rung's width search reads, so every arm keeps
+    the base trunk width."""
+    return {k: v for k, v in cfg.items() if k != "dna_fusion"}
 
 
 def fusion_of(cfg: dict, name: str) -> str | None:
@@ -91,18 +112,19 @@ class DnaFiLM(nn.Module):
 
 
 class DnaPatchDown(nn.Module):
-    """Per-bin DNA features [B, d_dna, L] -> [B, c, L / f]: Conv1d(d_dna, c, f, stride f), a
-    learned pooling of each block of f bins (L must be a multiple of f)."""
+    """Per-bin DNA features [B, d_dna, L] -> [B, c, L / f]: the mean of each block of f bins,
+    then a 1x1 Conv1d(d_dna, c) (L must be a multiple of f; d_dna x c + c parameters)."""
 
     def __init__(self, d_dna: int, c: int, f: int):
         super().__init__()
         self.f = int(f)
-        self.conv = nn.Conv1d(d_dna, c, self.f, stride=self.f)
+        self.pool = nn.AvgPool1d(self.f, self.f)
+        self.conv = nn.Conv1d(d_dna, c, 1)
 
     def forward(self, dna: torch.Tensor) -> torch.Tensor:
         if dna.shape[-1] % self.f:
             raise ValueError(f"DnaPatchDown: length {dna.shape[-1]} is not a multiple of {self.f}")
-        return self.conv(dna)
+        return self.conv(self.pool(dna))
 
 
 class DnaCrossAttn(nn.Module):
@@ -126,4 +148,4 @@ class DnaCrossAttn(nn.Module):
 
 
 __all__ = ["APPLIES", "DnaCrossAttn", "DnaFiLM", "DnaPatchDown", "FUSIONS", "NOT_APPLICABLE",
-           "fusion_of"]
+           "fusion_of", "without_fusion"]
