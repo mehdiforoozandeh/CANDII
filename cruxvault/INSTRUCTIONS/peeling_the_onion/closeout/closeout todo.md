@@ -37,10 +37,10 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 
 | Item | File | Depends on | Status |
 |---|---|---|---|
-| Fill the lab, antibody and donor covariates | [[closeout D1 lab antibody donor covariates]] | none | spec (item agent started 2026-11-16) |
+| Fill the lab, antibody and donor covariates | [[closeout D1 lab antibody donor covariates]] | none | in rework: fill correct; corrected table version with train-only category lists in work (review finding) |
 | Second experiments: table, evaluation set, cross-lab pairs | [[closeout D2 second experiments and cross-lab pairs]] | D1 | not started |
 | Data set update with DNase-seq in the headline | [[closeout D3 dataset update with DNase-seq]] | D1 | not started |
-| Blind tracks, final model, blind pass, EIC board row | [[closeout D4 blind tracks final model EIC board]] | D1, D3, M1 | blocked: PI approved the blind-only scope (51 blind tracks, 11 controls, 10 outage reruns; about 22,700 allocated CPU-hours); the submission from this session was refused by the permission system, so the PI must run the command |
+| Blind tracks, final model, blind pass, EIC board row | [[closeout D4 blind tracks final model EIC board]] | D1, D3, M1 | spec: blind-only scope ruled (about 22,700 allocated CPU-hours); an agent ports the build to Fir (fastest compute) |
 
 ### Evaluation (success criterion 3)
 
