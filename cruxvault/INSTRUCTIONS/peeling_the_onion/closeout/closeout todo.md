@@ -48,7 +48,7 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 |---|---|---|---|
 | The 16-versus-256 region check and settled scores | [[closeout E1 256-region check and settled scores]] | none | spec (item agent started 2026-11-16) |
 | Signal p-value and peaks from the predicted NB; AlphaGenome 2 board row; signal-space score | [[closeout E2 p-value and peaks from the predicted NB]] | none | spec (item agent started 2026-11-16) |
-| Report the metrics that are computed and never reported | [[closeout E3 report the computed metrics]] | none | spec (item agent started 2026-11-16) |
+| Report the metrics that are computed and never reported | [[closeout E3 report the computed metrics]] | none | done 2026-11-16 for the screening scores ([[computed metrics report]]); rerun on settled scores after E1 |
 | Complete the replicate ladder and the crossed mixed model | [[closeout E4 complete the replicate ladder]] | D2 | not started |
 
 ### Training objective (success criterion 2)
