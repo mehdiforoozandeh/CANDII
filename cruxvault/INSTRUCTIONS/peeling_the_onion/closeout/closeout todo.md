@@ -55,7 +55,7 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 
 | Item | File | Depends on | Status |
 |---|---|---|---|
-| Write the settled training objective as one document | [[closeout O1 training objective document]] | A9 (losses), A4 (two-step) | not started |
+| Write the settled training objective as one document | [[closeout O1 training objective document]] | A1 (its loss and two-step ablations) | not started |
 
 ### Ablations and model design (success criterion 4)
 
