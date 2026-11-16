@@ -30,7 +30,7 @@
 set -u
 module load python/3.10.13 >/dev/null 2>&1; unset EBPYTHONPREFIXES
 O=/project/def-maxwl/mforooz/ONION
-K="${K:-/project/def-maxwl/mforooz/onion_kit/COD1}"
+K="${K:-/project/def-maxwl/mforooz/onion_kit/COD1b}"
 V="${V:-eic_v1_2}"
 T=$O/tables/$V
 EV=$O/eval/$V/evalset_p16.json
