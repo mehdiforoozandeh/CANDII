@@ -552,7 +552,7 @@ def cmd_collect(a) -> int:
     if a.half and a.fraglen_out:
         raise SystemExit("collect: --fraglen-out reads whole-read-set records; not with --half")
     n = {"rows": len(rows), "filled": 0, "no_record": 0, "stale": 0, "not_ok": 0,
-         "kept_build_cells": 0}
+         "kept_build_cells": 0, "frag_len_le0": 0}
     out_rows, xcor = [], {}
     for r in rows:
         mid = r["measurement_id"]
@@ -565,6 +565,9 @@ def cmd_collect(a) -> int:
         else:
             for c in QC_COLUMNS:
                 v = rec["values"].get(c, "") or ""
+                if c == "frag_len" and v and float(v) <= 0:   # A4: xcor's peak at shift 0
+                    n["frag_len_le0"] += 1                    # (ATAC/DNase) is no length
+                    v = ""
                 if v:
                     vals[c] = v
                 elif vals[c]:

@@ -221,3 +221,25 @@ def test_collect_many_dirs_last_usable_record_wins_and_half_table(tmp_path, caps
     with pytest.raises(SystemExit):
         QF.main(["collect", "--tables", str(t), "--out", str(one), "--half", "pr1",
                  "--fraglen-out", str(tmp_path / "fl.tsv")])
+
+
+def test_qc_values_are_clipped_and_zero_fragment_length_is_absent(tmp_path):
+    torch.manual_seed(0)
+    emb = CV.CovariateEmbedding(C.K_META + C.K_QC, 6)
+    enc = CV.CovariateEncoder({"vocab": {}})
+    lim = CV.NUMERIC["nsc"][0] + CV.QC_Z_CLIP * CV.NUMERIC["nsc"][1]
+    a = emb(torch.from_numpy(enc.c_in({"nsc": str(lim)}, True))[None])
+    b = emb(torch.from_numpy(enc.c_in({"nsc": "40"}, True))[None])
+    assert torch.allclose(a, b)                                   # beyond +5 z: same input
+    rows = [{"measurement_id": "Z", "in_eic": "train", "sha256": "sZ"}]
+    t = T._tables(tmp_path, rows)
+    d = tmp_path / "q"
+    d.mkdir()
+    v = {c: "" for c in QF.QC_COLUMNS}
+    v.update(nsc="1.6", rsc="1.9", frag_len="0")
+    (d / "Z.json").write_text(json.dumps({"measurement_id": "Z", "status": "ok",
+                                          "counts_sha256": "sZ", "values": v}))
+    out = tmp_path / "qc.tsv"
+    assert QF.main(["collect", "--tables", str(t), "--out", str(out), "--qc-dir", str(d)]) == 0
+    got = _read(out)["Z"]
+    assert got["frag_len"] == "" and got["nsc"] == "1.6"

@@ -59,8 +59,13 @@ CATEGORICAL = {"pipeline_id": "pipeline", "pipeline_version_id": "pipeline_versi
 #: fixed (centre, scale) per numeric column; centre is also the value of an empty cell
 NUMERIC = {"log2_depth": (24.0, 2.0), "run_type_pe": (0.5, 0.5), "read_length": (75.0, 50.0),
            "dedup_on": (0.5, 0.5), "mapq_threshold": (20.0, 15.0),
-           "nsc": (1.1, 0.1), "rsc": (1.0, 0.5), "nrf": (0.8, 0.2), "pbc1": (0.8, 0.2),
-           "pbc2": (5.0, 5.0), "frip": (0.2, 0.15), "frag_len": (200.0, 100.0)}
+           "nsc": (1.1, 0.3), "rsc": (1.0, 0.5), "nrf": (0.8, 0.2), "pbc1": (0.8, 0.2),
+           "pbc2": (14.0, 15.0), "frip": (0.2, 0.15), "frag_len": (200.0, 100.0)}
+#: A4: nsc was (1.1, 0.1) and pbc2 (5.0, 5.0) before; on the 1,122 / 729 training rows with a value
+#: (eic_v1_2 + the 2026-11-13 fill records) their 90th percentiles sat at z = 7.8 and 8.0 and their
+#: maxima at z = 40 and 47 (nsc median 1.09, p90 1.88; pbc2 median 13.6, p90 45). Only qc_on_input
+#: runs read these columns, and none existed. A standardised QC value is clipped to +-QC_Z_CLIP.
+QC_Z_CLIP = 5.0
 #: A4: raw value of an empty QC cell (no QC metric is negative; pbc2 = -1 is already written empty)
 QC_ABSENT = -9999.0
 #: rows in every categorical embedding table; ids at or above it map to 0 (unknown)
@@ -149,7 +154,8 @@ class CovariateEmbedding(nn.Module):
     `nn.Embedding(PV_TABLE, d_cat)` each, id = round(multiplier x raw value), in place of a
     standardised scalar; log2 depth and the QC columns stay scalars.
     With the QC columns (k_in = K_META + K_QC) each QC column also gives a presence feature
-    (1 = a value, 0 = `QC_ABSENT`), and an absent value enters as a standardised 0 (A4). The
+    (1 = a value, 0 = `QC_ABSENT`), an absent value enters as a standardised 0, and a present one
+    is clipped to +-QC_Z_CLIP (A4). The
     metadata-only build (k_in = K_META) is unchanged.
     The scrambled-covariates control is applied by the caller (`model_covariates`), not here.
     """
@@ -197,7 +203,8 @@ class CovariateEmbedding(nn.Module):
             q = c[..., self.num_idx][..., self.qc_pos]
             present = q != QC_ABSENT
             num = num.clone()
-            num[..., self.qc_pos] = torch.where(present, num[..., self.qc_pos],
+            num[..., self.qc_pos] = torch.where(present,
+                                                num[..., self.qc_pos].clamp(-QC_Z_CLIP, QC_Z_CLIP),
                                                 torch.zeros_like(q))
             feats = [num, present.to(num.dtype)]
         for j, i in enumerate(self.pv_idx):

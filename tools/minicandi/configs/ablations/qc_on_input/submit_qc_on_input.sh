@@ -143,7 +143,7 @@ collect)
     [ ! -e "$f" ] || { echo "REFUSED: $f exists (never overwritten; set Q to a new path)" >&2; exit 3; }
   done
   nw=$(ls "$Q"/fill/rec_whole_*.tar 2>/dev/null | wc -l); np=$(ls "$Q"/fill/rec_pr1_*.tar 2>/dev/null | wc -l)
-  echo "fill tars: whole $nw, pr1 $np (rows files: $(wc -l < "$Q/fill/rows_whole.txt" 2>/dev/null || echo 0) and $(wc -l < "$Q/fill/rows_pr1.txt" 2>/dev/null || echo 0) chunks)"
+  echo "fill tars: whole $nw, pr1 $np (rows files: $(cat "$Q/fill/rows_whole.txt" 2>/dev/null | wc -l) and $(cat "$Q/fill/rows_pr1.txt" 2>/dev/null | wc -l) chunks)"
   BODY="set -eu; module load python/3.10.13; virtualenv --no-download \$SLURM_TMPDIR/venv; \
 source \$SLURM_TMPDIR/venv/bin/activate; pip install -q --no-index --upgrade pip; \
 pip install -q --no-index -r $K/requirements-fir.txt; \
