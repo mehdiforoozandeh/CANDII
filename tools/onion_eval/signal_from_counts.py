@@ -75,12 +75,17 @@ Model side of `box_d` (E2 review): the predicted NB is per bin and its joint law
 The spread pileup gets a NB with mean m = box mean of the means and a size set by one of two
 dependence forms (`dependence`, recorded as `signal_box_dependence`): `comonotone` (default; the
 bins' over-dispersion moves together, the UPPER variance bound, n_s = m^2 / (sum w mu / sqrt n)^2)
-or `independent` (the LOWER bound, n_s = m^2 / sum w^2 mu^2 / n); see `_spread`. The -log10 p
-score is convex in the count, so the comonotone form gives the LARGER expected score (more
-confident peaks). Default comonotone because over-dispersion is enrichment that is smooth at the
-fragment scale (d is 4 to 16 bins), and adjacent read-span bins share reads; independence across
-bins one fragment apart is the less plausible end. The truth lies between the two; both are
-reported. The plug-in mode needs no assumption (the score of the box mean). The predicted-control
+or `independent` (the LOWER bound when neighbouring bins are not negatively correlated,
+n_s = m^2 / sum w^2 mu^2 / n); see `_spread`. Either NB has mean s * m and size n_s on the
+pileup scale (`_score_pileup`; s = d / (rl + 24)): the pileup counts fragments, so its Poisson
+part is s * m. The -log10 p score is convex in the count, so the comonotone form gives the LARGER
+expected score (more confident peaks). Default comonotone because over-dispersion is enrichment
+that is smooth at the fragment scale (d is 4 to 16 bins); independence across bins one fragment
+apart is the less plausible end. For non-negative correlation between neighbouring bins the truth
+lies between the two; both are reported. The plug-in mode needs no assumption (the score of the
+box mean). `inbin` keeps its old expectation, which puts the NB on the read-span count and scales
+the count by s: its Poisson variance is s^2 m in place of s m (too large by the factor s, about 3.3
+at d = 200 bp and rl = 36 bp), kept so that existing scores reproduce. The predicted-control
 route spreads the predicted control mean by the same box. Region edges: the box is not
 renormalized; the `box_reach(d)` bins at each region end are masked from signal-space metrics
 (`edge_keep`).
@@ -175,7 +180,8 @@ PILEUP_FORMS = ("box_d", "inbin")
 PILEUP_DEFAULT = "box_d"
 #: E2 review: the dependence between the bins under one box in the box_d EXPECTATION mode
 #: (`_spread`); recorded as `signal_box_dependence`. `comonotone` (default): the upper variance
-#: bound; `independent`: the lower bound. The truth lies between them.
+#: bound; `independent`: the lower bound for non-negative correlation between neighbouring bins.
+#: Under that condition the truth lies between them.
 DEPENDENCE_FORMS = ("comonotone", "independent")
 DEPENDENCE_DEFAULT = "comonotone"
 
@@ -280,6 +286,23 @@ def plug_in_neglog10p(mu, scale: float, lam) -> np.ndarray:
     lam = np.broadcast_to(np.asarray(lam, dtype=np.float64), mu.shape).copy()
     obs = np.floor(mu * float(scale)).astype(np.int64)
     return log10_upper_tail(obs, lam)
+
+
+def _score_pileup(mu, n, scale, lam, mode, pileup):
+    """The MACS2 score of the NB at the pileup scale.
+
+    `box_d` (E2, second review): the pileup is a count of FRAGMENTS with mean s * m (s = d / (rl +
+    24), m the spread read-span mean), so its NB has mean s * m and the same size n:
+    Var = s m + (s m)^2 / n, i.e. Poisson part s m and over-dispersion part (s m)^2 / n (relative
+    over-dispersion unchanged). It is scored at scale 1. A simulation of Gamma-Poisson read starts
+    with extended fragments matches this (tests: test_box_d_pileup_variance_by_simulation).
+    `inbin` (kept bit-identical so that existing scores reproduce): the NB sits on the read-span
+    count and the count is scaled by s, so Var = s^2 (m + m^2 / n): the Poisson part is s^2 m, too
+    large by the factor s (about 3.3 at d = 200 bp, rl = 36 bp). The plug-in mode is identical in
+    both (floor(s * m)); only the expectation mode differs."""
+    if pileup == "box_d":
+        return _score(np.asarray(mu, dtype=np.float64) * float(scale), n, 1.0, lam, mode)
+    return _score(mu, n, scale, lam, mode)
 
 
 def _score(mu, n, scale, lam, mode):
@@ -428,10 +451,11 @@ def _spread(mu, n, ctl, d, pileup, dependence=DEPENDENCE_DEFAULT):
                     when every n_k is equal), so n_s = m^2 / (sum_k w_k mu_k / sqrt(n_k))^2. This
                     is the UPPER variance bound. Equal sizes give n_s = n.
       `independent` the G_k are independent: variance sum_k w_k^2 mu_k^2 / n_k, so
-                    n_s = m^2 / sum_k w_k^2 mu_k^2 / n_k. This is the LOWER bound (for positive
-                    correlation). Equal sizes and means give n_s = n / sum_k w_k^2 > n.
-    The Poisson part of the NB is m in both forms (one bin's), not sum_k w_k^2 mu_k: adjacent
-    read-span counts share reads, so their Poisson parts are not independent either.
+                    n_s = m^2 / sum_k w_k^2 mu_k^2 / n_k. This is the LOWER bound when neighbouring bins
+                    are not negatively correlated. Equal sizes and means give n_s = n / sum_k w_k^2 > n.
+    The over-dispersion part is relative (Var_gamma = m^2 / n_s); `_score_pileup` puts the NB on
+    the pileup scale with mean s * m and the same n_s, so the Poisson part is the fragment count's
+    own s * m (the pileup counts fragments, each read once), and Var_gamma = (s m)^2 / n_s.
     Direction: the -log10 p score is convex in the count, so E[score] RISES with the variance; the
     comonotone form gives the larger expectation (more confident peaks), the independent form the
     smaller. The plug-in mode reads m only and needs neither. On observed counts (n = None) only
@@ -497,7 +521,7 @@ def signal_track(mu, n, assay_class: str, control_counts, covariates: dict,
         d = float(ATAC_SMOOTH_WIN)
         lam = macs2_lambda(lambda_bg=d * depth / gsize, treat_pileup=pileup_from_counts(mu, d, rl))
         mu_s, n_s, _ = _spread(mu, n, None, d, pileup, dependence)   # llocal: the unspread mean
-        sig = _score(mu_s, n_s, d / (rl + SPAN_EXTRA), lam, mode)
+        sig = _score_pileup(mu_s, n_s, d / (rl + SPAN_EXTRA), lam, mode, pileup)
         return sig.astype(np.float32), "local_background"
 
     # ChIP-seq
@@ -513,7 +537,7 @@ def signal_track(mu, n, assay_class: str, control_counts, covariates: dict,
     lam = macs2_lambda(lambda_bg=d * depth / gsize,
                        control_pileup=pileup_from_counts(ctl_s, d, crl),
                        ratio_treat2control=depth / cdepth)
-    sig = _score(mu_s, n_s, d / (rl + SPAN_EXTRA), lam, mode)
+    sig = _score_pileup(mu_s, n_s, d / (rl + SPAN_EXTRA), lam, mode, pileup)
     source = "predicted_control" if bool(covariates.get("control_is_predicted", False)) else "observed_control"
     return sig.astype(np.float32), source
 

@@ -288,3 +288,22 @@ def test_isotonic_valid_restricts_the_fit():
     valid[9] = False
     cal = A.isotonic_recalibrate(pred, truth, n_bins=10, valid=valid)
     assert np.allclose(cal[:9], truth[:9]) and cal[9] == pytest.approx(16.0)
+
+
+def test_box_d_peak_probability_is_on_the_pileup_scale():
+    """E2 second review: under box_d the peak probability is P(score(K) >= 2) with K ~ NB(mean
+    s * m, size n_s) of the spread pileup, against the lambda of the spread control."""
+    rng = np.random.default_rng(6)
+    rb = 400
+    ctl = {"chr1": np.full(rb, 3.0)}
+    mu = np.linspace(5.0, 60.0, rb)
+    n = np.full(rb, 3.0)
+    p = A.peak_probability_from_nb(n, mu, _chip_row(), ds=_FakeDS(ctl), regions=[("chr1", 0)], rb=rb)
+    m_s, n_s, ctl_s = S._spread(mu, n, ctl["chr1"], 200, "box_d")
+    s_ = 200 / (76 + 24)
+    lam = S.macs2_lambda(lambda_bg=200 * 2e7 / MACS2_GSIZE_HS,
+                         control_pileup=S.pileup_from_counts(ctl_s, 200, 76), ratio_treat2control=2.0)
+    k = nbinom.rvs(n_s, n_s / (n_s + s_ * m_s), size=(20000, rb), random_state=rng)
+    freq = (log10_upper_tail(k.astype(np.int64), np.broadcast_to(lam, k.shape).copy()) >= 2.0).mean(0)
+    inner = slice(8, rb - 8)                                   # away from the zero-padded ends
+    assert np.max(np.abs(p[inner] - freq[inner])) < 0.01

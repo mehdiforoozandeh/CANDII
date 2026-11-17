@@ -116,7 +116,8 @@ def test_chip_route_end_to_end_on_a_hand_case():
     L = 800
     mu = np.full(L, 5.0)
     ctrl = np.full(L, 2.0)
-    sig, src = S.signal_track(mu, 1e12, "narrow_histone", ctrl, CHIP_COV)
+    # the in-bin rule (NB on the read-span count, scaled); box_d is held by the route test below
+    sig, src = S.signal_track(mu, 1e12, "narrow_histone", ctrl, CHIP_COV, pileup="inbin")
     assert src == "observed_control" and sig.dtype == np.float32 and sig.shape == (L,)
     r = 2.0e7 / 3.0e7
     lam = max(180 * 2.0e7 / MACS2_GSIZE_HS, r * 2.0 * 180 / (50 + 24))
@@ -141,7 +142,7 @@ def test_chip_without_a_control_is_refused():
 def test_atac_route_uses_d_150_and_no_control():
     L = 1000
     mu = np.full(L, 4.0)
-    sig, src = S.signal_track(mu, 1e12, "accessibility_atac", None, ATAC_COV)
+    sig, src = S.signal_track(mu, 1e12, "accessibility_atac", None, ATAC_COV, pileup="inbin")
     assert src == "local_background"
     pile = 4.0 * 150 / (76 + 24)                       # = 6.0
     lam = max(150 * 5.0e7 / MACS2_GSIZE_HS, pile)      # flat track: local mean = pileup
@@ -450,21 +451,69 @@ def test_expected_score_rises_with_variance():
 
 
 def test_box_d_route_equals_inbin_on_the_spread_hand_case():
-    """expectation and plug-in under box_d equal the in-bin rule on the spread NB (box mean of mu,
-    the size of the dependence form) and the spread control, for both dependence forms."""
-    from onion_eval.signal_from_counts import _spread, box_spread
+    """box_d: plug-in = the in-bin rule on the spread mean and control; expectation = the NB of
+    the spread pileup on the PILEUP scale (mean s * m, the dependence form's size, scale 1) against
+    the lambda of the spread control (E2 second review), for both dependence forms."""
+    from candi.store.pval_from_counts import log10_upper_tail  # noqa: F401
+    from onion_eval.signal_from_counts import _spread, box_spread, nb_expected_neglog10p
     mu = np.array([1.0, 2.0, 12.0, 30.0, 12.0, 2.0, 1.0, 1.0])
     n = np.array([2.0, 2.0, 4.0, 4.0, 4.0, 2.0, 2.0, 2.0])
     ctl = np.array([1.0, 1.0, 2.0, 1.0, 1.0, 1.0, 3.0, 1.0])
     cov = dict(depth_reads=2.0e7, read_length=36, frag_len=90, control_depth_reads=2.5e7,
                control_read_length=36)
+    s_ = 90.0 / 60.0
+    lam = S.macs2_lambda(lambda_bg=90 * 2.0e7 / 2.7e9,
+                         control_pileup=S.pileup_from_counts(box_spread(ctl, 90), 90, 36),
+                         ratio_treat2control=2.0e7 / 2.5e7)
     for dep in ("comonotone", "independent"):
         m, n_s, _ = _spread(mu, n, None, 90, "box_d", dep)
-        for mode in ("expectation", "plug_in"):
-            got, src = S.signal_track(mu, n, "narrow_histone", ctl, cov, mode=mode, dependence=dep)
-            want, _ = S.signal_track(m, n_s, "narrow_histone", box_spread(ctl, 90), cov, mode=mode,
-                                     pileup="inbin")
-            np.testing.assert_array_equal(got, want)
-            assert src == "observed_control"
+        got, src = S.signal_track(mu, n, "narrow_histone", ctl, cov, mode="plug_in", dependence=dep)
+        want, _ = S.signal_track(m, n_s, "narrow_histone", box_spread(ctl, 90), cov, mode="plug_in",
+                                 pileup="inbin")
+        np.testing.assert_array_equal(got, want)
+        got, src = S.signal_track(mu, n, "narrow_histone", ctl, cov, dependence=dep)
+        want = nb_expected_neglog10p(m * s_, n_s, 1.0, lam).astype(np.float32)
+        np.testing.assert_array_equal(got, want)
+        assert src == "observed_control"
     with pytest.raises(ValueError, match="pileup"):
         S.signal_track(mu, n, "narrow_histone", ctl, cov, pileup="box")
+
+
+def _simulate_pileup(lam, n, d, rl, dep, R, W=1000, seed=0):
+    """Read starts on [0, W) at rate lam * G per bp, G ~ Gamma(n, mean 1): one G per replicate
+    (comonotone) or one per 25 bp bin of starts (independent); strand 1/2. Returns the read-span
+    count of the bin holding x (the bin25 rule: bins start//25 .. (start + rl)//25) and the
+    MACS2 fragment coverage at bp x (+ reads [start, start + d), - reads [end - d, end))."""
+    rng = np.random.default_rng(seed)
+    x, nb = W // 2 + 12, W // 25
+    G = (np.repeat(rng.gamma(n, 1.0 / n, R)[:, None], nb, 1) if dep == "comonotone"
+         else rng.gamma(n, 1.0 / n, (R, nb)))
+    k = rng.poisson(lam * 25 * G)
+    rep = np.repeat(np.repeat(np.arange(R), nb), k.ravel())
+    start = np.repeat(np.tile(np.arange(nb) * 25, R), k.ravel()) + rng.integers(0, 25, k.sum())
+    plus = rng.random(start.size) < 0.5
+    b = x // 25
+    c = np.bincount(rep[(start // 25 <= b) & ((start + rl) // 25 >= b)], minlength=R)
+    e = start + rl - 1
+    on = (plus & (start <= x) & (x <= start + d - 1)) | (~plus & (e - d + 1 <= x) & (x <= e))
+    return c, np.bincount(rep[on], minlength=R)
+
+
+def test_box_d_pileup_variance_by_simulation():
+    """E2 second review: the fragment coverage has mean s * m and variance s m + (s m)^2 / n_s
+    (the NB on the pileup scale); the in-bin scaling s^2 (m + m^2 / n_s) overstates the Poisson
+    part by the factor s. Comonotone G: within 6%. Independent G per 25 bp bin of starts: the box
+    weights only approximate the true start kernel, so within 30%, and much closer than in-bin."""
+    from onion_eval.signal_from_counts import box_weights
+    d, rl = 200, 36
+    s_ = d / (rl + 24)
+    for dep, n, tol in (("comonotone", 1000.0, 0.06), ("comonotone", 2.0, 0.06),
+                        ("independent", 2.0, 0.30)):
+        c, cov = _simulate_pileup(0.02, n, d, rl, dep, R=60_000)
+        m = c.mean()
+        ns = n if dep == "comonotone" else n / (box_weights(d) ** 2).sum()
+        var_fix = s_ * m + (s_ * m) ** 2 / ns
+        var_old = s_ ** 2 * (m + m ** 2 / ns)
+        assert abs(cov.mean() - s_ * m) / cov.mean() < 0.04
+        assert abs(var_fix - cov.var()) / cov.var() < tol, (dep, n, var_fix, cov.var())
+        assert abs(var_old - cov.var()) > 3 * abs(var_fix - cov.var()), (dep, n, var_old)

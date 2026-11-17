@@ -254,8 +254,11 @@ def peak_probability_from_nb(n, mu, row: dict, *, ds, regions, rb: int, predicte
             lam, d, rl, _ = _chip_lambda(mu[sl], control(i, c, s), cov, MACS2_GSIZE_HS, pileup)
         else:
             lam, d, rl, _ = _no_control_lambda(mu[sl], cov, MACS2_GSIZE_HS)
-        k = _first_count_at_threshold(lam, d / (rl + SPAN_EXTRA), threshold)
         m_s, n_s, _ = _spread(mu[sl], n[sl], None, d, pileup, dependence)  # NB of the spread pileup
+        scale = d / (rl + SPAN_EXTRA)
+        if pileup == "box_d":     # E2 second review: the NB on the pileup scale (`_score_pileup`)
+            m_s, scale = m_s * scale, 1.0
+        k = _first_count_at_threshold(lam, scale, threshold)
         out.append(nbinom.sf(k - 1, n_s, n_s / (n_s + m_s)))
     return np.concatenate(out).astype(np.float32)
 
