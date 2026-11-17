@@ -71,7 +71,7 @@ from minicandi.components import (CovariateInjector, CountTransform, DnaTower,  
                                   MaskHandler, NBHead, NotApplicable, component_kwargs,
                                   sinusoidal_positions)
 from minicandi.contract import A, LOG2_DEPTH_COL, MiniCandi, k_input  # noqa: E402
-from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
+from minicandi.covariates import drop_field_indices, model_covariates, scramble_mode  # noqa: E402
 
 RUNG = 6
 NAME = "perceiver"
@@ -177,6 +177,8 @@ class Model(MiniCandi):
         d_bin, d_dna, d_out = int(cfg["d_bin"]), int(cfg["d_dna"]), int(cfg["d_bin_out"])
         kw = component_kwargs(cfg)
         self.cov_dropout = kw["covariate_dropout"]
+        _drop = drop_field_indices(cfg)   # A12: None unless covariate_drop_fields
+        self.cov_drop = {} if _drop is None else {"drop": _drop}   # off: today's call
 
         # inputs
         self.transform = CountTransform(cfg["count_transform"], **kw["transform"])
@@ -228,7 +230,8 @@ class Model(MiniCandi):
         NP = L // P
         dev = x_counts.device
         c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training,
-                                                         self.cov_dropout)
+                                                         self.cov_dropout,
+                                                         **self.cov_drop)
         pos = sinusoidal_positions(NP, d, device=dev)                       # [NP, d]
 
         # (track, patch) count tokens

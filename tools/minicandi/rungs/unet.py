@@ -89,7 +89,7 @@ from minicandi.components import (ConvBlock, CountTransform, CovariateInjector, 
                                   Upsample, component_kwargs, fine_to_sub, res_subs_of,
                                   sinusoidal_positions, sub_output, sub_to_fine)
 from minicandi.contract import A, K_META, LOG2_DEPTH_COL, MiniCandi, k_input  # noqa: E402
-from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
+from minicandi.covariates import drop_field_indices, model_covariates, scramble_mode  # noqa: E402
 from minicandi.dna_fusion import DnaCrossAttn, DnaFiLM, fusion_of, without_fusion  # noqa: E402
 
 RUNG = 4
@@ -189,6 +189,8 @@ class Model(MiniCandi):
         self.k_in = k_input(cfg)
         kw = component_kwargs(cfg)
         self.cov_dropout = kw["covariate_dropout"]
+        _drop = drop_field_indices(cfg)   # A12: None unless covariate_drop_fields
+        self.cov_drop = {} if _drop is None else {"drop": _drop}   # off: today's call
         self.fusion = fusion_of(cfg, NAME)    # item A11; None = late concatenation + DNA skips
         if self.fusion == "early" and self.skip_source == "dna":
             raise NotApplicable("rung 4: dna_fusion = early has no DNA tower, so no DNA skip")
@@ -278,7 +280,8 @@ class Model(MiniCandi):
         x_counts, x_avail = batch["x_counts"], batch["x_avail"].bool()
         x_bin_mask = batch["x_bin_mask"].bool()
         c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training,
-                                                         self.cov_dropout, self.hide_depth)
+                                                         self.cov_dropout, self.hide_depth,
+                                                         **self.cov_drop)
         c_in, c_out = c_in.float(), c_out.float()
         y_avail = batch["y_avail"].bool()
         B, L, _ = x_counts.shape

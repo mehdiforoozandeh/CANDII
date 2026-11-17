@@ -69,7 +69,7 @@ from minicandi import components as M  # noqa: E402
 from minicandi.components import NotApplicable  # noqa: E402
 from minicandi.contract import (A, K_META, LOG2_DEPTH_COL, MiniCandi, k_input,  # noqa: E402
                                 without_extras)
-from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
+from minicandi.covariates import drop_field_indices, model_covariates, scramble_mode  # noqa: E402
 from minicandi.dna_fusion import (DnaCrossAttn, DnaFiLM, DnaPatchDown, fusion_of,  # noqa: E402
                                   without_fusion)
 
@@ -145,6 +145,8 @@ class Model(MiniCandi):
         self.scramble = scramble_mode(cfg)
         kw = M.component_kwargs(cfg)
         self.cov_dropout = kw["covariate_dropout"]
+        _drop = drop_field_indices(cfg)   # A12: None unless covariate_drop_fields
+        self.cov_drop = {} if _drop is None else {"drop": _drop}   # off: today's call
 
         self.transform = M.CountTransform(cfg["count_transform"], **kw["transform"])
         self.lift = nn.Linear(1, D_TRACK)
@@ -195,7 +197,8 @@ class Model(MiniCandi):
         self.begin_extras(batch)
         x_counts, x_avail, x_bin_mask = batch["x_counts"], batch["x_avail"], batch["x_bin_mask"]
         c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training,
-                                                         self.cov_dropout)
+                                                         self.cov_dropout,
+                                                         **self.cov_drop)
         B, L, Ac = x_counts.shape
         vis = M.MaskHandler.visible(x_avail, x_bin_mask)
         x = self.transform(x_counts, c_in_t[..., LOG2_DEPTH_COL], vis)

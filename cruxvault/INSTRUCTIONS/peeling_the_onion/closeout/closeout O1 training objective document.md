@@ -64,3 +64,11 @@ Acceptance checks:
 ## 8. Done when
 
 `onion training objective.md` holds the 8 sections, each choice is tied to a cited result or marked untested, and its keys match the M1 final config.
+
+## 9. Specification as worked (2026-11-17, item agent)
+
+- Deliverable: `cruxvault/INSTRUCTIONS/peeling_the_onion/onion training objective.md`. It holds the 8 sections of section 5 (as sections 2 to 8, with OPEN choices in section 9 and untested defaults in section 10). No compute; no code change.
+- Source of every value: the code at 01248f4 (file and line cited), the base configs `tools/minicandi/configs/rung{2,3,4}/base_heldout.json`, and the Fir base `run.json` files. Evidence: `results/ablations_closeout/ABLATIONS_READ.md` and `arm_summary_p16_sv_2026-11-17.tsv` (foreman worktree), 16 regions, screening tier.
+- Correction to section 3: the sampler defaults are at `dataset.py`:238-246, not 233-240.
+- Key check: all 34 config keys named in the document are read by the code (`train.code_keys`), and the 14 that the base configs hold have the stated values.
+- Not yet met: "keys match the M1 final config" (M1 has not started); the 256-region rescoring and the mix-and-match round are OPEN in the document.
