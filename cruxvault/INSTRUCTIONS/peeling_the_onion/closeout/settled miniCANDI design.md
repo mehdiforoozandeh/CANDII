@@ -254,3 +254,12 @@ Every value of the design table that a config key sets agrees with these files: 
 8. Whether more compute changes the architecture order (matched-compute runs queued on Fir).
 9. Whether the masking defaults (mask fraction, bin-mask fraction, kind weights) are good: no run varied them.
 10. How the design does on test data: D14 condition 2 is met on validation for imputation and calibration by every model (my arithmetic from `FINAL_ROUND_EQUAL.md`: margins over the position-average baseline 0.263 to 0.313 on imputation against 2x ranges of 0.024 to 0.056; 0.442 to 0.484 on calibration against 0.216 to 0.356), and on the 16-region correction term by both conv models (0.335 and 0.290 against 0.024 and 0.062) but not by the U-Net (0.507 - 0.383 = 0.124 against 2 x 0.071 = 0.142). I did not run `select_rule.py check-done`, and no 256-region baseline comparison is in this document. The test-split result comes from item D4.
+
+## Decisions that the PI makes in the next session
+
+PI ruling of 2026-11-17: "scaling is next session's task. the task for this session is to provide the necessary information and prototype minicandi for a more informed and confident scaling in the next session". On the data version: "you recommend + provide info. we'll work on it next session". So this document recommends and informs; it decides neither point.
+
+| Decision | Recommendation (the agent's intent) | Information for it | What would change the recommendation |
+|---|---|---|---|
+| Architecture that goes to scaling | Carry the conv autoencoder and the U-Net into the first scaling step, and choose after the mix-and-match round. | Row 1 of the design table: the three models tie on the composite on 256 regions; the U-Net is better on imputation, both conv models are better on correction. Rows 3, 22, 24 and 25 give the U-Net-specific trade-offs. | The 256-region rescoring (rules 2.1 to 2.6) or the mix-and-match round moves one model beyond twice the seed range on the composite with no goal lower. |
+| Data version of the final model | The candidate that makes DNase-seq correction-scorable, built as a version in the next session. | Row 30; `closeout D3 dataset update with DNase-seq.md`; ready queue entry 15 (4 row rebuilds, version build, baselines; the 9 base runs train again on it). | The 4 row rebuilds fail again, or the base runs on the candidate differ from the current tables beyond the seed range. |
