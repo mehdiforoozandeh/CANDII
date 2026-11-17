@@ -171,6 +171,13 @@ metric phase refuses a store of another mode (or a normal store). Outputs: score
 `foreign_covariates` (mode, seed, definition, per measurement the donor and the columns it changed)
 and `scorer_settings.foreign_covariates`, read by select_rule.scorer_keys, so a foreign score never
 compares with a normal one. `--out` must name a directory that holds 'foreign'.
+Native input depth at scoring (close-out mix-and-match; off by default): ONION_SCORE_INPUT_DEPTH=native
+scores a run trained with `input_depth = fixed` with its inputs at their native depth (no thinning;
+C states the true depth), the deployment case in which no depth cap can be imposed on the input.
+Refused for a run that is not `input_depth = fixed` and for a baseline. The predict and the metrics
+job must both have it (STORE.json records it; the metric phase refuses a store made without it, and
+the reverse). Outputs: scores.json `input_depth_at_scoring` and `scorer_settings.input_depth_at_scoring`
+(both only with the switch). `--out` must name a directory that holds 'native_depth'.
 
 Add-on scoring (OXe, Amendment 4, PI ruling 33). `--addon` scores an add-on eval set
 (`evalset.py addon`, key `addon_of`) and is required for one; it is refused on any other eval set
@@ -326,6 +333,12 @@ FOREIGN_DEFINITION = (
     "normal scores (select_rule.scorer_keys key `foreign_covariates`).")
 FOREIGN_TRUTH_NOTE = ("scored against the true target's counts: the truth, the reference predictors and "
                       "the noise floor never read foreign covariates; only the model's forward does")
+#: mix-and-match: native input depth at scoring of a run trained with input_depth = fixed
+INPUT_DEPTH_ENV = "ONION_SCORE_INPUT_DEPTH"
+INPUT_DEPTH_KEY = "input_depth_at_scoring"
+INPUT_DEPTH_MODES = ("native",)
+#: a native-depth scoring writes only into a directory whose name holds this text
+INPUT_DEPTH_DIR_TAG = "native_depth"
 #: E5: headline 7 robust aggregates (beside the existing mean of per-target ratios, unchanged)
 H7_ROBUST_KEY = "predicted_over_replicate_variance_robust"
 H7_ROBUST_DESCRIPTION = (
@@ -790,6 +803,17 @@ def foreign_from_env():
         raise ValueError(f"{FOREIGN_SEED_ENV}={raw!r}: want an integer") from None
 
 
+def input_depth_kwargs() -> dict:
+    """Mix-and-match: {"input_depth_at_scoring": "native"} from ONION_SCORE_INPUT_DEPTH; {} when
+    unset or empty (score.py and predict_store.py run)."""
+    m = os.environ.get(INPUT_DEPTH_ENV, "").strip()
+    if not m:
+        return {}
+    if m not in INPUT_DEPTH_MODES:
+        raise ValueError(f"{INPUT_DEPTH_ENV}={m!r}: want one of {INPUT_DEPTH_MODES}")
+    return {INPUT_DEPTH_KEY: m}
+
+
 def foreign_spec(mode, seed=0):
     """E5: {"mode", "sides", "depth", "seed"} of a foreign-covariate mode, or None for None."""
     if mode is None:
@@ -1000,7 +1024,7 @@ class Scorer:
                  signal_override=None, addon=False, dump_signal=None, dump_targets=None,
                  dump_method=None, workers=1, stage_dir=None, pred_store=None, store_run=None,
                  refs_from=None, fraglen_table=None, same_view=False, foreign_covariates=None,
-                 foreign_seed=0):
+                 foreign_seed=0, input_depth_at_scoring=None):
         from minicandi import contract as C
         from minicandi.dataset import OnionDataset, tables_sha256
         from onion_eval.evalset import tables_dir_of
@@ -1044,6 +1068,18 @@ class Scorer:
             raise ValueError("foreign covariates apply to a model's forward: give main='model' and "
                              "a model or a prediction store")
         self._foreign_donor, self._foreign_rows = None, {}
+        #: mix-and-match: native input depth at scoring (None = off, the default)
+        if input_depth_at_scoring is not None:
+            if input_depth_at_scoring not in INPUT_DEPTH_MODES:
+                raise ValueError(f"input_depth_at_scoring {input_depth_at_scoring!r} not in "
+                                 f"{INPUT_DEPTH_MODES}")
+            if main != "model" or not (model is not None or pred_store is not None):
+                raise ValueError("input_depth_at_scoring applies to a model's inputs: give "
+                                 "main='model' and a model or a prediction store")
+            if (config or {}).get("input_depth") != "fixed":
+                raise ValueError("input_depth_at_scoring = native needs a run trained with "
+                                 "input_depth = fixed (any other run already reads native inputs)")
+        self.input_depth_at_scoring = input_depth_at_scoring
         self.C, self.log = C, log
         self.evalset_path = Path(evalset).resolve()
         self.ev = json.loads(self.evalset_path.read_text(encoding="utf-8"))
@@ -1099,13 +1135,16 @@ class Scorer:
         cfg.update({"context_bins": L, "evalset": str(self.evalset_path), "region_bins": self.rb,
                     "allow_blind": self.allow_blind})
         cfg.setdefault("batch_size", 8)
+        if self.input_depth_at_scoring is not None:      # mix-and-match: no input thinning
+            cfg["input_depth"] = self.input_depth_at_scoring
         self.cfg, self.L, self.bs = cfg, L, int(cfg["batch_size"])
         #: windows per forward pass while scoring targets (F3); the guardrail keeps batch_size
         self.tile_bs = int(infer_batch or self.bs)
         self._OnionDataset = OnionDataset
         self.ds = OnionDataset(self.tables, split, cfg, seed=0)
         if (self.foreign is not None and self.foreign["depth"] == "swap_depth"
-                and "in" in self.foreign["sides"] and self.ds.config.get("input_depth") == "fixed"):
+                and "in" in self.foreign["sides"] and (config or {}).get("input_depth") == "fixed"):
+            # the run's own config: a native-depth scoring (mix-and-match) changes self.ds.config
             raise ValueError("foreign covariates: swap_depth on side C is not defined for a run with "
                              "input_depth = fixed (its inputs are thinned by the true depth)")
         self.predict_control = bool(self.ds.config.get("predict_control")) and has_model
@@ -2564,6 +2603,11 @@ class Scorer:
         if st_fc != want_fc:
             raise ScoreRefused(f"{self.pred_store_dir}: the prediction store holds forwards with "
                                f"foreign covariates {st_fc}, this scoring wants {want_fc}")
+        # mix-and-match: a store of native-depth forwards only for a native-depth scoring
+        st_id, want_id = info.get(INPUT_DEPTH_KEY), self.input_depth_at_scoring
+        if st_id != want_id:
+            raise ScoreRefused(f"{self.pred_store_dir}: the prediction store holds forwards with "
+                               f"input depth at scoring {st_id}, this scoring wants {want_id}")
         self.store, self.store_info = st, info
         self._store_regions = {r["key"]: {ri: k for k, ri in enumerate(r["region_indices"])}
                                for r in reqs}
@@ -2830,6 +2874,9 @@ class Scorer:
         baseline (no model) writes neither."""
         fc = {} if self.foreign is None else {FOREIGN_KEY: self.foreign["mode"],
                                               "foreign_seed": self.foreign["seed"]}
+        if self.input_depth_at_scoring is not None:   # mix-and-match: keys only with the switch
+            fc[INPUT_DEPTH_KEY] = self.input_depth_at_scoring
+            scores[INPUT_DEPTH_KEY] = self.input_depth_at_scoring
         if self.store is None:
             if isinstance(self.model_pred, ModelPredictor):
                 scores["scorer_settings"] = {"device": str(self.device), "infer_batch": self.tile_bs,
@@ -3460,6 +3507,7 @@ def score(evalset, out, *, run=None, baseline=None, model=None, config=None,
     if (run is not None or model is not None) and phase is None:
         tf32_off()
     _guard_foreign_out(Path(out), kw)
+    _guard_input_depth_out(Path(out), kw)
     if phase not in (None, "metrics"):
         raise ValueError(f"phase {phase!r}: None (legacy) or 'metrics'")
     if (phase == "metrics") != (pred_store is not None):
@@ -3524,6 +3572,29 @@ def _guard_foreign_out(out: Path, kw) -> None:
     if prev.is_file() and (old.get("mode"), old.get("seed")) != (mode, seed):
         raise ScoreRefused(f"{prev} holds a score with foreign covariates {old.get('mode')!r} seed "
                            f"{old.get('seed')!r}, not {mode!r} seed {seed}")
+
+
+def _guard_input_depth_out(out: Path, kw) -> None:
+    """Mix-and-match: a native-depth score goes only to a directory whose name holds
+    INPUT_DEPTH_DIR_TAG, and never over a scores.json made without the switch (or the reverse)."""
+    mode = kw.get(INPUT_DEPTH_KEY)
+    prev = out / "scores.json"
+    old = (json.loads(prev.read_text(encoding="utf-8")).get(INPUT_DEPTH_KEY)
+           if prev.is_file() else None)
+    if mode is None:
+        if old:
+            raise ScoreRefused(f"{prev} holds a score with input depth at scoring {old!r}; a "
+                               f"normal score never goes over it")
+        if INPUT_DEPTH_DIR_TAG in out.name:
+            raise ScoreRefused(f"--out {out}: a directory whose name holds '{INPUT_DEPTH_DIR_TAG}' "
+                               f"takes only native-depth scores ({INPUT_DEPTH_ENV}=native)")
+        return
+    if INPUT_DEPTH_DIR_TAG not in out.name:
+        raise ScoreRefused(f"--out {out}: a native-depth score goes to a directory whose name holds "
+                           f"'{INPUT_DEPTH_DIR_TAG}' (e.g. <seed dir>/p256_sv_{INPUT_DEPTH_DIR_TAG}), "
+                           f"never beside normal scores")
+    if prev.is_file() and old != mode:
+        raise ScoreRefused(f"{prev} holds a score with input depth at scoring {old!r}, not {mode!r}")
 
 
 def _score_with(sc, out: Path, *, run, pairs_only) -> dict:
@@ -3790,7 +3861,7 @@ def main(argv=None) -> int:
                   **phase_kw, **dump_kwargs(a),
                   **({"fraglen_table": a.fraglen_table} if a.fraglen_table else {}),
                   **({"same_view": True} if (a.score_same_view or same_view_from_env()) else {}),
-                  **foreign_kwargs(a))
+                  **foreign_kwargs(a), **input_depth_kwargs())
     except (PermissionError, ScoreRefused) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2

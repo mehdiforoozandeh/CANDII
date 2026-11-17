@@ -2,7 +2,7 @@
 
     python tools/onion_eval/select_rule.py compare --incumbent <arm dir> --challenger <arm dir>
         [--simpler incumbent|challenger|none] [--name <comparison>] [--settlements <tsv>]
-        [--sub SUB] [--allow-mix scorer_settings.device|scorer_settings.infer_batch|fraglen_table.sha256 ...]
+        [--sub SUB] [--allow-mix scorer_settings.device|scorer_settings.infer_batch|fraglen_table.sha256|input_depth_at_scoring ...]
     python tools/onion_eval/select_rule.py table --runs <dir> [--prefix p] [--sub SUB]
         [--composite-version 2|3]
         (columns: arm, seed, state, composite (from the clipped terms while CLIP_GOAL_TERMS),
@@ -36,7 +36,8 @@ Scorer keys (Amendment 10, interface M): every seed of the compared ARMS (both a
 final design of `check-done`) must also share `scorer_version` (absent = 1), `scorer_settings.device`,
 `scorer_settings.infer_batch` and each `refs.sha256_*` (absent = None); a mix is REFUSED. Baselines
 are references, not arms: a scorer_version 1 baseline is comparable with version 2 runs.
-`--allow-mix <key>` exempts the device, the batch or `fraglen_table.sha256`. `--sub SUB` (compare, table) reads
+`--allow-mix <key>` exempts the device, the batch, `fraglen_table.sha256` or `input_depth_at_scoring` (A13:
+a native-depth score of a fixed-input-depth run against a normal one, the deployment comparison). `--sub SUB` (compare, table) reads
 `<arm>/seed<k>/<SUB>/scores.json` (`SCORE_SUBDIR`); table then reads SCORED and SKIPPED there.
 
 D13 (`compare`). Seed spread of a quantity = max - min over seeds, the larger of the two arms
@@ -431,15 +432,19 @@ def check_comparable(seeds: list[dict], split: str = "val") -> None:
 # check_comparable only, so a scorer_version 1 baseline is a valid reference for version 2 runs.
 SCORER_KEYS = ("evalset_sha256", "tables_sha256", "scorer_version", "scorer_settings.device",
                "scorer_settings.infer_batch", "refs.sha256_*", "fraglen_table.sha256",
-               "foreign_covariates")
+               "foreign_covariates", "input_depth_at_scoring")
 #: FL: the fragment-length side table of `score.py --fraglen-table`; absent (a score made without
 #: the option, or before the key existed) is None
 FRAGLEN_KEY = "fraglen_table.sha256"
 #: E5: the comparability key of a score made with foreign covariates at scoring (`mode:seed<n>`)
 FOREIGN_KEY = "foreign_covariates"
+#: A13: the key of a native-depth score of a fixed-input-depth run (score.py INPUT_DEPTH_KEY); it is
+#: written only when present and is mixable, so the deployment comparison (native-depth arm against
+#: a normal reference) needs an explicit --allow-mix input_depth_at_scoring
+INPUT_DEPTH_KEY = "input_depth_at_scoring"
 #: the keys `--allow-mix` may exempt (a cross-rung comparison of a GPU and a CPU forward; FL: a
 #: count-space comparison across scores with and without the fragment-length table)
-MIXABLE = ("scorer_settings.device", "scorer_settings.infer_batch", FRAGLEN_KEY)
+MIXABLE = ("scorer_settings.device", "scorer_settings.infer_batch", FRAGLEN_KEY, INPUT_DEPTH_KEY)
 FRAGLEN_MIX_NOTE = ("signal-space values differ between scores with and without the fragment-length "
                     "table (estimated frag_len for ChIP-seq tracks whose frag_len is empty); "
                     "count-space values do not depend on it")
@@ -462,6 +467,9 @@ def scorer_keys(s: dict) -> dict:
     fc = s.get("foreign_covariates")
     if fc:
         out[FOREIGN_KEY] = f"{fc.get('mode')}:seed{fc.get('seed')}"
+    idm = s.get(INPUT_DEPTH_KEY)            # A13: only with the switch
+    if idm:
+        out[INPUT_DEPTH_KEY] = idm
     t = s.get("__oracle__")             # arm_report: read with an oracle-floor reference (OF)
     if t:
         out.update(composite_version=t["composite_version"], gap_closed_floor=t["gap_closed_floor"])

@@ -1,0 +1,17 @@
+arm	run_name	switches	n_switches	keys_changed	native_depth_scoring	design
+concat	mix_convattn_concat	concat	1	covariate_injection	no	half_I=+ABCDE
+fixdepth	mix_convattn_fixdepth	fixed_depth	1	input_depth	yes	half_I=+ABCDE
+imp4	mix_convattn_imp4	impute_x4	1	loss_weights	no	half_I=+ABCDE
+crps	mix_convattn_crps	nb_crps	1	loss	no	half_I=+ABCDE
+svonly	mix_convattn_svonly	same_view_only	1	same_view_prob	no	half_I=+ABCDE
+concat-fixdepth-imp4	mix_convattn_concat-fixdepth-imp4	concat,fixed_depth,impute_x4	3	covariate_injection,input_depth,loss_weights	yes	half_I=+ABCDE
+concat-fixdepth-crps	mix_convattn_concat-fixdepth-crps	concat,fixed_depth,nb_crps	3	covariate_injection,input_depth,loss	yes	half_I=+ABCDE
+concat-fixdepth-svonly	mix_convattn_concat-fixdepth-svonly	concat,fixed_depth,same_view_only	3	covariate_injection,input_depth,same_view_prob	yes	half_I=+ABCDE
+concat-imp4-crps	mix_convattn_concat-imp4-crps	concat,impute_x4,nb_crps	3	covariate_injection,loss,loss_weights	no	half_I=+ABCDE
+concat-imp4-svonly	mix_convattn_concat-imp4-svonly	concat,impute_x4,same_view_only	3	covariate_injection,loss_weights,same_view_prob	no	half_I=+ABCDE
+concat-crps-svonly	mix_convattn_concat-crps-svonly	concat,nb_crps,same_view_only	3	covariate_injection,loss,same_view_prob	no	half_I=+ABCDE
+fixdepth-imp4-crps	mix_convattn_fixdepth-imp4-crps	fixed_depth,impute_x4,nb_crps	3	input_depth,loss,loss_weights	yes	half_I=+ABCDE
+fixdepth-imp4-svonly	mix_convattn_fixdepth-imp4-svonly	fixed_depth,impute_x4,same_view_only	3	input_depth,loss_weights,same_view_prob	yes	half_I=+ABCDE
+fixdepth-crps-svonly	mix_convattn_fixdepth-crps-svonly	fixed_depth,nb_crps,same_view_only	3	input_depth,loss,same_view_prob	yes	half_I=+ABCDE
+imp4-crps-svonly	mix_convattn_imp4-crps-svonly	impute_x4,nb_crps,same_view_only	3	loss,loss_weights,same_view_prob	no	half_I=+ABCDE
+concat-fixdepth-imp4-crps-svonly	mix_convattn_concat-fixdepth-imp4-crps-svonly	concat,fixed_depth,impute_x4,nb_crps,same_view_only	5	covariate_injection,input_depth,loss,loss_weights,same_view_prob	yes	half_I=+ABCDE
