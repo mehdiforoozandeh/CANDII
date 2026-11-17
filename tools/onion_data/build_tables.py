@@ -57,6 +57,22 @@ evaluation_only.tsv build_info.json. With `--superset-of`, every line of the old
 and each covariates vocabulary must extend the older one (ids stay); else exit 1 and nothing is
 written. `--dry-run` prints the same counts and writes nothing.
 
+WORK SNAPSHOT (close-out D3). `build` reads three kinds of small file under `--work`: the QC
+files (`qc.json`, `rep<i>.xcor.qc`), the `READSET.json` beside each half tagAlign (the split
+signatures of the designed pairs) and the `NOT_APPLICABLE` markers. Without them the QC cells
+come out empty, designed pairs move to `pairs_shared_reads.tsv`, and a `--superset-of` build is
+refused. When the work folders leave the disk, take a snapshot of these files first:
+
+    python build_tables.py snapshot-work --work <dir> --out <snapshot.json.gz>
+    python build_tables.py check-work-snapshot --snapshot <file> --work <dir> \\
+        --measurements <dir> --build-list <tsv>
+
+`check-work-snapshot` compares, for every measurement directory and build-list row, what the
+build reads from the disk with what it reads from the snapshot alone (exit 1 on a difference).
+`build --work-snapshot <file>` reads a file from the snapshot when it is not on the disk; a file on
+the disk always wins. Without the option nothing changes. The name-token check of
+`align_views.experiment_checks` reads the half tagAligns themselves; without them it is skipped.
+
 ADD-ON (Amendment 4, chunk OXt). `build` is unchanged: an experiment with no ledger role, such as
 a second experiment of PI ruling 33, still goes to `missing.tsv`.
 
@@ -83,6 +99,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import gzip
 import hashlib
 import io
 import json
@@ -117,6 +134,12 @@ MEASUREMENTS, PAIRS, SHARED = "measurements.tsv", "pairs.tsv", "pairs_shared_rea
 WITHHELD, COVARIATES, MISSING = "withheld.tsv", "covariates.json", "missing.tsv"
 EVAL_ONLY, BUILD_INFO = "evaluation_only.tsv", "build_info.json"
 LAYER_PREF = {"uniform": 0, "native": 1}
+#: the small files of a work folder that `build` reads (WORK SNAPSHOT in the module doc)
+WORK_SNAPSHOT_NAMES = ("qc.json", "READSET.json", BL.NOT_APPLICABLE)
+WORK_SNAPSHOT_XCOR = re.compile(r"rep\d+\.xcor\.qc")
+#: the loaded snapshot: work roots it answers for, {path relative to a root: text}, and whether a
+#: file on the disk is read first (False only inside `check-work-snapshot`)
+_WORK_SNAP = {"roots": (), "files": {}, "disk": True}
 
 
 # --------------------------------------------------------------------------------------------
@@ -197,6 +220,62 @@ def ledger_index(ledger_rows: list) -> dict:
 # read-level split of the halves
 
 
+# --------------------------------------------------------------------------------------------
+# work-folder snapshot (close-out D3; WORK SNAPSHOT in the module doc)
+
+
+def _is_work_snapshot_file(name: str) -> bool:
+    return name in WORK_SNAPSHOT_NAMES or bool(WORK_SNAPSHOT_XCOR.fullmatch(name))
+
+
+def snapshot_work(work) -> dict:
+    """{"schema", "work", "work_resolved", "created_utc", "files": {relative path: text}} of
+    every small file under `work` that `build` reads."""
+    given = Path(work)
+    root = given.resolve()
+    files = {}
+    for dp, dn, fn in os.walk(root):
+        dn.sort()
+        for f in sorted(fn):
+            if _is_work_snapshot_file(f):
+                p = Path(dp) / f
+                files[str(p.relative_to(root))] = p.read_text()
+    return {"schema": 1, "work": str(given), "work_resolved": str(root),
+            "created_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "files": files}
+
+
+def load_work_snapshot(path, work=None) -> dict:
+    """Read a snapshot and make `work_text` answer from it, for paths under the snapshot's work
+    root (as given and resolved) and under `work`."""
+    snap = json.loads(gzip.decompress(Path(path).read_bytes()))
+    roots = [snap["work"], snap["work_resolved"]] + ([str(work), str(Path(work).resolve())]
+                                                     if work else [])
+    _WORK_SNAP.update(roots=tuple(dict.fromkeys(Path(r) for r in roots)),
+                      files=snap["files"], disk=True)
+    return snap
+
+
+def clear_work_snapshot() -> None:
+    _WORK_SNAP.update(roots=(), files={}, disk=True)
+
+
+def work_text(path):
+    """The text of a work-folder file: from the disk if it is there, else from the loaded
+    snapshot, else None."""
+    p = Path(path)
+    if _WORK_SNAP["disk"] and p.is_file():
+        return p.read_text()
+    files = _WORK_SNAP["files"]
+    for r in _WORK_SNAP["roots"] if files else ():
+        try:
+            rel = str(p.relative_to(r))
+        except ValueError:
+            continue
+        if rel in files:
+            return files[rel]
+    return None
+
+
 class SplitSignature:
     """Which read-level split made a measurement's halves, from the `READSET.json` beside each
     half tagAlign (`align_views.build_readsets`). A thinned read set inherits its parent's split.
@@ -211,7 +290,8 @@ class SplitSignature:
         if d not in self._rs:
             f = d / "READSET.json"
             try:
-                self._rs[d] = json.loads(f.read_text()) if f.is_file() else None
+                t = work_text(f)
+                self._rs[d] = json.loads(t) if t is not None else None
             except (OSError, ValueError):
                 self._rs[d] = None
         return self._rs[d]
@@ -280,10 +360,10 @@ def qc_values(work, experiment: str, unit: str, arm: str, prov: dict) -> dict:
         return {}
     run = Path(work) / experiment / arm
     out = {}
-    qj = run / "qc.json"
-    if qj.is_file():
+    qt = work_text(run / "qc.json")
+    if qt is not None:
         try:
-            q = json.loads(qj.read_text())
+            q = json.loads(qt)
         except ValueError:
             q = {}
         lib = ((q.get("lib_complexity") or {}).get("lib_complexity") or {}).get(f"rep{rep}") or {}
@@ -292,9 +372,9 @@ def qc_values(work, experiment: str, unit: str, arm: str, prov: dict) -> dict:
             for k, col in QC_FROM_JSON.items():
                 if src.get(k) not in (None, ""):
                     out[col] = _fmt(src[k])
-    xf = run / f"rep{rep}.xcor.qc"
-    if xf.is_file() and not {"nsc", "rsc", "frag_len"} <= set(out):
-        f = xf.read_text().split("\n")[0].split("\t")
+    xt = None if {"nsc", "rsc", "frag_len"} <= set(out) else work_text(run / f"rep{rep}.xcor.qc")
+    if xt is not None:
+        f = xt.split("\n")[0].split("\t")
         if len(f) >= 10:
             out.setdefault("frag_len", _fmt(f[2].split(",")[0]))
             out.setdefault("nsc", _fmt(f[8]))
@@ -493,6 +573,9 @@ def collect(a) -> dict:
     expected = {}                                   # mid -> (build-list row, products, state)
     for r in bl:
         state, _ = BL.row_state(r, M, W)
+        if state == "todo" and _WORK_SNAP["files"] and \
+                work_text(BL.row_rundir(W, r) / BL.NOT_APPLICABLE) is not None:
+            state = "not_applicable"
         for mid, prods in BL.parse_tokens(r.get("expected_measurements", "")):
             expected.setdefault(mid, (r, prods, state))
 
@@ -682,7 +765,14 @@ def cmd_build(a) -> int:
         if why:
             print(f"refused: {why}")
             return 2
-    res = collect(a)
+    if getattr(a, "work_snapshot", ""):
+        snap = load_work_snapshot(a.work_snapshot, a.work)
+        print(f"work snapshot {a.work_snapshot}: {len(snap['files'])} files of {snap['work']} "
+              f"({snap['created_utc']}); a file on the disk wins")
+    try:
+        res = collect(a)
+    finally:
+        clear_work_snapshot()
     print_summary(res, a)
     if res["superset_bad"]:
         print("refused: the new tables are not a superset of the older tables; nothing written")
@@ -709,6 +799,9 @@ def cmd_build(a) -> int:
             "files_sha256": {n: sha256_bytes((out / n).read_bytes())
                              for n in sorted(res["texts"]) + [WITHHELD]},
             "slurm_job_id": os.environ.get("SLURM_JOB_ID", "")}
+    if getattr(a, "work_snapshot", ""):
+        info["work_snapshot"] = str(Path(a.work_snapshot).resolve())
+        info["work_snapshot_sha256"] = sha256_bytes(Path(a.work_snapshot).read_bytes())
     write_text(out / BUILD_INFO, json.dumps(info, indent=1) + "\n")
     print(f"wrote {out}: {len(res['rows'])} measurements, {len(res['pairs'])} pairs, "
           f"{len(res['shared'])} shared-read pairs, {len(res['missing'])} missing")
@@ -942,6 +1035,64 @@ def cmd_addon(a) -> int:
     return 0
 
 
+def cmd_snapshot_work(a) -> int:
+    out = Path(a.out)
+    if out.exists():
+        print(f"refused: {out} exists")
+        return 2
+    snap = snapshot_work(a.work)
+    kinds = Counter(Path(k).name if not WORK_SNAPSHOT_XCOR.fullmatch(Path(k).name)
+                    else "rep<i>.xcor.qc" for k in snap["files"])
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_name(out.name + ".part")
+    tmp.write_bytes(gzip.compress(json.dumps(snap, sort_keys=True).encode(), mtime=0))
+    os.replace(tmp, out)
+    print(f"snapshot of {snap['work']} ({snap['work_resolved']}): {len(snap['files'])} files ("
+          + ", ".join(f"{k} {v}" for k, v in sorted(kinds.items())) + f") -> {out} "
+          f"sha256 {sha256_bytes(out.read_bytes())}")
+    return 0
+
+
+def cmd_check_work_snapshot(a) -> int:
+    """What `build` reads from the disk == what it reads from the snapshot alone."""
+    M, W = Path(a.measurements), Path(a.work)
+    dirs = sorted(p for p in M.iterdir() if p.is_dir() and (p / "provenance.json").is_file()
+                  and (p / "meta.json").is_file())
+    rows = BL.read_tsv(a.build_list)
+
+    def read_all():
+        sig, qc, na = SplitSignature(), {}, {}
+        for d in dirs:
+            meta = json.loads((d / "meta.json").read_text())
+            prov = json.loads((d / "provenance.json").read_text())
+            qc[d.name] = qc_values(W, meta.get("experiment", ""), meta.get("unit", ""),
+                                   arm_of(d.name), prov)
+            sig.of_dir(d)
+        for r in rows:
+            na[r["row"]] = work_text(BL.row_rundir(W, r) / BL.NOT_APPLICABLE) is not None
+        return qc, {d.name: sig.of_dir(d) for d in dirs}, na
+
+    clear_work_snapshot()
+    disk = read_all()
+    load_work_snapshot(a.snapshot, W)
+    _WORK_SNAP["disk"] = False
+    try:
+        snap = read_all()
+    finally:
+        clear_work_snapshot()
+    bad = 0
+    for what, x, y in zip(("QC cells", "split signatures", "NOT_APPLICABLE markers"), disk, snap):
+        diff = sorted(k for k in x if x[k] != y.get(k))
+        n_val = sum(1 for k in x if (x[k] if what != "split signatures" else
+                                     SplitSignature.known(x[k])))
+        print(f"{what}: {len(x)} checked, {n_val} with a value on the disk, "
+              f"{len(diff)} differ" + (f"  e.g. {', '.join(diff[:5])}" if diff else ""))
+        bad += len(diff)
+    print("PASS: the snapshot gives what the disk gives" if not bad else
+          f"FAIL: {bad} differences")
+    return 0 if not bad else 1
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -959,7 +1110,19 @@ def main(argv=None) -> int:
     b.add_argument("--workers", type=int, default=int(os.environ.get("SLURM_CPUS_PER_TASK", "1")))
     b.add_argument("--recount-chrom", default="none",
                    help="chromosome recounted from the half tagAligns in verify (none = off)")
+    b.add_argument("--work-snapshot", default="",
+                   help="snapshot-work file read when a work-folder file is not on the disk")
     b.set_defaults(func=cmd_build)
+    s = sub.add_parser("snapshot-work", help="snapshot the small work-folder files build reads")
+    s.add_argument("--work", required=True)
+    s.add_argument("--out", required=True, help="a new .json.gz file")
+    s.set_defaults(func=cmd_snapshot_work)
+    c = sub.add_parser("check-work-snapshot", help="snapshot alone == the disk, for build's reads")
+    c.add_argument("--snapshot", required=True)
+    c.add_argument("--work", required=True)
+    c.add_argument("--measurements", required=True)
+    c.add_argument("--build-list", required=True)
+    c.set_defaults(func=cmd_check_work_snapshot)
     x = sub.add_parser("addon", help="add-on tables: a frozen base plus the second experiments")
     x.add_argument("--base", required=True, help="the frozen tables directory")
     x.add_argument("--other-build-list", required=True, help="$BX")
