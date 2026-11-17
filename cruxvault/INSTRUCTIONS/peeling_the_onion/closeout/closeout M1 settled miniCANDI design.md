@@ -57,6 +57,12 @@ Acceptance checks:
 - Cost: about 1 to 2 agent-days for the document; combinations, if run, 262 CPU-h per combination on 3 architectures, or 97 CPU-h on one (`ablation_specs/1_control_input.md` section 7).
 - Risk: settled comparisons must share one dataset version and one evaluation-set version (notepad L465). If D1 or D3 changes the tables, the design's key comparisons are rerun on the new version before the document calls them settled.
 
+## 7b. Specification as worked (2026-11-17, foreman brief of the final 24 hours)
+
+- The deliverable is `closeout/settled miniCANDI design.md` (not the path of section 5). Its sections follow the foreman brief: (a) one design table with value, evidence, confidence and status; (b) for each provisional row the settling run, its cost and its pre-written rule, with a mechanical rule for the 256-region rescoring; (c) tested and untested code paths; (d) configs, scaling changes and risks; (e) what the design does not know.
+- No new training runs before the deadline (`final 24 hours plan.md`). Correction-term effects stay screening tier (the 16-versus-256 check failed). Imputation and calibration in `p16_sv` are 256-region terms (`results/region_sampling_checks/REGION_CHECKS.md`).
+- `select_rule.py check-done` was not run (no scores on the laptop); D14 condition 2 is computed by hand from `FINAL_ROUND_EQUAL.md` in section 5 of the deliverable.
+
 ## 8. Done when
 
 `miniCANDI settled design.md` holds the 8 sections with every knob tied to evidence, its config matches, and D14 condition 1 and condition 2 on validation are stated as met or not met.
