@@ -313,6 +313,9 @@ def predict(scorer, reqs, out_dir, infer_batch, shard=(0, 1), *, run=None, guard
     fc = getattr(scorer, "foreign", None)        # E5: only with foreign covariates
     if fc is not None:
         ck_head[S.FOREIGN_KEY] = {"mode": fc["mode"], "seed": fc["seed"]}
+    idm = getattr(scorer, "input_depth_at_scoring", None)   # mix-and-match: only with the switch
+    if idm is not None:
+        ck_head[S.INPUT_DEPTH_KEY] = idm
     _claim_store(out_dir, {"format": STORE_FORMAT, **ident, **settings, "n_shards": N,
                            "region_bins": scorer.rb, "n_requests_total": len(reqs),
                            "requests_sha256": requests_sha256(reqs), **ck_head})
@@ -654,7 +657,9 @@ def run(argv=None) -> int:
     same switch (the request hash differs). `--foreign-covariates` (or ONION_FOREIGN_COVARIATES;
     E5) predicts with the covariates of another experiment of the same assay (score.py
     FOREIGN_DEFINITION); STORE.json and PREDICTED_<i>of<N>.json record the mode and seed, and
-    the metric phase must have the same switch."""
+    the metric phase must have the same switch. ONION_SCORE_INPUT_DEPTH=native (mix-and-match)
+    predicts a run trained with input_depth = fixed from native-depth inputs; STORE.json records
+    it and the metric phase must have the same switch."""
     ap = argparse.ArgumentParser(prog="predict_store.py run", description="forwards of one run "
                                  "into a prediction store")
     ap.add_argument("--run", required=True)
@@ -692,7 +697,7 @@ def run(argv=None) -> int:
         sc = S.Scorer(a.evalset, main="model", model=model, config=config, device=device,
                       run_tables_sha256=run_sha, guardrail_windows=a.guardrail_windows, log=log,
                       **({"same_view": True} if (a.score_same_view or S.same_view_from_env()) else {}),
-                      **S.foreign_kwargs(a))
+                      **S.foreign_kwargs(a), **S.input_depth_kwargs())
         phases["build_seconds"] = time.perf_counter() - t0
         t1 = time.perf_counter()
         reqs = requests(sc)

@@ -133,3 +133,30 @@ def test_submit_accepts_column_modes(sub_env):
     for bad in ("out_neutral", "out_neutral.Lab", "out_swap_depth.lab_id"):
         p = X._submit(tmp, e, DRY_RUN="1", FOREIGN_COVARIATES=bad, SCORE_SUBDIR="p256_foreign_x")
         assert p.returncode == 2, bad
+
+
+def test_column_modes_combine_with_native_input_depth(env):
+    """Per-column modes never touch log2 depth, so they combine with the native-depth switch
+    (ONION_SCORE_INPUT_DEPTH, a run trained with input_depth = fixed): the inputs are unthinned and
+    only the named column changes; the whole-row swap_depth on side C stays refused."""
+    from minicandi import registry as R
+    cfg = {**json.loads((REPO / "tools/minicandi/configs/rung2/base.json").read_text()),
+           "context_bins": X.L, "batch_size": X.B, "input_depth": "fixed"}
+    torch.manual_seed(2)
+    m = R.build_model(cfg).eval()
+    sc = S.Scorer(env["evalset"], main="model", model=m, config=cfg, run_tables_sha256=env["sha"],
+                  foreign_covariates="both_keep_depth.lab_id", input_depth_at_scoring="native", **X.KW)
+    assert sc.ds.config["input_depth"] == "native" and sc.foreign["columns"] == ["lab_id"]
+    i = META_COLUMNS.index("lab_id")
+    changed = 0
+    for job in sc.jobs()[0][:8]:
+        batch = _batch(sc, job, False)
+        mb = sc._model_batch(batch, job)
+        for k in ("c_in", "c_out"):
+            other = [j for j in range(batch[k].shape[-1]) if j != i]
+            assert torch.equal(mb[k][..., other], batch[k][..., other])   # depth included
+            changed += int(not torch.equal(mb[k], batch[k]))
+    assert changed > 0
+    with pytest.raises(ValueError, match="swap_depth"):
+        S.Scorer(env["evalset"], main="model", model=m, config=cfg, run_tables_sha256=env["sha"],
+                 foreign_covariates="in_swap_depth", input_depth_at_scoring="native", **X.KW)

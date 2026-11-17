@@ -78,6 +78,15 @@
 #   phase also refuses a store whose STORE.json records another mode or seed. Its jobs are named
 #   mc_<run dir name>_s<seed>_fc<mode>_s<FOREIGN_SEED>, so a queued normal scoring of the run, or a
 #   foreign scoring in another mode or donor seed, never makes the live-job check skip it.
+# SCORE_INPUT_DEPTH=native (close-out mix-and-match; unset = the lines above, byte for byte, and
+#   ONION_SCORE_INPUT_DEPTH is removed from the environment the jobs inherit): scores a run trained
+#   with input_depth = fixed from native-depth inputs (score.py, "Native input depth at scoring").
+#   Needs SCORE_PHASES=1 and a SCORE_SUBDIR holding 'native_depth'; implies SCORE_ONLY=1; exports
+#   ONION_SCORE_INPUT_DEPTH=native to every job (and names it on the predict and metrics lines). Its
+#   prediction store is $PRED_STORE_ROOT/<runs root name>/<run name>[/same_view]/native_depth/
+#   seed<s>/<SUB>. Its jobs are named mc_<run dir name>_s<seed>_nd, so a queued normal scoring of
+#   the run never makes the live-job check skip it; its predict jobs wait (afterok) on a queued or
+#   running training job of the run (named mc_<run dir name>_s<seed>), as SCORE_ONLY does.
 #
 # Idempotent. Per (arm, seed): skip when <run dir>/SCORED exists (training only: DONE), or when a
 # queued or running job of this user is named mc_<run dir name>_s<seed>; when DONE exists but not
@@ -120,8 +129,20 @@ else
   [ -z "${FOREIGN_SEED:-}" ] || { echo "FOREIGN_SEED goes with FOREIGN_COVARIATES" >&2; exit 2; }
   unset ONION_FOREIGN_COVARIATES ONION_FOREIGN_SEED   # never leaks from the submitting shell
 fi
+ND="${SCORE_INPUT_DEPTH:-}"
+if [ -n "$ND" ]; then   # mix-and-match: native input depth at scoring
+  [ "$ND" = native ] || { echo "SCORE_INPUT_DEPTH must be native" >&2; exit 2; }
+  [ -z "$FC" ] || { echo "SCORE_INPUT_DEPTH and FOREIGN_COVARIATES exclude each other" >&2; exit 2; }
+  [ "${SCORE_PHASES:-0}" = 1 ] || { echo "SCORE_INPUT_DEPTH needs SCORE_PHASES=1" >&2; exit 2; }
+  [[ "${SCORE_SUBDIR:-}" == *native_depth* ]] || { echo "SCORE_INPUT_DEPTH needs SCORE_SUBDIR holding 'native_depth'" >&2; exit 2; }
+  export ONION_SCORE_INPUT_DEPTH="$ND"
+  SV_DIR="$SV_DIR/native_depth"
+else
+  unset ONION_SCORE_INPUT_DEPTH   # never leaks from the submitting shell
+fi
 SONLY="${SCORE_ONLY:-0}"
 [ -z "$FC" ] || SONLY=1
+[ -z "$ND" ] || SONLY=1
 [ "$SONLY" != 1 ] || [ -n "$EVALSET" ] || { echo "SCORE_ONLY=1 needs an eval set" >&2; exit 2; }
 # two-phase scoring (SP3)
 PHASES="${SCORE_PHASES:-0}"; PONLY="${PREDICT_ONLY:-0}"; MONLY="${METRICS_ONLY:-0}"
@@ -228,6 +249,7 @@ for spec in "${ARGS_ARMS[@]}"; do
     RUN="$ARMDIR/seed$SEED"
     JOB="mc_$(basename "$ARMDIR")_s$SEED"
     [ -z "$FC" ] || JOB="${JOB}_fc${FC}_s$FCS"   # E5: a foreign scoring has its own job name
+    [ -z "$ND" ] || JOB="${JOB}_nd"              # mix-and-match: a native-depth scoring too
     SOUT="$RUN${SUB:+/$SUB}"   # the score dir (SCORE_SUBDIR)
     if [ -n "$EVALSET" ] && [ -f "$SOUT/SCORED" ]; then
       echo "skip $JOB: $SOUT/SCORED exists"; n_skip=$((n_skip + 1)); continue
@@ -242,6 +264,12 @@ for spec in "${ARGS_ARMS[@]}"; do
     if [ "$SONLY" = 1 ]; then
       MINE="$(printf '%s\n' "$LIVEJ" | awk -v j="$JOB" '$2 == j')"
       TID="$(printf '%s\n' "$MINE" | awk '/train\.sh/ {print $1; exit}')"
+      if [ -n "$ND" ]; then   # the run's training job carries the name without "_nd"
+        TID="$(printf '%s\n' "$LIVEJ" | awk -v j="${JOB%_nd}" '$2 == j && /train\.sh/ {print $1; exit}')"
+        if [ -z "$TID" ] && [ ! -f "$RUN/DONE" ] && [ "$DRY" = 1 ]; then
+          TID="<train>"; echo "note $JOB: dry run; the training job of the run is assumed queued"
+        fi
+      fi
       NOTSC='train\.sh'; [ "$MONLY" != 1 ] || NOTSC='train\.sh|predict\.sh'
       if printf '%s\n' "$MINE" | awk -v p="$NOTSC" 'NF && $0 !~ p' | grep -q .; then
         echo "skip $JOB: a scoring job of that name is queued or running"
@@ -300,6 +328,7 @@ for spec in "${ARGS_ARMS[@]}"; do
           PENV=("ONION_SHARD=$i/$NSH" "ONION_INFER_BATCH=$PB" "ONION_DEVICE=$PD")
           [ "$SV" != 1 ] || PENV+=(ONION_SCORE_SAME_VIEW=1)
           [ -z "$FC" ] || PENV+=("ONION_FOREIGN_COVARIATES=$FC" "ONION_FOREIGN_SEED=$FCS")
+          [ -z "$ND" ] || PENV+=("ONION_SCORE_INPUT_DEPTH=$ND")
           PRED=(sbatch "${COMMON[@]}" "--job-name=$JOB" "--time=$PTIME" "--cpus-per-task=$PCPUS"
                 "--mem=${PMEM}M" "--gres=$PG" "--output=$SOUT/predict_${i}of${NSH}_%j.out"
                 ${DEP[@]+"${DEP[@]}"} --export=ALL
@@ -325,6 +354,7 @@ for spec in "${ARGS_ARMS[@]}"; do
         [ "${KEEP_PRED_STORE:-0}" != 1 ] || MENV+=(ONION_KEEP_PRED_STORE=1)
         [ "$SV" != 1 ] || MENV+=(ONION_SCORE_SAME_VIEW=1)
         [ -z "$FC" ] || MENV+=("ONION_FOREIGN_COVARIATES=$FC" "ONION_FOREIGN_SEED=$FCS")
+        [ -z "$ND" ] || MENV+=("ONION_SCORE_INPUT_DEPTH=$ND")
         MET=(sbatch "${COMMON[@]}" "--job-name=$JOB" "--time=$MTIME" "--cpus-per-task=$MCPUS"
              "--mem=${MMEM}M" --gres=none "--output=$SOUT/metrics_%j.out"
              ${MDEP[@]+"${MDEP[@]}"} --export=ALL
