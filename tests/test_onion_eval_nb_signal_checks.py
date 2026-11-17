@@ -47,3 +47,66 @@ def test_lambda_compare():
     got = NC.lambda_compare(obs * np.array([1.0, 1.05, 1.5, 0.5]), obs, 1.0, 1.0)
     assert got["frac_within_10pct"] == 0.5
     assert got["frac_bg_obs"] == 0.25 and got["within_10pct_median"] == 1
+
+
+def test_agreement_slope_is_pipeline_on_formula():
+    """y = 2x + noise-free offset: slope 2 (pipeline on formula), not 0.5 (the reverse)."""
+    x = np.linspace(0.0, 5.0, 800)
+    got = NC.agreement(x, 2.0 * x + 1.0, rb=400)
+    assert abs(got["slope"] - 2.0) < 1e-9
+    assert abs(got["mean_diff"] - float(np.mean(x - (2.0 * x + 1.0)))) < 1e-12
+
+
+def test_agreement_masks_non_finite_bins():
+    rng = np.random.default_rng(3)
+    x = rng.exponential(1.0, 800)
+    y = x.copy()
+    y[[5, 17]] = np.nan
+    x[33] = np.inf
+    got = NC.agreement(x, y, rb=400)
+    assert got["n_masked"] == 3
+    assert np.isfinite(got["median_abs_diff"]) and np.isfinite(got["p99_abs_diff"])
+    assert abs(got["pearson_raw"] - 1.0) < 1e-12
+
+
+def test_lambda_ratio_is_predicted_over_observed():
+    """predicted = 2 x observed: ratio 2 (pred / obs), not 0.5; and the background fractions
+    belong to their own side."""
+    obs = np.array([1.0, 2.0, 4.0, 8.0])
+    got = NC.lambda_compare(2.0 * obs, obs, 2.0, 1.0)
+    assert got["median_ratio"] == 2.0 and got["within_10pct_median"] == 0
+    assert got["frac_bg_obs"] == 0.25 and got["frac_bg_pred"] == 0.25
+    got = NC.lambda_compare(obs, 2.0 * obs, 1.0, 1.0)
+    assert got["median_ratio"] == 0.5 and got["frac_bg_pred"] == 0.25 and got["frac_bg_obs"] == 0.0
+
+
+def test_lambda_refuses_a_non_validation_dump(tmp_path):
+    import json
+    import pytest
+    (tmp_path / "tracks.json").write_text(json.dumps({"split": "blind", "regime": "x",
+                                                      "targets": []}))
+
+    class Sc:
+        rb, regions = 4, []
+    with pytest.raises(SystemExit, match="validation dumps only"):
+        NC._lambda_one(Sc(), tmp_path)
+
+
+def test_table_common_macro_uses_one_assay_set(tmp_path):
+    import json
+    blk = {"counts_log1p": {"macro": 0.5, "per_assay": {"A": 0.4, "B": 0.6}, "missing_scorable": []},
+           "signal_arcsinh": {"macro": None, "per_assay": {"A": 0.2, "B": None},
+                              "missing_scorable": ["C"]}}
+    s = {"specific_variance_recovered_above_noise": blk, "r_spec": blk}
+    p = tmp_path / "s.json"
+    p.write_text(json.dumps(s))
+    assert NC.main(["table", "--run", f"r={p}", "--out", str(tmp_path / "o")]) == 0
+    import csv
+    rows = list(csv.DictReader(open(tmp_path / "o" / "signal_space_macro.tsv"), delimiter="\t"))
+    r = {(x["block"], x["space"]): x for x in rows if x["regime"] == "leave_one_assay_out"}
+    c = r[("r_spec", "counts_log1p")]
+    g = r[("r_spec", "signal_arcsinh")]
+    assert float(c["macro_common"]) == 0.4 and float(g["macro_common"]) == 0.2
+    assert c["n_assays_common"] == g["n_assays_common"] == "1"
+    assert float(c["macro_defined"]) == 0.5 and g["missing_scorable"] == "C"
+    assert g["n_missing_scorable"] == "1"

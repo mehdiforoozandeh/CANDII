@@ -62,7 +62,7 @@ ZERO_COUNT = 1e-9
 WITHIN = 0.10
 
 FORMULA_COLS = ["target", "cell", "assay", "assay_class", "route", "lambda_source", "fraglen_source",
-                "frag_len", "n_bins", "frac_zero_counts", "pearson_raw", "pearson_asinh", "spearman",
+                "frag_len", "n_bins", "n_masked", "frac_zero_counts", "pearson_raw", "pearson_asinh", "spearman",
                 "median_abs_diff", "p99_abs_diff", "mean_diff", "slope", "bin_precision",
                 "bin_recall", "bin_f1", "bin_jaccard", "tile_precision", "tile_recall", "tile_f1",
                 "tile_jaccard", "reason"]
@@ -92,13 +92,19 @@ def _prf(called, truth) -> dict:
 def agreement(formula, pipeline, rb: int) -> dict:
     """Agreement of a formula -log10 p track with the pipeline's, both [n_regions * rb]."""
     x, y = np.asarray(formula, np.float64), np.asarray(pipeline, np.float64)
-    d = x - y
-    out = {"n_bins": int(x.size), "pearson_raw": corr(x, y),
-           "pearson_asinh": corr(np.arcsinh(x), np.arcsinh(y)), "spearman": spearman(x, y),
+    fin = np.isfinite(x) & np.isfinite(y)
+    n_masked = int(x.size - fin.sum())
+    if n_masked:      # a non-finite bin is masked (counted in `n_masked`), never propagated
+        x, y = np.where(fin, x, 0.0), np.where(fin, y, 0.0)
+    d = (x - y)[fin]
+    out = {"n_bins": int(x.size), "n_masked": n_masked, "pearson_raw": corr(x[fin], y[fin]),
+           "pearson_asinh": corr(np.arcsinh(x[fin]), np.arcsinh(y[fin])),
+           "spearman": spearman(x[fin], y[fin]),
            "median_abs_diff": float(np.median(np.abs(d))),
            "p99_abs_diff": float(np.quantile(np.abs(d), 0.99)), "mean_diff": float(d.mean())}
-    vx = float(np.var(x))
-    out["slope"] = float(np.cov(x, y, bias=True)[0, 1] / vx) if vx > 0 else float("nan")
+    vx = float(np.var(x[fin]))
+    out["slope"] = (float(np.cov(x[fin], y[fin], bias=True)[0, 1] / vx) if vx > 0
+                    else float("nan"))
     bx, by = PK.derived_peaks(x), PK.derived_peaks(y)
     out.update({f"bin_{k}": v for k, v in _prf(bx, by).items()})
     tx, ty = PK.tile_any(bx, region_bins=rb), PK.tile_any(by, region_bins=rb)
@@ -219,6 +225,9 @@ def cmd_lambda(a) -> int:
 def _lambda_one(sc, d: Path):
     rb, regions = sc.rb, sc.regions
     meta = json.loads((d / "tracks.json").read_text(encoding="utf-8"))
+    if meta.get("split") != "val":
+        raise SystemExit(f"{d}: dump split {meta.get('split')!r}; the lambda check reads "
+                         "validation dumps only")
     regime = meta["regime"]
     rows = []
     for mid in meta["targets"]:
@@ -273,30 +282,47 @@ TABLE_KEYS = [(blk, sp) for blk in ("specific_variance_recovered_above_noise", "
 def cmd_table(a) -> int:
     """Signal-space metric 1 beside count space, per run (`--run name=<scores.json>`, repeated).
     Headline 1 is defined per assay (shared and specific parts of one assay's targets), so the
-    table gives, per run, regime, block (headline 1, r_spec) and space: the scorer's macro (None
-    when one scorable assay is undefined), the per-assay values of the scorable assays, and
-    `macro_defined`, the mean over the scorable assays that are defined, with their count. A second
+    table gives, per run, regime, block (headline 1, r_spec) and space: `macro_common`, the mean
+    over the scorable assays defined in EVERY space of the block (the comparable row, one assay set
+    for all spaces); the scorer's macro (None when one scorable assay is undefined);
+    `macro_defined`, the mean over the assays this space defines (a different set per space, not
+    comparable across spaces); the scorable assays with no record (`missing_scorable`); and the
+    per-assay values. A second
     file gives the lambda source of each signal variant per target."""
     rows, per_assay, lam = [], [], []
+    spaces = sorted({sp for _, sp in TABLE_KEYS})
     for spec in a.run:
         name, path = spec.split("=", 1)
         s = json.loads(Path(path).read_text(encoding="utf-8"))
         for regime in ("leave_one_assay_out", "accessibility_only"):
             src = s if regime == "leave_one_assay_out" else s.get(regime, {})
-            for blk, sp in TABLE_KEYS:
-                v = src.get(blk, {}).get(sp)
-                if not isinstance(v, dict):
-                    continue
-                pa = v.get("per_assay") or {}
-                vals = [x for x in pa.values() if isinstance(x, (int, float))]
-                rows.append({"run": name, "regime": regime, "block": blk, "space": sp,
-                             "macro": v.get("macro"),
-                             "macro_defined": float(np.mean(vals)) if vals else None,
-                             "n_assays_defined": len(vals), "n_assays": len(pa),
-                             "reason": (v.get("reason") or "")[:200]})
-                for assay, x in sorted(pa.items()):
-                    per_assay.append({"run": name, "regime": regime, "block": blk, "space": sp,
-                                      "assay": assay, "value": x})
+            for blk in sorted({b for b, _ in TABLE_KEYS}):
+                blocks = {sp: src.get(blk, {}).get(sp) for sp in spaces}
+                blocks = {sp: v for sp, v in blocks.items() if isinstance(v, dict)}
+
+                def defined(v):
+                    return {k for k, x in (v.get("per_assay") or {}).items()
+                            if isinstance(x, (int, float)) and np.isfinite(x)}
+                # the comparable set: scorable assays defined in EVERY space of this block
+                common = set.intersection(*(defined(v) for v in blocks.values())) if blocks else set()
+                for sp, v in blocks.items():
+                    pa = v.get("per_assay") or {}
+                    vals = [pa[k] for k in sorted(defined(v))]
+                    rows.append({"run": name, "regime": regime, "block": blk, "space": sp,
+                                 "macro": v.get("macro"),
+                                 "macro_defined": float(np.mean(vals)) if vals else None,
+                                 "n_assays_defined": len(vals), "n_assays": len(pa),
+                                 "macro_common": (float(np.mean([pa[k] for k in sorted(common)]))
+                                                  if common else None),
+                                 "n_assays_common": len(common),
+                                 "assays_common": ",".join(sorted(common)),
+                                 "missing_scorable": ",".join(v.get("missing_scorable") or []),
+                                 "n_missing_scorable": len(v.get("missing_scorable") or []),
+                                 "reason": (v.get("reason") or "")[:200]})
+                    for assay, x in sorted(pa.items()):
+                        per_assay.append({"run": name, "regime": regime, "block": blk,
+                                          "space": sp, "assay": assay, "value": x,
+                                          "in_common_set": int(assay in common)})
             h = src.get("specific_variance_recovered_above_noise", {})
             for mid, rec in (h.get("signal_arcsinh", {}).get("per_target") or {}).items():
                 r = {"run": name, "regime": regime, "target": mid, "assay": rec.get("assay"),
@@ -308,11 +334,13 @@ def cmd_table(a) -> int:
                 lam.append(r)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    _write_tsv(out / "signal_space_macro.tsv", ["run", "regime", "block", "space", "macro",
-                                                 "macro_defined", "n_assays_defined", "n_assays",
-                                                 "reason"], rows)
+    _write_tsv(out / "signal_space_macro.tsv", ["run", "regime", "block", "space", "macro_common",
+                                                 "n_assays_common", "macro", "macro_defined",
+                                                 "n_assays_defined", "n_assays",
+                                                 "n_missing_scorable", "missing_scorable",
+                                                 "assays_common", "reason"], rows)
     _write_tsv(out / "signal_space_per_assay.tsv", ["run", "regime", "block", "space", "assay",
-                                                     "value"], per_assay)
+                                                     "value", "in_common_set"], per_assay)
     _write_tsv(out / "signal_space_lambda_sources.tsv",
                ["run", "regime", "target", "assay", "cell", "fraglen_source",
                 "lambda_source.signal_arcsinh", "lambda_source.signal_arcsinh_plug_in",

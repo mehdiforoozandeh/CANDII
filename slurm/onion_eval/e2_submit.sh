@@ -25,7 +25,8 @@
 #   2 jobs: ag2_score.py score, tables headline and control_free, with the t308 methods and
 #     minicandi_conv_ae, minicandi_conv_attn, minicandi_unet (3 seeds each)
 #     -> ag2/scores/eic_v1/e2/{headline,control_free}/ag2_board_val.tsv, per_target.tsv, ...
-# Never resubmits a job that wrote SCORED; writes only under e2/ and ag2/scores/eic_v1/e2/.
+# Never resubmits a job whose output exists or whose job name is queued or running (squeue -u $USER
+# -n <name>); writes only under e2/ and ag2/scores/eic_v1/e2/.
 set -euo pipefail
 WHERE="${1:?usage: e2_submit.sh fir|nibi}"
 DRY="${DRY_RUN:-1}"
@@ -42,6 +43,11 @@ SCORE_MEM="${SCORE_MEM:-20000M}"
 remote() {   # run one command on the cluster, or print it
   if [ "$DRY" = 1 ]; then echo "[dry-run $WHERE] $1"; else "${SSH[@]}" "$WHERE" "$1"; fi
 }
+# guard: 0 (skip) when <file> exists or a job named <name> is queued or running on the cluster.
+# A dry run checks too (read-only ssh), so its printout shows what a live run would submit.
+done_or_queued() {   # done_or_queued <file> <job name>
+  "${SSH[@]}" "$WHERE" "test -f $1 || [ -n \"\$(squeue -h -u \$USER -n $2)\" ]" 2>/dev/null
+}
 
 case "$WHERE" in
 fir)
@@ -57,8 +63,8 @@ fir)
       dump=$O/e2/tracks/$run/seed$s
       LDUMPS+=" --dump ${name}_s${s}_heldin=$dump/leave_one_assay_out --dump ${name}_s${s}_hidden=$dump/accessibility_only"
       TRUNS+=" --run ${name}_s${s}=$out/scores.json"
-      if [ "$DRY" != 1 ] && "${SSH[@]}" fir "test -f $out/SCORED"; then
-        echo "skip $run seed$s: $out/SCORED exists"; continue
+      if done_or_queued "$out/SCORED" "e2_score_${run}_s$s"; then
+        echo "skip $run seed$s: $out/SCORED exists or e2_score_${run}_s$s is queued or running"; continue
       fi
       cmd="mkdir -p $out $dump && module load python/3.10.13 >/dev/null 2>&1; $SB --job-name=e2_score_${run}_s$s --time=$SCORE_TIME --cpus-per-task=2 --mem=$SCORE_MEM --output=$O/e2/logs/%x_%j.out $K/slurm/onion_eval/score.sh $K $EV $out run $O/runs_fir/$run/seed$s --dump-signal $dump --fraglen-table $O/e2/eic_v1_fraglen.tsv --lambda-source predicted_control --device cpu"
       if [ "$DRY" = 1 ]; then remote "$cmd"; else
@@ -66,8 +72,10 @@ fir)
     done
   done
   DEP=""; [ ${#DEPS[@]} -eq 0 ] || DEP="--dependency=afterok:$(IFS=:; echo "${DEPS[*]}")"
-  remote "$SB $DEP --job-name=e2_lambda --time=04:00:00 --cpus-per-task=1 --mem=16000M --output=$O/e2/logs/%x_%j.out $K/slurm/onion_kit/run.sh $K tools/onion_eval/nb_signal_checks.py lambda --evalset $EV --fraglen-table $O/e2/eic_v1_fraglen.tsv --out $O/e2/checks/lambda$LDUMPS"
-  remote "$SB $DEP --job-name=e2_table --time=00:30:00 --cpus-per-task=1 --mem=4000M --output=$O/e2/logs/%x_%j.out $K/slurm/onion_kit/run.sh $K tools/onion_eval/nb_signal_checks.py table --out $O/e2/checks/table$TRUNS"
+  if done_or_queued "$O/e2/checks/lambda/lambda_check.json" e2_lambda; then echo "skip e2_lambda: output exists or job queued"; else
+  remote "$SB $DEP --job-name=e2_lambda --time=04:00:00 --cpus-per-task=1 --mem=16000M --output=$O/e2/logs/%x_%j.out $K/slurm/onion_kit/run.sh $K tools/onion_eval/nb_signal_checks.py lambda --evalset $EV --fraglen-table $O/e2/eic_v1_fraglen.tsv --out $O/e2/checks/lambda$LDUMPS"; fi
+  if done_or_queued "$O/e2/checks/table/signal_space_macro.tsv" e2_table; then echo "skip e2_table: output exists or job queued"; else
+  remote "$SB $DEP --job-name=e2_table --time=00:30:00 --cpus-per-task=1 --mem=4000M --output=$O/e2/logs/%x_%j.out $K/slurm/onion_kit/run.sh $K tools/onion_eval/nb_signal_checks.py table --out $O/e2/checks/table$TRUNS"; fi
   ;;
 nibi)
   A=$O/ag2; B=$A/tracks/eic_v1/baselines_fl
@@ -81,6 +89,9 @@ nibi)
     M+=" --method $b=$B/$b"
   done
   for table in headline control_free; do
+    if done_or_queued "$A/scores/eic_v1/e2/$table/SCORED" "e2_ag2_$table"; then
+      echo "skip e2_ag2_$table: SCORED exists or job queued"; continue
+    fi
     remote "module load python/3.10.13 >/dev/null 2>&1; sbatch --parsable --account=def-maxwl --gres=none --job-name=e2_ag2_$table --time=06:00:00 --cpus-per-task=4 --mem=32000M --output=$O/logs/%x_%j.out $K/slurm/onion_kit/run.sh $K tools/onion_eval/ag2_score.py score --evalset $O/eval/eic_v1/evalset.json --audit $A/audit/ag2_eic_audit.tsv --tables $O/tables/eic_v1 --truth-from $B/position_average$M --ag2 $A/pack/eic_v1 --peaks $A/peaks --split val --table $table --allow-unscored --out $A/scores/eic_v1/e2/$table"
   done
   ;;
