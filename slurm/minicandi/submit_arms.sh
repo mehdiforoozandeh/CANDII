@@ -68,7 +68,9 @@
 # FOREIGN_COVARIATES=<mode> [FOREIGN_SEED=<n>, default 0] (close-out item E5; unset = the lines above,
 #   byte for byte, and ONION_FOREIGN_COVARIATES / ONION_FOREIGN_SEED are removed from the environment
 #   the jobs inherit): scores with the covariates of another experiment of the same assay (score.py
-#   FOREIGN_MODES: in|out|both _ keep_depth|swap_depth). Needs SCORE_SUBDIR naming a directory that
+#   FOREIGN_MODES: in|out|both _ keep_depth|swap_depth; close-out item A12 adds the per-column modes
+#   <side>_keep_depth.<col>[.<col>] and <side>_neutral.<col>[.<col>], score.py
+#   FOREIGN_COLUMNS_DEFINITION). Needs SCORE_SUBDIR naming a directory that
 #   holds 'foreign' (score.py refuses any other --out), implies SCORE_ONLY=1 (never a training job),
 #   exports ONION_FOREIGN_COVARIATES and ONION_FOREIGN_SEED to every job (and names them on the
 #   predict and metrics lines). Its prediction store is $PRED_STORE_ROOT/<runs root name>/<run
@@ -109,7 +111,7 @@ else unset ONION_SCORE_SAME_VIEW; fi                    # never leaks from the s
 SV_DIR=""; [ "$SV" != 1 ] || SV_DIR=/same_view
 FC="${FOREIGN_COVARIATES:-}"; FCS="${FOREIGN_SEED:-0}"
 if [ -n "$FC" ]; then   # E5: foreign covariates at scoring
-  [[ "$FC" =~ ^(in|out|both)_(keep|swap)_depth$ ]] || { echo "FOREIGN_COVARIATES must be (in|out|both)_(keep|swap)_depth" >&2; exit 2; }
+  [[ "$FC" =~ ^(in|out|both)_((keep|swap)_depth|(keep_depth|neutral)(\.[a-z][a-z0-9_]*)+)$ ]] || { echo "FOREIGN_COVARIATES must be (in|out|both)_(keep|swap)_depth, or (in|out|both)_(keep_depth|neutral).<column>[.<column>] (A12)" >&2; exit 2; }
   [[ "$FCS" =~ ^[0-9]+$ ]] || { echo "FOREIGN_SEED must be a non-negative integer" >&2; exit 2; }
   [[ "${SCORE_SUBDIR:-}" == *foreign* ]] || { echo "FOREIGN_COVARIATES needs SCORE_SUBDIR holding 'foreign'" >&2; exit 2; }
   export ONION_FOREIGN_COVARIATES="$FC" ONION_FOREIGN_SEED="$FCS"

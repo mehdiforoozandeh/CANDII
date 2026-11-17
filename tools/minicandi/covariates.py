@@ -238,8 +238,52 @@ def hide_depth(c: torch.Tensor, avail: torch.Tensor) -> torch.Tensor:
     return out
 
 
+#: A12: config key of the per-field drop switch (list of META_COLUMNS / QC_COLUMNS names)
+DROP_FIELDS_KEY = "covariate_drop_fields"
+
+
+def neutral_value(col: str) -> float:
+    """A12: the raw value that carries no information for one column: the fixed centre of a numeric
+    or flag column (it standardises to 0) and id 0 (unknown) of a categorical column."""
+    if col in CATEGORICAL:
+        return 0.0
+    if col in NUMERIC:
+        return float(NUMERIC[col][0])
+    raise ValueError(f"unknown covariate column {col!r}")
+
+
+def drop_field_indices(cfg: dict) -> tuple | None:
+    """A12: (c_in indices, c_out indices) of `covariate_drop_fields`, or None when the key is absent
+    or empty (the default: today's behavior). META columns sit at the same index in C and C'; a QC
+    column is in C only and needs `qc_on_input`. Unknown or repeated names are a ValueError."""
+    names = (cfg or {}).get(DROP_FIELDS_KEY) or []
+    if not names:
+        return None
+    if isinstance(names, str) or len(set(names)) != len(names):
+        raise ValueError(f"{DROP_FIELDS_KEY} {names!r}: want a list of distinct column names")
+    if cfg.get("two_step"):   # the base leg's c_base would keep the column
+        raise ValueError(f"{DROP_FIELDS_KEY} is not defined with two_step (c_base is not dropped)")
+    cols_in = list(META_COLUMNS) + (list(QC_COLUMNS) if cfg.get("qc_on_input") else [])
+    bad = [n for n in names if n not in cols_in]
+    if bad:
+        raise ValueError(f"{DROP_FIELDS_KEY}: {bad} not in the columns of C {cols_in}")
+    return (tuple(cols_in.index(n) for n in names),
+            tuple(META_COLUMNS.index(n) for n in names if n in META_COLUMNS))
+
+
+def drop_fields(c: torch.Tensor, avail: torch.Tensor, idx: tuple, k_cols: tuple) -> torch.Tensor:
+    """A12: columns `idx` of every available track's row set to `neutral_value` (unavailable rows
+    are kept, as in `hide_depth`). `k_cols` names the columns of `c` in order. A new tensor."""
+    out = c.clone()
+    a = avail.bool()
+    for i in idx:
+        v = torch.full_like(c[..., i], neutral_value(k_cols[i]))
+        out[..., i] = torch.where(a, v, c[..., i])
+    return out
+
+
 def model_covariates(batch: dict, mode: str, training: bool, dropout: float = 0.0,
-                     hide_depth_covariate: bool | str = False) -> tuple:
+                     hide_depth_covariate: bool | str = False, drop: tuple | None = None) -> tuple:
     """(c_in, c_out) for the covariate encoders and (c_in_t, c_out_t) whose column 0 is the depth
     the count transform and the NB head use.
 
@@ -264,6 +308,13 @@ def model_covariates(batch: dict, mode: str, training: bool, dropout: float = 0.
     each track's rows of the two encoder copies are dropped with this probability
     (`drop_covariates`); the two transform copies are never dropped, so the depth offset is kept.
     At 0, or in eval mode, nothing is drawn and the outputs are today's.
+
+    `drop` (A12; config `covariate_drop_fields` through `drop_field_indices`, default None): in
+    training AND eval mode, after any scramble and hide-depth and before any dropout, the listed
+    columns of the two ENCODER copies (C and C') become their `neutral_value` on available rows;
+    the two transform copies are never changed, so dropping `log2_depth` removes depth from the
+    covariate encoders and keeps the count transform and the NB depth offset. None returns today's
+    tensors (no clone, no op).
     """
     if not (isinstance(hide_depth_covariate, bool) or hide_depth_covariate in ("output", "input")):
         raise ValueError(f"hide_depth_covariate {hide_depth_covariate!r}; want false, true, "
@@ -285,6 +336,11 @@ def model_covariates(batch: dict, mode: str, training: bool, dropout: float = 0.
         e_out = hide_depth(e_out, batch["y_avail"])
     if hide_depth_covariate is True:
         t_in = hide_depth(t_in, batch["x_avail"])
+    if drop is not None:
+        idx_in, idx_out = drop
+        cols_in = tuple(META_COLUMNS) + tuple(QC_COLUMNS)
+        e_in = drop_fields(e_in, batch["x_avail"], idx_in, cols_in)
+        e_out = drop_fields(e_out, batch["y_avail"], idx_out, tuple(META_COLUMNS))
     if training and dropout > 0:
         e_in, e_out = drop_covariates(e_in, e_out, float(dropout))
     return e_in, e_out, t_in, t_out

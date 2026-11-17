@@ -83,7 +83,7 @@ from minicandi.components import (ConvBlock, CountTransform, CovariateInjector, 
                                   DnaTower, Downsample, MaskHandler, NBHead, NotApplicable,
                                   Upsample, component_kwargs, fine_to_sub, res_subs_of,
                                   sub_output, sub_to_fine)
-from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
+from minicandi.covariates import drop_field_indices, model_covariates, scramble_mode  # noqa: E402
 from minicandi.dna_fusion import DnaFiLM, DnaPatchDown, fusion_of, without_fusion  # noqa: E402
 
 RUNG = 2
@@ -167,6 +167,8 @@ class Model(C.MiniCandi):
         k_in = C.k_input(cfg)
         kw = component_kwargs(cfg)
         self.cov_dropout = kw["covariate_dropout"]
+        _drop = drop_field_indices(cfg)   # A12: None unless covariate_drop_fields
+        self.cov_drop = {} if _drop is None else {"drop": _drop}   # off: today's call
 
         self.transform = CountTransform(cfg["count_transform"], **kw["transform"])
         self.in_sub, self.out_sub = res_subs_of(cfg)
@@ -232,7 +234,8 @@ class Model(C.MiniCandi):
         B, L, A = x_counts.shape
         vis = MaskHandler.visible(x_avail, bmask)                         # [B, L, A]
         c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training,
-                                                         self.cov_dropout)
+                                                         self.cov_dropout,
+                                                         **self.cov_drop)
         if self.in_sub == 1:
             x = self.transform(x_counts, c_in_t[..., C.LOG2_DEPTH_COL], vis)
             h = x[..., None] * self.lift_w + self.lift_b                 # [B, L, A, d_t]
