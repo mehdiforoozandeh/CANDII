@@ -36,13 +36,15 @@ from minicandi.covariates import DROP_FIELDS_KEY, drop_field_indices  # noqa: E4
 
 #: the grouped-removal control (A12 specification, "Controls and traps"). Each group joins fields
 #: whose information overlaps in the eic_v1_2 training rows (conditional entropy H(a | b) / H(a),
-#: cruxvault/results/closeout_A12/FIELDS.md), so that a leave-one-out arm of one member cannot show
+#: the A12 item file, section "Fields"), so that a leave-one-out arm of one member cannot show
 #: the group's value while the other member still carries it.
 GROUPS = {
     "pipeline": ("pipeline_id", "pipeline_version_id"),       # identical information (0.00)
     "lab_platform": ("lab_id", "platform_id"),                # the brief's pair (0.57 / 0.69)
     "donor_lab": ("donor_id", "lab_id"),                      # donor fixes lab (0.15)
-    "view_knobs": ("dedup_on", "mapq_threshold"),             # the processing knobs of the views
+    "view_knobs": ("run_type_pe", "read_length", "dedup_on",  # the processing knobs that the
+                   "mapq_threshold"),                         # counterfactual views vary (se, crop,
+                                                              # nodedup, mapq; depth is the offset)
     "categorical": ("pipeline_id", "pipeline_version_id", "lab_id", "platform_id",
                     "antibody_id", "donor_id"),               # = the numeric-only embedding arm
     "all_but_depth": tuple(c for c in META_COLUMNS if c != "log2_depth"),
