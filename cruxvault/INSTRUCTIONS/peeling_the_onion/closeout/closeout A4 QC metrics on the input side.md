@@ -60,3 +60,72 @@ Build checks: the side table has one row per measurement; the 447 build-filled r
 ## 8. Done when
 
 The QC side table is collected with fill rates reported, the 9 runs are scored, and the D13 outcome of "QC on input only" against "metadata only" is logged in the notepad.
+
+## Specification as worked (2026-11-17, agent CO-A4)
+
+Branch `chunk/onion-CO-A4`. Numbers were read on Nibi on 2026-11-17 from `ONION/tables/eic_v1_2/measurements.tsv`, `ONION/CO-D2/tables/eic_v1_2x/measurements.tsv`, the records in `/scratch/mforooz/onion/qc/`, `ONION/eval/eic_v1/evalset.json` and `sacct`.
+
+### Corrections to section 3 ("State today")
+
+- The QC records number 953, not about 1,908 (855 ok, 94 no read set, 4 refused). Only batches 1 and 2 (Nibi jobs 27164529, 27235942, 400 tasks each) and a 153-task job 27332401 ran. Batches 3 to 6 were never submitted. So 1,262 of the 2,215 rows have no record (1,131 training, 131 validation).
+- The collect defect of `t211` L67 is already fixed (commit 7bfad4a; test `test_collect_keeps_the_build_values`).
+- `frip` is empty in every row of eic_v1_2 (2,740 rows) and of the add-on eic_v1_2x (2,811 rows). Blind rows (78) have no QC value except `frag_len` (72).
+- Second experiments (eic_v1_2x, role `evalonly`, 71 rows): NSC filled for 28, NRF for 30. These rows are targets only (the dataset refuses them as inputs), so their QC never enters C.
+- The 953 records were copied to one tar on /project: `ONION/CO-A4/qc_records_2026-11-13.tar` (md5 024964da982ce098ae6160426da50309).
+
+### Question and arms
+
+Question: does adding read-derived QC (NSC, RSC, NRF, PBC1, PBC2, fragment length; FRiP stays empty) to the input covariates C, never to C', improve the composite or the correction term over the metadata-only default? Arm: `qc_on_input` on `final/rung{2,3,4}/reference_equal.json` (configs `tools/minicandi/configs/ablations/qc_on_input/rung{2,3,4}/qc_on_input.json`), 3 seeds, 80,000 windows, tables eic_v1_2, scored on all 256 regions (`p256_sv`). Reference: `eic_v1_2_rung{2,3,4}_base_heldout`. The trunk width is the base width on all three models (60, 104, 25); the arm adds 896 parameters (embedding input).
+
+### What the model may know at inference (the leak rule)
+
+An input's QC must be computable from the reads of that input alone, as a user can compute it from the track they give. Three cases break this in the data, and the code handles each:
+1. A base row's NRF, PBC1 and PBC2 come from the reads of its nodedup child (the reads before duplicate removal). When that child is the target of the same window, the three values are computed from the target's own reads. Rule (dataset, always on with `qc_on_input`): those three cells of the input are written absent. In eic_v1 scoring this concerns 43 correction pairs (base source, nodedup target); training draws the same pair kind.
+2. A scored correction source is read from its `pr1` half, but its QC comes from the whole read set, whose `pr2` half may share reads with the target's `pr2` half. Rule: config `qc_table_pr1`, a side table measured on the `pr1` half (`qc_fill.py run --half pr1`); a `pr1` input reads only that table, and a row it does not list is all absent.
+3. Reconstruction items and same-view training pairs feed the target as its own input. Its QC is then the target's QC, but the input is the same reads (minus masked bins), so this is the input's own QC. Accepted, stated as a limit: the masked bins are a small part of the reads behind a genome-wide QC value.
+C' never holds QC (D6; tests check that `c_out` is identical with the arm on and off).
+
+### QC values of validation and blind rows
+
+- As targets (imputation, correction, blind), their QC never enters the model (C' is metadata only).
+- As inputs: all 275 scored correction sources are validation rows. Their QC enters C under rule 2. The final model (`train_on_validation`) also reads validation rows as training inputs, so the fill covers the 131 validation rows without a record.
+- Blind rows are never inputs (blind cells are served by their training tracks).
+- Standardization uses fixed constants (no fit), so no statistic of validation or blind rows reaches the model. Two constants were changed from training rows only: NSC (1.1, 0.1) -> (1.1, 0.3) and PBC2 (5, 5) -> (14, 15), because the 90th percentiles sat at z = 7.8 and 8.0 and the maxima at z = 40 and 47 (training rows: NSC median 1.09, p90 1.88; PBC2 median 13.6, p90 45). Every standardized QC value is clipped to +-5.
+
+### Missing values
+
+An empty QC cell is written as `QC_ABSENT` (-9999). The embedding reads each QC column as a pair (standardized value, presence flag); an absent value enters as value 0 with flag 0. Before this change an absent cell was the column centre, which the model could not tell from a typical value. This matters because absence is structured: NRF and PBC exist only for base and nodedup rows, and no route exists for the 284 rows aligned by the native redacted-BAM pipeline. A fragment length of 0 or less (xcor's peak at shift 0 in 15 ATAC-seq/DNase-seq records) is written absent by `collect`. A dropped QC field (A12 switch) reads as absent.
+
+### Fill passes that must run BEFORE `/scratch/mforooz/onion/work` leaves scratch
+
+Both read the tagAligns under `onion/work` (checked by dry run: 0 of 4,043 files missing) and the `counts.h5` under `/scratch/mforooz/onion/measurements`. Neither writes to /scratch: each array task keeps its records in `$SLURM_TMPDIR` and writes one tar to `/project/def-maxwl/mforooz/ONION/CO-A4/fill/`.
+1. Pass "whole": 1,262 rows (190 have no read-set route and end in seconds), 3,568 files, 300 GB read, 64 tasks of 20 rows.
+2. Pass "pr1": the 275 scored correction sources (36 without a route), 475 files, 39 GB read, 14 tasks.
+The collect step reads only the tars on /project and can run after `onion/work` leaves.
+
+### Cost (allocated CPU-hours)
+
+- Fill rate measured on the 953 records: 222.3 CPU-h (sacct of the 3 jobs) / 859 rows with a read set = 0.259 CPU-h per row (4 CPUs).
+- Pass whole: 1,072 x 0.259 = 278 CPU-h. Pass pr1: 239 x 0.259 = 62 CPU-h (upper bound; a half has half the reads). Collect: 0.5 CPU-h. Fill total about 340 CPU-h, 79 jobs, about 162 files on /project.
+- Training: the eic_v1_2 base runs used 82.2 CPU-h for 9 runs (conv autoencoder 17.9, conv + attention 43.0, U-Net 21.2). Scoring on 256 regions: 3 x 30.0 + 3 x 25.4 + 3 x 52 = 322.2 CPU-h. Arm total 404 CPU-h, 90 jobs.
+- Item total about 745 CPU-h. Prerequisites not counted here: eic_v1_2 eval set and 256-region baselines on the training cluster, and the 9 reference scorings into `p256_sv`.
+
+### Expectation (before any run)
+
+Fill after the 953 old records alone: NSC on 1,302 of 2,662 training and validation rows (0.49), NRF on 843 (0.32); the scoring inputs: imputation inputs 188 of 245, correction sources 125 of 275. After pass whole, NSC is expected on at most about 2,374 rows (all but the 288 rows with no route or a refused read set), NRF only on base and nodedup rows. Prediction: no effect beyond the seed range on imputation; a possible gain on correction, mostly on pairs that differ in duplicate rate.
+
+### Decision table
+
+| outcome (composite or correction-only, 256 regions) | conclusion |
+|---|---|
+| beyond the seed range, better, on 2 or 3 architectures | QC on input enters the design (D6 arm 2) |
+| within the seed range on all three | by D13 the metadata-only default stays |
+| worse beyond the range | QC adds noise or leaks; read the 43 base-to-nodedup pairs and the pairs by view first |
+
+### Run order
+
+`MODE=fill` (Nibi, before `onion/work` leaves), then `MODE=collect` (Nibi), then the side tables to the training cluster, then `MODE=train`, all in `tools/minicandi/configs/ablations/qc_on_input/submit_qc_on_input.sh` (dry run by default).
+
+### Limits
+
+FRiP is empty (no peaks are called). 284 rows have no read-set route and stay absent. The foreign-covariate scoring path (`score.py`) builds C from rows directly and does not apply rules 1 and 2; do not run it on this arm without that change. Signal-space scores read `frag_len` from the dataset row, which the QC side table overrides; count-space metrics do not read it.
