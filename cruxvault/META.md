@@ -97,6 +97,7 @@ Root: [[candii]]
     - ◐ `q56` [Q] [[q56_do_the_ablation_conclusions_drawn_from_t|**Do the ablation conclusions drawn from the 16 pair regions hold on all 256 evaluation regions?**]] — *leaning* · moderate
   - ◐ `q57` [Q] [[q57_how_closely_can_a_formula_on_25_bp_binne|**How closely can a formula on 25 bp binned counts reproduce the pipeline's signal p-value track and peaks?**]] — *leaning* · moderate
   - ◐ `q58` [Q] [[q58_can_the_second_experiments_separate_a_la|**Can the second experiments separate a lab effect from a donor effect in the cross-experiment pairs?**]] — *leaning* · moderate
+  - ◐ `q59` [Q] [[q59_do_the_nested_replicate_ladder_and_the_c|**Do the nested replicate ladder and the crossed mixed model give the same variance shares, and which one can be quoted?**]] — *leaning* · moderate
 - ◐ `q23` [Q] [[q23_is_the_model_wired_as_designed_does_scra|**Is the model wired as designed: does scrambling the covariates, switching the DNA off, another injection form, a mask token, or matched compute move the scores (the wiring checks of rung 1)?**]] — *leaning* · moderate
   - ◐ `h40` [H] [[h40_scrambled_covariates_lowers_the_correcti|scrambled_covariates lowers the correction term by more than 2 seed spreads and leaves imputation within 2; dna_off lowers imputation]] — *leaning* · weak · mixed
   - ○ `q43` [Q] [[q43_does_the_gain_of_scrambled_covariates_in|**Does the gain of scrambled covariates in gap closed at rung 4 come from the 84 headline pairs with a duplicate-keeping side, where source and target can share DNA fragments?**]] — *open*
@@ -107,7 +108,7 @@ Root: [[candii]]
 
 ## Dashboard
 
-- **Questions** (58): open 13 · leaning 37 · settled 8 · parked 0
+- **Questions** (59): open 13 · leaning 38 · settled 8 · parked 0
 - **Hypotheses** (40): open 10 · leaning 18 · settled 6 · parked 6
-- **Confidence**: weak 22 · moderate 33 · strong 14
-- **Findings**: 101
+- **Confidence**: weak 22 · moderate 34 · strong 14
+- **Findings**: 102

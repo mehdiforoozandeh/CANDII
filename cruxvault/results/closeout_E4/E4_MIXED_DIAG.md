@@ -1,0 +1,19 @@
+# Close-out E4: why the ladder and the mixed model disagree at the fine band (H3K36me3)
+
+Nibi jobs 27608832, 27609106 and 27609414 (kit COE4; script `tools/onion_eval/diag_e4_mixed.py`, copied to `CO-E4/diag/`), 0.17 CPU-h in all. The evidence is in the three `diag_*.json` files of this folder. The pair values below are per Haar coefficient, band fine (the ladder's per-bin values times 256 x 16384 / 3,670,016).
+
+## Findings
+
+1. **The response is the same.** On 12 identical pairs of pooled uniform tracks, the ladder's `pair_variance` and the mixed model's response (thinning, log1p, Haar fine band) agree to within 2 to 3%. For example, C12 vs C16 gives 0.03038 by the ladder and 0.03105 by the mixed model. On the pr1/pr2 halves of C12 the two give 0.02949 and 0.03001. The rest comes from the two common depths (ladder 3,739,866 reads; mixed model 3,843,039) and from the thinning draws (`diag_same_pairs.json`).
+2. **The REML fit is not the cause.** The stored fit and a fit started at moment values reach the same objective (scaled -2.2543446). Each puts one of cell and library on the lower bound. A cell-only fit gives a cell fraction of 0.0036, the same as the moments: between-cell pairs 0.03562 against halves 0.03545, an excess of 0.00017 of 0.0355 (`diag_H3K36me3_fine.json`). Cell sits on the bound because replicate (`cell|donor`) has the same partition as cell in 15 of 19 cells. In this fit only the sum cell + experiment + replicate + lab (0.0064) is identified. The mixed-model output now marks a fraction below 1e-6 as "at the lower bound of the fit (boundary)" when `--min-contrast-cells` is set.
+3. **The two use different observations, and the sampling variance differs by track.**
+   - The mixed model takes the br-unit halves for 16 of its cells (32 of 42 libraries) and weights every observation equally.
+   - The ladder takes pooled tracks and averages over cells.
+   - The per-track sampling pair value at the fine band ranges from 0.021 to 0.049 per bin (median 0.028; pseudoreplicate pairs of the smoke run). The mean between-cell pair value per observation ranges from 0.030 (C46 pooled) to 0.045 (C02 br; `diag_moments.json`). This spread is about 10 times the between-cell excess.
+   - With a residual variance that differs by track this much, the homoscedastic mixed model (one residual variance) and the ladder's subtraction measure different things.
+4. **The ladder's subtraction is one-sided.** An other_cell_type pair is clustered on its a-side cell and subtracts only the a-side's lower rung, but its pair value holds the sampling variance of both sides. On the smoke pairs at the fine band, cell type over sampling is 0.00187 with the a-side subtracted and 0.00144 with the mean of both sides subtracted (23% lower). This also applies to other_experiment pairs, whose b-side is the second experiment. The gap that remains (about 0.0016 against 0.00017 per coefficient) is not explained. It is in the choice and weighting of observations (point 3).
+
+## Which one to trust, for what
+
+- **Ladder:** use it for the sampling and biological-replicate rungs (both sides of a pair are one library or one experiment; they agree with t305). Use it for the two-sided rungs (cell type, other experiment) as an upper value: the one-sided subtraction inflates them when the partners are noisier. Fix (not built; it changes the ladder definition, so the foreman or the PI decides): subtract 0.5 x (lower rung of a + lower rung of b) for two-sided pairs.
+- **Mixed model:** do not quote factors with small fractions (all except residual at the fine band) from the homoscedastic fit. The residual-variance assumption fails (the per-track sampling variance spans a factor of about 2.3). Do not submit the 80 CPU-h mixed stage before a per-library residual variance is added (for example, a moment estimator that subtracts each library's own halves variance). Nothing was tuned.
