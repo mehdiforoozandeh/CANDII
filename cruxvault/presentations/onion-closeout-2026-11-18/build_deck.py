@@ -1,0 +1,881 @@
+"""Rebuild index.html from deck_src.html: the close-out deck of the peeling-the-onion run (2026-11-18).
+
+Paper arc (prezit references/paper-arc.md), one part per success criterion of the PI, then what did not
+run, the ready queue and the open PI decisions. Every number on a slide is read here from a vault file
+and embedded as DATA (prose numbers as preformatted strings in DATA.n, figures as matplotlib PNGs in
+DATA.fig). The page types no number. The build writes the deck-sources manifest (vault-relative path ->
+sha256 of every file it read) so that `crux deck --verify` can prove the deck is current.
+
+`results/` is git-ignored: the build reads this worktree's copies, which are byte copies of the
+foreman's worktree files of the same path.
+
+    /Users/mforooz/miniforge3/bin/python build_deck.py [VAULT]
+Needs matplotlib and Pillow (the `candii` env has neither; the base miniforge python has both).
+A pattern or row that is missing stops the build and names the file.
+"""
+import base64, csv, hashlib, io, json, pathlib, re, sys
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from matplotlib.patches import FancyBboxPatch, Rectangle
+from matplotlib.colors import TwoSlopeNorm, ListedColormap
+from PIL import Image
+
+HERE = pathlib.Path(__file__).resolve().parent
+VAULT = pathlib.Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else HERE.parent.parent
+read, SRC, N, FIG = [], {}, {}, {}
+
+
+def path(rel):
+    p = VAULT / rel
+    if p not in read:
+        read.append(p)
+    return p
+
+
+def text(rel):
+    return path(rel).read_bytes().decode("utf-8")
+
+
+def grab(rel, pattern, n=1):
+    m = re.search(pattern, text(rel), re.S)
+    if not m:
+        sys.exit(f"build_deck: pattern not found in {rel}: {pattern}")
+    return [m.group(i + 1) for i in range(n)] if n > 1 else m.group(1)
+
+
+def tsv(rel):
+    return list(csv.DictReader(text(rel).splitlines(), delimiter="\t"))
+
+
+def cite(key, *rels):
+    SRC.setdefault(key, [])
+    for r in rels:
+        path(r)
+        if r not in SRC[key]:
+            SRC[key].append(r)
+
+
+def f3(x):
+    return f"{x:.3f}".replace("-", "−")
+
+
+def s3(x):
+    return ("+" if x >= 0 else "−") + f"{abs(x):.3f}"
+
+
+def comma(x):
+    return f"{x:,}"
+
+
+def put(key, val):
+    if key in N:
+        sys.exit(f"build_deck: key {key} set twice")
+    N[key] = val
+
+
+INS = "INSTRUCTIONS/peeling_the_onion/"
+OBJ = INS + "onion training objective.md"
+PAPER = INS + "onion paper.md"
+DES = INS + "closeout/settled miniCANDI design.md"
+RQ = INS + "closeout/ready queue for scaling.md"
+TODO = INS + "closeout/closeout todo.md"
+PLAN24 = INS + "closeout/final 24 hours plan.md"
+ARMS = "results/ablations_closeout/arm_summary_p16_sv_2026-11-17.tsv"
+READ = "results/ablations_closeout/ABLATIONS_READ.md"
+CHK = "results/region_sampling_checks/check_v3.tsv"
+CHKMD = "results/region_sampling_checks/PAIR_REGIONS_V3.md"
+WV = "results/closeout_A3/where_vs_allviews.tsv"
+WVMD = "results/closeout_A3/WHERE_VIEWS.md"
+
+# ---- colors (light, printed on a white card in both themes) -------------------------------------
+INK, INK2, MUTED, HAIR = "#1b1d1f", "#36393d", "#6c6f73", "#d9dad6"
+MC = {"convae": "#2f6f8f", "convattn": "#4f9a8a", "unet": "#b5543a"}
+MODEL = {"convae": "conv autoencoder", "convattn": "conv + attention", "unet": "U-Net"}
+MODELS = ["convae", "convattn", "unet"]
+REF = {"convae": "rung2_base_heldout", "convattn": "rung3_base_heldout", "unet": "rung4_base_heldout"}
+OK, WAIT, BAD, GREY = "#3f8a5c", "#c99a2e", "#b5543a", "#a7a9ad"
+plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 13, "axes.edgecolor": MUTED,
+                     "axes.labelcolor": INK2, "xtick.color": INK2, "ytick.color": INK2,
+                     "axes.titlesize": 15, "axes.titleweight": "bold", "axes.titlecolor": INK,
+                     "axes.spines.top": False, "axes.spines.right": False})
+
+
+def png(key, fig):
+    """Save a figure as a palette PNG (small, under 1 MB in all) and embed it as base64."""
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=110, facecolor="white", metadata={"Software": None})
+    plt.close(fig)
+    im = Image.open(io.BytesIO(buf.getvalue())).convert("RGB").quantize(colors=96, method=Image.Quantize.MEDIANCUT)
+    out = io.BytesIO()
+    im.save(out, format="PNG", optimize=True)
+    FIG[key] = "data:image/png;base64," + base64.b64encode(out.getvalue()).decode("ascii")
+
+
+def panel_label(ax, s):
+    ax.text(-0.01, 1.04, s, transform=ax.transAxes, fontsize=16, fontweight="bold", color="#2f6f8f",
+            ha="right", va="bottom")
+
+
+# ==================================================================================================
+# Arm summary (16-region screening set; imputation and calibration use all 256 regions)
+# ==================================================================================================
+ARM = {}
+for r in tsv(ARMS):
+    ARM[r["arm"]] = r
+KEYS = {"imp": "imputation_raw", "cor": "correction_v3_raw", "cal": "uncertainty_raw",
+        "comp": "composite_v3", "conly": "correction_only"}
+
+
+def mr(arm, k):
+    r = ARM.get(arm)
+    if r is None:
+        sys.exit(f"build_deck: {ARMS} has no row {arm}")
+    m, g = r[KEYS[k] + ".mean"], r[KEYS[k] + ".range"]
+    return (float(m) if m not in ("", "None") else None, float(g) if g not in ("", "None") else None)
+
+
+def diff(arm, ref, k):
+    (a, ra), (b, rb) = mr(arm, k), mr(ref, k)
+    if a is None or b is None:
+        return None
+    bar = max(ra or 0, rb or 0)
+    return dict(d=a - b, bar=bar, arm=a, ref=b, ra=ra, rb=rb, z=(a - b) / bar if bar else 0.0,
+                beyond=abs(a - b) > bar, x2=abs(a - b) > 2 * bar, n=int(ARM[arm]["n_seeds"]))
+
+
+for m in MODELS:
+    for k in KEYS:
+        mean, rng = mr(REF[m], k)
+        put(f"ref.{m}.{k}", f3(mean))
+        put(f"ref.{m}.{k}.r", f3(rng))
+cite("arms", ARMS, READ)
+
+# ==================================================================================================
+# Criterion 1: data
+# ==================================================================================================
+fr = grab(PAPER, r"It read ([0-9,]+) measurement directories and wrote [0-9,]+ rows: ([0-9,]+) training, "
+                 r"([0-9,]+) validation and ([0-9,]+) blind rows", 4)
+for k, v in zip(("rows", "train", "val", "blindrows"), fr):
+    put(f"data.{k}", v)
+VT = grab(OBJ, r"\*\*Views in training\*\*.*?: base ([0-9]+); depth 0\.50, 0\.25, 0\.125 \(([0-9]+) each\); "
+               r"no dedup ([0-9]+); MAPQ 0 ([0-9]+); single-end ([0-9]+); crop 36 ([0-9]+); crop 50 ([0-9]+)\.", 7)
+VT = [int(x) for x in VT]
+views = [("base view", VT[0], "base"), ("depth 0.50", VT[1], "align"), ("depth 0.25", VT[1], "align"),
+         ("depth 0.125", VT[1], "align"), ("no duplicate removal", VT[2], "align"),
+         ("no mapping-quality filter", VT[3], "align"), ("single-end", VT[4], "read"),
+         ("reads cut to 36 bp", VT[5], "read"), ("reads cut to 50 bp", VT[6], "read")]
+put("data.views_total", comma(sum(v for _, v, _ in views)))
+put("data.base", comma(VT[0]))
+put("data.cf", comma(sum(v for _, v, _ in views[1:])))
+put("data.readlevel", comma(VT[4] + VT[5] + VT[6]))
+cite("data", PAPER, OBJ)
+
+fig, ax = plt.subplots(figsize=(12.6, 4.6))
+VC = {"base": "#36393d", "align": "#2f6f8f", "read": "#d9822b"}
+ys = list(range(len(views)))[::-1]
+for y, (n, v, kind) in zip(ys, views):
+    ax.barh(y, v, color=VC[kind], height=0.68)
+    ax.text(v + 8, y, comma(v), va="center", fontsize=12, color=INK)
+ax.set_yticks(ys, [n for n, _, _ in views])
+ax.set_xlabel("training measurements of this view (table version with filled covariates)")
+ax.set_title("Training views per kind: one base view per measurement, eight counterfactual views", loc="left")
+ax.set_xlim(0, VT[0] * 1.12)
+from matplotlib.patches import Patch
+ax.legend(handles=[Patch(color=VC["base"], label="base view (all reads)"),
+                   Patch(color=VC["align"], label="alignment-level view (from the base alignment)"),
+                   Patch(color=VC["read"], label="read-level view (from the FASTQ files)")],
+          loc="lower right", frameon=False, fontsize=12)
+fig.tight_layout()
+png("views", fig)
+
+# data deliverables: parsed from the close-out todo list (statuses written by the foreman)
+d2 = grab(TODO, r"add-on table eic_v1_2x \(([0-9]+) second experiments, ([0-9]+) other-experiment pairs\)", 2)
+d3 = grab(TODO, r"candidate table \(([0-9,]+) rows; DNase-seq correction-scorable\)")
+d3c = grab(TODO, r"the 4 row rebuilds \(about ([0-9,]+) CPU-hours\)")
+d4 = grab(TODO, r"blind-only scope ruled 2026-11-17 \(([0-9]+) blind rows \+ ([0-9]+) controls \+ ([0-9]+) reruns, "
+                r"about ([0-9,]+) allocated CPU-hours\)", 4)
+qcn = grab(DES, r"The QC table holds ([0-9,]+) of ([0-9,]+) records", 2)
+put("data.d2", d2[0])
+put("data.d2pairs", d2[1])
+put("data.d3rows", d3)
+put("data.d3cost", d3c)
+put("data.blind", d4[0])
+put("data.blindctl", d4[1])
+put("data.blindre", d4[2])
+put("data.blindcost", d4[3])
+put("data.qc", qcn[0])
+put("data.qcall", qcn[1])
+cite("data2", TODO, DES, PAPER)
+
+fig, ax = plt.subplots(figsize=(12.6, 4.4))
+ax.set_xlim(0, 100)
+ax.set_ylim(0, 44)
+ax.axis("off")
+boxes = [
+    (2, 24, "Tables, first freeze", f"{fr[0]} rows\n{fr[1]} training, {fr[2]} validation", OK, "delivered"),
+    (27, 24, "Covariates filled", "lab, antibody, donor\nand platform filled", OK, "delivered (default)"),
+    (52, 24, "Second experiments", f"add-on table: {d2[0]} second\nexperiments, {d2[1]} pairs", WAIT,
+     "built; not scored"),
+    (77, 24, "DNase-seq update", f"candidate table,\n{d3} rows", WAIT, "built; 4 rebuilds owed"),
+    (2, 2, "QC side tables", f"{qcn[0]} of {qcn[1]} records;\nfill job running", WAIT, "partial"),
+    (27, 2, "1 bp region store", "recount waits for\nits probe job", WAIT, "not built"),
+    (52, 2, "Blind tracks rebuilt", f"{d4[0]} blind rows, {d4[1]} controls,\n{d4[2]} reruns", BAD,
+     "not submitted"),
+    (77, 2, "Final model, board row", "needs the settled design\nand the blind build", BAD, "not built"),
+]
+for x, y, t, b, c, s in boxes:
+    ax.add_patch(FancyBboxPatch((x, y), 21, 17.5, boxstyle="round,pad=0.4,rounding_size=1.2", fc=c, ec=c,
+                                alpha=0.13))
+    ax.add_patch(FancyBboxPatch((x, y), 21, 17.5, boxstyle="round,pad=0.4,rounding_size=1.2", fc="none", ec=c,
+                                lw=2))
+    ax.text(x + 10.5, y + 14.6, t, ha="center", va="center", fontsize=13, fontweight="bold", color=INK)
+    ax.text(x + 10.5, y + 8.6, b, ha="center", va="center", fontsize=11.5, color=INK2, linespacing=1.3)
+    ax.text(x + 10.5, y + 2.2, s, ha="center", va="center", fontsize=11.5, fontweight="bold", color=c)
+for x in (23.5, 48.5, 73.5):
+    ax.annotate("", xy=(x + 3, 32.8), xytext=(x, 32.8), arrowprops=dict(arrowstyle="->", color=MUTED, lw=1.6))
+fig.tight_layout()
+png("data_state", fig)
+
+# ==================================================================================================
+# Where the counterfactual views help
+# ==================================================================================================
+VARMS = [("base view only", "abl_views_base_only_{m}", "rung4_views_base_only"),
+         ("base + depth thinning", "abl_views_base_depth_{m}", "rung4_views_base_depth"),
+         ("base + read-level views", "abl_views_base_fastq_{m}", "rung4_views_base_fastq"),
+         ("base + alignment-level views", "abl_views_base_alignment_{m}", "rung4_views_base_alignment")]
+fig, axs = plt.subplots(1, 3, figsize=(13.2, 4.9), sharey=True)
+for ax, m in zip(axs, MODELS):
+    rows = [("all views (reference)", REF[m])] + [(n, (t.format(m=m) if m != "unet" else u)) for n, t, u in VARMS]
+    for i, (n, arm) in enumerate(rows):
+        mean, rng = mr(arm, "conly")
+        nseed = int(ARM[arm]["n_seeds"])
+        c = MC[m] if i == 0 else "#8a8d92"
+        ax.plot([i, i], [mean - rng / 2, mean + rng / 2], color=c, lw=6, alpha=0.35, solid_capstyle="butt")
+        ax.plot(i, mean, "o", color=c, ms=10)
+        ax.text(i, mean + rng / 2 + 0.03, f3(mean) + ("\n2 seeds" if nseed == 2 else ""), ha="center",
+                va="bottom", fontsize=10.5, color=INK)
+    ax.axhline(0, color=MUTED, lw=1)
+    ax.set_xticks(range(len(rows)), ["all\nviews", "base\nonly", "base +\ndepth", "base +\nread-level",
+                                     "base +\nalignment"], fontsize=11)
+    ax.set_title(f"{['(a)', '(b)', '(c)'][MODELS.index(m)]} {MODEL[m]}", loc="left")
+    ax.set_ylim(-0.2, 1.0)
+axs[0].set_ylabel("correction-only term\n(share of the covariate cost closed)")
+fig.suptitle("Correction-only term by training views, three models, 16 pair regions (screening), 3 seeds "
+             "(2 where marked); bar = seed range", fontsize=12.5, color=MUTED, x=0.01, ha="left", y=0.995)
+fig.tight_layout(rect=(0, 0, 1, 0.95))
+for ax in axs[1:]:
+    ax.spines["left"].set_visible(True)
+png("views_conly", fig)
+for m in MODELS:
+    d = diff("abl_views_base_only_" + m if m != "unet" else "rung4_views_base_only", REF[m], "conly")
+    put(f"vw.bo.{m}", f3(d["arm"]))
+    put(f"vw.bo.{m}.d", s3(d["d"]))
+    put(f"vw.bo.{m}.bar", f3(d["bar"]))
+    dc = diff("abl_views_base_only_" + m if m != "unet" else "rung4_views_base_only", REF[m], "comp")
+    put(f"vw.bocomp.{m}.d", s3(dc["d"]))
+    put(f"vw.bocomp.{m}.bar", f3(dc["bar"]))
+for m in ("convae", "convattn"):
+    d = diff(f"abl_views_base_alignment_{m}", REF[m], "imp")
+    put(f"vw.al.{m}.d", s3(d["d"]))
+    put(f"vw.al.{m}.bar", f3(d["bar"]))
+cite("views", ARMS, READ)
+
+# U-Net per pair type, per seed, from where_vs_allviews.tsv
+W = {}
+for r in tsv(WV):
+    W[(r["arm"], r["quantity"], r["group"])] = r
+WARMS = [("all views", "rung4_base_heldout", MC["unet"]), ("base only", "rung4_views_base_only", "#8a8d92"),
+         ("base + depth", "rung4_views_base_depth", "#2f6f8f"),
+         ("base + read-level", "rung4_views_base_fastq", "#d9822b"),
+         ("base + alignment", "rung4_views_base_alignment", "#6b4fa0")]
+WQ = [("(a) depth-thinning pairs", "thin_assay", "__macro__"),
+      ("(b) no-dedup + MAPQ pairs", "corr_knob_all", "mapq+nodedup"),
+      ("(c) crop pairs (scored term)", "corr_knob_all", "crop")]
+fig, axs = plt.subplots(1, 3, figsize=(13.2, 4.7))
+for ax, (title, q, g) in zip(axs, WQ):
+    for i, (n, arm, c) in enumerate(WARMS):
+        r = W.get((arm, q, g))
+        if r is None:
+            sys.exit(f"build_deck: {WV} has no row {arm} {q} {g}")
+        vals = [float(x) for x in r["values"].split(",")]
+        ax.scatter([i] * len(vals), vals, color=c, s=46, zorder=3)
+        ax.plot([i - 0.3, i + 0.3], [float(r["mean"])] * 2, color=c, lw=3)
+    ax.axhline(0, color=MUTED, lw=1)
+    ax.set_xticks(range(len(WARMS)), [n.replace(" + ", " +\n").replace("all views", "all\nviews")
+                                      .replace("base only", "base\nonly") for n, _, _ in WARMS], fontsize=9.6)
+    ax.set_title(title, loc="left", fontsize=14)
+axs[0].set_ylabel("gap closed (0 = depth-only scaling,\n1 = oracle reference)")
+fig.suptitle("U-Net: gap closed by pair type and training views, 16 pair regions (screening); dot = one seed, "
+             "line = mean", fontsize=12.5, color=MUTED, x=0.01, ha="left", y=0.995)
+fig.tight_layout(rect=(0, 0, 1, 0.95))
+png("views_pairs", fig)
+
+
+def wrow(arm, q, g):
+    return W[(arm, q, g)]
+
+
+r0, r1 = wrow("rung4_base_heldout", "thin_assay", "__macro__"), wrow("rung4_views_base_depth", "thin_assay", "__macro__")
+put("wv.thin.all", f3(float(r0["mean"])))
+put("wv.thin.all.r", f3(float(r0["range"])))
+put("wv.thin.depth", f3(float(r1["mean"])))
+put("wv.thin.depth.r", f3(float(r1["range"])))
+nodepth = []
+for arm in ("rung4_views_base_only", "rung4_views_base_fastq", "rung4_views_base_alignment"):
+    nodepth += [float(x) for x in wrow(arm, "thin_assay", "__macro__")["values"].split(",")]
+withdepth = []
+for arm in ("rung4_base_heldout", "rung4_views_base_depth"):
+    withdepth += [float(x) for x in wrow(arm, "thin_assay", "__macro__")["values"].split(",")]
+put("wv.thin.with.n", str(len(withdepth)))
+put("wv.thin.with.min", f3(min(withdepth)))
+put("wv.thin.without.n", str(len(nodepth)))
+put("wv.thin.without.max", f3(max(nodepth)))
+ra, rb = wrow("rung4_views_base_alignment", "corr_knob_all", "mapq+nodedup"), wrow("rung4_base_heldout", "corr_knob_all", "mapq+nodedup")
+put("wv.mq.al", f3(float(ra["mean"])))
+put("wv.mq.al.r", f3(float(ra["range"])))
+put("wv.mq.all", f3(float(rb["mean"])))
+put("wv.mq.all.r", f3(float(rb["range"])))
+cite("views2", WV, WVMD)
+
+# ==================================================================================================
+# Criterion 2: the training objective (schematic) and the loss ablations
+# ==================================================================================================
+ob = {}
+ob["bins"] = grab(OBJ, r"One training example is a window of ([0-9,]+) bins of 25 bp")
+ob["tracks"] = grab(OBJ, r"Each of the ([0-9]+) tracks \(35 assays plus the ChIP control\)")
+ob["p"] = grab(OBJ, r"draw p from U\(([0-9.]+, [0-9.]+)\)")
+ob["svp"] = grab(OBJ, r"With probability `same_view_prob` = ([0-9.]+)")
+ob["bmf"] = grab(OBJ, r"each bin hidden with probability `bin_mask_frac` = ([0-9.]+)")
+ob["lr"] = grab(OBJ, r"\| learning rate \| ([0-9e.-]+) \(`lr`\)")
+for k, v in ob.items():
+    put("obj." + k, v)
+cite("obj", OBJ)
+
+fig, ax = plt.subplots(figsize=(13.2, 5.0))
+ax.set_xlim(0, 100)
+ax.set_ylim(0, 50)
+ax.axis("off")
+
+
+def box(x, y, w, h, title, body, c):
+    ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.3,rounding_size=1.0", fc=c, ec=c, alpha=0.12))
+    ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.3,rounding_size=1.0", fc="none", ec=c, lw=1.8))
+    ax.text(x + w / 2, y + h - 3.0, title, ha="center", va="center", fontsize=12.5, fontweight="bold", color=INK)
+    ax.text(x + w / 2, y + (h - 5) / 2, body, ha="center", va="center", fontsize=10.8, color=INK2, linespacing=1.3)
+
+
+def arrow(x0, y0, x1, y1):
+    ax.annotate("", xy=(x1, y1), xytext=(x0, y0), arrowprops=dict(arrowstyle="->", color=MUTED, lw=1.6))
+
+
+box(0.5, 16, 17, 20, "One window", f"{ob['bins']} bins of 25 bp,\none cell type,\n{ob['tracks']} tracks\n"
+    "+ DNA sequence\n+ covariates C, C'", "#36393d")
+box(23, 35, 23, 14, "(1) imputation", "track hidden whole\n(probability p ~ U(" + ob["p"] + "))\ntarget: a view of it",
+    "#2f6f8f")
+box(23, 18, 23, 14, "(2) correction", "input: one view\ntarget: a different view\nscored on every bin", "#d9822b")
+box(23, 1, 23, 14, "(3) same-view reconstruction", f"{ob['bmf']} of bins hidden\ntarget: the same view,\n"
+    "scored on hidden bins only", "#4f9a8a")
+box(52, 16, 20, 20, "Model", "conv autoencoder,\nconv + attention\nor U-Net;\nabout one million\nparameters",
+    "#6b4fa0")
+box(78, 16, 21, 20, "Negative Binomial\nper bin and track", "mean = target depth x 2^eta\nsize n per bin\n\n"
+    "loss: mean NB negative\nlog-likelihood over\nthe scored bins", "#b5543a")
+for y in (42, 25, 8):
+    arrow(17.8, 26, 22.6, y)
+    arrow(46.3, y, 51.6, 26)
+arrow(72.3, 26, 77.6, 26)
+ax.text(34.5, 50.2, f"each visible track: same view with probability {ob['svp']}, else a different view",
+        ha="center", fontsize=10.5, color=MUTED)
+fig.tight_layout()
+png("objective", fig)
+
+LOSSES = [("imputation weight 4", "abl_losses_loss_impute_x4_{m}"), ("bin-equal weighting", "abl_losses_loss_bin_equal_{m}"),
+          ("Poisson mean, NB size", "abl_losses_loss_poisson_mean_{m}"), ("NB CRPS", "abl_losses_loss_nb_crps_{m}")]
+fig, axs = plt.subplots(1, 2, figsize=(13.2, 4.6), sharey=True)
+for ax, (k, title) in zip(axs, (("comp", "(a) composite (screening)"), ("imp", "(b) imputation (256 regions)"))):
+    for j, (n, t) in enumerate(LOSSES):
+        for i, m in enumerate(MODELS):
+            d = diff(t.format(m=m), REF[m], k)
+            y = j + (i - 1) * 0.24
+            ax.plot([-d["bar"], d["bar"]], [y, y], color=MC[m], alpha=0.25, lw=7, solid_capstyle="butt")
+            ax.plot(d["d"], y, "o", color=MC[m], ms=8, mfc=MC[m] if d["beyond"] else "white", mew=2)
+    ax.axvline(0, color=MUTED, lw=1)
+    ax.set_title(title, loc="left")
+    ax.set_xlabel("arm minus base")
+axs[0].set_yticks(range(len(LOSSES)), [n for n, _ in LOSSES])
+axs[0].invert_yaxis()
+axs[1].legend(handles=[plt.Line2D([], [], marker="o", color=MC[m], ls="", ms=8, label=MODEL[m]) for m in MODELS]
+              + [plt.Line2D([], [], marker="o", color=MUTED, mfc="white", ls="", ms=8, label="within the range (open)")],
+              loc="lower right", frameon=False, fontsize=11)
+fig.suptitle("Loss arms minus base, 3 seeds; shaded band = plus or minus the larger seed range; filled dot = beyond it",
+             fontsize=12.5, color=MUTED, x=0.01, ha="left", y=0.995)
+fig.tight_layout(rect=(0, 0, 1, 0.94))
+png("losses", fig)
+cite("losses", ARMS, READ, OBJ)
+d = diff("abl_losses_loss_impute_x4_convattn", REF["convattn"], "imp")
+put("loss.x4.ca.d", s3(d["d"]))
+put("loss.x4.ca.bar", f3(d["bar"]))
+
+# ==================================================================================================
+# Criterion 3: evaluation; the 16-versus-256 check
+# ==================================================================================================
+CK = {}
+for r in tsv(CHK):
+    if r["scope"] == "ALL":
+        CK[(r["p"], r["condition"])] = r
+CN = {"1": "(1) each run's value inside the\n95% interval of its 256-region value",
+      "2": "(2) at least 95% of the run x assay\ncells inside their interval",
+      "3": "(3) same selection verdict\n(4 architecture comparisons)",
+      "4": "(4) seed range at most 1.5 times\nthe 256-region seed range",
+      "5": "(5) replicate-variance metric\nunchanged",
+      "6": "(6) sign of every clear\n256-region difference kept"}
+fig, ax = plt.subplots(figsize=(12.6, 4.9))
+ps = ["8", "16", "32"]
+for j, p in enumerate(ps):
+    for i, c in enumerate("123456"):
+        r = CK.get((p, c))
+        if r is None:
+            sys.exit(f"build_deck: {CHK} has no ALL row p={p} condition={c}")
+        ok = r["pass"] == "pass"
+        lab = r["quantity"]
+        if c == "2":
+            lab = f"{float(r['value']) * 100:.0f}% inside"
+        ax.add_patch(Rectangle((j, 5 - i), 0.94, 0.9, fc=OK if ok else BAD, alpha=0.18, ec=OK if ok else BAD, lw=1.5))
+        ax.text(j + 0.47, 5 - i + 0.45, ("pass: " if ok else "fail: ") + lab, ha="center", va="center", fontsize=11.5,
+                color=INK, fontweight="bold" if not ok else "normal")
+ax.set_xlim(-2.05, 3)
+ax.set_ylim(-0.1, 6)
+ax.axis("off")
+for i, c in enumerate("123456"):
+    ax.text(-0.06, 5 - i + 0.45, CN[c], ha="right", va="center", fontsize=11, color=INK2)
+for j, p in enumerate(ps):
+    ax.text(j + 0.47, 6.0, f"{p} pair regions", ha="center", va="bottom", fontsize=13, fontweight="bold", color=INK)
+fig.tight_layout()
+png("check", fig)
+v3n = grab(CHKMD, r"ran on ([0-9]+) runs of ([0-9]+) arms .*? with ([0-9,]+) region-bootstrap draws", 3)
+put("chk.runs", v3n[0])
+put("chk.arms", v3n[1])
+put("chk.boot", v3n[2])
+c16 = CK[("16", "1")]["quantity"]
+put("chk.c1.16", c16)
+put("chk.c2.16", f"{float(CK[('16', '2')]['value']) * 100:.0f}%")
+put("chk.c4.16", CK[("16", "4")]["quantity"])
+put("chk.c6.16", CK[("16", "6")]["quantity"])
+cite("check", CHK, CHKMD)
+
+tests = grab(DES, r"Result: ([0-9,]+) passed, ([0-9]+) skipped, ([0-9]+) failed", 3)
+put("test.pass", tests[0])
+put("test.skip", tests[1])
+put("test.fail", tests[2])
+cite("evaltest", DES, TODO, PAPER)
+ev = grab(PAPER, r"It scores ([0-9]+) regions of ([0-9,]+) bins each")
+put("ev.regions", ev)
+put("ev.items", grab(PAPER, r"The set has ([0-9]+) imputation items"))
+put("ev.pairs", grab(PAPER, r"The set has ([0-9,]+) correction pairs over"))
+put("ev.crop", grab(PAPER, r"this value on the ([0-9]+) never-trained crop and crop \+ single-end pairs"))
+put("ev.p16", ps[1])
+put("seeds", ARM[REF["convae"]]["n_seeds"])
+put("des.windows", grab(DES, r"\| 28 \| Training length \| ([0-9,]+) windows"))
+cw = grab(PAPER, r"The composite is ([0-9.]+) imputation \+ ([0-9.]+) correction \+ ([0-9.]+) uncertainty", 3)
+put("ev.w1", cw[0])
+put("ev.w2", cw[1])
+put("ev.w3", cw[2])
+
+# ==================================================================================================
+# Criterion 4: architectures on 256 regions
+# ==================================================================================================
+S256 = {}
+for r in tsv(CHK):
+    if r["p"] == "16" and r["condition"] == "1" and r["quantity"] in ("correction_v3", "correction_only"):
+        arm, seed = r["scope"].split("/")
+        S256.setdefault((arm, r["quantity"]), []).append(float(r["value_all_regions"]))
+fig, axs = plt.subplots(1, 3, figsize=(13.2, 4.6))
+for ax, (title, k) in zip(axs, (("(a) imputation", "imp"), ("(b) correction, crop pairs", "correction_v3"),
+                                ("(c) correction-only term", "correction_only"))):
+    for i, m in enumerate(MODELS):
+        if k == "imp":
+            mean, rng = mr(REF[m], "imp")
+            ax.plot([i, i], [mean - rng / 2, mean + rng / 2], color=MC[m], lw=8, alpha=0.35, solid_capstyle="butt")
+            ax.plot(i, mean, "o", color=MC[m], ms=11)
+            ax.text(i + 0.12, mean, f3(mean), va="center", fontsize=11)
+        else:
+            v = S256[(REF[m], k)]
+            mean = sum(v) / len(v)
+            ax.scatter([i] * len(v), v, color=MC[m], s=46, zorder=3)
+            ax.plot([i - 0.25, i + 0.25], [mean] * 2, color=MC[m], lw=3)
+            ax.text(i + 0.3, mean, f3(mean), va="center", fontsize=11)
+            put(f"a256.{m}.{k}", f3(mean))
+            put(f"a256.{m}.{k}.r", f3(max(v) - min(v)))
+    ax.set_xticks(range(3), ["conv\nautoencoder", "conv +\nattention", "U-Net"], fontsize=11.5)
+    ax.set_xlim(-0.5, 2.8)
+    ax.set_title(title, loc="left")
+axs[0].set_ylabel("score (higher is better)")
+fig.suptitle("Base recipes of the three models on all 256 regions, 3 seeds; (a) mean with seed range, "
+             "(b) and (c) dot = one seed", fontsize=12.5, color=MUTED, x=0.01, ha="left", y=0.995)
+fig.tight_layout(rect=(0, 0, 1, 0.95))
+png("arch", fig)
+for (a, b) in (("convae", "unet"), ("convattn", "unet")):
+    for r in tsv(CHK):
+        if r["p"] == "16" and r["condition"] == "3" and r["scope"] == f"{REF[a]} vs {REF[b]}":
+            mm = re.search(r"all regions: composite delta (-?[0-9.]+) within 2 x spread ([0-9.]+)", r["note"])
+            put(f"tie.{a}", s3(float(mm.group(1))))
+            put(f"tie.{a}.bar", f3(float(mm.group(2))))
+cite("arch", CHK, CHKMD, ARMS, DES)
+
+# ==================================================================================================
+# Ablation overview heatmaps (two slides)
+# ==================================================================================================
+G1 = [("ChIP control off as input", "abl_control_input_control_output_only_{m}"),
+      ("ChIP control off as output", "abl_predict_control_predict_control_off_{m}"),
+      ("average baseline as input", "abl_average_input_average_input_{m}"),
+      ("two-step, native base depth", "abl_two_step_two_step_native_{m}"),
+      ("two-step, fixed base depth", "abl_two_step_two_step_fixed_{m}"),
+      ("fixed input depth", "abl_depth_input_input_depth_fixed_{m}"),
+      ("DNA off", "abl_dna_off_dna_off_{m}"),
+      ("DNA from a language model", "abl_dna_source_dna_gnlm_{m}"),
+      ("DNA shifted by 5 Mb (control)", "abl_dna_source_dna_shift5mb_{m}"),
+      ("DNA joined by FiLM", "abl_dna_fusion_fusion_film_{m}"),
+      ("DNA joined late", "abl_dna_fusion_fusion_late_{m}"),
+      ("DNA by cross-attention", "abl_dna_fusion_fusion_xattn_{m}"),
+      ("DNA joined at the stem", "abl_dna_fusion_fusion_early_{m}"),
+      ("scrambled covariates (control)", "abl_scrambled_covariates_scrambled_covariates_{m}"),
+      ("covariates: numeric only", "abl_cov_embedding_cov_numeric_only_{m}"),
+      ("covariate dropout", "abl_cov_embedding_cov_dropout_{m}"),
+      ("numeric covariates as codes", "abl_cov_embedding_cov_numeric_per_value_{m}"),
+      ("injection: adaLN-zero", "abl_cov_injection_inject_adaln_zero_{m}"),
+      ("injection: concatenation", "abl_cov_injection_form_inject_concat_{m}"),
+      ("injection: tokens", "abl_cov_injection_form_inject_tokens_{m}"),
+      ("mask by dropping (no token)", "abl_mask_mode_mask_drop_{m}")]
+G2 = [("loss: imputation weight 4", "abl_losses_loss_impute_x4_{m}"),
+      ("loss: bin-equal weighting", "abl_losses_loss_bin_equal_{m}"),
+      ("loss: Poisson mean", "abl_losses_loss_poisson_mean_{m}"),
+      ("loss: NB CRPS", "abl_losses_loss_nb_crps_{m}"),
+      ("views: base only", "abl_views_base_only_{m}|rung4_views_base_only"),
+      ("views: base + depth", "abl_views_base_depth_{m}|rung4_views_base_depth"),
+      ("views: base + read-level", "abl_views_base_fastq_{m}|rung4_views_base_fastq"),
+      ("views: base + alignment", "abl_views_base_alignment_{m}|rung4_views_base_alignment"),
+      ("views: same-view pairs only", "abl_views_all_same_view_only_{m}|rung4_views_all_same_view_only"),
+      ("transform: log(1 + x)", "abl_count_transforms_tf_log1p_{m}"),
+      ("transform: asinh", "abl_count_transforms_tf_asinh_{m}"),
+      ("transform: Pearson residual", "abl_count_transforms_tf_pearson_{m}"),
+      ("transform: local ratio", "abl_count_transforms_tf_local_ratio_{m}"),
+      ("transform: per-window quantile", "abl_count_transforms_tf_quantile_{m}"),
+      ("transform: raw counts", "abl_count_transforms_tf_raw_{m}"),
+      ("transform: soft clip", "abl_count_transforms_tf_soft_clip_{m}"),
+      ("offset, pseudocount 0.1", "abl_count_transforms_offset_eps0.1_{m}"),
+      ("offset, pseudocount 0.01", "abl_count_transforms_offset_eps0.01_{m}")]
+cmap = plt.get_cmap("RdBu")
+norm = TwoSlopeNorm(vmin=-4, vcenter=0, vmax=4)
+
+
+def armname(t, m):
+    if "|" in t:
+        a, u = t.split("|")
+        return u if m == "unet" else a.format(m=m)
+    return t.format(m=m)
+
+
+def heat(key, rows, title):
+    mets = [("imp", "(a) imputation\n256 regions"), ("cor", "(b) correction, crop pairs\n16 regions (screening)"),
+            ("conly", "(c) correction-only\n16 regions (screening)")]
+    fig, axs = plt.subplots(1, 3, figsize=(13.4, 0.30 * len(rows) + 1.5), sharey=True)
+    nsig = 0
+    for ax, (k, t) in zip(axs, mets):
+        for i, (n, tpl) in enumerate(rows):
+            for j, m in enumerate(MODELS):
+                arm = armname(tpl, m)
+                if arm not in ARM:
+                    ax.add_patch(Rectangle((j, i), 1, 1, fc="#f1f1ee", ec="white", lw=1.5))
+                    ax.text(j + 0.5, i + 0.5, "not run", ha="center", va="center", fontsize=10, color=GREY)
+                    continue
+                dd = diff(arm, REF[m], k)
+                if dd is None:
+                    ax.add_patch(Rectangle((j, i), 1, 1, fc="#f1f1ee", ec="white", lw=1.5))
+                    continue
+                z = max(-4, min(4, dd["z"]))
+                ax.add_patch(Rectangle((j, i), 1, 1, fc=cmap(norm(z)), ec="white", lw=1.5))
+                dag = " \u2020" if dd["n"] < 3 else ""
+                if dd["beyond"]:
+                    nsig += 1
+                    lab = s3(dd["d"]) + (" 2x" if dd["x2"] else "") + dag
+                    ax.text(j + 0.5, i + 0.5, lab, ha="center", va="center", fontsize=11,
+                            color="white" if abs(z) > 2.6 else INK, fontweight="bold" if dd["x2"] else "normal")
+                elif dag:
+                    ax.text(j + 0.5, i + 0.5, dag.strip(), ha="center", va="center", fontsize=11, color=INK2)
+        ax.set_xlim(0, 3)
+        ax.set_ylim(len(rows), 0)
+        ax.set_xticks([0.5, 1.5, 2.5], ["conv\nautoencoder", "conv +\nattention", "U-Net"], fontsize=12)
+        ax.xaxis.tick_top()
+        ax.set_title(t, fontsize=14, pad=40)
+        for s in ax.spines.values():
+            s.set_visible(False)
+        ax.tick_params(length=0)
+    axs[0].set_yticks([i + 0.5 for i in range(len(rows))], [n for n, _ in rows], fontsize=13)
+    fig.tight_layout()
+    png(key, fig)
+    return nsig
+
+
+heat("heat1", G1, "Color: arm minus base in units of the larger seed range (blue up, red down, clipped at 4). "
+                  "Number shown when the difference is beyond the range; 2x = beyond twice the range. 3 seeds each.")
+heat("heat2", G2, "Color: arm minus base in units of the larger seed range (blue up, red down, clipped at 4). "
+                  "Number shown when beyond the range; 2x = beyond twice the range. Anscombe arm void (code defect).")
+for t, key in (("abl_count_transforms_tf_local_ratio_{m}", "lr"), ("abl_count_transforms_tf_quantile_{m}", "q")):
+    for m in MODELS:
+        dd = diff(t.format(m=m), REF[m], "imp")
+        put(f"tf.{key}.{m}", s3(dd["d"]))
+        put(f"tf.{key}.{m}.bar", f3(dd["bar"]))
+for m in MODELS:
+    dd = diff(f"abl_scrambled_covariates_scrambled_covariates_{m}", REF[m], "conly")
+    put(f"sc.{m}", s3(dd["d"]))
+    put(f"sc.{m}.bar", f3(dd["bar"]))
+dd = diff("abl_depth_input_input_depth_fixed_unet", REF["unet"], "cor")
+put("fd.unet.cor", s3(dd["d"]))
+put("fd.unet.cor.bar", f3(dd["bar"]))
+dd = diff("abl_depth_input_input_depth_fixed_unet", REF["unet"], "imp")
+put("fd.unet.imp", s3(dd["d"]))
+put("fd.unet.imp.bar", f3(dd["bar"]))
+for m in ("convae", "convattn"):
+    dd = diff(f"abl_two_step_two_step_native_{m}", REF[m], "cor")
+    put(f"ts.{m}.cor", s3(dd["d"]))
+    put(f"ts.{m}.cor.bar", f3(dd["bar"]))
+dd = diff("abl_average_input_average_input_unet", REF["unet"], "imp")
+put("ai.unet.imp", s3(dd["d"]))
+put("ai.unet.imp.bar", f3(dd["bar"]))
+cite("heat", ARMS, READ)
+
+# ==================================================================================================
+# The settled design table: status of each row
+# ==================================================================================================
+sec = grab(DES, r"## 1\. The design table\n(.*?)\n\nEvery ablated switch")
+rows = []
+for line in sec.splitlines():
+    cells = [c.strip() for c in line.strip().strip("|").split("|")]
+    if len(cells) < 6 or not cells[0].isdigit():
+        continue
+    rows.append(dict(n=int(cells[0]), name=cells[1], conf=cells[4], status=cells[5]))
+if len(rows) < 30:
+    sys.exit(f"build_deck: {DES} design table has {len(rows)} rows")
+
+
+def stclass(s, conf=""):
+    s = s.lower()
+    if "ruling" in conf.lower() and not s.startswith("provisional") and "provisional" not in s:
+        return "ruling"
+    if s.startswith("provisional") or ("settled" in s and "provisional" in s):
+        return "provisional" if s.startswith("provisional") else "mixed"
+    if "ruling" in s:
+        return "ruling"
+    return "settled"
+
+
+def cfclass(c):
+    c = c.lower()
+    for k in ("strong", "moderate", "weak"):
+        if c.startswith(k):
+            return k
+    return "other"
+
+
+SC = {"settled": OK, "ruling": "#2f6f8f", "mixed": WAIT, "provisional": BAD}
+SL = {"settled": "settled by evidence", "ruling": "settled by a PI ruling", "mixed": "settled for some models, provisional for others",
+      "provisional": "provisional: a named run can change it"}
+fig, ax = plt.subplots(figsize=(13.4, 5.6))
+ncol = 4
+nrow = (len(rows) + ncol - 1) // ncol
+for i, r in enumerate(rows):
+    c, rr = i // nrow, i % nrow
+    st = stclass(r["status"], r["conf"])
+    x, y = c * 3.35, nrow - 1 - rr
+    ax.add_patch(FancyBboxPatch((x, y + 0.08), 3.2, 0.84, boxstyle="round,pad=0,rounding_size=0.12", fc=SC[st],
+                                alpha=0.30, ec=SC[st], lw=1.6))
+    nm = re.sub(r"\s*\(.*?\)", "", r["name"])
+    nm = {"Pearson residual transform on the U-Net": "Pearson residuals, U-Net",
+          "Two-step routing through the base view": "Two-step routing",
+          "Hidden-position representation": "Hidden-position token"}.get(nm, nm)
+    nm = nm if len(nm) <= 34 else nm[:33].rstrip() + "."
+    ax.text(x + 0.1, y + 0.5, nm, va="center", fontsize=10.2, color=INK)
+    ax.text(x + 3.12, y + 0.5, cfclass(r["conf"]) if cfclass(r["conf"]) != "other" else "", va="center", ha="right",
+            fontsize=9, color=MUTED, style="italic")
+ax.set_xlim(-0.05, ncol * 3.35)
+ax.set_ylim(-0.1, nrow + 0.05)
+ax.axis("off")
+ax.legend(handles=[Patch(fc=SC[k], alpha=0.30, ec=SC[k], label=SL[k]) for k in SC], loc="upper center",
+          bbox_to_anchor=(0.5, 0.0), ncol=2, frameon=False, fontsize=11)
+fig.tight_layout()
+png("design", fig)
+cnt = {k: sum(1 for r in rows if stclass(r["status"], r["conf"]) == k) for k in SC}
+put("des.rows", str(len(rows)))
+for k, v in cnt.items():
+    put(f"des.{k}", str(v))
+put("des.weak", str(sum(1 for r in rows if cfclass(r["conf"]) == "weak")))
+cite("design", DES)
+
+# ==================================================================================================
+# What did not run, and the ready queue
+# ==================================================================================================
+sq = grab(RQ, r"\(`quota -w`\): [0-9,]+ KB used \(([0-9,]+) GiB\) against a soft quota of [0-9,]+ KB \(([0-9,]+) GiB\)", 2)
+work = grab(RQ, r"The folder `onion/work` \(([0-9,]+) GiB\) leaves scratch")
+fj = grab(RQ, r"([0-9]+) Fir jobs wait in the queue")
+put("nr.used", sq[0])
+put("nr.quota", sq[1])
+put("nr.work", work)
+put("nr.firjobs", fj)
+put("nr.firend", grab(RQ, r"Planned outage from 2026-11-17 07:00 UTC to (about 2026-11-20)"))
+put("nr.deadline", grab(PLAN24, r"deadline: (2026-11-18T20:00Z)"))
+cite("notrun", RQ, PLAN24)
+
+fig, axs = plt.subplots(1, 2, figsize=(13.2, 3.9), gridspec_kw=dict(width_ratios=[1.1, 1]))
+ax = axs[0]
+used, quota, wk = [float(x.replace(",", "")) for x in (sq[0], sq[1], work)]
+ax.barh(1, used - wk, color="#8a8d92", height=0.5)
+ax.barh(1, wk, left=used - wk, color=WAIT, height=0.5)
+ax.text(used + 25, 1, f"{sq[0]} GiB used", va="center", fontsize=12)
+ax.axvline(quota, color=BAD, lw=2.5)
+ax.text(quota + 20, 1.75, f"soft quota {sq[1]} GiB: above it, every write is refused", color=BAD, fontsize=11.5, ha="left")
+ax.text(quota + 40, 0.62, f"pipeline work folder, {work} GiB:\nleaves after the QC fill and the recount", ha="left",
+        va="top", fontsize=10.5, color=INK2)
+ax.set_xlim(0, used * 1.25)
+ax.set_ylim(-0.3, 2.1)
+ax.set_yticks([])
+ax.set_xlabel("Nibi /scratch use (GiB)")
+ax.set_title("(a) Nibi scratch: over its quota", loc="left")
+ax = axs[1]
+import datetime as dt
+t0 = dt.datetime(2026, 11, 16, 12)
+H = lambda d: (d - t0).total_seconds() / 3600
+ax.barh(2, H(dt.datetime(2026, 11, 20, 12)) - H(dt.datetime(2026, 11, 17, 7)), left=H(dt.datetime(2026, 11, 17, 7)),
+        color=BAD, alpha=0.75, height=0.5)
+ax.text(H(dt.datetime(2026, 11, 17, 9)), 2, "Fir planned outage", va="center", color="white",
+        fontsize=11, fontweight="bold")
+ax.barh(1, H(dt.datetime(2026, 11, 18, 20)) - H(dt.datetime(2026, 11, 17, 20, 15)), left=H(dt.datetime(2026, 11, 17, 20, 15)),
+        color="#2f6f8f", alpha=0.75, height=0.5)
+ax.text(H(dt.datetime(2026, 11, 17, 19)), 1, "the 24-hour close-out window", va="center", ha="right", color=INK, fontsize=11,
+        fontweight="bold")
+ax.axvline(H(dt.datetime(2026, 11, 18, 20)), color=INK, lw=1.5, ls="--")
+days = [dt.datetime(2026, 11, d) for d in (17, 18, 19, 20, 21)]
+ax.set_xticks([H(d) for d in days], [d.strftime("%b %d") for d in days])
+ax.set_yticks([])
+ax.set_ylim(0.4, 2.6)
+ax.set_xlim(0, H(dt.datetime(2026, 11, 21)))
+ax.set_xlabel("date (UTC); dashed line = end of the run")
+ax.set_title("(b) Fir outage and the close-out window", loc="left")
+fig.tight_layout()
+png("notrun", fig)
+
+# ready queue: parse section 1
+q = grab(RQ, r"## 1\. Order of sending\n\n(.*?)\n\nEntries 1 to 4")
+QE = []
+for line in q.splitlines():
+    cells = [c.strip() for c in line.strip().strip("|").split("|")]
+    if len(cells) != 5 or not cells[0].isdigit():
+        continue
+    QE.append(dict(order=int(cells[0]), entry=cells[1].replace("`", "").replace("eic_v1_2", "Filled-covariate tables:"), cluster=cells[2], waits=cells[3], cost=cells[4]))
+if len(QE) != 19:
+    sys.exit(f"build_deck: {RQ} order table has {len(QE)} entries")
+
+
+def cost_of(s):
+    """The CPU-hours used for the bar: the largest 'about'/plain figure before any '+', summing '+' parts;
+    a range 'a to b' takes a; 'not built' gives None."""
+    if "not built" in s:
+        return None
+    s2 = re.sub(r"\(.*?\)", "", s)
+    s2 = s2.split(" or ")[0]
+    tot = 0.0
+    for part in s2.split("+"):
+        mm = re.findall(r"[0-9][0-9,]*\.?[0-9]*", part)
+        if mm:
+            tot += float(mm[0].replace(",", ""))
+    return tot or None
+
+
+def gclass(e):
+    w, o = e["waits"].lower(), e["order"]
+    if o <= 4:
+        return "can go now"
+    if "pi" in w:
+        return "waits for a PI decision"
+    if "fir return" in w or "queued" in w or e["cluster"].startswith("Fir"):
+        return "waits for Fir"
+    return "waits for an earlier entry"
+
+
+GC = {"can go now": OK, "waits for Fir": "#2f6f8f", "waits for a PI decision": WAIT, "waits for an earlier entry": "#8a8d92"}
+fig, ax = plt.subplots(figsize=(13.4, 6.0))
+for i, e in enumerate(QE):
+    c = cost_of(e["cost"])
+    g = gclass(e)
+    y = len(QE) - 1 - i
+    nm = e["entry"]
+    nm = nm if len(nm) <= 52 else nm[:51] + "."
+    ax.text(0.8, y, f"{e['order']}. {nm}", ha="right", va="center", fontsize=10.2, color=INK)
+    if c is None:
+        ax.text(1.05, y, "no submit script yet", va="center", fontsize=9.5, color=MUTED, style="italic")
+        continue
+    ax.barh(y, c, left=1, color=GC[g], height=0.66, log=True)
+    ax.text(c * 1.12 + 1, y, e["cost"] if len(e["cost"]) <= 40 else e["cost"][:39] + ".", va="center",
+            fontsize=8.8, color=INK2)
+ax.set_xscale("log")
+ax.set_xlim(1, 4e5)
+ax.set_ylim(-0.7, len(QE) - 0.3)
+ax.set_yticks([])
+ax.set_xticks([1, 10, 100, 1000, 10000, 100000], ["0", "10", "100", "1,000", "10,000", "100,000"])
+ax.set_xlabel("allocated CPU-hours (log scale; the bar starts at zero)")
+ax.spines["left"].set_visible(False)
+ax.legend(handles=[Patch(color=GC[k], label=k) for k in GC], loc="upper right", frameon=False, fontsize=11)
+fig.tight_layout()
+png("queue", fig)
+tot = sum(cost_of(e["cost"]) or 0 for e in QE)
+put("rq.n", str(len(QE)))
+put("rq.now", str(sum(1 for e in QE if gclass(e) == "can go now")))
+put("rq.noscript", str(sum(1 for e in QE if cost_of(e["cost"]) is None)))
+put("rq.total", comma(int(round(tot, -2))))
+cite("queue", RQ)
+
+# PI decisions: ready queue section 4
+sec4 = grab(RQ, r"## 4\. PI decisions that this queue waits for\n\n(.*?)(?:\n\n## |\Z)")
+DEC = []
+for line in sec4.splitlines():
+    mm = re.match(r"\s*([0-9]+)\. (.*)", line)
+    if mm:
+        DEC.append(re.sub(r"\s+,", ",", re.sub(r" of notepad L[0-9]+", "", mm.group(2).replace("`", "").replace("eic_v1_2", "the tables with filled covariates"))).strip())
+if len(DEC) < 8:
+    sys.exit(f"build_deck: {RQ} section 4 has {len(DEC)} decisions")
+cite("dec", RQ, DES, TODO)
+
+# rescoring (pending slide)
+rs = grab(DES, r"\*\*The run\.\*\* ([0-9]+) run-seeds of ([0-9]+) decisive arms, scored into `p256_sv` on Nibi "
+               r"\(PI approved, about ([0-9,]+) allocated CPU-hours", 3)
+put("rs.seeds", rs[0])
+put("rs.arms", rs[1])
+put("rs.cost", rs[2])
+cite("pending", DES, RQ, CHKMD)
+
+# title
+cite("title", TODO, PLAN24, DES)
+cite("status", TODO, PLAN24, DES, OBJ, CHKMD)
+
+# ==================================================================================================
+data = dict(n=N, fig=FIG, dec=DEC, src=SRC)
+read += [HERE / "build_deck.py", HERE / "deck_src.html"]
+sources = {p.relative_to(VAULT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in read}
+src = (HERE / "deck_src.html").read_bytes().decode("utf-8")
+if src.count("__SOURCES__") != 1 or src.count("__DATA__") != 1:
+    sys.exit("build_deck: deck_src.html must hold exactly one __SOURCES__ and one __DATA__")
+used_keys = set(re.findall(r'data-k="([^"]+)"', src))
+missing = sorted(k for k in used_keys if k not in N)
+if missing:
+    sys.exit(f"build_deck: deck_src.html uses keys not in DATA.n: {missing}")
+used_figs = set(re.findall(r'data-fig="([^"]+)"', src))
+if used_figs - set(FIG):
+    sys.exit(f"build_deck: deck_src.html uses figures not built: {sorted(used_figs - set(FIG))}")
+out = src.replace("__SOURCES__", json.dumps(sources, sort_keys=True))
+out = out.replace("__DATA__", json.dumps(data, separators=(",", ":")))
+(HERE / "index.html").write_bytes(out.encode("utf-8"))
+size = len(out.encode("utf-8"))
+print(f"build_deck: wrote index.html ({size / 1e6:.2f} MB) from {len(sources)} files; {len(FIG)} figures; "
+      f"{len(N)} numbers; unused figures {sorted(set(FIG) - used_figs)}")
+if size > 1_000_000:
+    sys.exit("build_deck: index.html is over 1 MB")
