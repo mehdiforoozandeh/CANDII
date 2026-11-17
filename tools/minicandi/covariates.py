@@ -26,6 +26,12 @@ NB head read are never touched.
 D6: read-derived QC (`QC_COLUMNS`) goes into C only when `qc_on_input` is set, never into C'.
 `c_out` therefore has exactly K_META columns, always.
 
+Absent QC (close-out item A4). Most rows have no value in some QC column (FRiP in every row; NRF
+and PBC in every view other than base and nodedup). An empty QC cell is written as `QC_ABSENT`, a
+value no QC metric takes, and the embedding built with the QC columns reads each QC column as a
+pair (standardised value, 1 = present) with the value set to 0 where the cell is absent. So "absent"
+and "a typical value" are two different inputs. The metadata columns keep the centre rule above.
+
 Standardisation follows `tools/t118/ladder/encoding.py` in spirit (z-scores, unknown -> neutral);
 its column set is the testbed's, not interface B's, so it is not imported.
 """
@@ -55,6 +61,8 @@ NUMERIC = {"log2_depth": (24.0, 2.0), "run_type_pe": (0.5, 0.5), "read_length": 
            "dedup_on": (0.5, 0.5), "mapq_threshold": (20.0, 15.0),
            "nsc": (1.1, 0.1), "rsc": (1.0, 0.5), "nrf": (0.8, 0.2), "pbc1": (0.8, 0.2),
            "pbc2": (5.0, 5.0), "frip": (0.2, 0.15), "frag_len": (200.0, 100.0)}
+#: A4: raw value of an empty QC cell (no QC metric is negative; pbc2 = -1 is already written empty)
+QC_ABSENT = -9999.0
 #: rows in every categorical embedding table; ids at or above it map to 0 (unknown)
 CAT_TABLE = 1024
 #: the `numeric_per_value` arm: discrete numeric column -> multiplier of its id (id = round(m x v))
@@ -119,7 +127,9 @@ class CovariateEncoder:
         return out
 
     def qc(self, row: dict) -> np.ndarray:
-        return np.asarray([_num(row.get(c), c) for c in QC_COLUMNS], dtype=np.float32)
+        """float32[K_QC]; an empty cell is `QC_ABSENT` (A4), never the column centre."""
+        return np.asarray([QC_ABSENT if str(row.get(c) or "").strip() == "" else float(row[c])
+                           for c in QC_COLUMNS], dtype=np.float32)
 
     def c_in(self, row: dict, qc_on_input: bool = False, depth_scale: float = 1.0) -> np.ndarray:
         m = self.meta(row, depth_scale)
@@ -138,6 +148,9 @@ class CovariateEmbedding(nn.Module):
     `per_value=True` (the `numeric_per_value` arm) reads the `PER_VALUE` columns through one
     `nn.Embedding(PV_TABLE, d_cat)` each, id = round(multiplier x raw value), in place of a
     standardised scalar; log2 depth and the QC columns stay scalars.
+    With the QC columns (k_in = K_META + K_QC) each QC column also gives a presence feature
+    (1 = a value, 0 = `QC_ABSENT`), and an absent value enters as a standardised 0 (A4). The
+    metadata-only build (k_in = K_META) is unchanged.
     The scrambled-covariates control is applied by the caller (`model_covariates`), not here.
     """
 
@@ -159,7 +172,10 @@ class CovariateEmbedding(nn.Module):
         if self.pv_idx:   # only for the per-value arm, so a default build keeps today's state_dict
             self.register_buffer("pv_mult", torch.tensor([pv[cols[i]] for i in self.pv_idx]))
             self.pv_tables = nn.ModuleList(nn.Embedding(PV_TABLE, d_cat) for _ in self.pv_idx)
-        n_feat = len(self.num_idx) + d_cat * (len(self.pv_idx) + len(self.cat_idx))
+        #: A4: positions in `num_idx` of the QC columns (empty for the metadata-only build)
+        self.qc_pos = [j for j, i in enumerate(self.num_idx) if cols[i] in QC_COLUMNS]
+        n_feat = (len(self.num_idx) + len(self.qc_pos)
+                  + d_cat * (len(self.pv_idx) + len(self.cat_idx)))
         self.mlp = nn.Sequential(nn.Linear(n_feat, hidden), nn.GELU(), nn.Linear(hidden, d_out))
         # created only for the covariate-dropout arm, so a default build keeps today's state_dict
         self.null = nn.Parameter(torch.zeros(d_out)) if null_vector else None
@@ -177,6 +193,13 @@ class CovariateEmbedding(nn.Module):
                              "built without null_vector=True")
         num = (c[..., self.num_idx] - self.centre) / self.scale
         feats = [num]
+        if self.qc_pos:                      # A4: absent QC -> value 0 and presence 0
+            q = c[..., self.num_idx][..., self.qc_pos]
+            present = q != QC_ABSENT
+            num = num.clone()
+            num[..., self.qc_pos] = torch.where(present, num[..., self.qc_pos],
+                                                torch.zeros_like(q))
+            feats = [num, present.to(num.dtype)]
         for j, i in enumerate(self.pv_idx):
             ids = (c[..., i] * self.pv_mult[j]).round().long()
             ids = torch.where((ids >= 0) & (ids < PV_TABLE), ids, torch.zeros_like(ids))
@@ -244,9 +267,12 @@ DROP_FIELDS_KEY = "covariate_drop_fields"
 
 def neutral_value(col: str) -> float:
     """A12: the raw value that carries no information for one column: the fixed centre of a numeric
-    or flag column (it standardises to 0) and id 0 (unknown) of a categorical column."""
+    or flag column (it standardises to 0), id 0 (unknown) of a categorical column, and
+    `QC_ABSENT` of a QC column (A4: a dropped QC field reads as absent, not as a typical value)."""
     if col in CATEGORICAL:
         return 0.0
+    if col in QC_COLUMNS:
+        return QC_ABSENT
     if col in NUMERIC:
         return float(NUMERIC[col][0])
     raise ValueError(f"unknown covariate column {col!r}")
