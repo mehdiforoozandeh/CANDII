@@ -205,3 +205,63 @@ def test_mixed_model_assays_filter(tmp_path, monkeypatch):
     seen.clear()
     MM.run(tmp_path, ev, "fine", tmp_path / "mm.tsv")
     assert seen == ["A", "B"]
+
+
+# ---------------------------------------------------------------------------------------------------
+# review fixes: quote rule, ladder telescoping, matched share, negative flag
+
+def test_mixed_model_quote_rule_blanks_factor_without_contrast_in_three_cells():
+    labels = {"cell": ["C1", "C1", "C2", "C2", "C3", "C3"],
+              "experiment": ["E1", "F1", "E2", "F2", "E3", "E3"],    # varies inside C1, C2: 2 cells
+              "library": ["a", "b", "c", "d", "e", "f"]}             # varies inside 3 cells
+    rows = [dict(factor="cell", variance_fraction=0.3, ci_low=0.1, ci_high=0.5, n_levels=3, estimable=1, note=""),
+            dict(factor="experiment", variance_fraction=0.2, ci_low=0.0, ci_high=0.4, n_levels=5, estimable=1,
+                 note=""),
+            dict(factor="library", variance_fraction=1e-9, ci_low=0.0, ci_high=1e-8, n_levels=6, estimable=1,
+                 note=""),
+            dict(factor="residual", variance_fraction=0.5, ci_low=0.4, ci_high=0.6, n_levels=6, estimable=1,
+                 note="REML")]
+    out = {r["factor"]: r for r in MM.quote_rule(rows, labels, 3)}
+    assert np.isnan(out["experiment"]["variance_fraction"]) and np.isnan(out["experiment"]["ci_low"])
+    assert out["experiment"]["note"].startswith(MM.NOT_IDENTIFIED + ": varies inside 2 cells")
+    assert out["library"]["variance_fraction"] == 1e-9 and "boundary" in out["library"]["note"]
+    assert out["cell"]["variance_fraction"] == 0.3 and out["residual"]["note"] == "REML"
+    assert rows[1]["variance_fraction"] == 0.2                       # input untouched
+
+
+def test_report_quote_rule_from_design():
+    mixed = [dict(assay="A", band="fine", factor="lab", variance_fraction="0.002", ci_low="0", ci_high="0.05",
+                  n_levels="4", estimable="1", note=""),
+             dict(assay="A", band="fine", factor="experiment", variance_fraction="0.01", ci_low="0", ci_high="0.02",
+                  n_levels="9", estimable="1", note=""),
+             dict(assay="A", band="fine", factor="residual", variance_fraction="0.9", ci_low="0.8", ci_high="1",
+                  n_levels="20", estimable="1", note="REML; second experiments included")]
+    design = [dict(assay="A", second_experiments="1", factor="lab", cells_with_contrast="2", n_obs="20", n_cells="6", estimable="1"),
+              dict(assay="A", second_experiments="1", factor="experiment", cells_with_contrast="5", n_obs="20", n_cells="6", estimable="1"),
+              dict(assay="A", second_experiments="0", factor="experiment", cells_with_contrast="0", n_obs="10", n_cells="6", estimable="0")]
+    out = {m["factor"]: m for m in LD.quote_rule(mixed, design)}
+    assert out["lab"]["variance_fraction"] == "" and LD.NOT_IDENTIFIED in out["lab"]["note"]
+    assert out["experiment"]["variance_fraction"] == "0.01"
+    md = LD.markdown([], mixed=list(out.values()), design=design)
+    assert "| A | fine | lab |  |" in md
+
+
+def test_ladder_chain_check_telescopes_on_common_units():
+    rows = _planted()
+    _pv(rows, "broad_histone", "B", "other_cell_type", "C1", 0.4)
+    got = [c for c in LD.chain_check(rows) if c["assay_class"] == "broad_histone"][0]
+    assert got["ok"] is True and got["n_units"] == 5 and got["n_cells"] == 4
+    assert got["sum_of_increments"] == pytest.approx(got["other_cell_type_value"], abs=1e-12)
+
+
+def test_share_is_matched_and_negative_increment_flagged():
+    rows = _planted()
+    for c in ("C1", "C2", "C3", "C4"):
+        _pv(rows, "broad_histone", "B", "other_cell_type", c, 0.4)   # would lower a class-wide denominator
+        _pv(rows, "broad_histone", "A", "other_experiment", c, 0.98, "experiment;donor", n=2)
+    bh = {(r["rung"], r["pair_class"]): r for r in LD.ladder_rows(rows, n_boot=100)
+          if r["assay_class"] == "broad_histone"}
+    ld = bh[("other_experiment", "experiment;lab;donor")]
+    assert ld["share"] == pytest.approx(0.05 / 2.0) and ld["share_units"] == 4
+    neg = bh[("other_experiment", "experiment;donor")]
+    assert neg["layer_increment"] == pytest.approx(-0.02) and "negative increment" in neg["flag"]

@@ -94,7 +94,7 @@ Per assay class, report every D12 rung with its increment, interval, pair count 
 | other experiment, class `experiment;donor` | same lab, other donor | isogenic | experiment repeat with donor | broad 5 (4), narrow 11 (8), DNase-seq 2 (2), ATAC-seq 2 (2) |
 | other cell type | two cell types | isogenic | cell type with donor and experiment (t305 form) | estimable |
 
-- Assay-matched increment: for each (cell, assay) with pairs of the rung and of the rung below, mean pair value of the rung minus that of the rung below; mean over the cell's assays; mean over cells. Interval: 95% cluster bootstrap over cells, t form with sqrt(n/(n-1)) (`layers._interval`). Estimable: at least 5 matched pairs from 3 cells (`layers.py`:94). A row under the rule has an empty value and the flag "not estimable: N pairs from C cells ...". No pooled-across-class row exists (PI decision open; D2 9.9).
+- Assay-matched increment: for each (cell, assay) with pairs of the rung and of the rung below, mean pair value of the rung minus that of the rung below; mean over the cell's assays; mean over cells. Interval: 95% cluster bootstrap over cells, t form with sqrt(n/(n-1)) (`layers._interval`). Estimable: at least 5 matched pairs from 3 cells (`layers.MIN_PAIRS`, `layers.MIN_CELLS`, layers.py:100). A row under the rule has an empty value and the flag "not estimable: N pairs from C cells ...". No pooled-across-class row exists (PI decision open; D2 9.9).
 - `share` = increment / the class's other_cell_type pair value (the variance between two tracks that share only the assay), the scale of a mixed-model fraction.
 - The cell-type layer of ruling 30 (over the same-donor experiment pairs) stays in `layers.tsv` (its own row, flag `donor not separated` where the same-donor classes are too few); the ladder quotes the t305 form so it is comparable with t305.
 
@@ -137,11 +137,20 @@ Per assay class, report every D12 rung with its increment, interval, pair count 
 - layers (pair list, design, layers with per-pair values): 1x0.5 + 1x0.5 + 4x3 = 13 at most; t305 measured 1 h 19 min on 4 CPUs for 3,908 pairs -> about 5.3 + 1 = 6 expected.
 - mixed (4 bands, every assay, 200 bootstrap draws): the smoke took 1 min 57 s for 1 assay, 1 band, 20 draws on 2 CPUs (venv setup included). At 10 times the draws, about 15 min per assay and band at most, x 30 assays = 7.5 h per band -> submit with MIXED_CPUS=2 MIXED_TIME=10:00:00: 4 x 2 x 10 = 80 CPU-h allocated at most, about 60 expected.
 - report: 1x0.5.
-- Submit: `bash slurm/onion_eval/closeout_e4_submit.sh layers|mixed|report nibi` (dry run by default; `DRY_RUN=0` submits; kit COE4 on Nibi).
+- Submit: `bash slurm/onion_eval/closeout_e4_submit.sh layers|mixed|report nibi` (dry run by default; `DRY_RUN=0` submits).
+- Files under `CO-E4` for the full run: layers stage 5 outputs + 3 logs; mixed 4 + 4 logs; report 4 + 1 log; 3 folders: about 24 (not 10).
+- Kit: COE4 (git a8d6e13) holds the layers, pair-list and design code, so the `layers` stage can run on it. It lacks the review fixes of 9.10 (`--min-contrast-cells`, the ladder's own telescoping check, the matched share). The `mixed` and `report` stages need a kit with them, or the report runs on the laptop from the small pulled tables (pair values about 4 MB).
 
 ### 9.9 Smoke run (2026-11-17; evidence `results/closeout_E4/E4_SMOKE.md`)
 
 - Nibi jobs 27607315 (pair list), 27607317 (layers), 27607318 (mixed model), 27607319 (report), kit COE4; 0.62 CPU-h allocated; 13 files under `/project/def-maxwl/mforooz/ONION/CO-E4`.
 - H3K36me3 sampling 0.04092 [0.0366, 0.0452] and biological replicate 0.000369 [0.0000069, 0.00073] agree with t305 (0.0409; 0.0004).
 - Telescoping check: 0 of 75 groups pass, because every rung above sampling holds other cells than the rung below. The acceptance check "telescoping passes" cannot hold as written on this pair set; the PI or the foreman decides whether to replace it by a check on common cells only.
-- Full layers stage not submitted tonight (foreman order: no more than 50 more files under /project; the stage writes 5 files and is about 6 CPU-h).
+- Full layers stage not submitted tonight (foreman order: no more than 50 more files under /project; the stage writes 8 files with its logs and is about 6 CPU-h).
+
+### 9.10 Review fixes (2026-11-17)
+
+- Quote rule in code. `mixed_model.py --min-contrast-cells 3` (off by default; the submit script passes it) blanks the fraction of a fitted factor other than cell that varies inside fewer than 3 cells, with the note "not identified inside cells". It marks a fraction below 1e-6 as a boundary fit. `ladder.py report --design` applies the same rule to tables that were written without the switch.
+- The ladder's own telescoping check (`chain_check.tsv`): pseudoreplicate -> isogenic -> other_cell_type on the (cell, assay) units that hold all three. Smoke: 65 of 65 groups are exact; broad histone, all bands, 16 units: 0.03821 + 0.000369 + 0.004489 = 0.04307. The old check on layers.tsv stays, labeled as known to fail (its rungs hold different cells).
+- `share` uses the same (cell, assay) units as the increment (column `share_units`). A negative increment is kept and flagged.
+- Ladder vs mixed model at the fine band: diagnosis in `results/closeout_E4/E4_MIXED_DIAG.md`. The response is identical and the REML fit is sound. The mixed model's homoscedastic residual and the ladder's one-sided subtraction both fail under track-specific sampling variance (0.021 to 0.049). Do not submit the mixed stage before a per-library residual is added. Quote two-sided ladder rungs as upper values until two-sided subtraction is decided.

@@ -26,12 +26,18 @@ report    The ladder table from the per-pair values of `layers.py run --pairs-ou
           The rung below is the nearest populated nested rung for pseudoreplicate .. isogenic, and
           isogenic for every rung above it (PI ruling 30: donor and experiment are siblings over
           isogenic). The four other_experiment pair classes are four rows. A row is estimable when its
-          matched pairs number at least MIN_PAIRS from at least MIN_CELLS cells (`layers.py`:94);
+          matched pairs number at least MIN_PAIRS from at least MIN_CELLS cells (`layers.MIN_PAIRS`, `layers.MIN_CELLS`, layers.py:100);
           otherwise its value is left empty and its flag says "not estimable" with the counts. Interval:
-          95% cluster bootstrap over cells, t form (`layers._interval`). `share` is the increment over
-          the class's other_cell_type pair value (the total between two tracks that share only the
-          assay), the scale of a mixed-model variance fraction. With --layers it also runs
-          `total_variance.telescoping_check` on layers.tsv; with --mixed it lists the mixed-model rows.
+          95% cluster bootstrap over cells, t form (`layers._interval`). A negative increment is kept
+          (never clipped) and flagged. `share` is, on the row's (cell, assay) units that also hold
+          other_cell_type pairs, the increment over the other_cell_type pair value of those same units
+          (the total between two tracks that share only the assay; the scale of a mixed-model variance
+          fraction); `share_units` counts them. `chain_check.tsv` is the ladder's own telescoping check
+          (pseudoreplicate -> isogenic -> other_cell_type on the units that hold all three). With --layers
+          it also runs the old `total_variance.telescoping_check` on layers.tsv (known to fail: its rungs
+          hold different cells). With --mixed it lists the mixed-model rows; with --design it applies the
+          quote rule (a factor other than cell that varies inside fewer than 3 cells: fraction left empty,
+          "not identified inside cells").
 
 CLI:
   python tools/onion_eval/ladder.py pairlist --evalset <json> --tables <dir> --out <json> --changes <tsv>
@@ -86,7 +92,7 @@ REASON_UNBUILT = ("no pair: the per-library and per-lane units are build priorit
 REASON_EMPTY = "no pair in EIC for this assay class"
 REPORT_COLUMNS = ["assay_class", "stratum", "band", "rung", "pair_class", "layer", "increment_over",
                   "n_pairs_all", "n_cells_all", "n_pairs", "n_cells", "n_assays", "variance",
-                  "layer_increment", "ci_low", "ci_high", "ci_width", "share", "flag", "holds"]
+                  "layer_increment", "ci_low", "ci_high", "ci_width", "share", "share_units", "flag", "holds"]
 
 
 def _sha256(path):
@@ -236,10 +242,6 @@ def ladder_block(units, n_boot=1000, seed=0):
     """Ladder rows of one (assay class, stratum, band). units: the value of `unit_values` for it."""
     populated = {rk[0] for rk, u in units.items() if u}
     oct_ = units.get(("other_cell_type", ""), {})
-    oct_cells = {}
-    for (c, _a), v in oct_.items():
-        oct_cells.setdefault(c, []).extend(v)
-    total = float(np.mean([np.mean(v) for v in oct_cells.values()])) if oct_cells else float("nan")
     rows = []
     for rung, pc, layer, holds in LADDER:
         u = units.get((rung, pc), {})
@@ -249,7 +251,7 @@ def ladder_block(units, n_boot=1000, seed=0):
         row = dict(rung=rung, pair_class=pc, layer=layer, holds=holds, n_pairs_all=n_all, n_cells_all=c_all,
                    increment_over=low[0] if low else "", n_pairs=0, n_cells=0, n_assays=0,
                    variance=float("nan"), layer_increment=float("nan"), ci_low=float("nan"),
-                   ci_high=float("nan"), ci_width=float("nan"), share=float("nan"))
+                   ci_high=float("nan"), ci_width=float("nan"), share=float("nan"), share_units=0)
         if not u:
             row["flag"] = REASON_UNBUILT if rung in ("sequencing", "technical") else REASON_EMPTY
             rows.append(row)
@@ -276,11 +278,54 @@ def ladder_block(units, n_boot=1000, seed=0):
         rng = np.random.default_rng(seed)
         boot = vals[rng.integers(0, len(cells), size=(n_boot, len(cells)))].mean(1)
         lo, hi = LY._interval(est, boot, len(cells))
+        # share: on the (cell, assay) units of this increment that also hold other_cell_type pairs, the
+        # increment over the other_cell_type pair value of those same units (cell means, then mean)
+        su = [k for k in matched if k in oct_]
+        if su:
+            sc = sorted({c for c, _ in su})
+            num = np.mean([np.mean([np.mean(u[k]) - (np.mean(lu[k]) if low else 0.0) for k in su if k[0] == c])
+                           for c in sc])
+            den = np.mean([np.mean([np.mean(oct_[k]) for k in su if k[0] == c]) for c in sc])
+            row.update(share=float(num / den), share_units=len(su))
+        flag = "ok" if est >= 0 else "ok; negative increment (not clipped)"
         row.update(variance=float(np.mean([var_c[c] for c in cells])), layer_increment=est, ci_low=lo,
-                   ci_high=hi, ci_width=hi - lo, share=est / total if total and math.isfinite(total) else
-                   float("nan"), flag="ok")
+                   ci_high=hi, ci_width=hi - lo, flag=flag)
         rows.append(row)
     return rows
+
+
+CHAIN = (("pseudoreplicate", ""), ("isogenic", ""), ("other_cell_type", ""))
+CHAIN_COLUMNS = ["assay_class", "stratum", "band", "n_units", "n_cells", "sampling", "replicate_increment",
+                 "cell_type_increment", "sum_of_increments", "other_cell_type_value", "abs_diff", "ok"]
+
+
+def chain_check(pair_rows, tol=1e-9):
+    """The ladder's own telescoping check: on the (cell, assay) units that hold every rung of the chain
+    pseudoreplicate -> isogenic -> other_cell_type, the assay-matched sampling value plus the two
+    increments (cell means, then mean) against the other_cell_type value of the same units."""
+    out = []
+    for (cls, s, b), units in sorted(unit_values(pair_rows).items()):
+        if cls == "control":
+            continue
+        us = [units.get(k, {}) for k in CHAIN]
+        common = sorted(set(us[0]).intersection(*us[1:]))
+        cells = sorted({c for c, _ in common})
+        row = dict(assay_class=cls, stratum=s, band=b, n_units=len(common), n_cells=len(cells))
+        if not common:
+            out.append(dict(row, ok=""))
+            continue
+        def cm(f):
+            return float(np.mean([np.mean([f(k) for k in common if k[0] == c]) for c in cells]))
+        m = [lambda k, j=j: float(np.mean(us[j][k])) for j in range(3)]
+        samp = cm(m[0])
+        rep_ = cm(lambda k: m[1](k) - m[0](k))
+        ct = cm(lambda k: m[2](k) - m[1](k))
+        top = cm(m[2])
+        tot = samp + rep_ + ct
+        out.append(dict(row, sampling=samp, replicate_increment=rep_, cell_type_increment=ct,
+                        sum_of_increments=tot, other_cell_type_value=top, abs_diff=abs(tot - top),
+                        ok=bool(abs(tot - top) <= tol * (1 + abs(top)))))
+    return out
 
 
 def ladder_rows(pair_rows, n_boot=1000, seed=0):
@@ -297,14 +342,37 @@ def _g(x, nd=3):
     return "" if not (isinstance(x, float) and math.isfinite(x)) else f"{x:.{nd}g}"
 
 
-def markdown(rows, tele=None, mixed=None, design=None):
+NOT_IDENTIFIED = "not identified inside cells"
+
+
+def quote_rule(mixed, design, min_cells=MIN_CELLS):
+    """Mixed-model rows with the E4 quote rule applied from design.tsv: a fitted factor other than cell
+    that varies inside fewer than min_cells cells gets an empty fraction and interval (the same rule as
+    `mixed_model.quote_rule`, for tables written without --min-contrast-cells). The design row is the one
+    with the table's second-experiments mode (its residual note says "second experiments included")."""
+    se = {(m["assay"], m["band"]): ("1" if "second experiments included" in m.get("note", "") else "0")
+          for m in mixed if m["factor"] == "residual"}
+    cw = {(d["assay"], d["second_experiments"], d["factor"]): d["cells_with_contrast"] for d in design}
+    out = []
+    for m in mixed:
+        m = dict(m)
+        k = cw.get((m["assay"], se.get((m["assay"], m["band"]), "0"), m["factor"]), "")
+        if m["factor"] not in ("cell", "residual") and m["estimable"] == "1" and k != "" and \
+                int(k) < min_cells and m["variance_fraction"] != "":
+            m.update(variance_fraction="", ci_low="", ci_high="",
+                     note=f"{NOT_IDENTIFIED}: varies inside {k} cells < {min_cells} (fitted, not quoted)")
+        out.append(m)
+    return out
+
+
+def markdown(rows, tele=None, mixed=None, design=None, chain=None):
     lines = ["# Replicate ladder (close-out item E4)", "",
              "Stratum all, band all. Increments are assay-matched pair values (0.5 E[(Y - Y')^2] of log1p "
              "counts at each assay's common depth); intervals are 95% cluster-bootstrap intervals over cells. "
              "No row is pooled across assay classes. Full table: ladder.tsv.", ""]
     for cls in sorted({r["assay_class"] for r in rows}):
         lines += [f"## {cls}", "", "| rung | layer | increment [95% interval] | pairs (cells) matched | "
-                  "pairs (cells) all | share of cell-type pair value | flag |", "|---|---|---|---|---|---|---|"]
+                  "pairs (cells) all | share of the cell-type pair value (same cells and assays) | flag |", "|---|---|---|---|---|---|---|"]
         for r in rows:
             if r["assay_class"] != cls or r["stratum"] != "all" or r["band"] != "all":
                 continue
@@ -316,11 +384,29 @@ def markdown(rows, tele=None, mixed=None, design=None):
         lines.append("")
     if tele is not None:
         ok = sum(1 for t in tele if t["ok"])
-        lines += ["## Telescoping check of layers.tsv", "",
-                  f"{ok} of {len(tele)} groups telescope exactly (total_variance.telescoping_check); "
-                  f"{sum(1 for t in tele if t['chain_ok'])} have the ruling-30 chain. The rest hold rungs with "
-                  "different cells (telescoping.tsv).", ""]
+        lines += ["## Old telescoping check of layers.tsv (known to fail)", "",
+                  f"{ok} of {len(tele)} groups telescope exactly (total_variance.telescoping_check on the "
+                  "pooled rows of layers.tsv, which the ladder does not use). Known cause of the failures: the "
+                  "rungs hold different cells, so each increment uses the cells it shares with the rung below "
+                  "and the sum does not telescope (telescoping.tsv).", ""]
+    if chain is not None:
+        cc = [c for c in chain if c["stratum"] == "all" and c["band"] == "all"]
+        lines += ["## Telescoping check of the ladder (chain_check.tsv)", "",
+                  f"On the (cell, assay) units that hold pseudoreplicate, isogenic and other_cell_type pairs: "
+                  f"{sum(1 for c in chain if c['ok'] is True)} of {sum(1 for c in chain if c['ok'] != '')} "
+                  "(class, stratum, band) groups telescope exactly.", "",
+                  "| assay class | units | cells | sampling | replicate | cell type | sum | other_cell_type | ok |",
+                  "|---|---|---|---|---|---|---|---|---|"]
+        for c in cc:
+            lines.append(f"| {c['assay_class']} | {c['n_units']} | {c['n_cells']} | {_g(c.get('sampling'), 4)} | "
+                         f"{_g(c.get('replicate_increment'), 4)} | {_g(c.get('cell_type_increment'), 4)} | "
+                         f"{_g(c.get('sum_of_increments'), 4)} | {_g(c.get('other_cell_type_value'), 4)} | "
+                         f"{c['ok']} |")
+        lines.append("")
     if mixed:
+        if design is None and not any(NOT_IDENTIFIED in m.get("note", "") for m in mixed):
+            lines += ["WARNING: no design.tsv given and the mixed-model table carries no quote rule: "
+                      "fractions of factors that vary inside fewer than 3 cells are shown.", ""]
         lines += ["## Crossed mixed model (order-free cross-check)", "",
                   "| assay | band | factor | variance fraction [95% interval] | levels | estimable | note |",
                   "|---|---|---|---|---|---|---|"]
@@ -358,9 +444,13 @@ def cmd_report(args):
         tele = TV.telescoping_check(args.layers)
         _write_tsv(tele, ["group", "innermost", "outermost", "sum_of_increments", "outermost_variance",
                           "abs_diff", "chain_ok", "ok"], out / "telescoping.tsv")
+    chain = chain_check(pair_rows)
+    _write_tsv(chain, CHAIN_COLUMNS, out / "chain_check.tsv")
     mixed = [r for p in (args.mixed or []) for r in _read_tsv(p)]
     design = _read_tsv(args.design) if args.design else None
-    (out / "ladder.md").write_text(markdown(rows, tele, mixed, design))
+    if design is not None:
+        mixed = quote_rule(mixed, design)
+    (out / "ladder.md").write_text(markdown(rows, tele, mixed, design, chain))
     print(f"ladder report: {len(rows)} rows -> {out / 'ladder.tsv'}, {out / 'ladder.md'}")
     return 0
 

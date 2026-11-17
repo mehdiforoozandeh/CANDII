@@ -16,7 +16,7 @@
 #           with --pairs-out (4 CPU x 3 h, 32000M; t305 measured 1 h 19 min on 4 CPUs for 3,908 pairs,
 #           this list holds 3,979) -> 13 CPU-h allocated at most, about 6 expected.
 #   mixed   4 jobs, one per Haar band (fine, peak, domain, broad): mixed_model.py on every assay
-#           with --second-experiments --extra-factors lab, 200 bootstrap draws. MIXED_TIME and
+#           with --second-experiments --extra-factors lab --min-contrast-cells 3, 200 bootstrap draws. MIXED_TIME and
 #           MIXED_CPUS set the request (default 8 h x 4 CPU = 32 CPU-h per job, 128 in all at most);
 #           set them from the smoke job's sacct before submitting.
 #   report  1 job (1 CPU x 0.5 h): ladder.py report over the layers pair values, layers.tsv
@@ -71,7 +71,7 @@ smoke)
   if done_or_queued "$S/layers.tsv" co_e4_smoke_layers; then echo "skip smoke layers"; else
     j2=$(remote "$SB --job-name=co_e4_smoke_layers $(dep "$j1") --time=01:00:00 --cpus-per-task=4 --mem=16000M --output=$E/logs/%x_%j.out $RUN tools/onion_eval/layers.py run --tables $TX --evalset $S/pairlist.json --strata $STRATA --out $S/layers.tsv --pairs-out $S/pair_values.tsv.gz"); echo "layers: $j2"; fi
   if done_or_queued "$S/mixed_fine.tsv" co_e4_smoke_mm; then echo "skip smoke mixed model"; else
-    j3=$(remote "$SB --job-name=co_e4_smoke_mm --time=02:00:00 --cpus-per-task=2 --mem=16000M --output=$E/logs/%x_%j.out $RUN tools/onion_eval/mixed_model.py run --tables $TX --evalset $EVL --band fine --assays $SMOKE_ASSAYS --second-experiments --extra-factors lab --n-boot 20 --out $S/mixed_fine.tsv"); echo "mixed model: $j3"; fi
+    j3=$(remote "$SB --job-name=co_e4_smoke_mm --time=02:00:00 --cpus-per-task=2 --mem=16000M --output=$E/logs/%x_%j.out $RUN tools/onion_eval/mixed_model.py run --tables $TX --evalset $EVL --band fine --assays $SMOKE_ASSAYS --second-experiments --extra-factors lab --min-contrast-cells 3 --n-boot 20 --out $S/mixed_fine.tsv"); echo "mixed model: $j3"; fi
   d=$(echo "$j2 $j3" | xargs | tr ' ' ':')
   if done_or_queued "$S/ladder/ladder.md" co_e4_smoke_report; then echo "skip smoke report"; else
     j4=$(remote "$SB --job-name=co_e4_smoke_report $(dep "$d") --time=00:30:00 --cpus-per-task=1 --mem=4000M --output=$E/logs/%x_%j.out $RUN tools/onion_eval/ladder.py report --pairs $S/pair_values.tsv.gz --layers $S/layers.tsv --mixed $S/mixed_fine.tsv --n-boot 1000 --out-dir $S/ladder"); echo "report: $j4"; fi
@@ -92,7 +92,7 @@ mixed)
   remote "mkdir -p $M $E/logs" >/dev/null
   for b in $BANDS; do
     if done_or_queued "$M/mixed_$b.tsv" "co_e4_mm_$b"; then echo "skip mixed $b"; continue; fi
-    j=$(remote "$SB --job-name=co_e4_mm_$b --time=$MIXED_TIME --cpus-per-task=$MIXED_CPUS --mem=32000M --output=$E/logs/%x_%j.out $RUN tools/onion_eval/mixed_model.py run --tables $TX --evalset $EVL --band $b --second-experiments --extra-factors lab --n-boot 200 --out $M/mixed_$b.tsv"); echo "mixed $b: $j"
+    j=$(remote "$SB --job-name=co_e4_mm_$b --time=$MIXED_TIME --cpus-per-task=$MIXED_CPUS --mem=32000M --output=$E/logs/%x_%j.out $RUN tools/onion_eval/mixed_model.py run --tables $TX --evalset $EVL --band $b --second-experiments --extra-factors lab --min-contrast-cells 3 --n-boot 200 --out $M/mixed_$b.tsv"); echo "mixed $b: $j"
   done
   ;;
 report)

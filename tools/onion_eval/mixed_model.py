@@ -399,8 +399,36 @@ def extra_factor_rows(obs, extra, header):
     return fit, rows
 
 
+BOUNDARY_FRACTION = 1e-6
+NOT_IDENTIFIED = "not identified inside cells"
+
+
+def quote_rule(rows, labels, min_cells):
+    """E4: blank the fraction (and interval) of a fitted factor other than cell that varies inside fewer
+    than `min_cells` cells (it is then identified only across cells, i.e. confounded with cell), and mark
+    a fraction below BOUNDARY_FRACTION as a fit at the lower bound. The fit itself is unchanged."""
+    cells = labels["cell"]
+    out = []
+    for r in rows:
+        r = dict(r)
+        f = r["factor"]
+        if r["estimable"] == 1 and f in labels and f != "cell":
+            k = len({c for c in set(cells)
+                     if len({x for x, cc in zip(labels[f], cells) if cc == c}) > 1})
+            if k < min_cells:
+                r.update(variance_fraction=float("nan"), ci_low=float("nan"), ci_high=float("nan"),
+                         note=f"{NOT_IDENTIFIED}: varies inside {k} cells < {min_cells} (fitted, not quoted)")
+                out.append(r)
+                continue
+        if r["estimable"] == 1 and math.isfinite(r["variance_fraction"]) and \
+                r["variance_fraction"] < BOUNDARY_FRACTION:
+            r["note"] = (r["note"] + "; " if r["note"] else "") + "at the lower bound of the fit (boundary)"
+        out.append(r)
+    return out
+
+
 def run(tables, evalset, band, out, layer=None, n_boot=200, seed=0, reader=None, extra=(),
-        second_experiments=False, assays=None):
+        second_experiments=False, assays=None, min_contrast_cells=0):
     if band not in BANDS:
         raise ValueError(f"band {band!r} not in {sorted(BANDS)}")
     tables = Path(tables)
@@ -437,10 +465,14 @@ def run(tables, evalset, band, out, layer=None, n_boot=200, seed=0, reader=None,
         else:
             fr, beta = decompose(S, ysum, K, labels, depth, n_boot=n_boot, seed=seed)
         halves = sum(1 for o in obs if o["half"])
+        if min_contrast_cells:                  # E4: quote a fraction only where it is identified
+            fr = quote_rule(fr, labels, min_contrast_cells)
         for r in fr:
             if r["factor"] == "residual":
                 r["note"] += (f"; layer {used_layer}; {halves} of {len(obs)} observations are"
                               " pseudoreplicate halves")
+                if second_experiments:
+                    r["note"] += "; second experiments included"
             rows.append(dict(assay=assay, band=band, **r))
         if "lab" not in extra:                  # E5: with lab as an extra factor its row is above
             rows.append(dict(assay=assay, band=band, **lab_row(obs)))
@@ -479,12 +511,15 @@ def main(argv=None):
                         f"factors ({', '.join(EXTRA_FACTORS)}); default none (the rows above, unchanged)")
     r.add_argument("--second-experiments", action="store_true",
                    help="E4: also take the in_eic=evalonly rows (second experiments of an add-on table)")
+    r.add_argument("--min-contrast-cells", type=int, default=0,
+                   help="E4: blank a factor's fraction when it varies inside fewer cells (default 0: off)")
     r.add_argument("--assays", default="", help="E4: comma list of assays to fit (default: every assay)")
     args = ap.parse_args(argv)
     extra = tuple(x for x in args.extra_factors.split(",") if x)
     rows = run(args.tables, args.evalset, args.band, args.out, args.layer, args.n_boot, args.seed,
                extra=extra, second_experiments=args.second_experiments,
-               assays=[x for x in args.assays.split(",") if x] or None)
+               assays=[x for x in args.assays.split(",") if x] or None,
+               min_contrast_cells=args.min_contrast_cells)
     n_ne = sum(1 for x in rows if x["estimable"] == 0 and x["factor"] in FACTORS)
     print(f"mixed_model: {len(rows)} rows -> {args.out}; {n_ne} non-estimable factor rows; {METHOD}")
     return 0
