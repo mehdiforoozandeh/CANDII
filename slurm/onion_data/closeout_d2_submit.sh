@@ -30,7 +30,7 @@ set -euo pipefail
 STAGE="${1:?usage: closeout_d2_submit.sh prep|layers|baselines|models|build [nibi|fir]}"
 WHERE="${2:-nibi}"
 DRY="${DRY_RUN:-1}"
-KIT_ID="${KIT_ID:-COD2}"
+KIT_ID="${KIT_ID:-COD2b}"
 BASE="${BASE:-eic_v1_2}"
 BASE_EVALSET_SHA="${BASE_EVALSET_SHA:-26f9e32f7cfd49f33b841925ff88901ba4b91c2df438ecc840e4074499f31c76}"  # Fir eval/eic_v1_2/evalset.json
 O=/project/def-maxwl/mforooz/ONION
@@ -66,7 +66,7 @@ case "$STAGE" in
 prep)
   need "$O/catalog/encode/experiments.tsv" "$O/eic/other_experiment_ledger.tsv" \
        "$O/eic/other_experiment_build_list.tsv" "$O/eval/strata/masks.h5"
-  if done_or_queued "$D/PAIR_SMOKE_ALL.md" co_d2_prep; then echo "skip prep: done or queued"; exit 0; fi
+  if done_or_queued "$D/eval/${BASE}x/evalset_layers.json" co_d2_prep; then echo "skip prep: done or queued"; exit 0; fi
   remote "mkdir -p $D/logs && $SB --job-name=co_d2_prep --time=03:00:00 --cpus-per-task=4 --mem=32000M --output=$D/logs/%x_%j.out $K/slurm/onion_data/closeout_d2_prep.sh $K $D $BASE $BASE_EVALSET_SHA"
   ;;
 layers)

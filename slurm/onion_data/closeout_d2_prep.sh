@@ -44,6 +44,8 @@ cd "$KIT"
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1 OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 source "$KIT/slurm/_kit_pin.sh"
 mkdir -p "$D/eval/$BASE" "$D/eval/${BASE}x" "$D/tables"
+# evalset.py reads the genome at <tables>/../../genome; one symlink makes D/tables/<x> resolve to $O/genome
+[ -e "$D/genome" ] || ln -s $O/genome "$D/genome"
 step() { echo; echo "=== step $1 $(date -u +%H:%M:%S)"; }
 
 step "1 evalset build on $BASE"
