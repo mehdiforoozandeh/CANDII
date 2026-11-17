@@ -4,9 +4,10 @@
     python recount.py run --work <dir> --experiment <acc> --regions <tsv> \\
         (--frag-len <int|0> | --frag-len-source xcor [--measurements <dir>] [--tables <eic_v1>]) \\
         --halves {0|1} --out <store dir> [--unit pooled] [--layer uniform] [--run-arm base] \\
-        [--roles all|eval] [--chrom-sizes <json>]
-    python recount.py verify --out <measurement dir> --counts <eic_v1 counts.h5>
+        [--roles all|eval] [--chrom-sizes <json>] [--verify-counts <eic_v1 counts.h5>]
+    python recount.py verify --out <measurement dir> --counts <eic_v1 counts.h5> [--no-rescan]
     python recount.py verify --all --tables <eic_res_v1> [--eic-v1 <tables dir>] [--workers N]
+        [--no-rescan]
     python recount.py tables --eic-v1 <tables dir> --store <dir> --out <eic_res_v1>
 
 POINT RULE (plan, Amendment 3, the fact paragraph). One position per tagAlign line (one read): its
@@ -38,6 +39,15 @@ region, uint8, or uint16 (uint32) for a view with a value above 255 (65535); att
 every output's sha256. `<out>/regions.tsv` is a copy of `--regions` (it must match if present).
 `--roles eval` (the `br<i>` views of the validation experiments) restricts the files to the eval
 regions.
+
+ONE READ OF THE TAGALIGNS (item A7). The read sets under Nibi `/scratch/mforooz/onion/work` will
+leave scratch. `run --verify-counts <eic_v1 counts.h5>` therefore does the read-set check of
+`verify` in the same scan that counts the points (overlap rule at 25 bp on the eval regions against
+the stored counts), records it in `provenance.json` (`readset_check`: pass, or the problems, with
+the sha256 of the counts file) and exits 1 on a mismatch, after it has written the files. Without
+the option the run is as before. `verify --no-rescan` then checks a measurement from the store
+alone: the recorded in-run check must be `pass` against a counts file of the same sha256, and the
+point sums are compared with the recorded `n_reads_in_regions` of each view instead of a rescan.
 
 FRAGMENT LENGTH (`--frag-len-source xcor`, ChIP-seq). Per replicate from
 `<work>/<exp>/<run arm>/rep<i>.xcor.qc` (column 3, first value; the file `build_tables.py` reads),
@@ -397,7 +407,8 @@ def run(a) -> int:
     d = store / mid
     d.mkdir(parents=True, exist_ok=True)
     layout = Layout(regions)
-    half = {h: scan_tagaligns(tas[h], layout, shift) for h in HALVES}
+    check = getattr(a, "verify_counts", None)
+    half = {h: scan_tagaligns(tas[h], layout, shift, overlap=bool(check)) for h in HALVES}
     base = half["pr1"]["points"].astype(np.uint64) + half["pr2"]["points"]
     if base.size and int(base.max()) > np.iinfo(np.uint32).max:
         raise SystemExit(f"{mid}: a 1 bp count overflows uint32")
@@ -431,10 +442,22 @@ def run(a) -> int:
             "frag_len_source": fl["frag_len_source"], "frag_len_per_rep": fl["frag_len_per_rep"],
             "chrom_sizes": str(a.chrom_sizes), "outputs": outputs, "code": {"git_sha": AV.git_sha()},
             "wall_s": round(time.time() - t0, 1), "created_utc": AV.utc()}
+    rc = 0
+    if check:
+        ov = half["pr1"]["overlap"] + half["pr2"]["overlap"]
+        probs = readset_problems(ov, regions, check)
+        prov["readset_check"] = {"counts": str(check), "counts_sha256": sha256_file(check),
+                                 "result": "pass" if not probs else probs}
+        prov["n_reads_in_regions_halves"] = {h: half[h]["n_in"] for h in HALVES}
+        if probs:
+            rc = 1
+            for x in probs:
+                print(f"FAIL {mid}: {x}", flush=True)
     write_json(d / "provenance.json", prov)
     print(f"[recount] {mid}: {views[''][1]} reads, {views[''][2]} in {len(regions)} regions, "
-          f"shift {shift} ({fl['frag_len_source']}), wall {prov['wall_s']} s", flush=True)
-    return 0
+          f"shift {shift} ({fl['frag_len_source']}), wall {prov['wall_s']} s"
+          + (f", read-set check {'pass' if rc == 0 else 'FAIL'}" if check else ""), flush=True)
+    return rc
 
 
 # --------------------------------------------------------------------------------------------
@@ -445,8 +468,32 @@ def _read_region(f, r) -> np.ndarray:
     return np.asarray(f[f"r{r['region']}"][()], np.int64)
 
 
-def verify_one(mdir, counts_v1) -> list[str]:
-    """Problems of one store measurement against its eic_v1 counts.h5 (module doc)."""
+def readset_problems(overlap, regions: list[dict], counts_v1) -> list[str]:
+    """Problems of an overlap-rule recount [n_slots, REGION_BINS] (slot order = `regions`)
+    against the stored eic_v1 counts.h5 on the eval regions: the read-set check."""
+    import h5py
+    probs = []
+    ev = 0
+    with h5py.File(counts_v1, "r") as f:
+        for slot, r in enumerate(regions):
+            if r["role"] != "eval":
+                continue
+            ev += 1
+            s = r["start_bp"] // RES
+            ref = np.asarray(f[r["chrom"]][s:s + REGION_BINS], np.int64)
+            if ref.shape[0] != REGION_BINS or not np.array_equal(ref, overlap[slot]):
+                n = int((ref != overlap[slot][:ref.shape[0]]).sum()) + \
+                    REGION_BINS - ref.shape[0]
+                probs.append(f"overlap recount differs from {counts_v1} on region {r['region']} "
+                             f"({r['chrom']}:{r['start_bp']}): {n} bins")
+    if not ev:
+        probs.append("no eval region: the read set cannot be checked against eic_v1")
+    return probs
+
+
+def verify_one(mdir, counts_v1, rescan: bool = True) -> list[str]:
+    """Problems of one store measurement against its eic_v1 counts.h5 (module doc). With
+    `rescan` False the tagAligns are not read (`--no-rescan`)."""
     import h5py
     mdir = Path(mdir)
     probs = []
@@ -464,32 +511,35 @@ def verify_one(mdir, counts_v1) -> list[str]:
     if probs:
         return probs
     shift = int(prov["frag_len_shift"])
-    ev = [r for r in regions if r["role"] == "eval"]
-    # (1) the read set is the stored one: overlap rule at 25 bp on the eval regions
     layout = Layout(regions)
-    tas = [p for h in HALVES for p in prov["halves"][h]]
-    scan = scan_tagaligns(tas, layout, shift, points=False, overlap=True)
-    with h5py.File(counts_v1, "r") as f:
-        for slot, r in enumerate(regions):
-            if r["role"] != "eval":
-                continue
-            s = r["start_bp"] // RES
-            ref = np.asarray(f[r["chrom"]][s:s + REGION_BINS], np.int64)
-            if ref.shape[0] != REGION_BINS or not np.array_equal(ref, scan["overlap"][slot]):
-                n = int((ref != scan["overlap"][slot][:ref.shape[0]]).sum()) + \
-                    REGION_BINS - ref.shape[0]
-                probs.append(f"overlap recount differs from {counts_v1} on region {r['region']} "
-                             f"({r['chrom']}:{r['start_bp']}): {n} bins")
-    if not ev:
-        probs.append("no eval region: the read set cannot be checked against eic_v1")
-    if scan["n_lines"] != prov["n_lines"]:
-        probs.append(f"tagAlign lines {scan['n_lines']} != provenance {prov['n_lines']}")
+    if rescan:
+        # (1) the read set is the stored one: overlap rule at 25 bp on the eval regions
+        tas = [p for h in HALVES for p in prov["halves"][h]]
+        scan = scan_tagaligns(tas, layout, shift, points=False, overlap=True)
+        probs += readset_problems(scan["overlap"], regions, counts_v1)
+        if scan["n_lines"] != prov["n_lines"]:
+            probs.append(f"tagAlign lines {scan['n_lines']} != provenance {prov['n_lines']}")
+        n_in = {"": scan["n_in"]}
+        if prov.get("with_halves"):
+            for h in HALVES:
+                n_in[h] = scan_tagaligns(prov["halves"][h], layout, shift, points=False)["n_in"]
+    else:
+        # (1') the check recorded by `run --verify-counts`, against this counts file
+        rec = prov.get("readset_check") or {}
+        if rec.get("result") != "pass":
+            probs.append(f"no passed in-run read-set check recorded ({rec.get('result')!r}); "
+                         f"verify with the rescan while the tagAligns exist")
+        elif rec.get("counts_sha256") != sha256_file(counts_v1):
+            probs.append(f"the in-run read-set check used another counts file than {counts_v1}")
+        n_in = {"": int(prov["n_reads_in_regions"])}
+        if prov.get("with_halves"):
+            for h in HALVES:
+                n_in[h] = int(prov.get("n_reads_in_regions_halves", {}).get(h, -1))
     # (2) pooled = pool(point1bp, 25), sum = reads inside the regions
-    views = [("point1bp.h5", "counts.h5", scan["n_in"])]
+    views = [("point1bp.h5", "counts.h5", n_in[""])]
     if prov.get("with_halves"):
         for h in HALVES:
-            sh = scan_tagaligns(prov["halves"][h], layout, shift, points=False)
-            views.append((f"point1bp_{h}.h5", f"{h}.h5", sh["n_in"]))
+            views.append((f"point1bp_{h}.h5", f"{h}.h5", n_in[h]))
     pts = {}
     for pname, cname, n_in in views:
         with h5py.File(mdir / pname, "r") as fp, h5py.File(mdir / cname, "r") as fc:
@@ -518,14 +568,14 @@ def verify_one(mdir, counts_v1) -> list[str]:
 
 
 def _verify_task(args):
-    mid, mdir, cv1 = args
+    mid, mdir, cv1, rescan = args
     try:
-        return mid, verify_one(mdir, cv1)
+        return mid, verify_one(mdir, cv1, rescan)
     except Exception as e:  # noqa: BLE001  (a crash is a failure of that measurement)
         return mid, [f"verify crashed: {type(e).__name__}: {e}"]
 
 
-def verify_all(tables, eic_v1=None, workers=1) -> int:
+def verify_all(tables, eic_v1=None, workers=1, rescan=True) -> int:
     tables = Path(tables)
     if eic_v1 is None:
         eic_v1 = json.loads((tables / "build_info.json").read_text())["eic_v1"]
@@ -537,7 +587,8 @@ def verify_all(tables, eic_v1=None, workers=1) -> int:
         if mid not in v1 or not v1[mid]["counts_path"].startswith("h5:"):
             fails.append((mid, [f"no h5 counts_path in {eic_v1}/measurements.tsv"]))
             continue
-        tasks.append((mid, str(Path(r["counts_path"][3:]).parent), v1[mid]["counts_path"][3:]))
+        tasks.append((mid, str(Path(r["counts_path"][3:]).parent), v1[mid]["counts_path"][3:],
+                      rescan))
     if workers > 1:
         with Pool(workers) as p:
             res = p.map(_verify_task, tasks, chunksize=1)
@@ -639,6 +690,8 @@ def main(argv=None) -> int:
     r.add_argument("--layer", default="uniform")
     r.add_argument("--roles", choices=("all", "eval"), default="all")
     r.add_argument("--chrom-sizes", default=AV.GENOME_SIZES)
+    r.add_argument("--verify-counts", help="eic_v1 counts.h5 of the row: the read-set check in "
+                                           "the same scan (item A7)")
     v = sub.add_parser("verify")
     v.add_argument("--out", help="one store measurement dir")
     v.add_argument("--counts", help="its eic_v1 counts.h5")
@@ -646,6 +699,8 @@ def main(argv=None) -> int:
     v.add_argument("--tables", help="eic_res_v1 tables dir (with --all)")
     v.add_argument("--eic-v1", help="eic_v1 tables dir (default: from build_info.json)")
     v.add_argument("--workers", type=int, default=1)
+    v.add_argument("--no-rescan", action="store_true",
+                   help="check from the store alone, by the in-run read-set check (item A7)")
     t = sub.add_parser("tables")
     t.add_argument("--eic-v1", required=True)
     t.add_argument("--store", required=True)
@@ -665,10 +720,10 @@ def main(argv=None) -> int:
         if a.all:
             if not a.tables:
                 ap.error("verify --all needs --tables")
-            return verify_all(a.tables, a.eic_v1, a.workers)
+            return verify_all(a.tables, a.eic_v1, a.workers, not a.no_rescan)
         if not (a.out and a.counts):
             ap.error("verify needs --out and --counts, or --all --tables")
-        probs = verify_one(a.out, a.counts)
+        probs = verify_one(a.out, a.counts, not a.no_rescan)
         for x in probs:
             print(f"FAIL {Path(a.out).name}: {x}")
         print(f"verify failures: {1 if probs else 0}")

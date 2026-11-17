@@ -58,13 +58,14 @@ if str(_TOOLS) not in sys.path:
 
 from minicandi import contract as C  # noqa: E402
 from minicandi.components import fine_to_sub, res_bp_of, res_subs_of, sub_to_fine  # noqa: E402
-from minicandi.dataset import OnionDataset  # noqa: E402
+from minicandi.dataset import EXCLUDE_TRIES, OnionDataset  # noqa: E402
 from minicandi.losses import total_loss  # noqa: E402
 from onion_data.recount import REGION_BP, pool, read_regions  # noqa: E402
 
 POINT_FILES = {"counts": "point1bp.h5", "pr1": "point1bp_pr1.h5", "pr2": "point1bp_pr2.h5"}
 #: config keys that the region store cannot serve
-REFUSED = ("two_step", "rna_track", "dna_embedding_h5", "dna_shift_bp", "average_h5")
+REFUSED = ("two_step", "rna_track", "dna_embedding_h5", "dna_shift_bp", "average_h5",
+           "exclude_regions", "train_regions")   # the last two: 25 bp bins, the store is bp
 
 
 def is_res_config(cfg: dict) -> bool:
@@ -108,12 +109,14 @@ class ResDataset(OnionDataset):
         if not reg.is_file():
             raise FileNotFoundError(f"{self.tables_dir}/regions.tsv: missing (the region store's "
                                     f"regions)")
-        self.regions = read_regions(reg)
+        # `store_regions`, not `regions`: `OnionDataset.regions` is the train_regions table of
+        # the parent (None here), and the parent's window draw reads it (item A7 fix)
+        self.store_regions = read_regions(reg)
         self.region_bp = REGION_BP
         self._by_chrom: dict = {}
-        for r in self.regions:
+        for r in self.store_regions:
             self._by_chrom.setdefault(r["chrom"], []).append(r)
-        self.train_regions = [r for r in self.regions if r["role"] == "train"]
+        self.train_regions = [r for r in self.store_regions if r["role"] == "train"]
         self.window_bp = self.L * self.res
         if self.window_bp > self.region_bp:
             raise ValueError(f"a window of {self.L} tokens of {self.res} bp ({self.window_bp} bp) "
@@ -178,10 +181,51 @@ class ResDataset(OnionDataset):
 
     # ---------------------------------------------------------------- windows
 
+    def window_span(self, meta: dict) -> tuple:
+        """(chrom, start bin, n bins) in 25 bp bins that cover the window's bases (item A7)."""
+        s = int(meta.get("start_bp", int(meta["start_bin"]) * C.RES))
+        b0 = s // C.RES
+        return meta["chrom"], b0, -(-(s + self.window_bp) // C.RES) - b0
+
+    def exclude_windows(self, intervals) -> None:
+        """`OnionDataset.exclude_windows` with the intervals in 25 bp bins, kept in bp (item A7:
+        the held-out windows of `heldout_loss` and the evalset regions)."""
+        if self.mode != "train" or self.excluded is not None:
+            raise ValueError("exclude_windows: train mode, once")
+        per: dict = {}
+        for chrom, start, n in intervals:
+            per.setdefault(str(chrom), []).append((int(start) * C.RES,
+                                                   (int(start) + int(n)) * C.RES))
+        self.excluded = {}
+        for chrom, iv in per.items():
+            iv.sort()
+            self.excluded[chrom] = (np.asarray([a for a, _ in iv], np.int64),
+                                    np.maximum.accumulate(np.asarray([b for _, b in iv],
+                                                                     np.int64)))
+
+    def _overlaps_excluded(self, chrom: str, start: int) -> bool:
+        """True when [start, start + window_bp) (bp) overlaps an excluded interval."""
+        hit = self.excluded.get(chrom)
+        if hit is None:
+            return False
+        starts, end_max = hit
+        i = int(np.searchsorted(starts, start + self.window_bp, side="left")) - 1
+        return i >= 0 and int(end_max[i]) > start
+
     def _draw_locus(self, rng) -> tuple[str, int]:
-        r = self.train_regions[int(rng.integers(len(self.train_regions)))]
-        off = int(rng.integers(0, self.region_bp - self.window_bp + 1))
-        return r["chrom"], r["start_bp"] + off
+        """A training region uniformly, then a start uniformly inside it; with excluded windows
+        (`heldout_loss`) a start that overlaps one is rejected and drawn again (item A7 fix: the
+        draw ignored them, so the held-out loss was measured on training windows)."""
+        excl = self.excluded is not None
+        for _ in range(EXCLUDE_TRIES if excl else 1):
+            r = self.train_regions[int(rng.integers(len(self.train_regions)))]
+            start = r["start_bp"] + int(rng.integers(0, self.region_bp - self.window_bp + 1))
+            if excl and self._overlaps_excluded(r["chrom"], start):
+                self._exclude_rejections += 1
+                continue
+            return r["chrom"], start
+        raise RuntimeError(f"ResDataset: no start of {EXCLUDE_TRIES} tries is free of the "
+                           f"excluded windows")
 
     def window(self, chrom: str, start_bin: int, inputs: list, targets: list, **kw) -> dict:
         """`OnionDataset.window` at base `start_bin` (bp, see the module docstring), plus the
