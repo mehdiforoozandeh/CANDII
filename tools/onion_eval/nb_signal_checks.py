@@ -80,7 +80,7 @@ PILEUPS = ("box_d", "inbin", "box_ext", "box_ext_submean")
 SUBPOS = 5
 
 FORMULA_COLS = ["target", "cell", "assay", "assay_class", "route", "lambda_source", "fraglen_source",
-                "frag_len", "n_bins", "n_masked", "frac_zero_counts", "pearson_raw", "pearson_asinh", "spearman",
+                "frag_len", "n_bins", "n_masked", "n_edge_masked", "frac_zero_counts", "pearson_raw", "pearson_asinh", "spearman",
                 "median_abs_diff", "p99_abs_diff", "mean_diff", "slope", "bin_precision",
                 "bin_recall", "bin_f1", "bin_jaccard", "tile_precision", "tile_recall", "tile_f1",
                 "tile_jaccard", "reason"]
@@ -107,15 +107,22 @@ def _prf(called, truth) -> dict:
     return {"precision": p, "recall": r, "f1": f1, "jaccard": tp / nu if nu else float("nan")}
 
 
-def agreement(formula, pipeline, rb: int) -> dict:
-    """Agreement of a formula -log10 p track with the pipeline's, both [n_regions * rb]."""
+def agreement(formula, pipeline, rb: int, keep=None) -> dict:
+    """Agreement of a formula -log10 p track with the pipeline's, both [n_regions * rb]. `keep`
+    (bool per bin, E2 review): the bins a box spread leaves without outside neighbours are False;
+    they leave every statistic, and a tile with such a bin leaves the tile statistics
+    (`n_edge_masked` counts the bins)."""
     x, y = np.asarray(formula, np.float64), np.asarray(pipeline, np.float64)
     fin = np.isfinite(x) & np.isfinite(y)
     n_masked = int(x.size - fin.sum())
+    edge = np.ones(x.size, bool) if keep is None else np.asarray(keep, bool)
+    n_edge = int((~edge).sum())
+    fin = fin & edge
     if n_masked:      # a non-finite bin is masked (counted in `n_masked`), never propagated
         x, y = np.where(fin, x, 0.0), np.where(fin, y, 0.0)
     d = (x - y)[fin]
-    out = {"n_bins": int(x.size), "n_masked": n_masked, "pearson_raw": corr(x[fin], y[fin]),
+    out = {"n_bins": int(x.size), "n_masked": n_masked, "n_edge_masked": n_edge,
+           "pearson_raw": corr(x[fin], y[fin]),
            "pearson_asinh": corr(np.arcsinh(x[fin]), np.arcsinh(y[fin])),
            "spearman": spearman(x[fin], y[fin]),
            "median_abs_diff": float(np.median(np.abs(d))),
@@ -124,9 +131,10 @@ def agreement(formula, pipeline, rb: int) -> dict:
     out["slope"] = (float(np.cov(x[fin], y[fin], bias=True)[0, 1] / vx) if vx > 0
                     else float("nan"))
     bx, by = PK.derived_peaks(x), PK.derived_peaks(y)
-    out.update({f"bin_{k}": v for k, v in _prf(bx, by).items()})
+    out.update({f"bin_{k}": v for k, v in _prf(bx[edge], by[edge]).items()})
     tx, ty = PK.tile_any(bx, region_bins=rb), PK.tile_any(by, region_bins=rb)
-    out.update({f"tile_{k}": v for k, v in _prf(tx, ty).items()})
+    tk = ~PK.tile_any(~edge, region_bins=rb)
+    out.update({f"tile_{k}": v for k, v in _prf(tx[tk], ty[tk]).items()})
     return out
 
 
@@ -272,7 +280,12 @@ def cmd_formula(a) -> int:
             rows.append(dict(rec, reason=f"no formula signal: {e}"))
             continue
         rec.update(lambda_source=src, frac_zero_counts=float(np.mean(y <= 0)), reason="")
-        rec.update(agreement(sig, truth, rb))
+        keep = None
+        if a.pileup != "inbin":      # every spread variant is zero-padded at the region ends
+            bd = SG.box_d_of(row)
+            width = bd if a.pileup == "box_d" else kernel_width_bp(a.pileup, bd, row["read_length"])
+            keep = SG.edge_keep(len(regions), rb, SG.box_reach(width))
+        rec.update(agreement(sig, truth, rb, keep=keep))
         rows.append(rec)
         print(f"formula {mid} {t['assay']}: pearson {rec['pearson_raw']:.4f} "
               f"tile_f1 {rec['tile_f1']:.4f}", flush=True)
@@ -280,7 +293,8 @@ def cmd_formula(a) -> int:
     out.mkdir(parents=True, exist_ok=True)
     _write_tsv(out / "formula_check.tsv", FORMULA_COLS, rows)
     ok = [r for r in rows if not r.get("reason")]
-    summ = {"evalset": str(sc.evalset_path), "fraglen_table": a.fraglen_table, "pileup": a.pileup,
+    summ = {"evalset": str(sc.evalset_path), "fraglen_table": a.fraglen_table,
+            "signal_pileup": a.pileup,
             "dnase_route": sc.dnase_route, "n_targets": len(rows), "n_checked": len(ok),
             "by_route": {}}
     for route in sorted({r["route"] for r in ok}):

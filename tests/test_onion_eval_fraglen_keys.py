@@ -80,3 +80,14 @@ def test_signal_pileup_is_a_comparability_key(capsys):
         SR.check_scorer_keys(_items(_s("old"), _s("new", signal_pileup="box_d")))
     SR.check_scorer_keys(_items(_s("old"), _s("new", signal_pileup="box_d")), allow=(PK,))
     assert "signal_pileup" in capsys.readouterr().err
+
+
+def test_signal_box_dependence_is_a_comparability_key():
+    """E2 review: comonotone and independent box_d scores never compare silently."""
+    DK = "signal_box_dependence"
+    assert SR.scorer_keys(_s("old"))[DK] is None
+    a = _s("a", signal_pileup="box_d", signal_box_dependence="comonotone")
+    b = _s("b", signal_pileup="box_d", signal_box_dependence="independent")
+    with pytest.raises(SR.Refused, match="signal_box_dependence"):
+        SR.check_scorer_keys(_items(a, b))
+    SR.check_scorer_keys(_items(a, b), allow=(DK,))

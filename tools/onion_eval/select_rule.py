@@ -2,7 +2,7 @@
 
     python tools/onion_eval/select_rule.py compare --incumbent <arm dir> --challenger <arm dir>
         [--simpler incumbent|challenger|none] [--name <comparison>] [--settlements <tsv>]
-        [--sub SUB] [--allow-mix scorer_settings.device|scorer_settings.infer_batch|fraglen_table.sha256|signal_pileup ...]
+        [--sub SUB] [--allow-mix scorer_settings.device|scorer_settings.infer_batch|fraglen_table.sha256|input_depth_at_scoring|signal_pileup|signal_box_dependence ...]
     python tools/onion_eval/select_rule.py table --runs <dir> [--prefix p] [--sub SUB]
         [--composite-version 2|3]
         (columns: arm, seed, state, composite (from the clipped terms while CLIP_GOAL_TERMS),
@@ -36,7 +36,10 @@ Scorer keys (Amendment 10, interface M): every seed of the compared ARMS (both a
 final design of `check-done`) must also share `scorer_version` (absent = 1), `scorer_settings.device`,
 `scorer_settings.infer_batch` and each `refs.sha256_*` (absent = None); a mix is REFUSED. Baselines
 are references, not arms: a scorer_version 1 baseline is comparable with version 2 runs.
-`--allow-mix <key>` exempts the device, the batch, `fraglen_table.sha256` or `signal_pileup` (E2: the pileup form of the signal routes; absent = `inbin`). `--sub SUB` (compare, table) reads
+`--allow-mix <key>` exempts the device, the batch, `fraglen_table.sha256`, `input_depth_at_scoring` (A13:
+a native-depth score of a fixed-input-depth run against a normal one, the deployment comparison),
+`signal_pileup` or `signal_box_dependence` (E2: the pileup form of the signal routes, absent =
+`inbin`, and the bin dependence of the box_d expectation). `--sub SUB` (compare, table) reads
 `<arm>/seed<k>/<SUB>/scores.json` (`SCORE_SUBDIR`); table then reads SCORED and SKIPPED there.
 
 D13 (`compare`). Seed spread of a quantity = max - min over seeds, the larger of the two arms
@@ -431,7 +434,8 @@ def check_comparable(seeds: list[dict], split: str = "val") -> None:
 # check_comparable only, so a scorer_version 1 baseline is a valid reference for version 2 runs.
 SCORER_KEYS = ("evalset_sha256", "tables_sha256", "scorer_version", "scorer_settings.device",
                "scorer_settings.infer_batch", "refs.sha256_*", "fraglen_table.sha256",
-               "foreign_covariates", "signal_pileup")
+               "foreign_covariates", "input_depth_at_scoring", "signal_pileup",
+               "signal_box_dependence")
 #: FL: the fragment-length side table of `score.py --fraglen-table`; absent (a score made without
 #: the option, or before the key existed) is None
 FRAGLEN_KEY = "fraglen_table.sha256"
@@ -441,11 +445,19 @@ PILEUP_KEY = "signal_pileup"
 PILEUP_ABSENT = "inbin"
 PILEUP_MIX_NOTE = ("signal-space values differ between the box_d and inbin pileup forms; "
                    "count-space values do not depend on it")
+#: E2 review: the bin dependence of the box_d expectation (comonotone | independent); absent
+#: (inbin, or a score made before the key) is None
+DEPENDENCE_KEY = "signal_box_dependence"
 #: E5: the comparability key of a score made with foreign covariates at scoring (`mode:seed<n>`)
 FOREIGN_KEY = "foreign_covariates"
+#: A13: the key of a native-depth score of a fixed-input-depth run (score.py INPUT_DEPTH_KEY); it is
+#: written only when present and is mixable, so the deployment comparison (native-depth arm against
+#: a normal reference) needs an explicit --allow-mix input_depth_at_scoring
+INPUT_DEPTH_KEY = "input_depth_at_scoring"
 #: the keys `--allow-mix` may exempt (a cross-rung comparison of a GPU and a CPU forward; FL: a
 #: count-space comparison across scores with and without the fragment-length table)
-MIXABLE = ("scorer_settings.device", "scorer_settings.infer_batch", FRAGLEN_KEY, PILEUP_KEY)
+MIXABLE = ("scorer_settings.device", "scorer_settings.infer_batch", FRAGLEN_KEY, INPUT_DEPTH_KEY,
+           PILEUP_KEY, DEPENDENCE_KEY)
 FRAGLEN_MIX_NOTE = ("signal-space values differ between scores with and without the fragment-length "
                     "table (estimated frag_len for ChIP-seq tracks whose frag_len is empty); "
                     "count-space values do not depend on it")
@@ -461,7 +473,8 @@ def scorer_keys(s: dict) -> dict:
            "scorer_settings.device": st.get("device"),
            "scorer_settings.infer_batch": st.get("infer_batch"),
            FRAGLEN_KEY: (s.get("fraglen_table") or {}).get("sha256"),
-           PILEUP_KEY: s.get(PILEUP_KEY) or PILEUP_ABSENT}
+           PILEUP_KEY: s.get(PILEUP_KEY) or PILEUP_ABSENT,
+           DEPENDENCE_KEY: s.get(DEPENDENCE_KEY)}
     refs = s.get("refs") or {}
     out.update({f"refs.{k}": v for k, v in sorted(refs.items()) if k.startswith("sha256_")})
     # E5: a score made with foreign covariates at scoring never compares with a normal score; the
@@ -469,6 +482,9 @@ def scorer_keys(s: dict) -> dict:
     fc = s.get("foreign_covariates")
     if fc:
         out[FOREIGN_KEY] = f"{fc.get('mode')}:seed{fc.get('seed')}"
+    idm = s.get(INPUT_DEPTH_KEY)            # A13: only with the switch
+    if idm:
+        out[INPUT_DEPTH_KEY] = idm
     t = s.get("__oracle__")             # arm_report: read with an oracle-floor reference (OF)
     if t:
         out.update(composite_version=t["composite_version"], gap_closed_floor=t["gap_closed_floor"])
@@ -487,7 +503,7 @@ def check_scorer_keys(items, allow=()) -> None:
         if k in allow:
             if k == FRAGLEN_KEY and len({json.dumps(kv.get(k)) for _, kv in items}) > 1:
                 print(f"warning: --allow-mix {FRAGLEN_KEY}: {FRAGLEN_MIX_NOTE}", file=sys.stderr)
-            if k == PILEUP_KEY and len({json.dumps(kv.get(k)) for _, kv in items}) > 1:
+            if k in (PILEUP_KEY, DEPENDENCE_KEY) and len({json.dumps(kv.get(k)) for _, kv in items}) > 1:
                 print(f"warning: --allow-mix {PILEUP_KEY}: {PILEUP_MIX_NOTE}", file=sys.stderr)
             continue
         vals: dict = {}
@@ -499,7 +515,7 @@ def check_scorer_keys(items, allow=()) -> None:
                 + (f" (null = scored without --fraglen-table; {FRAGLEN_MIX_NOTE}; "
                    f"--allow-mix {FRAGLEN_KEY} compares them anyway)" if k == FRAGLEN_KEY else "")
                 + (f" ({PILEUP_MIX_NOTE}; --allow-mix {PILEUP_KEY} compares them anyway)"
-                   if k == PILEUP_KEY else ""))
+                   if k in (PILEUP_KEY, DEPENDENCE_KEY) else ""))
     if bad:
         raise Refused("scorer settings not comparable: " + "; ".join(bad))
 

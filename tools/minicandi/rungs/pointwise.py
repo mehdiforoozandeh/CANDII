@@ -54,7 +54,7 @@ if str(_TOOLS) not in sys.path:
 from minicandi import contract as C  # noqa: E402
 from minicandi.components import (CountTransform, CovariateInjector, DnaTower,  # noqa: E402
                                   MaskHandler, NBHead, NotApplicable, component_kwargs)
-from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
+from minicandi.covariates import drop_field_indices, model_covariates, scramble_mode  # noqa: E402
 
 RUNG = 1
 NAME = "pointwise"
@@ -119,6 +119,8 @@ class Model(C.MiniCandi):
         k_in = C.k_input(cfg)
         kw = component_kwargs(cfg)
         self.cov_dropout = kw["covariate_dropout"]
+        _drop = drop_field_indices(cfg)   # A12: None unless covariate_drop_fields
+        self.cov_drop = {} if _drop is None else {"drop": _drop}   # off: today's call
         depth = int(cfg.get("mlp_depth", 2))
         blocks = int(cfg.get("trunk_blocks", 1))
         if depth < 2 or blocks < 0:
@@ -148,7 +150,8 @@ class Model(C.MiniCandi):
         self.begin_extras(batch)
         x_avail, x_bin_mask = batch["x_avail"], batch["x_bin_mask"]
         c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training,
-                                                         self.cov_dropout)
+                                                         self.cov_dropout,
+                                                         **self.cov_drop)
         vis = MaskHandler.visible(x_avail, x_bin_mask)                     # [B, L, A]
         x = self.transform(batch["x_counts"], c_in_t[..., C.LOG2_DEPTH_COL], vis)
         h = self.in_proj(x.unsqueeze(-1)) + self.in_track                  # [B, L, A, d]

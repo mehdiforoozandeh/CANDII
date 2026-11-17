@@ -46,7 +46,7 @@ from candi.store.pval_from_counts import MACS2_GSIZE_HS, log10_upper_tail
 
 from onion_eval.signal_from_counts import (ATAC_SMOOTH_WIN, DNASE_ROUTE_DEFAULT, DNASE_ROUTES,  # `tools` on sys.path, as score.py
                                            SPAN_EXTRA, macs2_lambda, pileup_from_counts, route_of,
-                                           PILEUP_DEFAULT, _spread)
+                                           PILEUP_DEFAULT, DEPENDENCE_DEFAULT, _spread)
 
 __all__ = [
     "AG2_INSERTION_TOTAL",
@@ -235,7 +235,8 @@ def _first_count_at_threshold(lam, scale, threshold):
 
 def peak_probability_from_nb(n, mu, row: dict, *, ds, regions, rb: int, predicted_control=None,
                              threshold: float = 2.0, dnase_route: str = DNASE_ROUTE_DEFAULT,
-                             pileup: str = PILEUP_DEFAULT) -> np.ndarray:
+                             pileup: str = PILEUP_DEFAULT,
+                             dependence: str = DEPENDENCE_DEFAULT) -> np.ndarray:
     """Per bin, the NB probability that the D9b MACS2 score of the count reaches `threshold`
     (-log10 p >= 2, i.e. p <= 0.01, by default), over the scorer's concatenated eval regions.
     Arguments as `signal_from_nb`. The DNase-seq route `hotspot2_density` has no p-value and is refused."""
@@ -254,7 +255,7 @@ def peak_probability_from_nb(n, mu, row: dict, *, ds, regions, rb: int, predicte
         else:
             lam, d, rl, _ = _no_control_lambda(mu[sl], cov, MACS2_GSIZE_HS)
         k = _first_count_at_threshold(lam, d / (rl + SPAN_EXTRA), threshold)
-        m_s, n_s, _ = _spread(mu[sl], n[sl], None, d, pileup)    # the NB of the spread pileup
+        m_s, n_s, _ = _spread(mu[sl], n[sl], None, d, pileup, dependence)  # NB of the spread pileup
         out.append(nbinom.sf(k - 1, n_s, n_s / (n_s + m_s)))
     return np.concatenate(out).astype(np.float32)
 

@@ -128,6 +128,13 @@ peak-probability arrays): `box_d` spreads the predicted mean, size and control o
 of the fragment length (`signal_from_counts.box_spread`); `inbin` is the bin's own count, the rule
 before the ruling. Written as `signal_pileup` in scores.json and tracks.json; select_rule and
 ag2_score refuse a mix (absent reads `inbin`). Count-space values do not depend on it.
+`--signal-box-dependence comonotone|independent` (E2 review; default `comonotone`): the NB size of the
+spread pileup in the expectation mode (`signal_from_counts._spread`): comonotone bins (upper variance
+bound, larger expected scores) or independent bins (lower bound). Written as `signal_box_dependence`
+(None unless box_d; None for an external entry, whose `signal_pileup` is None too). The reach bins
+at both ends of every region (`box_reach(d)`) are masked from r_spec in the signal space
+(`signal_edge_bins_masked` per target; `signal_edge_bins` in tracks.json); headline 1 (Haar
+levels over whole regions) cannot drop bins and keeps them (at most 2 x 8 of 16,384 bins).
 
 Options of chunk SC (each off by default; a default scores.json is unchanged):
   --lambda-source auto|observed_control|predicted_control. `auto` is the route above.
@@ -177,6 +184,18 @@ metric phase refuses a store of another mode (or a normal store). Outputs: score
 `foreign_covariates` (mode, seed, definition, per measurement the donor and the columns it changed)
 and `scorer_settings.foreign_covariates`, read by select_rule.scorer_keys, so a foreign score never
 compares with a normal one. `--out` must name a directory that holds 'foreign'.
+Per-column modes (close-out item A12; FOREIGN_COLUMNS_DEFINITION): `<side>_keep_depth.<col>[.<col>]`
+replaces only the named columns by the donor's, and `<side>_neutral.<col>[.<col>]` sets only the named
+columns to their neutral value (covariates.neutral_value), with no donor. The whole-row modes above
+are unchanged. A per-column mode may be on together with ONION_SCORE_INPUT_DEPTH=native (it never
+touches log2 depth); the `--out` name must then hold both 'foreign' and 'native_depth'.
+Native input depth at scoring (close-out mix-and-match; off by default): ONION_SCORE_INPUT_DEPTH=native
+scores a run trained with `input_depth = fixed` with its inputs at their native depth (no thinning;
+C states the true depth), the deployment case in which no depth cap can be imposed on the input.
+Refused for a run that is not `input_depth = fixed` and for a baseline. The predict and the metrics
+job must both have it (STORE.json records it; the metric phase refuses a store made without it, and
+the reverse). Outputs: scores.json `input_depth_at_scoring` and `scorer_settings.input_depth_at_scoring`
+(both only with the switch). `--out` must name a directory that holds 'native_depth'.
 
 Add-on scoring (OXe, Amendment 4, PI ruling 33). `--addon` scores an add-on eval set
 (`evalset.py addon`, key `addon_of`) and is required for one; it is refused on any other eval set
@@ -330,8 +349,27 @@ FOREIGN_DEFINITION = (
     "`assays_with_no_column_changed`) and stay in every table and macro, so a foreign macro covers "
     "the same assays as the normal one in every mode. Scores of this mode are never comparable with "
     "normal scores (select_rule.scorer_keys key `foreign_covariates`).")
+#: A12: per-column modes `<side>_keep_depth.<col>...` (donor values) and `<side>_neutral.<col>...`
+FOREIGN_COLUMN_KINDS = ("keep_depth", "neutral")
+FOREIGN_COLUMNS_DEFINITION = (
+    "A12 per-column screening at scoring. Mode `<side>_keep_depth.<col>[.<col>...]`: as the whole-row "
+    "mode `<side>_keep_depth`, with the same donor draw, but only the named covariate columns take the "
+    "donor's value; every other column, depth included, stays true. Mode `<side>_neutral.<col>[...]`: "
+    "no donor; the named columns of every available row on that side take their neutral value (the "
+    "fixed centre of a numeric or flag column, id 0 = unknown of a categorical column; "
+    "minicandi.covariates.neutral_value). log2_depth is never a per-column target (it is also the "
+    "count transform's and the NB offset's depth); QC columns exist on side `in` only, and only for a "
+    "run with qc_on_input. A neutral id 0 may be a row that training never updated (a field filled in "
+    "every training row): read neutral screens with that caveat; the foreign donor value is always a "
+    "real value of the same assay.")
 FOREIGN_TRUTH_NOTE = ("scored against the true target's counts: the truth, the reference predictors and "
                       "the noise floor never read foreign covariates; only the model's forward does")
+#: mix-and-match: native input depth at scoring of a run trained with input_depth = fixed
+INPUT_DEPTH_ENV = "ONION_SCORE_INPUT_DEPTH"
+INPUT_DEPTH_KEY = "input_depth_at_scoring"
+INPUT_DEPTH_MODES = ("native",)
+#: a native-depth scoring writes only into a directory whose name holds this text
+INPUT_DEPTH_DIR_TAG = "native_depth"
 #: E5: headline 7 robust aggregates (beside the existing mean of per-target ratios, unchanged)
 H7_ROBUST_KEY = "predicted_over_replicate_variance_robust"
 H7_ROBUST_DESCRIPTION = (
@@ -796,10 +834,39 @@ def foreign_from_env():
         raise ValueError(f"{FOREIGN_SEED_ENV}={raw!r}: want an integer") from None
 
 
+def input_depth_kwargs() -> dict:
+    """Mix-and-match: {"input_depth_at_scoring": "native"} from ONION_SCORE_INPUT_DEPTH; {} when
+    unset or empty (score.py and predict_store.py run)."""
+    m = os.environ.get(INPUT_DEPTH_ENV, "").strip()
+    if not m:
+        return {}
+    if m not in INPUT_DEPTH_MODES:
+        raise ValueError(f"{INPUT_DEPTH_ENV}={m!r}: want one of {INPUT_DEPTH_MODES}")
+    return {INPUT_DEPTH_KEY: m}
+
+
 def foreign_spec(mode, seed=0):
-    """E5: {"mode", "sides", "depth", "seed"} of a foreign-covariate mode, or None for None."""
+    """E5: {"mode", "sides", "depth", "seed"} of a foreign-covariate mode, or None for None.
+    A12: a per-column mode (FOREIGN_COLUMNS_DEFINITION) adds "columns" (names, in mode order) and
+    "kind" ("keep_depth" = donor values, "neutral" = neutral values); its "depth" is keep_depth."""
     if mode is None:
         return None
+    if "." in str(mode):
+        from minicandi.contract import META_COLUMNS, QC_COLUMNS
+        head, *cols = str(mode).split(".")
+        side, _, kind = head.partition("_")
+        if side not in FOREIGN_SIDES or kind not in FOREIGN_COLUMN_KINDS:
+            raise ValueError(f"foreign covariates {mode!r}: a per-column mode is "
+                             f"<in|out|both>_<{'|'.join(FOREIGN_COLUMN_KINDS)}>.<column>[.<column>]")
+        known = set(META_COLUMNS) | set(QC_COLUMNS)
+        bad = [c for c in cols if c not in known or c == "log2_depth"]
+        if not cols or bad or len(set(cols)) != len(cols):
+            raise ValueError(f"foreign covariates {mode!r}: columns {cols} must be distinct covariate "
+                             f"columns other than log2_depth")
+        if "out" in FOREIGN_SIDES[side] and any(c in QC_COLUMNS for c in cols):
+            raise ValueError(f"foreign covariates {mode!r}: QC columns are on side `in` only")
+        return {"mode": str(mode), "sides": list(FOREIGN_SIDES[side]), "depth": "keep_depth",
+                "seed": int(seed), "columns": list(cols), "kind": kind}
     if mode not in FOREIGN_MODES:
         raise ValueError(f"foreign covariates {mode!r} not in {FOREIGN_MODES}")
     side, _, depth = mode.partition("_")
@@ -925,6 +992,49 @@ def pair_metrics_from_records(cor_recs, rep_recs, scorable, n_boot, seed, not_ap
     return out
 
 
+ADDON_PAIR_CLASS_KEY = "other_experiment_gap_closed_by_pair_class"
+
+
+def other_experiment_pair_class_block(rep_recs) -> dict:
+    """Close-out D2 (add-on scores only): the other_experiment pair jobs (EIC track pr1 -> second
+    experiment pr2, the model given the second experiment's own covariates) split by pair class
+    (`experiment`, `experiment;lab`, `experiment;donor`, `experiment;lab;donor`, ... from
+    `knobs_differing`; `layers.pair_class_of`), with the per-pair records. The value is
+    `replicate_pair_gap_closed_vs_depth_only` restricted to a class: (depth-only - model) /
+    (depth-only - floor) on mean CRPS, floor = the second experiment's pr1 -> pr2. The class
+    `experiment;lab` is the cross-lab correction at the same donor; no aggregate reads this block."""
+    from onion_eval.layers import FLAG_FEW, FLAG_OK, MIN_CELLS, MIN_PAIRS, pair_class_of
+    recs = [r for r in rep_recs if r.get("rung") == "other_experiment"]
+    by_class, per_pair = defaultdict(list), []
+    for r in recs:
+        cls = pair_class_of(r.get("knob") or "")[0]
+        by_class[cls].append(r)
+        one = _gap_fn([r])
+        per_pair.append({**{k: r.get(k) for k in ("pair_id", "source", "target", "assay", "cell",
+                                                   "knob")},
+                         "pair_class": cls,
+                         **{k: (None if _undef(r.get(k)) else _j(r.get(k)))
+                            for k in ("crps_model", "crps_model_oracle_scaled", "crps_depth_only",
+                                      "crps_floor", "pred_total", "source_total",
+                                      "log2_depth_ratio")},
+                         "gap_closed": None if isinstance(one, Mx.Undefined) else _j(one)})
+
+    def blk(rs):                       # flag: the minimum of layers.py (MIN_PAIRS from MIN_CELLS)
+        g = _gap_fn(rs)
+        n_cells = len({r["cell"] for r in rs})
+        return {"value": None if isinstance(g, Mx.Undefined) else _j(g),
+                "reason": g.reason if isinstance(g, Mx.Undefined) else "", "n_pairs": len(rs),
+                "n_cells": n_cells,
+                "flag": FLAG_OK if len(rs) >= MIN_PAIRS and n_cells >= MIN_CELLS else FLAG_FEW,
+                "assays": sorted({r["assay"] for r in rs})}
+    return {"definition": other_experiment_pair_class_block.__doc__.split("\n\n")[0],
+            "pooled": blk(recs) if recs else {"value": None, "reason": "no pair job",
+                                              "n_pairs": 0, "n_cells": 0, "flag": FLAG_FEW,
+                                              "assays": []},
+            "per_pair_class": {c: blk(rs) for c, rs in sorted(by_class.items())},
+            "per_pair": sorted(per_pair, key=lambda x: str(x["pair_id"]))}
+
+
 def _correction_metrics_of(recs, scorable, n_boot, seed) -> dict:
     nb, sd = n_boot, seed
     head = [r for r in recs if r["never_trained"] == 1 and r["subset_pair"] == 0]
@@ -1006,7 +1116,8 @@ class Scorer:
                  signal_override=None, addon=False, dump_signal=None, dump_targets=None,
                  dump_method=None, workers=1, stage_dir=None, pred_store=None, store_run=None,
                  refs_from=None, fraglen_table=None, same_view=False, foreign_covariates=None,
-                 foreign_seed=0, signal_pileup=None):
+                 foreign_seed=0, input_depth_at_scoring=None, signal_pileup=None,
+                 signal_box_dependence=None):
         from minicandi import contract as C
         from minicandi.dataset import OnionDataset, tables_sha256
         from onion_eval.evalset import tables_dir_of
@@ -1050,6 +1161,18 @@ class Scorer:
             raise ValueError("foreign covariates apply to a model's forward: give main='model' and "
                              "a model or a prediction store")
         self._foreign_donor, self._foreign_rows = None, {}
+        #: mix-and-match: native input depth at scoring (None = off, the default)
+        if input_depth_at_scoring is not None:
+            if input_depth_at_scoring not in INPUT_DEPTH_MODES:
+                raise ValueError(f"input_depth_at_scoring {input_depth_at_scoring!r} not in "
+                                 f"{INPUT_DEPTH_MODES}")
+            if main != "model" or not (model is not None or pred_store is not None):
+                raise ValueError("input_depth_at_scoring applies to a model's inputs: give "
+                                 "main='model' and a model or a prediction store")
+            if (config or {}).get("input_depth") != "fixed":
+                raise ValueError("input_depth_at_scoring = native needs a run trained with "
+                                 "input_depth = fixed (any other run already reads native inputs)")
+        self.input_depth_at_scoring = input_depth_at_scoring
         self.C, self.log = C, log
         self.evalset_path = Path(evalset).resolve()
         self.ev = json.loads(self.evalset_path.read_text(encoding="utf-8"))
@@ -1105,15 +1228,22 @@ class Scorer:
         cfg.update({"context_bins": L, "evalset": str(self.evalset_path), "region_bins": self.rb,
                     "allow_blind": self.allow_blind})
         cfg.setdefault("batch_size", 8)
+        if self.input_depth_at_scoring is not None:      # mix-and-match: no input thinning
+            cfg["input_depth"] = self.input_depth_at_scoring
         self.cfg, self.L, self.bs = cfg, L, int(cfg["batch_size"])
         #: windows per forward pass while scoring targets (F3); the guardrail keeps batch_size
         self.tile_bs = int(infer_batch or self.bs)
         self._OnionDataset = OnionDataset
         self.ds = OnionDataset(self.tables, split, cfg, seed=0)
         if (self.foreign is not None and self.foreign["depth"] == "swap_depth"
-                and "in" in self.foreign["sides"] and self.ds.config.get("input_depth") == "fixed"):
+                and "in" in self.foreign["sides"] and (config or {}).get("input_depth") == "fixed"):
+            # the run's own config: a native-depth scoring (mix-and-match) changes self.ds.config
             raise ValueError("foreign covariates: swap_depth on side C is not defined for a run with "
                              "input_depth = fixed (its inputs are thinned by the true depth)")
+        if self.foreign is not None and "columns" in self.foreign and not self.ds.qc_on_input:
+            from minicandi.contract import QC_COLUMNS
+            if any(c in QC_COLUMNS for c in self.foreign["columns"]):
+                raise ValueError("foreign covariates: a QC column needs a run with qc_on_input")
         self.predict_control = bool(self.ds.config.get("predict_control")) and has_model
         self.regions = [(c, int(s)) for c, s in self.ev["regions"]]
         #: SF0 (Amendment 8, B.4): positions in `regions` that the pair jobs run on (all by default)
@@ -1143,6 +1273,19 @@ class Scorer:
                                                else None)
         if self.sig is not None and self.signal_pileup not in self.sig.PILEUP_FORMS:
             raise ValueError(f"signal_pileup {self.signal_pileup!r} not in {self.sig.PILEUP_FORMS}")
+        #: E2 review: the bin dependence of the box_d expectation (`comonotone` default, or
+        #: `independent`); recorded as `signal_box_dependence` (None unless box_d)
+        self.signal_box_dependence = signal_box_dependence or (
+            self.sig.DEPENDENCE_DEFAULT if self.sig is not None else None)
+        if self.sig is not None and self.signal_box_dependence not in self.sig.DEPENDENCE_FORMS:
+            raise ValueError(f"signal_box_dependence {self.signal_box_dependence!r} not in "
+                             f"{self.sig.DEPENDENCE_FORMS}")
+        if self.external:      # an external entry's signal is its own: neither key applies
+            self.signal_pileup_record = self.signal_dependence_record = None
+        else:
+            self.signal_pileup_record = self.signal_pileup
+            self.signal_dependence_record = (self.signal_box_dependence
+                                             if self.signal_pileup == "box_d" else None)
         # FL: estimated fragment lengths for tracks whose frag_len is empty (None: today's path)
         self.fraglen_path = str(Path(fraglen_table).resolve()) if fraglen_table else None
         self.fraglen = None
@@ -1232,7 +1375,7 @@ class Scorer:
                                                 "signal_pc_left_out": {}, "native_left_out": {},
                                                 "peakprob_left_out": {},
                                                 "signal_pc_same_as_signal": [], "truth_only": [],
-                                                "fraglen_sources": {}})
+                                                "fraglen_sources": {}, "edge_bins": {}})
         if mid in self.flagged:
             m["left_out"][mid] = FLAGGED_REASON
             return
@@ -1272,7 +1415,7 @@ class Scorer:
                         sp, _ = self.sig.signal_from_nb(
                             n, mu, dict(row, control_measurement_id=""), mode="expectation",
                             predicted_control=A["dump.avg_ctl_mu"], dnase_route=self.dnase_route,
-                            **kw)
+                            dependence=self.signal_box_dependence, **kw)
                         pc = Mx.to_space(np.asarray(sp, np.float64), "signal_arcsinh")
                         pc_src = TRAINING_AVERAGE_CONTROL
                     except (ValueError, KeyError) as e:
@@ -1302,7 +1445,8 @@ class Scorer:
                     m["native_left_out"][mid] = f"no native-space track: {e}"
                 try:
                     arrays["peakprob"] = AS.peak_probability_from_nb(
-                        n, mu, row, predicted_control=ctl, dnase_route=self.dnase_route, **kw)
+                        n, mu, row, predicted_control=ctl, dnase_route=self.dnase_route,
+                        dependence=self.signal_box_dependence, **kw)
                 except (ValueError, KeyError) as e:
                     m["peakprob_left_out"][mid] = f"no peak probability: {e}"
             else:
@@ -1317,6 +1461,8 @@ class Scorer:
             np.save(d / f"{mid}.{name}.npy", a)
         m["targets"].append(mid)
         m["lambda_sources"][mid] = src
+        if rec.get("signal_edge_bins") is not None:
+            m.setdefault("edge_bins", {})[mid] = rec["signal_edge_bins"]
 
     def _dump_finish(self) -> None:
         """tracks.json of each regime directory (interface F keys first)."""
@@ -1328,7 +1474,12 @@ class Scorer:
                     "region_bins": self.rb, "n_regions": len(self.regions),
                     "lambda_source_mode": self.lambda_source, "targets": m["targets"],
                     "space": "signal_arcsinh", "dnase_route": self.dnase_route,
-                    "signal_pileup": self.signal_pileup,
+                    "signal_pileup": self.signal_pileup_record,
+                    "signal_box_dependence": self.signal_dependence_record,
+                    # E2 review: per target, the bins at each region end that the box spread
+                    # leaves without outside neighbours; ag2_score masks the largest of them
+                    "signal_edge_bins_per_target": dict(sorted(m.get("edge_bins", {}).items())),
+                    "signal_edge_bins": max(m.get("edge_bins", {}).values(), default=0),
                     "left_out": m["left_out"],
                     "dump_targets_given": self.dump_targets is not None,
                     "evalset": str(self.evalset_path),
@@ -1625,17 +1776,46 @@ class Scorer:
         for side in self.foreign["sides"]:
             key, avail, mids = sides[side]
             c = batch[key].clone()
+            idx = self._foreign_col_idx(side)
             for m in mids:
-                v = self._foreign_row(m, side, scale)
                 t = self.C.TRACK_INDEX[self.ds.rows[m]["assay"]]
                 av = batch[avail][:, t].bool()
+                if idx is not None and self.foreign["kind"] == "neutral":     # A12: no donor
+                    if bool(av.any()):
+                        sub = c[av, t]
+                        sub[:, idx] = self._neutral_vec(idx).to(c.dtype)
+                        c[av, t] = sub
+                    continue
+                v = self._foreign_row(m, side, scale)
                 if v is None or not bool(av.any()):
                     continue
                 v = torch.as_tensor(np.asarray(v), dtype=c.dtype)
+                if idx is not None:                                           # A12: named columns
+                    sub = c[av, t]
+                    sub[:, idx] = v[idx]
+                    c[av, t] = sub
+                    continue
                 lo = 1 if keep else 0
                 c[av, t, lo:] = v[lo:]
             b[key] = c
         return b
+
+    def _foreign_col_idx(self, side):
+        """A12: the indices of a per-column mode's columns in C (side `in`, with QC columns when the
+        run reads them) or C' (side `out`); None for a whole-row mode."""
+        if "columns" not in self.foreign:
+            return None
+        from minicandi.contract import META_COLUMNS, QC_COLUMNS
+        cols = list(META_COLUMNS) + (list(QC_COLUMNS) if side == "in" and self.ds.qc_on_input
+                                     else [])
+        return [cols.index(c) for c in self.foreign["columns"]]
+
+    def _neutral_vec(self, idx):
+        """A12: the neutral raw values of columns `idx` (C order) as a float tensor."""
+        from minicandi.contract import META_COLUMNS, QC_COLUMNS
+        from minicandi.covariates import neutral_value
+        cols = list(META_COLUMNS) + list(QC_COLUMNS)
+        return torch.tensor([neutral_value(cols[i]) for i in idx], dtype=torch.float32)
 
     def foreign_block(self, by_side: dict) -> dict:
         """E5: scores.json `foreign_covariates`: the mode, the definition and, per swapped side
@@ -1653,7 +1833,20 @@ class Scorer:
             enc = ((lambda r: self.ds.encoder.c_in(r, self.ds.qc_on_input)) if side == "in"
                    else self.ds.encoder.c_out)
             per, cnt = {}, defaultdict(int)
+            idx = self._foreign_col_idx(side)
             for m in sorted(set(by_side.get(side, ()))):
+                if idx is not None and self.foreign["kind"] == "neutral":     # A12: no donor
+                    a = np.asarray(enc(rows[m]), dtype=np.float32)
+                    b = a.copy()
+                    b[idx] = self._neutral_vec(idx).numpy()
+                    ch = [cols[i] for i in idx if a[i] != b[i]]
+                    per[m] = {"donor": None, "neutral": True, "columns_changed": ch}
+                    if not ch:
+                        a_ = rows[m]["assay"]
+                        no_change.setdefault(side, {})[a_] = no_change.get(side, {}).get(a_, 0) + 1
+                    for k in ch:
+                        cnt[k] += 1
+                    continue
                 d = self._donor(m)
                 if d is None:
                     n_none += 1
@@ -1661,7 +1854,7 @@ class Scorer:
                     no_donor.setdefault(side, {}).setdefault(rows[m]["assay"], []).append(m)
                     continue
                 a, b = enc(rows[m]), enc(rows[d])
-                ch = [cols[i] for i in range(len(cols)) if a[i] != b[i]
+                ch = [cols[i] for i in (range(len(cols)) if idx is None else idx) if a[i] != b[i]
                       and (i > 0 or self.foreign["depth"] == "swap_depth")]
                 per[m] = {"donor": d, "donor_cell": rows[d]["cell"], "columns_changed": ch}
                 if not ch:
@@ -1670,9 +1863,11 @@ class Scorer:
                 for k in ch:
                     cnt[k] += 1
             assign[side], n_ch[side] = per, dict(sorted(cnt.items()))
-            n_same[side] = sum(1 for e in per.values() if e["donor"] is not None
+            n_same[side] = sum(1 for e in per.values() if (e["donor"] is not None or e.get("neutral"))
                                and not e["columns_changed"])
-        return dict(self.foreign, definition=FOREIGN_DEFINITION, truth=FOREIGN_TRUTH_NOTE,
+        extra = ({} if "columns" not in self.foreign
+                 else {"columns_definition": FOREIGN_COLUMNS_DEFINITION})          # A12
+        return dict(self.foreign, definition=FOREIGN_DEFINITION, truth=FOREIGN_TRUTH_NOTE, **extra,
                     n_measurements={k: len(v) for k, v in assign.items()},
                     n_without_donor=n_none, n_with_no_column_changed=n_same,
                     assays_without_donor={k: {a: sorted(v) for a, v in sorted(d.items())}
@@ -2175,8 +2370,21 @@ class Scorer:
         h2 = Mx.to_space(files["pr2_signal"], "signal_arcsinh")
         N = Mx.noise_floor(h1, h2, ts, 2.0)
         kw = dict(ds=self.ds, regions=self.regions, rb=self.rb, dnase_route=self.dnase_route,
-                  pileup=self.signal_pileup)
+                  pileup=self.signal_pileup, dependence=self.signal_box_dependence)
+        # E2 review: the box spread is zero-padded past each region end; the reach bins at both
+        # ends of every region are masked from the vector metrics (r_spec) of the signal space
+        reach = 0
+        if not self.external and self.signal_pileup == "box_d":
+            try:
+                bd = self.sig.box_d_of(row)
+            except ValueError:
+                bd = None
+            reach = self.sig.box_reach(bd) if bd else 0
+        edge_keep = (self.sig.edge_keep(len(self.regions), self.rb, reach) if reach else None)
         rec = {"lambda_source": None, "lambda_reason": ""}
+        if self.signal_pileup == "box_d" and not self.external:    # inbin records stay as before
+            rec.update(signal_edge_bins=reach,
+                       signal_edge_bins_masked=0 if edge_keep is None else int((~edge_keep).sum()))
         if fl_src is not None:
             rec.update(fraglen_source=fl_src, fraglen_reason=fl_why,
                        fraglen_bp=row.get("frag_len") or "",
@@ -2229,7 +2437,7 @@ class Scorer:
                         a_s, pa_reason = None, f"no signal from the position average: {e}"
                 a_by_mode[mode] = (a_s, pa_reason)
             if ps is not None and a_s is not None:
-                rs = Mx.r_spec(ts, ps, a_s)
+                rs = Mx.r_spec(ts, ps, a_s, mask=edge_keep)
             else:
                 rs = Mx.Undefined(lam_reason or (pa_reason if pa_ok else "position average undefined"))
             rec.update({f"{pre}N": N, f"{pre}r_spec": rs})
@@ -2578,6 +2786,11 @@ class Scorer:
         if st_fc != want_fc:
             raise ScoreRefused(f"{self.pred_store_dir}: the prediction store holds forwards with "
                                f"foreign covariates {st_fc}, this scoring wants {want_fc}")
+        # mix-and-match: a store of native-depth forwards only for a native-depth scoring
+        st_id, want_id = info.get(INPUT_DEPTH_KEY), self.input_depth_at_scoring
+        if st_id != want_id:
+            raise ScoreRefused(f"{self.pred_store_dir}: the prediction store holds forwards with "
+                               f"input depth at scoring {st_id}, this scoring wants {want_id}")
         self.store, self.store_info = st, info
         self._store_regions = {r["key"]: {ri: k for k, ri in enumerate(r["region_indices"])}
                                for r in reqs}
@@ -2844,6 +3057,9 @@ class Scorer:
         baseline (no model) writes neither."""
         fc = {} if self.foreign is None else {FOREIGN_KEY: self.foreign["mode"],
                                               "foreign_seed": self.foreign["seed"]}
+        if self.input_depth_at_scoring is not None:   # mix-and-match: keys only with the switch
+            fc[INPUT_DEPTH_KEY] = self.input_depth_at_scoring
+            scores[INPUT_DEPTH_KEY] = self.input_depth_at_scoring
         if self.store is None:
             if isinstance(self.model_pred, ModelPredictor):
                 scores["scorer_settings"] = {"device": str(self.device), "infer_batch": self.tile_bs,
@@ -2959,6 +3175,8 @@ class Scorer:
         ta = time.perf_counter()
         scores.update(pair_metrics_from_records(cor_recs, rep_recs, sc, self.n_boot, self.seed,
                                                 not_applicable=self.pairs_not_applicable))
+        if self.addon:                           # close-out D2: key only on an add-on score
+            scores[ADDON_PAIR_CLASS_KEY] = other_experiment_pair_class_block(rep_recs)
         if self.same_view:                       # CM: keys only with the switch
             self.same_view_records = sv_recs
             scores[CORRECTION_ONLY_KEY] = correction_only_block(cor_recs, sv_recs)
@@ -3017,7 +3235,8 @@ class Scorer:
                        "evalset": str(self.evalset_path), "evalset_sha256": sha256_file(self.evalset_path),
                        "tables": str(self.tables), "tables_sha256": self.tables_sha256,
                        "run_tables_sha256": self.run_tables_sha256,
-                       "dnase_route": self.dnase_route, "signal_pileup": self.signal_pileup,
+                       "dnase_route": self.dnase_route, "signal_pileup": self.signal_pileup_record,
+                       "signal_box_dependence": self.signal_dependence_record,
                        "baseline_fit_on": self.fit_on,
                        "n_regions": len(self.regions), "region_bins": self.rb,
                        "context_bins": self.L, "wall_seconds": round(time.time() - t0, 1),
@@ -3102,7 +3321,11 @@ class Scorer:
                                               if "lambda_source_training_average" in r else {}),
                                            **({k: r[k] for k in ("fraglen_source", "fraglen_bp",
                                                                  "fraglen_reason", "fraglen_kind")}
-                                              if "fraglen_source" in r else {})}
+                                              if "fraglen_source" in r else {}),
+                                           # E2 review: box_d only (inbin records unchanged)
+                                           **({k: r[k] for k in ("signal_edge_bins",
+                                                                 "signal_edge_bins_masked")}
+                                              if "signal_edge_bins" in r else {})}
                              for r in recs}
         if self.fraglen is not None:      # FL: only with --fraglen-table
             srcs = {r["target"]: r["fraglen_source"] for r in recs if "fraglen_source" in r}
@@ -3475,6 +3698,7 @@ def score(evalset, out, *, run=None, baseline=None, model=None, config=None,
     if (run is not None or model is not None) and phase is None:
         tf32_off()
     _guard_foreign_out(Path(out), kw)
+    _guard_input_depth_out(Path(out), kw)
     if phase not in (None, "metrics"):
         raise ValueError(f"phase {phase!r}: None (legacy) or 'metrics'")
     if (phase == "metrics") != (pred_store is not None):
@@ -3539,6 +3763,29 @@ def _guard_foreign_out(out: Path, kw) -> None:
     if prev.is_file() and (old.get("mode"), old.get("seed")) != (mode, seed):
         raise ScoreRefused(f"{prev} holds a score with foreign covariates {old.get('mode')!r} seed "
                            f"{old.get('seed')!r}, not {mode!r} seed {seed}")
+
+
+def _guard_input_depth_out(out: Path, kw) -> None:
+    """Mix-and-match: a native-depth score goes only to a directory whose name holds
+    INPUT_DEPTH_DIR_TAG, and never over a scores.json made without the switch (or the reverse)."""
+    mode = kw.get(INPUT_DEPTH_KEY)
+    prev = out / "scores.json"
+    old = (json.loads(prev.read_text(encoding="utf-8")).get(INPUT_DEPTH_KEY)
+           if prev.is_file() else None)
+    if mode is None:
+        if old:
+            raise ScoreRefused(f"{prev} holds a score with input depth at scoring {old!r}; a "
+                               f"normal score never goes over it")
+        if INPUT_DEPTH_DIR_TAG in out.name:
+            raise ScoreRefused(f"--out {out}: a directory whose name holds '{INPUT_DEPTH_DIR_TAG}' "
+                               f"takes only native-depth scores ({INPUT_DEPTH_ENV}=native)")
+        return
+    if INPUT_DEPTH_DIR_TAG not in out.name:
+        raise ScoreRefused(f"--out {out}: a native-depth score goes to a directory whose name holds "
+                           f"'{INPUT_DEPTH_DIR_TAG}' (e.g. <seed dir>/p256_sv_{INPUT_DEPTH_DIR_TAG}), "
+                           f"never beside normal scores")
+    if prev.is_file() and old != mode:
+        raise ScoreRefused(f"{prev} holds a score with input depth at scoring {old!r}, not {mode!r}")
 
 
 def _score_with(sc, out: Path, *, run, pairs_only) -> dict:
@@ -3687,11 +3934,23 @@ def dump_kwargs(a) -> dict:
     return {"dump_signal": a.dump_signal, "dump_targets": ids}
 
 
+def _foreign_mode_arg(m: str) -> str:
+    """argparse type of --foreign-covariates: a whole-row mode (FOREIGN_MODES) or an A12
+    per-column mode (foreign_spec)."""
+    try:
+        foreign_spec(m)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e)) from None
+    return m
+
+
 def add_foreign_arguments(ap) -> None:
     """E5: --foreign-covariates MODE [--foreign-seed N] (score.py and predict_store.py run)."""
-    ap.add_argument("--foreign-covariates", default=None, choices=FOREIGN_MODES,
+    ap.add_argument("--foreign-covariates", default=None, type=_foreign_mode_arg,
                     help=f"E5: give the model the covariates of another experiment of the same assay "
-                         f"(side in = C, out = C', both; keep_depth or swap_depth); default off (also "
+                         f"(side in = C, out = C', both; keep_depth or swap_depth); A12: or one of "
+                         f"<side>_keep_depth.<col>[.<col>] / <side>_neutral.<col>[.<col>] (named "
+                         f"columns only); default off (also "
                          f"{FOREIGN_ENV}=<mode>); the out dir name must hold '{FOREIGN_DIR_TAG}'")
     ap.add_argument("--foreign-seed", type=int, default=None,
                     help=f"E5: seed of the donor draw (default 0, or {FOREIGN_SEED_ENV})")
@@ -3729,6 +3988,10 @@ def main(argv=None) -> int:
                     help="pileup form of the signal routes (default box_d, PI ruling 2026-11-17; "
                          "inbin = the bin's own count, the rule before the ruling); recorded as "
                          "signal_pileup in scores.json and tracks.json")
+    ap.add_argument("--signal-box-dependence", default=None, choices=("comonotone", "independent"),
+                    help="box_d expectation: the dependence of the bins under one box (default "
+                         "comonotone, the upper variance bound; independent, the lower); recorded "
+                         "as signal_box_dependence")
     ap.add_argument("--lambda-source", default="auto", choices=LAMBDA_SOURCE_OPTIONS,
                     help="auto (default): the observed control where it exists, else the model's "
                          "predicted control; observed_control: never the predicted control; "
@@ -3802,6 +4065,8 @@ def main(argv=None) -> int:
                                           else a.guardrail_windows}), no_halves=a.no_halves,
                   dnase_route=a.dnase_route, repeat_blind_reason=a.repeat_blind_reason,
                   **({"signal_pileup": a.signal_pileup} if a.signal_pileup else {}),
+                  **({"signal_box_dependence": a.signal_box_dependence}
+                     if a.signal_box_dependence else {}),
                   infer_batch=a.infer_batch, region_cache=not a.no_region_cache,
                   lambda_source=a.lambda_source, **({"addon": True} if a.addon else {}),
                   **({"workers": a.workers} if a.workers > 1 else {}),
@@ -3810,7 +4075,7 @@ def main(argv=None) -> int:
                   **phase_kw, **dump_kwargs(a),
                   **({"fraglen_table": a.fraglen_table} if a.fraglen_table else {}),
                   **({"same_view": True} if (a.score_same_view or same_view_from_env()) else {}),
-                  **foreign_kwargs(a))
+                  **foreign_kwargs(a), **input_depth_kwargs())
     except (PermissionError, ScoreRefused) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2

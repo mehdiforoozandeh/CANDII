@@ -66,3 +66,85 @@ Results:
 ## 8. Done when
 
 `eic_v1x` and its add-on evaluation set exist and pass their checks, `OTHER_EXPERIMENT.md` reports the experiment layer, and the cross-lab correction and metric-7 bounds are reported for the baselines and 3 architectures x 3 seeds.
+
+## 9. Specification as worked (2026-11-17, overnight, item agent CO-D2)
+
+### 9.1 State today, read from the artifacts (this replaces section 3 where they differ)
+
+- Tables on Nibi: `eic_v1`, `eic_v1_1`, `eic_v1_2` (section 3 said only `eic_v1`). `eic_v1_2` is byte-identical on Nibi and Fir (sha256 of its six hashed files compared). It holds 0 rows with `in_eic = evalonly`, 0 `other_experiment` pairs, and 0 pairs whose `knobs_differing` names `lab` (counted from `measurements.tsv` and `pairs.tsv`). So no second experiment and no real cross-lab pair is in any table today.
+- Lab vocabulary of `eic_v1_2` (`CHANGES.md`): 6 training labs. Every validation second experiment has a lab in that list; 4 training-split DNase-seq second experiments (Gregory Crawford, Duke) do not, so they would encode to id 0.
+- Build (sacct of the build arrays, and `counts.h5` + `meta.json` in `/scratch/mforooz/onion/measurements`): 71 of 88 second experiments are built; all 13 validation second experiments are built. Not built: 13 DNase-seq rows held for their tail partner (2015, 2023, 2039, 2040, 2042, 2052, 2067, 2072, 2076, 2077, 2078, 2081, 2084) and 4 DNase-seq rows that failed (2028 FAILED after 6:41 h; 2049, 2075, 2079 NODE_FAIL after about 42 h). All 17 are training-split pairs: they feed the layers only, never a model score.
+- A second experiment's `meta.json` has `lab`, `antibody` and `donor` empty (read: `ENCSR487BEW.pooled.uniform.base/meta.json`). The add-on builder copied `meta.json`, so on top of `eic_v1_2` the second experiment would carry no lab in C' while its EIC partner does. Fixed in code (9.4).
+- The eval set of `eic_v1_2` (`26f9e32f...`) and the 9 base-recipe runs trained on `eic_v1_2` (`runs_fir/eic_v1_2_rung{2,3,4}_base_heldout`) exist on Fir only. Fir is in an outage until about 2026-11-20.
+- Cross-lab correction is already computed by the scorer: an `other_experiment` pair of the add-on eval set is a pair job (EIC track pr1 -> second experiment pr2, the model given the second experiment's own covariates), reported as `replicate_pair_gap_closed_vs_depth_only.per_rung.other_experiment`; depth-only scaling and the floor (the second experiment's pr1 -> pr2) are computed in the same job. Section 5 step 5's "cross-lab correction gap closed" is that value. The scorer had no split by pair class (added, 9.4).
+- Pipeline work folders (`/scratch/mforooz/onion/work`, leaving scratch): `build_tables.py addon` reads them only for the QC columns `nsc, rsc, nrf, pbc1, pbc2, frag_len` of the appended rows (`qc_values`). The prep job of 9.5 reads them before the removal. Counts, halves and every metric of this item read `measurements/`, which stays. The build of the 17 missing rows writes new work folders and must run only after the removal.
+
+### 9.2 Gate GX, counted from the ledger and the built directories (before the add-on check)
+
+Built pairs per pair class, training and validation together (cells in brackets):
+
+| assay class | experiment (same lab, same donor) | experiment;lab | experiment;donor | experiment;lab;donor |
+|---|---|---|---|---|
+| broad histone | 4 (3) | 8 (2) | 5 (4) | 13 (4) |
+| narrow histone | 8 (3) | 6 (2) | 11 (8) | 6 (4) |
+| DNase-seq | 4 (4) | 2 (2) | 2 (2) | 0 |
+| ATAC-seq | 0 | 0 | 2 (2) | 0 |
+
+- Clause 1 trips: `experiment;lab` (other lab, same donor) has fewer than 3 cells in every assay class (`MIN_PAIRS = 5` from `MIN_CELLS = 3`, `layers.py:94`). The pure lab layer is not estimable. Building the 17 missing DNase-seq rows adds 2 `experiment;lab` pairs (rows 2052, 2077), so DNase-seq would reach 4 pairs: still under the minimum.
+- Estimable with lab and donor changed together: `experiment;lab;donor` in broad histone (13 pairs, 4 cells) and narrow histone (6 pairs, 4 cells). Pooled other-lab (both lab classes): broad 21 pairs from 6 cells, narrow 12 from 6.
+- Validation pairs: 13 (7 other-lab: 3 `experiment;lab`, 4 `experiment;lab;donor`; 6 same-lab). Clause 3 is counted by the pair smoke of the prep job.
+
+### 9.3 Question, steps, expectation (written before any result)
+
+Question: does the model correct the level and shape of a real second experiment of the same cell when it is given that experiment's lab, antibody, donor and platform (cross-lab correction), and where does the experiment layer sit beside the cell-type layer?
+
+Steps: (1) prep (add-on tables `eic_v1_2x` with filled covariates, check, add-on eval set, layer pair file, pair smoke); (2) layers on `eic_v1_2x`; (3) the 5 baselines with `--addon`; (4) the 3 base recipes x 3 seeds trained on `eic_v1_2`, then the 3 final candidates x 3 seeds when M1 names them; (5) report `OTHER_EXPERIMENT.md`.
+
+Expectation (before any run): (a) more than half of the 13 validation pairs are outside 1 +- 0.05 in regional totals, so the metric-7 upper bound is not quoted (clause 3); the two smoke pairs were 1.68 and 1.38. (b) The cross-lab gap closed of the 3 base recipes is between -0.2 and 0.2 and below the same-lab `experiment` class: a 38% to 68% level difference is not predictable from 6 lab ids learned without any second experiment in training. (c) The `experiment;lab;donor` layer of broad histone has an interval that excludes 0.
+
+### 9.4 Code (switches off = old bytes)
+
+- `tools/onion_data/build_tables.py addon --catalog <dir>`: lab, antibody, donor and platform of each appended row by the D1 rule (`fill_covariates.join_rows`); `build_info.json` records the catalog and the cause notes. Off: add-on output on the synthetic fixture has the same digest on the base commit 01248f4 and on this branch (`0041e148...`, every file but `build_info.json`). Test: `tests/test_onion_data_tables_addon_fill.py`.
+- `tools/onion_eval/score.py`: with `--addon` only, the key `other_experiment_gap_closed_by_pair_class` (pooled, per pair class, per pair, each with the model, depth-only and floor CRPS). Off: the frozen-form score digest test of `tests/test_onion_eval_addon.py` stays green. Test: `tests/test_onion_eval_addon_pair_class.py`.
+- `slurm/onion_data/closeout_d2_submit.sh` (stages prep, layers, baselines, models, build; dry run by default) and `slurm/onion_data/closeout_d2_prep.sh`. Kit `COD2` on Nibi. Item root on Nibi: `/project/def-maxwl/mforooz/ONION/CO-D2`.
+
+### 9.5 Decision table
+
+| outcome | conclusion |
+|---|---|
+| pair smoke: more than 6 of 13 validation pairs outside 1 +- 0.05 | metric-7 upper bound not quoted (clause 3); report the count per pair class |
+| `experiment;lab;donor` layer interval excludes 0 in broad or narrow histone | lab plus donor is a real variance source; the t305 cell-type layer held part of it; the pure lab part stays unseparated (clause 1) |
+| `experiment;lab;donor` and `experiment` layers overlap | no evidence that changing lab adds variance beyond a repeat experiment |
+| model gap closed on other-lab pairs above depth-only (0) by more than the seed range | the model corrects some lab effect, at least in level |
+| model gap closed within the seed range of 0 | no lab correction; the D1 covariates did not help on real pairs |
+| model gap closed on other-lab pairs below the same-lab `experiment` class by more than the seed range | lab differences are harder than repeat differences for the model |
+
+### 9.6 Controls and traps
+
+- Lab is confounded with read length, platform and run type (`tech_diff` of the ledger); every validation second experiment is single-end. Report `tech_diff` beside every class.
+- The pair smoke depth-matches on the declared `depth_reads`; check the run type of both sides of each pair that is outside the tolerance.
+- 7 other-lab validation pairs give a wide interval: quote the pair count and the seed range with every class value; with fewer than 5 pairs a class value is descriptive only.
+- The add-on scores need runs trained on `eic_v1_2`. The `eic_v1` runs on Nibi (`runs_fir/rung*_base_heldout`) are refused by the scorer on `eic_v1_2x`; do not build an add-on of `eic_v1` to reuse them (it would carry empty lab covariates).
+
+### 9.7 Cost (CPU-h, allocated)
+
+- prep: 1 job x 4 CPU x 3 h = 12 at most (submitted 2026-11-17, Nibi job 27601259).
+- layers: 8 CPU x 12 h = 96 at most; E7a's estimate is 50.
+- one add-on score: the full eval set took 11.7 h on 2 CPUs (E2 timing job 4448330: 43 targets, with pairs) = 23.4 CPU-h. The add-on set has at most 26 targets (13 EIC + 13 second) and at most 13 pair jobs, so about 26 / 43 x 9.0 h + 2.6 h = 8.0 h x 2 CPU = 16 CPU-h; the job asks 2 CPU x 14 h = 28.
+- baselines 5 x 16 = 80 expected (140 allocated at most); base recipes 9 x 16 = 144 (252); final candidates 9 x 16 = 144 (252).
+- Total without the final candidates: 12 + 50 + 80 + 144 = 286 CPU-h expected, 12 + 96 + 140 + 252 = 500 at most.
+- The 17 missing DNase-seq rows (not recommended, 9.2): up to 17 x 72 h x 16 CPU = 19,584 allocated; the measured single-end smoke row 2030 used 2.93 h x 16 = 47 CPU-h for 47 M reads, about 1 CPU-h per million reads, so 7,312 M catalog reads give about 7,300 CPU-h.
+
+### 9.8 Results of the prep step (2026-11-17, Nibi job 27601259; evidence `results/closeout_D2/D2_PREP.md`)
+
+- Add-on tables `/project/def-maxwl/mforooz/ONION/CO-D2/tables/eic_v1_2x`: 71 rows, 71 `other_experiment` pairs; `check_dataset.py --addon-of tables/eic_v1_2` PASS with every leak count 0 (`second-experiment rows: 71 (other lab 35, same lab 36)`). Lab, donor and antibody are filled on every appended row.
+- Add-on eval set `CO-D2/eval/eic_v1_2x/evalset.json`: 13 validation targets, 13 second experiments, 13 pair ids; base eval set rebuilt on Nibi with the same sha256 as Fir's frozen `eval/eic_v1_2/evalset.json` (`26f9e32f...`).
+- Pair smoke: 3 of 13 validation pairs are outside 1 +- 0.05 (expectation (a) was wrong); other-lab 16 of 35 and same-lab 4 of 36 over all pairs. Gate GX clause 3 does not trip; clause 1 trips (9.2).
+- These tables are the D2 add-on of `eic_v1_2`. When D3 builds a later version, the add-on is rebuilt on it with the same stage (`BASE=<version>`), and the runs to score must be trained on that version.
+
+### 9.9 Review fixes (2026-11-17)
+
+- Pair-class block of the add-on score: each class (and the pooled row) now carries `n_pairs`, `n_cells` and `flag` (`ok` at 5 or more pairs from 3 or more cells, the `layers.py:94` rule; else `few pairs`).
+- Fill table: with `--catalog` and a filled base (one that holds `covariates_fill.tsv`), the add-on appends one side-table row per appended second experiment to `covariates_fill.tsv` and one section to `CHANGES.md`; the base files stay a byte prefix. Without `--catalog`, both files are plain copies. Neither file is hashed by `tables_sha256`. The `eic_v1_2x` built at 9.8 predates this fix: its two files are plain copies of the base. A rebuild (new D) gives the appended rows.
+- Known limit, donor knob against the filled donor: the pair class comes from the reviewed ledger, which compares the donor sets of the two experiments; the filled `donor` column writes `mixed` for a pool of several donors. Of the 39 add-on pairs whose class names `donor`, 1 has the same filled value on both sides: `p9023fbe311cd` (C09 H3K27me3, validation), where the EIC experiment pools ENCDO688UWB;ENCDO922CEJ and the second experiment pools ENCDO194EHQ;ENCDO779YRY. The knob is right (disjoint donor sets); the model sees the same donor id (`mixed`) on both sides. This pair stays in `experiment;donor` and is listed in the report.
+- Pooled across assay classes (reviewer's caveat): `experiment;lab` (other lab, same donor) has 16 pairs from 3 cells (C17, C23, C24) over all assay classes, which meets the minimum; `layers.py` has no such stratum. Judgment: a pooled-across-class lab layer is not a sound estimate. The layer is a variance increment over `isogenic` in the per-assay count scale; broad histone, narrow histone and DNase-seq differ in signal structure and in their isogenic level, so a pooled increment mixes three different quantities, and the cell bootstrap has only 3 units, so its interval is set by which 3 cells exist. At best it is a descriptive row labeled "pooled across assay classes, 3 cells, not a layer estimate". Cost to add it as such a row: about 30 lines in `layers.py` plus a test (a pooled-class stratum for the `other_experiment` class rows), no extra compute (the layers job reads the same pairs, inside its 50 CPU-h). Not added; PI decision.

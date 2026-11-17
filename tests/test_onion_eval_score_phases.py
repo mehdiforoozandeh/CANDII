@@ -562,6 +562,7 @@ ARMS_NEW_KEYS = {
     "/selection/composite_status",
     # E2 (PI ruling 2026-11-17): the pileup form of the signal routes
     "/signal_pileup",
+    "/signal_box_dependence",
 }
 
 

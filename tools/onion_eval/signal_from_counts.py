@@ -64,19 +64,26 @@ on the side set by the strand) and scores every base pair. `box_d` spreads each 
 centred box of d bp (`box_spread`; ATAC-seq / DNase-seq d = 150) before the score: the treatment
 and, for ChIP-seq, the control (all lambda windows read the spread control; the no-control llocal
 window reads the unspread mean, a window mean that the box does not change away from the edges).
-At a region end the box is cut and renormalized. On observed counts this raised the median Pearson
+At a region end the box is zero-padded (no renormalization; the edge bins are masked from the
+metrics, `edge_keep`). On observed counts this raised the median Pearson
 with the pipeline's -log10 p track from 0.831 to 0.921 (41 ChIP-seq validation targets) and the
 500 bp peak-tile F1 at -log10 p >= 2 from 0.573 to 0.782; it was chosen among 4 variants on 42
 validation targets (`cruxvault/results/closeout_E2/FORMULA_EXTENSION.md`). The strand and the bp
 positions are lost at binning, so no 25 bp formula reproduces the pipeline exactly. `inbin` keeps
 the bin's own count (the rule before the ruling) and stays reachable by that value.
-Model side of `box_d`: the predicted NB is per bin and its joint law is not modelled. The spread
-pileup's NB has the box mean of the means and the box mean of the sizes, i.e. the bins under one
-box share one Gamma rate (fully correlated over-dispersion, and the Poisson part taken as one bin's).
-This is the upper bound of the spread pileup's variance; independent bins (variance
-sum w_k^2 (mu_k + mu_k^2 / n_k)) are the lower bound. The plug-in mode needs no such assumption
-(the score of the box mean). The predicted-control route spreads the predicted control mean by the
-same box.
+Model side of `box_d` (E2 review): the predicted NB is per bin and its joint law is not modelled.
+The spread pileup gets a NB with mean m = box mean of the means and a size set by one of two
+dependence forms (`dependence`, recorded as `signal_box_dependence`): `comonotone` (default; the
+bins' over-dispersion moves together, the UPPER variance bound, n_s = m^2 / (sum w mu / sqrt n)^2)
+or `independent` (the LOWER bound, n_s = m^2 / sum w^2 mu^2 / n); see `_spread`. The -log10 p
+score is convex in the count, so the comonotone form gives the LARGER expected score (more
+confident peaks). Default comonotone because over-dispersion is enrichment that is smooth at the
+fragment scale (d is 4 to 16 bins), and adjacent read-span bins share reads; independence across
+bins one fragment apart is the less plausible end. The truth lies between the two; both are
+reported. The plug-in mode needs no assumption (the score of the box mean). The predicted-control
+route spreads the predicted control mean by the same box. Region edges: the box is not
+renormalized; the `box_reach(d)` bins at each region end are masked from signal-space metrics
+(`edge_keep`).
 
 Scorer adapter: `signal_from_nb(n, mu, row, *, ds, regions, rb, predicted_control=None,
 dnase_route=..., mode="expectation") -> (signal, lambda_source)`. The scorer's vectors join the eval regions end to end
@@ -135,6 +142,11 @@ __all__ = [
     "PILEUP_DEFAULT",
     "box_weights",
     "box_spread",
+    "box_reach",
+    "edge_keep",
+    "box_d_of",
+    "DEPENDENCE_FORMS",
+    "DEPENDENCE_DEFAULT",
     "plug_in_neglog10p",
 ]
 
@@ -161,6 +173,11 @@ SIGNAL_MODES = ("expectation", "plug_in")
 #: `inbin` is the bin's own count only (the rule before the ruling). Recorded as `signal_pileup`.
 PILEUP_FORMS = ("box_d", "inbin")
 PILEUP_DEFAULT = "box_d"
+#: E2 review: the dependence between the bins under one box in the box_d EXPECTATION mode
+#: (`_spread`); recorded as `signal_box_dependence`. `comonotone` (default): the upper variance
+#: bound; `independent`: the lower bound. The truth lies between them.
+DEPENDENCE_FORMS = ("comonotone", "independent")
+DEPENDENCE_DEFAULT = "comonotone"
 
 _CHIP_CLASSES = ("broad_histone", "narrow_histone")
 _ATAC = ("accessibility_atac", "ATAC-seq")
@@ -360,42 +377,92 @@ def box_weights(width_bp: float, bin_bp: int = BIN) -> np.ndarray:
     return w / w.sum()
 
 
+def box_reach(d: float) -> int:
+    """Bins on each side of a bin that the centred box of `d` bp reaches (0 for d <= 25 bp)."""
+    return (box_weights(d).size - 1) // 2
+
+
 def box_spread(x, d: float) -> np.ndarray:
-    """`x` (one contiguous stretch) averaged over the centred box of `d` bp (`box_weights`). At the
-    two ends of the stretch the box is cut and renormalized to the weights inside it, so a flat
-    track stays flat. d <= 25 bp returns `x` unchanged (as float64)."""
+    """`x` (one contiguous stretch) convolved with the centred box of `d` bp (`box_weights`), with
+    zeros past both ends of the stretch: every count keeps its own box weight, so mass inside the
+    stretch is never moved or created. The `box_reach(d)` bins at each end miss their outside
+    neighbours (the eval regions are cut from the genome); `edge_keep` masks them out of every
+    signal-space metric. d <= 25 bp returns `x` unchanged (as float64)."""
     x = np.asarray(x, dtype=np.float64)
     w = box_weights(d)
     if w.size == 1:
         return x.copy()
-    num = np.convolve(x, w, mode="same")
-    den = np.convolve(np.ones_like(x), w, mode="same")
-    return num / den
+    return np.convolve(x, w, mode="same")
 
 
-def _spread(mu, n, ctl, d, pileup):
+def edge_keep(n_regions: int, rb: int, reach: int) -> np.ndarray:
+    """bool [n_regions * rb]: False on the `reach` bins at both ends of every region (the bins whose
+    box spread misses neighbours outside the region), True elsewhere."""
+    k = np.ones((int(n_regions), int(rb)), bool)
+    r = int(reach)
+    if r > 0:
+        k[:, :r] = False
+        k[:, -r:] = False
+    return k.ravel()
+
+
+def box_d_of(row: dict) -> float | None:
+    """The box width (bp) of a row's signal route: its `frag_len` for ChIP-seq (None when empty),
+    ATAC_SMOOTH_WIN for ATAC-seq and DNase-seq (MACS2 route)."""
+    route = route_of(row["assay_class"] or row["assay"])
+    if route == "chip":
+        v = (str(row.get("frag_len") or "")).strip()
+        return float(v) if v else None
+    return float(ATAC_SMOOTH_WIN)
+
+
+def _spread(mu, n, ctl, d, pileup, dependence=DEPENDENCE_DEFAULT):
     """The box spread of the predicted mean, the NB size and the control, or nothing (`inbin`).
-    Model side (PI ruling 2026-11-17): the pileup of a bin is the box mean of the NB means; its NB
-    has that mean and the box mean of the sizes, i.e. the bins under one box share one Gamma rate
-    (fully correlated over-dispersion). This keeps the NB machinery of one bin and is the upper
-    bound of the pileup's variance; independent bins (variance sum w^2 (mu + mu^2 / n)) are the
-    lower bound. On observed counts (n = None, plug-in) only the counts are spread."""
+
+    Model side (PI ruling 2026-11-17; E2 review): bin k of the box has X_k ~ NB(n_k, mu_k), i.e.
+    Poisson(mu_k G_k) with G_k ~ Gamma(n_k, mean 1). The spread pileup Y = sum_k w_k X_k gets a NB
+    with mean m = sum_k w_k mu_k and a size n_s that matches the Gamma (over-dispersion) part of its
+    variance under one of two dependence forms (`dependence`, DEPENDENCE_FORMS):
+      `comonotone`  the G_k move together (one Gamma rank for the box): the over-dispersion
+                    variance is at most (sum_k w_k mu_k / sqrt(n_k))^2 (Cauchy-Schwarz; equality
+                    when every n_k is equal), so n_s = m^2 / (sum_k w_k mu_k / sqrt(n_k))^2. This
+                    is the UPPER variance bound. Equal sizes give n_s = n.
+      `independent` the G_k are independent: variance sum_k w_k^2 mu_k^2 / n_k, so
+                    n_s = m^2 / sum_k w_k^2 mu_k^2 / n_k. This is the LOWER bound (for positive
+                    correlation). Equal sizes and means give n_s = n / sum_k w_k^2 > n.
+    The Poisson part of the NB is m in both forms (one bin's), not sum_k w_k^2 mu_k: adjacent
+    read-span counts share reads, so their Poisson parts are not independent either.
+    Direction: the -log10 p score is convex in the count, so E[score] RISES with the variance; the
+    comonotone form gives the larger expectation (more confident peaks), the independent form the
+    smaller. The plug-in mode reads m only and needs neither. On observed counts (n = None) only
+    the counts are spread."""
     if pileup not in PILEUP_FORMS:
         raise ValueError(f"pileup {pileup!r} not in {PILEUP_FORMS}")
+    if dependence not in DEPENDENCE_FORMS:
+        raise ValueError(f"dependence {dependence!r} not in {DEPENDENCE_FORMS}")
     if pileup == "inbin":
         return mu, n, ctl
     mu = np.asarray(mu, dtype=np.float64)
+    m = box_spread(mu, d)
+    n_s = None
     if n is not None:
         n = np.broadcast_to(np.asarray(n, dtype=np.float64), mu.shape)
-    return (box_spread(mu, d), None if n is None else box_spread(n, d),
-            None if ctl is None else box_spread(ctl, d))
+        w = box_weights(d)
+        if w.size == 1:
+            n_s = np.array(n, dtype=np.float64)
+        elif dependence == "comonotone":
+            n_s = m ** 2 / np.convolve(mu / np.sqrt(n), w, mode="same") ** 2
+        else:
+            n_s = m ** 2 / np.convolve(mu ** 2 / n, w ** 2, mode="same")
+    return m, n_s, None if ctl is None else box_spread(ctl, d)
 
 
 def signal_track(mu, n, assay_class: str, control_counts, covariates: dict,
                  *, gsize: float = MACS2_GSIZE_HS,
                  dnase_route: str = DNASE_ROUTE_DEFAULT,
                  mode: str = "expectation",
-                 pileup: str = PILEUP_DEFAULT) -> tuple[np.ndarray, str]:
+                 pileup: str = PILEUP_DEFAULT,
+                 dependence: str = DEPENDENCE_DEFAULT) -> tuple[np.ndarray, str]:
     """The assay's pipeline signal derived from the predicted NB, and its lambda source.
 
     `covariates` keys (the `measurements.tsv` names): all routes `depth_reads` (treatment tagAlign
@@ -405,7 +472,8 @@ def signal_track(mu, n, assay_class: str, control_counts, covariates: dict,
     score under the NB (headline) or `plug_in`, the score of the NB mean; `n` is unused in
     `plug_in` mode. `pileup` (PILEUP_FORMS): `box_d` spreads the treatment (mean and size) and the
     control over the centred box of d before the score (`_spread`); `inbin` does not. The
-    hotspot2 route has no pileup and ignores it.
+    hotspot2 route has no pileup and ignores it. `dependence` (DEPENDENCE_FORMS): the size of the
+    spread NB in the expectation mode (`_spread`).
     """
     if dnase_route not in DNASE_ROUTES:
         raise ValueError(f"dnase_route {dnase_route!r} not in {DNASE_ROUTES}")
@@ -413,6 +481,8 @@ def signal_track(mu, n, assay_class: str, control_counts, covariates: dict,
         raise ValueError(f"mode {mode!r} not in {SIGNAL_MODES}")
     if pileup not in PILEUP_FORMS:
         raise ValueError(f"pileup {pileup!r} not in {PILEUP_FORMS}")
+    if dependence not in DEPENDENCE_FORMS:
+        raise ValueError(f"dependence {dependence!r} not in {DEPENDENCE_FORMS}")
     route = route_of(assay_class)
     mu = np.asarray(mu, dtype=np.float64)
     if route == "dnase" and dnase_route == "hotspot2_density":
@@ -426,7 +496,7 @@ def signal_track(mu, n, assay_class: str, control_counts, covariates: dict,
         depth, rl = _need(covariates, "depth_reads", "read_length")
         d = float(ATAC_SMOOTH_WIN)
         lam = macs2_lambda(lambda_bg=d * depth / gsize, treat_pileup=pileup_from_counts(mu, d, rl))
-        mu_s, n_s, _ = _spread(mu, n, None, d, pileup)     # llocal reads the unspread mean
+        mu_s, n_s, _ = _spread(mu, n, None, d, pileup, dependence)   # llocal: the unspread mean
         sig = _score(mu_s, n_s, d / (rl + SPAN_EXTRA), lam, mode)
         return sig.astype(np.float32), "local_background"
 
@@ -439,7 +509,7 @@ def signal_track(mu, n, assay_class: str, control_counts, covariates: dict,
     control_counts = np.asarray(control_counts, dtype=np.float64)
     if control_counts.shape != mu.shape:
         raise ValueError(f"control and treatment must be binned the same: {control_counts.shape} vs {mu.shape}")
-    mu_s, n_s, ctl_s = _spread(mu, n, control_counts, d, pileup)
+    mu_s, n_s, ctl_s = _spread(mu, n, control_counts, d, pileup, dependence)
     lam = macs2_lambda(lambda_bg=d * depth / gsize,
                        control_pileup=pileup_from_counts(ctl_s, d, crl),
                        ratio_treat2control=depth / cdepth)
@@ -451,7 +521,8 @@ def signal_track(mu, n, assay_class: str, control_counts, covariates: dict,
 def signal_from_nb(n, mu, row: dict, *, ds, regions, rb: int, predicted_control=None,
                    dnase_route: str = DNASE_ROUTE_DEFAULT,
                    mode: str = "expectation",
-                   pileup: str = PILEUP_DEFAULT) -> tuple[np.ndarray, str]:
+                   pileup: str = PILEUP_DEFAULT,
+                   dependence: str = DEPENDENCE_DEFAULT) -> tuple[np.ndarray, str]:
     """Signal of one target over the scorer's concatenated eval regions, and its lambda source.
     `pileup`: `box_d` (default) or `inbin`, as in `signal_track`; each region is spread alone.
     `mode`: `expectation` (headline) or `plug_in` (PI ruling 20), as in `signal_track`.
@@ -490,6 +561,7 @@ def signal_from_nb(n, mu, row: dict, *, ds, regions, rb: int, predicted_control=
             ctl = (ds.read(ctl_id, c, int(s), int(rb)).astype(np.float64) if crow is not None
                    else np.asarray(predicted_control, dtype=np.float64)[sl])
         sig, source = signal_track(mu[sl], n[sl], row["assay_class"] or row["assay"], ctl, cov,
-                                   dnase_route=dnase_route, mode=mode, pileup=pileup)
+                                   dnase_route=dnase_route, mode=mode, pileup=pileup,
+                                   dependence=dependence)
         out.append(sig)
     return np.concatenate(out), source

@@ -365,32 +365,106 @@ def test_box_weights_exact():
 
 
 def test_box_spread_exact_with_region_edges():
-    from onion_eval.signal_from_counts import box_spread
+    from onion_eval.signal_from_counts import box_reach, box_spread, edge_keep
     x = np.array([10.0, 0, 0, 0, 0, 0, 4.0])
-    got = box_spread(x, 75)                     # weights 1/3 each; ends renormalized to 2 bins
-    np.testing.assert_allclose(got, [5.0, 10 / 3, 0, 0, 0, 4 / 3, 2.0], rtol=0, atol=1e-12)
-    np.testing.assert_allclose(box_spread(np.full(9, 3.0), 180), np.full(9, 3.0), rtol=0, atol=1e-14)
-    np.testing.assert_array_equal(box_spread(x, 20), x)                               # d < 25
-    # d = 100: weights (0.5, 1, 1, 1, 0.5) / 4; the middle bin of a spike gets 1/4
-    y = np.zeros(11)
-    y[5] = 8.0
-    np.testing.assert_allclose(box_spread(y, 100)[3:8], [1.0, 2.0, 2.0, 2.0, 1.0], rtol=0, atol=1e-12)
+    got = box_spread(x, 75)            # weights 1/3 each, zeros past both ends (no renormalization)
+    np.testing.assert_allclose(got, [10 / 3, 10 / 3, 0, 0, 0, 4 / 3, 4 / 3], rtol=0, atol=1e-12)
+    flat = box_spread(np.full(9, 3.0), 180)                  # 7.2 bins: reach 4
+    np.testing.assert_allclose(flat[4:5], [3.0], rtol=0, atol=1e-14)   # interior stays flat
+    assert flat[0] < 3.0 and flat[-1] < 3.0                  # the ends miss their neighbours
+    np.testing.assert_array_equal(box_spread(x, 20), x)      # d < 25
+    # a spike in bin 0 keeps its own box weight, nothing more (mass is never created)
+    y = np.zeros(20)
+    y[0] = 1.0
+    from onion_eval.signal_from_counts import box_weights
+    w = box_weights(150)                                      # 6 bins: half weights at both ends
+    np.testing.assert_allclose(box_spread(y, 150)[0], w[(w.size - 1) // 2], rtol=0, atol=1e-15)
+    assert box_spread(y, 150).sum() < 1.0
+    # d = 100: weights (0.5, 1, 1, 1, 0.5) / 4
+    z = np.zeros(11)
+    z[5] = 8.0
+    np.testing.assert_allclose(box_spread(z, 100)[3:8], [1.0, 2.0, 2.0, 2.0, 1.0], rtol=0, atol=1e-12)
+    assert (box_reach(20), box_reach(75), box_reach(100), box_reach(150), box_reach(180)) == \
+        (0, 1, 2, 3, 4)
+    k = edge_keep(2, 10, 3)
+    assert k.tolist() == [False] * 3 + [True] * 4 + [False] * 6 + [True] * 4 + [False] * 3
+
+
+def test_dependence_sizes_exact():
+    from onion_eval.signal_from_counts import _spread, box_weights
+    mu = np.array([2.0, 10.0, 30.0, 10.0, 2.0])
+    n = np.array([0.5, 4.0, 1.0, 9.0, 2.0])
+    w = box_weights(75)                                       # 1/3 each
+    m, n_c, _ = _spread(mu, n, None, 75, "box_d", "comonotone")
+    _, n_i, _ = _spread(mu, n, None, 75, "box_d", "independent")
+    i = 2
+    mm = w @ mu[1:4]
+    np.testing.assert_allclose(m[i], mm, rtol=1e-14)
+    np.testing.assert_allclose(n_c[i], mm ** 2 / (w @ (mu[1:4] / np.sqrt(n[1:4]))) ** 2, rtol=1e-12)
+    np.testing.assert_allclose(n_i[i], mm ** 2 / ((w ** 2) @ (mu[1:4] ** 2 / n[1:4])), rtol=1e-12)
+    # equal sizes: comonotone keeps n; independent with equal means is n / sum w^2
+    _, nc, _ = _spread(np.full(9, 5.0), np.full(9, 3.0), None, 75, "box_d", "comonotone")
+    _, ni, _ = _spread(np.full(9, 5.0), np.full(9, 3.0), None, 75, "box_d", "independent")
+    np.testing.assert_allclose(nc[4], 3.0, rtol=1e-12)
+    np.testing.assert_allclose(ni[4], 3.0 / (w ** 2).sum(), rtol=1e-12)
+    with pytest.raises(ValueError, match="dependence"):
+        _spread(mu, n, None, 75, "box_d", "shared")
+
+
+def test_dependence_variances_by_simulation():
+    """The over-dispersion variance of Y = sum_k w_k X_k, X_k = Poisson(mu_k G_k), G_k ~ Gamma(n_k)
+    (mean 1): comonotone G (one uniform rank) never exceeds the comonotone bound
+    (sum w mu / sqrt n)^2 and equals it for equal sizes; independent G give sum w^2 mu^2 / n.
+    The reviewer's example: w = 1/2, mu = 10, n = (0.1, 100)."""
+    from scipy.stats import gamma
+    rng = np.random.default_rng(11)
+    w = np.array([0.5, 0.5])
+    mu = np.array([10.0, 10.0])
+    N = 400_000
+    for n in (np.array([0.1, 100.0]), np.array([2.0, 2.0])):
+        u = rng.random(N)
+        G = np.stack([gamma.ppf(u, a, scale=1.0 / a) for a in n], 1)        # comonotone
+        Gi = np.stack([rng.gamma(a, 1.0 / a, N) for a in n], 1)             # independent
+        for g, bound, cmp in ((G, (w @ (mu / np.sqrt(n))) ** 2, "le"),
+                              (Gi, (w ** 2) @ (mu ** 2 / n), "eq")):
+            X = rng.poisson(mu * g)
+            vy = np.var(X @ w)
+            poisson_part = (w ** 2) @ mu                    # independent Poisson draws given G
+            od = vy - poisson_part
+            if cmp == "eq" or n[0] == n[1]:
+                assert abs(od - bound) / bound < 0.05, (n, cmp, od, bound)
+            else:
+                assert od <= bound * 1.02, (n, od, bound)
+    # the review case: comonotone bound 266.1 > independent 250.25 > box-mean-of-n form 2.0
+    n = np.array([0.1, 100.0])
+    assert (w @ (mu / np.sqrt(n))) ** 2 > (w ** 2) @ (mu ** 2 / n) > (w @ mu) ** 2 / (w @ n)
+
+
+def test_expected_score_rises_with_variance():
+    """The -log10 p score is convex in the count: the expectation grows as the NB size falls
+    (mu = 10, lambda = 5, the reviewer's case), so the comonotone form gives larger scores."""
+    from onion_eval.signal_from_counts import nb_expected_neglog10p
+    hi = nb_expected_neglog10p(np.array([10.0]), np.array([1000.0]), 1.0, np.array([5.0]))[0]
+    lo = nb_expected_neglog10p(np.array([10.0]), np.array([0.3]), 1.0, np.array([5.0]))[0]
+    assert lo > hi and abs(hi - 2.03) < 0.02 and abs(lo - 5.20) < 0.05
 
 
 def test_box_d_route_equals_inbin_on_the_spread_hand_case():
-    """expectation and plug-in under box_d equal the in-bin rule on (box mean of mu, box mean of n,
-    box mean of the control): the shared-Gamma-rate model of the spread pileup."""
-    from onion_eval.signal_from_counts import box_spread
+    """expectation and plug-in under box_d equal the in-bin rule on the spread NB (box mean of mu,
+    the size of the dependence form) and the spread control, for both dependence forms."""
+    from onion_eval.signal_from_counts import _spread, box_spread
     mu = np.array([1.0, 2.0, 12.0, 30.0, 12.0, 2.0, 1.0, 1.0])
     n = np.array([2.0, 2.0, 4.0, 4.0, 4.0, 2.0, 2.0, 2.0])
     ctl = np.array([1.0, 1.0, 2.0, 1.0, 1.0, 1.0, 3.0, 1.0])
     cov = dict(depth_reads=2.0e7, read_length=36, frag_len=90, control_depth_reads=2.5e7,
                control_read_length=36)
-    for mode in ("expectation", "plug_in"):
-        got, src = S.signal_track(mu, n, "narrow_histone", ctl, cov, mode=mode)
-        want, _ = S.signal_track(box_spread(mu, 90), box_spread(n, 90), "narrow_histone",
-                               box_spread(ctl, 90), cov, mode=mode, pileup="inbin")
-        np.testing.assert_array_equal(got, want)
-        assert src == "observed_control"
+    for dep in ("comonotone", "independent"):
+        m, n_s, _ = _spread(mu, n, None, 90, "box_d", dep)
+        for mode in ("expectation", "plug_in"):
+            got, src = S.signal_track(mu, n, "narrow_histone", ctl, cov, mode=mode, dependence=dep)
+            want, _ = S.signal_track(m, n_s, "narrow_histone", box_spread(ctl, 90), cov, mode=mode,
+                                     pileup="inbin")
+            np.testing.assert_array_equal(got, want)
+            assert src == "observed_control"
     with pytest.raises(ValueError, match="pileup"):
         S.signal_track(mu, n, "narrow_histone", ctl, cov, pileup="box")

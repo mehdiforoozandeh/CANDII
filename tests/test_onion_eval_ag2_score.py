@@ -678,3 +678,36 @@ def test_mixed_signal_pileup_refused(val, tmp_path):
                    extra={"signal_pileup": "inbin"})
     _run(val, tmp_path / "o2", methods=_specs(val, [f"inrun={same}"]))
     assert json.loads((tmp_path / "o2" / "SCORED").read_text())["signal_pileup"] == "inbin"
+
+
+def test_truth_from_pileup_form_checked_and_edges_masked(val, tmp_path):
+    """E2 review: the truth-from directory enters the pileup-form check; a nonzero
+    `signal_edge_bins` masks that many bins at each region end from every metric and tile."""
+    arrs = {**{f"{t}.signal.npy": y for t, y in val["truth"].items()},
+            **{f"{t}.truth.npy": y for t, y in val["truth"].items()}}
+    tbox = _method(tmp_path, "tbox", "run", "val", arrs, val["ev_sha"],
+                   extra={"signal_pileup": "box_d", "signal_box_dependence": "comonotone"})
+    with pytest.raises(AS.Refused, match="signal_pileup"):
+        _run(dict(val, truth_from=tbox), tmp_path / "o0")
+    box = {f"{t}.signal.npy": y for t, y in val["truth"].items()}
+    run = _method(tmp_path, "edgy", "run", "val", box, val["ev_sha"],
+                  extra={"signal_pileup": "inbin", "signal_edge_bins": 3})
+    _run(val, tmp_path / "o", methods=_specs(val, [f"edgy={run}"]))
+    sc = json.loads((tmp_path / "o" / "SCORED").read_text())
+    assert sc["signal_edge_bins"] == 3 and sc["n_edge_bins_masked"] == 2 * 3 * len(REGIONS)
+    rows = [r for r in _read(tmp_path / "o" / "per_target.tsv") if r["method"] == "edgy"]
+    assert rows and all(float(r["pearson"]) == pytest.approx(1.0, abs=1e-6) for r in rows)
+    # 1,024-bin regions hold 51 whole tiles (bins 0..1019): the 3 masked bins at the start drop
+    # the first tile, the 3 at the end lie past the last tile
+    dropped = [int(r["n_tiles_dropped"]) for r in rows
+               if r["n_tiles_dropped"] not in ("not available", "")]
+    assert dropped and set(dropped) == {len(REGIONS)}
+
+
+def test_mixed_box_dependence_refused(val, tmp_path):
+    """E2 review: two NB-kind methods with different `signal_box_dependence` are refused."""
+    arrs = {f"{t}.signal.npy": y for t, y in val["truth"].items()}
+    a = _method(tmp_path, "co", "run", "val", arrs, val["ev_sha"],
+                extra={"signal_box_dependence": "comonotone"})
+    with pytest.raises(AS.Refused, match="signal_box_dependence"):
+        _run(val, tmp_path / "o", methods=_specs(val, [f"co={a}"]))
