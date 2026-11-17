@@ -122,6 +122,12 @@ of the MACS2 score under the predicted NB (`signal_arcsinh`); the plug-in varian
 mean (PI ruling 20), is written beside it under the same keys with the suffix `_plug_in`
 (`signal_arcsinh_plug_in` in headline 1 and in r_spec). Without the module the signal space is NaN
 with the reason.
+`--signal-pileup box_d|inbin` (E2, PI ruling 2026-11-17 "Adopt the box spread"; default `box_d`):
+the pileup form of every signal route (signal, plug-in, predicted control, the dumps' native and
+peak-probability arrays): `box_d` spreads the predicted mean, size and control over a centred box
+of the fragment length (`signal_from_counts.box_spread`); `inbin` is the bin's own count, the rule
+before the ruling. Written as `signal_pileup` in scores.json and tracks.json; select_rule and
+ag2_score refuse a mix (absent reads `inbin`). Count-space values do not depend on it.
 
 Options of chunk SC (each off by default; a default scores.json is unchanged):
   --lambda-source auto|observed_control|predicted_control. `auto` is the route above.
@@ -1000,7 +1006,7 @@ class Scorer:
                  signal_override=None, addon=False, dump_signal=None, dump_targets=None,
                  dump_method=None, workers=1, stage_dir=None, pred_store=None, store_run=None,
                  refs_from=None, fraglen_table=None, same_view=False, foreign_covariates=None,
-                 foreign_seed=0):
+                 foreign_seed=0, signal_pileup=None):
         from minicandi import contract as C
         from minicandi.dataset import OnionDataset, tables_sha256
         from onion_eval.evalset import tables_dir_of
@@ -1131,6 +1137,12 @@ class Scorer:
                 raise ValueError(f"dnase_route {self.dnase_route!r} not in {self.sig.DNASE_ROUTES}")
         else:
             self.dnase_route = dnase_route
+        #: E2 (PI ruling 2026-11-17): the pileup form of the signal routes (`box_d` default, `inbin`
+        #: the rule before the ruling); written to scores.json and tracks.json as `signal_pileup`
+        self.signal_pileup = signal_pileup or (self.sig.PILEUP_DEFAULT if self.sig is not None
+                                               else None)
+        if self.sig is not None and self.signal_pileup not in self.sig.PILEUP_FORMS:
+            raise ValueError(f"signal_pileup {self.signal_pileup!r} not in {self.sig.PILEUP_FORMS}")
         # FL: estimated fragment lengths for tracks whose frag_len is empty (None: today's path)
         self.fraglen_path = str(Path(fraglen_table).resolve()) if fraglen_table else None
         self.fraglen = None
@@ -1250,7 +1262,7 @@ class Scorer:
         src = {"signal": rec.get("lambda_source")}
         if not self.external:
             arrays["truth"] = sig[f"{SIGNAL_PREFIX['expectation']}truth"]
-            kw = dict(ds=self.ds, regions=self.regions, rb=self.rb)
+            kw = dict(ds=self.ds, regions=self.regions, rb=self.rb, pileup=self.signal_pileup)
             if self.lambda_source == "predicted_control":
                 pc = sig.get(f"{PC_PREFIX}pred")
                 pc_src = rec.get("lambda_source" + PREDICTED_CONTROL)
@@ -1316,6 +1328,7 @@ class Scorer:
                     "region_bins": self.rb, "n_regions": len(self.regions),
                     "lambda_source_mode": self.lambda_source, "targets": m["targets"],
                     "space": "signal_arcsinh", "dnase_route": self.dnase_route,
+                    "signal_pileup": self.signal_pileup,
                     "left_out": m["left_out"],
                     "dump_targets_given": self.dump_targets is not None,
                     "evalset": str(self.evalset_path),
@@ -2161,7 +2174,8 @@ class Scorer:
         h1 = Mx.to_space(files["pr1_signal"], "signal_arcsinh")
         h2 = Mx.to_space(files["pr2_signal"], "signal_arcsinh")
         N = Mx.noise_floor(h1, h2, ts, 2.0)
-        kw = dict(ds=self.ds, regions=self.regions, rb=self.rb, dnase_route=self.dnase_route)
+        kw = dict(ds=self.ds, regions=self.regions, rb=self.rb, dnase_route=self.dnase_route,
+                  pileup=self.signal_pileup)
         rec = {"lambda_source": None, "lambda_reason": ""}
         if fl_src is not None:
             rec.update(fraglen_source=fl_src, fraglen_reason=fl_why,
@@ -3003,7 +3017,8 @@ class Scorer:
                        "evalset": str(self.evalset_path), "evalset_sha256": sha256_file(self.evalset_path),
                        "tables": str(self.tables), "tables_sha256": self.tables_sha256,
                        "run_tables_sha256": self.run_tables_sha256,
-                       "dnase_route": self.dnase_route, "baseline_fit_on": self.fit_on,
+                       "dnase_route": self.dnase_route, "signal_pileup": self.signal_pileup,
+                       "baseline_fit_on": self.fit_on,
                        "n_regions": len(self.regions), "region_bins": self.rb,
                        "context_bins": self.L, "wall_seconds": round(time.time() - t0, 1),
                        "infer_batch": self.tile_bs, "region_cache": self.region_cache,
@@ -3710,6 +3725,10 @@ def main(argv=None) -> int:
                          "floor, under a key the selection rule refuses")
     ap.add_argument("--dnase-route", default=None,
                     choices=("hotspot2_density", "macs2_no_control"))
+    ap.add_argument("--signal-pileup", default=None, choices=("box_d", "inbin"),
+                    help="pileup form of the signal routes (default box_d, PI ruling 2026-11-17; "
+                         "inbin = the bin's own count, the rule before the ruling); recorded as "
+                         "signal_pileup in scores.json and tracks.json")
     ap.add_argument("--lambda-source", default="auto", choices=LAMBDA_SOURCE_OPTIONS,
                     help="auto (default): the observed control where it exists, else the model's "
                          "predicted control; observed_control: never the predicted control; "
@@ -3782,6 +3801,7 @@ def main(argv=None) -> int:
                   **({} if a.phase else {"guardrail_windows": 256 if a.guardrail_windows is None
                                           else a.guardrail_windows}), no_halves=a.no_halves,
                   dnase_route=a.dnase_route, repeat_blind_reason=a.repeat_blind_reason,
+                  **({"signal_pileup": a.signal_pileup} if a.signal_pileup else {}),
                   infer_batch=a.infer_batch, region_cache=not a.no_region_cache,
                   lambda_source=a.lambda_source, **({"addon": True} if a.addon else {}),
                   **({"workers": a.workers} if a.workers > 1 else {}),

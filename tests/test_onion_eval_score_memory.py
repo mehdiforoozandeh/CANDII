@@ -88,6 +88,7 @@ def dump_digest(d: Path, root: Path) -> str:
         if p.name == "tracks.json":
             m = json.loads(p.read_text(encoding="utf-8"))
             m.pop("evalset_sha256", None)
+            m.pop("signal_pileup", None)    # E2: added after the pinned base
             body = T._normalize(json.dumps(m, sort_keys=True), root).encode()
         else:
             body = p.read_bytes()
@@ -119,7 +120,8 @@ def recipes(env, out_root: Path, dump_root: Path) -> dict:
     got = {}
     for name, kw in RECIPES:
         o, d = Path(out_root) / name, Path(dump_root) / name
-        _score(env, o, dump_signal=d, **kw)
+        # E2: the digests were pinned before box_d existed; inbin must reproduce them bit for bit
+        _score(env, o, dump_signal=d, signal_pileup="inbin", **kw)
         got[name] = {"scores": T.scores_digest(o, env["root"]), "suff": T.suff_digest(o),
                      "dump": dump_digest(d, env["root"])}
     return got

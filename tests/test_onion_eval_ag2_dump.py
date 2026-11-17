@@ -125,6 +125,7 @@ def scores_digest(out: Path, root: Path) -> str:
         s.pop(k, None)
     s.pop("scorer_version", None)   # SF0 (Amendment 8): the one key added after the pinned base
     s.pop("scorer_settings", None)  # SP2b: written on the legacy model path since 2026-11-14
+    s.pop("signal_pileup", None)    # E2: the pileup form, added after the pinned base
     return hashlib.sha256(_normalize(json.dumps(s, indent=1, sort_keys=True, allow_nan=False),
                                      root).encode()).hexdigest()
 
@@ -164,11 +165,14 @@ def _score(env, out, *, blind=False, **kw):
 
 def recipes(env, out_root: Path, dump_root=None) -> dict:
     """The three runs whose outputs are pinned; with `dump_root`, each also dumps into
-    `dump_root/<recipe>` (same configs as without it)."""
+    `dump_root/<recipe>` (same configs as without it). E2: the pinned digests were taken before the
+    box_d pileup existed, so the recipes run `signal_pileup="inbin"`: equal digests prove that the
+    inbin form is the old route, bit for bit (`test_box_d_changes_signal_space_only` covers box_d)."""
     out_root = Path(out_root)
 
     def dump(name):
-        return {} if dump_root is None else {"dump_signal": Path(dump_root) / name}
+        return ({"signal_pileup": "inbin"} if dump_root is None
+                else {"dump_signal": Path(dump_root) / name, "signal_pileup": "inbin"})
     got = {}
     o = out_root / "val_model_auto"
     _score(env, o, **dump("val_model_auto"))
@@ -275,7 +279,8 @@ def test_run_dump_interface_f(dumped):
                        "frag_len": row["frag_len"], "control_depth_reads": crow["depth_reads"],
                        "control_read_length": crow["read_length"], "control_is_predicted": False}
                 fe = np.concatenate([AS.fold_change_track(y[i * RB:(i + 1) * RB],
-                                                          ctl[i * RB:(i + 1) * RB], cov)[0]
+                                                          ctl[i * RB:(i + 1) * RB], cov,
+                                                          pileup=m["signal_pileup"])[0]
                                      for i in range(2)])
                 np.testing.assert_allclose(arr["native_truth"], fe, rtol=1e-5)
                 assert m["lambda_source"][mid] == "observed_control"
@@ -563,3 +568,48 @@ def test_nb_signal_checks_on_the_fixture(dumped, tmp_path):
     lam = _tsv(o / "signal_space_lambda_sources.tsv")
     assert {r["lambda_source.signal_arcsinh_predicted_control"] for r in lam
             if r["assay"] == "H3K4me3"} == {"predicted_control"}
+
+
+def _leaves(x, path=""):
+    if isinstance(x, dict):
+        for k, v in x.items():
+            yield from _leaves(v, f"{path}/{k}")
+    elif isinstance(x, list):
+        for i, v in enumerate(x):
+            yield from _leaves(v, f"{path}[{i}]")
+    else:
+        yield path, x
+
+
+def _is_signal(path: str) -> bool:
+    return any(t in path for t in ("signal_arcsinh", "sig_", "signal_pileup", "lambda_",
+                                   "fraglen_"))
+
+
+def test_box_d_changes_signal_space_only(dumped, tmp_path):
+    """E2: the default box_d pileup and inbin give bit-identical count-space values (every
+    scores.json leaf outside the signal space, and every suffstats array outside it); the signal
+    space differs, and scores.json records `signal_pileup`."""
+    env = dumped["env"]
+    a, b = tmp_path / "inbin", tmp_path / "box"
+    _score(env, a, signal_pileup="inbin")
+    _score(env, b)
+    sa = json.loads((a / "scores.json").read_text())
+    sb = json.loads((b / "scores.json").read_text())
+    assert (sa["signal_pileup"], sb["signal_pileup"]) == ("inbin", "box_d")
+    for k in VOLATILE:
+        sa.pop(k, None)
+        sb.pop(k, None)
+    la = {p: v for p, v in _leaves(sa) if not _is_signal(p)}
+    lb = {p: v for p, v in _leaves(sb) if not _is_signal(p)}
+    assert la.keys() == lb.keys() and len(la) > 100
+    diff = [p for p in la if json.dumps(la[p]) != json.dumps(lb[p])]
+    assert not diff, diff[:10]
+    sig = [p for p, v in _leaves(sa) if "signal_arcsinh" in p and isinstance(v, float)]
+    assert any(json.dumps(dict(_leaves(sa))[p]) != json.dumps(dict(_leaves(sb))[p]) for p in sig)
+    with np.load(a / "suffstats.npz") as za, np.load(b / "suffstats.npz") as zb:
+        assert set(za.files) == set(zb.files)
+        cnt = [k for k in za.files if not _is_signal(k)]
+        assert cnt
+        for k in cnt:
+            np.testing.assert_array_equal(za[k], zb[k], err_msg=k)

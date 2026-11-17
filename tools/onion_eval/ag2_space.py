@@ -5,7 +5,8 @@ pinned interface H, chunk AGs).
     resample_sum(x, src_start_bp, src_bin_bp, dst_start_bp, dst_bin_bp, n_dst) -> float64[n_dst]
     fold_change_track(mu, control_counts, covariates, *, gsize) -> (float32, lambda_source)
     normalized_insertions(mu, covariates) -> float32
-    native_from_nb(n, mu, row, *, ds, regions, rb, predicted_control=None) -> (float32, lambda_source)
+    native_from_nb(n, mu, row, *, ds, regions, rb, predicted_control=None, pileup=PILEUP_DEFAULT)
+        -> (float32, lambda_source)
     peak_probability_from_nb(n, mu, row, *, ds, regions, rb, predicted_control=None,
                              threshold=2.0, dnase_route=DNASE_ROUTE_DEFAULT) -> float32
     isotonic_recalibrate(pred, truth, n_bins=2000, valid=None) -> float64
@@ -23,7 +24,8 @@ Sources.
   is `valid`, which restricts the fit (not the output) to a subset of bins.
 * `fold_change_track` and `peak_probability_from_nb` use the lambda of the D9b ChIP-seq and MACS2
   no-control routes of `signal_from_counts.signal_track` (lines 280-302) through its own
-  `pileup_from_counts` and `macs2_lambda`; nothing of those two functions is restated.
+  `pileup_from_counts` and `macs2_lambda`; nothing of those two functions is restated. Each takes
+  `pileup` (`box_d` default, or `inbin`) and spreads treatment, size and control as `signal_track`.
 
 Fold change (section B.2, secondary space A): FE = pileup(mu) / lambda, no pseudocount. FE is linear
 in the count, so its NB expectation is the value at `mu`; `n` is unused there.
@@ -43,7 +45,8 @@ from scipy.stats import nbinom, poisson
 from candi.store.pval_from_counts import MACS2_GSIZE_HS, log10_upper_tail
 
 from onion_eval.signal_from_counts import (ATAC_SMOOTH_WIN, DNASE_ROUTE_DEFAULT, DNASE_ROUTES,  # `tools` on sys.path, as score.py
-                                           SPAN_EXTRA, macs2_lambda, pileup_from_counts, route_of)
+                                           SPAN_EXTRA, macs2_lambda, pileup_from_counts, route_of,
+                                           PILEUP_DEFAULT, _spread)
 
 __all__ = [
     "AG2_INSERTION_TOTAL",
@@ -106,9 +109,9 @@ def _need(cov: dict, *keys):
     return [float(cov[k]) for k in keys]
 
 
-def _chip_lambda(mu, control_counts, covariates, gsize):
+def _chip_lambda(mu, control_counts, covariates, gsize, pileup="inbin"):
     """lambda of the ChIP-seq route of `signal_track` (lines 293-300), its pileup scale d/(rl+24),
-    and its lambda source."""
+    and its lambda source. `pileup` `box_d` spreads the control first, as `signal_track`."""
     if control_counts is None:
         raise ValueError("ChIP-seq needs a control: the observed one, or a predicted one "
                          "(set covariates['control_is_predicted'])")
@@ -117,6 +120,7 @@ def _chip_lambda(mu, control_counts, covariates, gsize):
     control_counts = np.asarray(control_counts, dtype=np.float64)
     if control_counts.shape != np.shape(mu):
         raise ValueError(f"control and treatment must be binned the same: {control_counts.shape} vs {np.shape(mu)}")
+    _, _, control_counts = _spread(mu, None, control_counts, d, pileup)
     lam = macs2_lambda(lambda_bg=d * depth / gsize,
                        control_pileup=pileup_from_counts(control_counts, d, crl),
                        ratio_treat2control=depth / cdepth)
@@ -135,14 +139,16 @@ def _no_control_lambda(mu, covariates, gsize):
 
 # ---------------------------------------------------------------- native spaces
 
-def fold_change_track(mu, control_counts, covariates: dict, *, gsize: float = MACS2_GSIZE_HS):
+def fold_change_track(mu, control_counts, covariates: dict, *, gsize: float = MACS2_GSIZE_HS,
+                      pileup: str = PILEUP_DEFAULT):
     """ChIP-seq fold change over the D9b lambda, per 25 bp bin: pileup(mu, frag_len, read_length) /
     lambda, no pseudocount. Covariate keys as the ChIP-seq route of `signal_track`. Returns
     (float32 [L], lambda_source)."""
     mu = np.asarray(mu, dtype=np.float64)
     if mu.ndim != 1:
         raise ValueError(f"mu must be 1-D [L], got shape {mu.shape}")
-    lam, d, rl, source = _chip_lambda(mu, control_counts, covariates, gsize)
+    lam, d, rl, source = _chip_lambda(mu, control_counts, covariates, gsize, pileup)
+    mu, _, _ = _spread(mu, None, None, d, pileup)
     return (pileup_from_counts(mu, d, rl) / lam).astype(np.float32), source
 
 
@@ -189,7 +195,8 @@ def _row_setup(n, mu, row, ds, regions, rb, predicted_control):
     return n, mu, route, cov, control
 
 
-def native_from_nb(n, mu, row: dict, *, ds, regions, rb: int, predicted_control=None):
+def native_from_nb(n, mu, row: dict, *, ds, regions, rb: int, predicted_control=None,
+                   pileup: str = PILEUP_DEFAULT):
     """The target's prediction in AG2's own unit over the scorer's concatenated eval regions:
     ChIP-seq fold change (per region, as `signal_from_nb`) or, for DNase-seq and ATAC-seq, normalized
     insertions. Arguments as `signal_from_nb`; `n` is unused (both maps are linear in the count).
@@ -199,7 +206,8 @@ def native_from_nb(n, mu, row: dict, *, ds, regions, rb: int, predicted_control=
         return normalized_insertions(mu, cov), NO_LAMBDA
     out, source = [], None
     for i, (c, s) in enumerate(regions):
-        fe, source = fold_change_track(mu[i * int(rb):(i + 1) * int(rb)], control(i, c, s), cov)
+        fe, source = fold_change_track(mu[i * int(rb):(i + 1) * int(rb)], control(i, c, s), cov,
+                                       pileup=pileup)
         out.append(fe)
     return np.concatenate(out), source
 
@@ -226,7 +234,8 @@ def _first_count_at_threshold(lam, scale, threshold):
 
 
 def peak_probability_from_nb(n, mu, row: dict, *, ds, regions, rb: int, predicted_control=None,
-                             threshold: float = 2.0, dnase_route: str = DNASE_ROUTE_DEFAULT) -> np.ndarray:
+                             threshold: float = 2.0, dnase_route: str = DNASE_ROUTE_DEFAULT,
+                             pileup: str = PILEUP_DEFAULT) -> np.ndarray:
     """Per bin, the NB probability that the D9b MACS2 score of the count reaches `threshold`
     (-log10 p >= 2, i.e. p <= 0.01, by default), over the scorer's concatenated eval regions.
     Arguments as `signal_from_nb`. The DNase-seq route `hotspot2_density` has no p-value and is refused."""
@@ -241,11 +250,12 @@ def peak_probability_from_nb(n, mu, row: dict, *, ds, regions, rb: int, predicte
     for i, (c, s) in enumerate(regions):
         sl = slice(i * int(rb), (i + 1) * int(rb))
         if route == "chip":
-            lam, d, rl, _ = _chip_lambda(mu[sl], control(i, c, s), cov, MACS2_GSIZE_HS)
+            lam, d, rl, _ = _chip_lambda(mu[sl], control(i, c, s), cov, MACS2_GSIZE_HS, pileup)
         else:
             lam, d, rl, _ = _no_control_lambda(mu[sl], cov, MACS2_GSIZE_HS)
         k = _first_count_at_threshold(lam, d / (rl + SPAN_EXTRA), threshold)
-        out.append(nbinom.sf(k - 1, n[sl], n[sl] / (n[sl] + mu[sl])))
+        m_s, n_s, _ = _spread(mu[sl], n[sl], None, d, pileup)    # the NB of the spread pileup
+        out.append(nbinom.sf(k - 1, n_s, n_s / (n_s + m_s)))
     return np.concatenate(out).astype(np.float32)
 
 

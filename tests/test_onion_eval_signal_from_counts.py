@@ -350,3 +350,47 @@ def test_signal_track_and_adapter_take_the_mode():
     np.testing.assert_array_equal(h_e, h_p)
     with pytest.raises(ValueError, match="mode"):
         S.signal_track(mu[:RB], n[:RB], "ATAC-seq", None, ATAC_COV, mode="median")
+
+
+# ------------------------------------------------- E2: box_d pileup (PI ruling 2026-11-17)
+
+def test_box_weights_exact():
+    from onion_eval.signal_from_counts import box_weights
+    np.testing.assert_array_equal(box_weights(20), [1.0])           # d < 25: in-bin
+    np.testing.assert_array_equal(box_weights(25), [1.0])
+    np.testing.assert_allclose(box_weights(75), [1 / 3, 1 / 3, 1 / 3])
+    # d = 180 (not a multiple of 25): 7.2 bins, half 3.6 -> 7 whole bins and 0.1 at each end
+    w = box_weights(180)
+    np.testing.assert_allclose(w, np.array([0.1, 1, 1, 1, 1, 1, 1, 1, 0.1]) / 7.2, rtol=0, atol=1e-15)
+
+
+def test_box_spread_exact_with_region_edges():
+    from onion_eval.signal_from_counts import box_spread
+    x = np.array([10.0, 0, 0, 0, 0, 0, 4.0])
+    got = box_spread(x, 75)                     # weights 1/3 each; ends renormalized to 2 bins
+    np.testing.assert_allclose(got, [5.0, 10 / 3, 0, 0, 0, 4 / 3, 2.0], rtol=0, atol=1e-12)
+    np.testing.assert_allclose(box_spread(np.full(9, 3.0), 180), np.full(9, 3.0), rtol=0, atol=1e-14)
+    np.testing.assert_array_equal(box_spread(x, 20), x)                               # d < 25
+    # d = 100: weights (0.5, 1, 1, 1, 0.5) / 4; the middle bin of a spike gets 1/4
+    y = np.zeros(11)
+    y[5] = 8.0
+    np.testing.assert_allclose(box_spread(y, 100)[3:8], [1.0, 2.0, 2.0, 2.0, 1.0], rtol=0, atol=1e-12)
+
+
+def test_box_d_route_equals_inbin_on_the_spread_hand_case():
+    """expectation and plug-in under box_d equal the in-bin rule on (box mean of mu, box mean of n,
+    box mean of the control): the shared-Gamma-rate model of the spread pileup."""
+    from onion_eval.signal_from_counts import box_spread
+    mu = np.array([1.0, 2.0, 12.0, 30.0, 12.0, 2.0, 1.0, 1.0])
+    n = np.array([2.0, 2.0, 4.0, 4.0, 4.0, 2.0, 2.0, 2.0])
+    ctl = np.array([1.0, 1.0, 2.0, 1.0, 1.0, 1.0, 3.0, 1.0])
+    cov = dict(depth_reads=2.0e7, read_length=36, frag_len=90, control_depth_reads=2.5e7,
+               control_read_length=36)
+    for mode in ("expectation", "plug_in"):
+        got, src = S.signal_track(mu, n, "narrow_histone", ctl, cov, mode=mode)
+        want, _ = S.signal_track(box_spread(mu, 90), box_spread(n, 90), "narrow_histone",
+                               box_spread(ctl, 90), cov, mode=mode, pileup="inbin")
+        np.testing.assert_array_equal(got, want)
+        assert src == "observed_control"
+    with pytest.raises(ValueError, match="pileup"):
+        S.signal_track(mu, n, "narrow_histone", ctl, cov, pileup="box")

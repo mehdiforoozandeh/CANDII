@@ -146,6 +146,9 @@ NO_SET = "none"
 TRUTH_PEAKS = ("encode", "pipeline_derived")
 KINDS = ("run", "baseline", "external", "ag2", "oracle_baseline", "replicate_floor")
 NB_KINDS = ("run", "baseline")
+#: kinds whose signal comes from counts through `signal_from_counts` (E2: one pileup form per board)
+PILEUP_KINDS = ("run", "baseline", "oracle_baseline")
+PILEUP_ABSENT = "inbin"
 
 PEAK_METRICS = (["auprc", "auprc_posfrac"] + [f"auprc_f{k}" for k in range(1, 9)]
                 + ["auprc_peakprob", "peak_precision", "peak_recall", "peak_f1",
@@ -466,6 +469,17 @@ def score(evalset, audit, tables, truth_from, methods, ag2, peaks, out, *, split
         kinds = {m["kind"] for _, m in ds}
         if len(kinds) > 1:
             raise Refused(f"{name}: its seed directories differ in kind {sorted(kinds)}")
+    # E2 (PI ruling 2026-11-17): every method whose signal is derived from counts carries one pileup
+    # form; a board never mixes `box_d` and `inbin` (absent = `inbin`, the form before the key)
+    forms = {}
+    for name, ds in dirs.items():
+        for d, m in ds:
+            if m["kind"] in PILEUP_KINDS:
+                forms.setdefault(m.get("signal_pileup") or PILEUP_ABSENT, []).append(f"{name} ({d})")
+    if len(forms) > 1:
+        raise Refused("methods differ in signal_pileup: " + "; ".join(
+            f"{k}: {', '.join(v[:3])}" for k, v in sorted(forms.items())))
+    pileup_form = next(iter(forms), None)
 
     # --- targets, audit, track sets
     rows = E.read_tsv(tables / "measurements.tsv")
@@ -598,7 +612,8 @@ def score(evalset, audit, tables, truth_from, methods, ag2, peaks, out, *, split
                "methods": {n: [{"dir": str(d.resolve()), "kind": m["kind"],
                                 "evalset_sha256": m.get("evalset_sha256", "")} for d, m in ds]
                            for n, ds in dirs.items()},
-               "truth_from": str(tdir.resolve()), "evalset_sha256": esha, "time": _utc()}
+               "truth_from": str(tdir.resolve()), "evalset_sha256": esha, "time": _utc(),
+               "signal_pileup": pileup_form}
     (out / "SCORED").write_text(json.dumps(summary, indent=1, sort_keys=True) + "\n",
                                 encoding="utf-8")
     log(f"{split} {table}: {len(scored)} of {len(universe)} targets scored; statuses "

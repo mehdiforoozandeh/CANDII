@@ -560,6 +560,8 @@ ARMS_NEW_KEYS = {
     "/predicted_control/pit_deviation_per_stratum",
     "/predicted_control/predicted_over_replicate_variance_robust",
     "/selection/composite_status",
+    # E2 (PI ruling 2026-11-17): the pileup form of the signal routes
+    "/signal_pileup",
 }
 
 

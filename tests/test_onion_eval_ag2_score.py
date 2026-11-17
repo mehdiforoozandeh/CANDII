@@ -664,3 +664,17 @@ def test_gate_counts_dropped_partial_tile_positives(tmp_path):
     assert {r["n_positive_tiles_dropped"] for r in rows} == {"2"}    # tile 0 of each chromosome
     assert {r["n_tiles_dropped"] for r in rows} == {"2"}
     assert any("2 positive tiles off the whole valid tiles dropped" in x for x in lines)
+
+
+def test_mixed_signal_pileup_refused(val, tmp_path):
+    """E2: a board never mixes pileup forms across counts-derived methods (absent = inbin)."""
+    box = _method(tmp_path, "boxrun", "run", "val",
+                  {f"{t}.signal.npy": y for t, y in val["truth"].items()}, val["ev_sha"],
+                  extra={"signal_pileup": "box_d"})
+    with pytest.raises(AS.Refused, match="signal_pileup"):
+        _run(val, tmp_path / "o", methods=_specs(val, [f"boxrun={box}"]))
+    same = _method(tmp_path, "inrun", "run", "val",
+                   {f"{t}.signal.npy": y for t, y in val["truth"].items()}, val["ev_sha"],
+                   extra={"signal_pileup": "inbin"})
+    _run(val, tmp_path / "o2", methods=_specs(val, [f"inrun={same}"]))
+    assert json.loads((tmp_path / "o2" / "SCORED").read_text())["signal_pileup"] == "inbin"

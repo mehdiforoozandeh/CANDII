@@ -69,3 +69,14 @@ def test_arm_report_sees_the_key(capsys):
     assert KEY in str(e.value)
     AR.check_arm_keys(arms, allow=(KEY,))
     assert "signal-space values differ" in capsys.readouterr().err
+
+
+def test_signal_pileup_is_a_comparability_key(capsys):
+    """E2: `signal_pileup` (absent = inbin) is refused as a mix unless --allow-mix names it."""
+    PK = "signal_pileup"
+    assert SR.scorer_keys(_s("old"))[PK] == "inbin"
+    SR.check_scorer_keys(_items(_s("old"), _s("new", signal_pileup="inbin")))
+    with pytest.raises(SR.Refused, match="signal_pileup.*count-space values do not depend"):
+        SR.check_scorer_keys(_items(_s("old"), _s("new", signal_pileup="box_d")))
+    SR.check_scorer_keys(_items(_s("old"), _s("new", signal_pileup="box_d")), allow=(PK,))
+    assert "signal_pileup" in capsys.readouterr().err

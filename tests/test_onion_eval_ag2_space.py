@@ -127,14 +127,37 @@ def test_signal_track_plug_in_equals_score_with_this_modules_lambda():
     ctl = rng.gamma(2.0, 2.0, 1500) + 0.1
     lam, d, rl, _ = A._chip_lambda(mu, ctl, CHIP_COV, MACS2_GSIZE_HS)
     ref = log10_upper_tail(np.floor(S.pileup_from_counts(mu, d, rl)).astype(np.int64), lam)
-    sig, _ = S.signal_track(mu, None, "narrow_histone", ctl, CHIP_COV, mode="plug_in")
+    # the in-bin rule (E2: `inbin`); test_box_d_plug_in_equals_score_of_the_spread holds box_d
+    sig, _ = S.signal_track(mu, None, "narrow_histone", ctl, CHIP_COV, mode="plug_in",
+                            pileup="inbin")
     assert np.allclose(sig, ref.astype(np.float32), rtol=1e-6, atol=1e-6)
     cov = {"depth_reads": 3e7, "read_length": 50}
     lam, d, rl, _ = A._no_control_lambda(mu, cov, MACS2_GSIZE_HS)
     ref = log10_upper_tail(np.floor(S.pileup_from_counts(mu, d, rl)).astype(np.int64), lam)
     for assay in ("accessibility_atac", "accessibility_dnase"):
-        sig, _ = S.signal_track(mu, None, assay, None, cov, mode="plug_in", dnase_route="macs2_no_control")
+        sig, _ = S.signal_track(mu, None, assay, None, cov, mode="plug_in", dnase_route="macs2_no_control",
+                                pileup="inbin")
         assert np.allclose(sig, ref.astype(np.float32), rtol=1e-6, atol=1e-6)
+
+
+def test_box_d_plug_in_equals_score_of_the_spread():
+    """E2: box_d = the in-bin rule applied to the box-spread treatment and control (ChIP-seq); for
+    ATAC-seq / DNase-seq the score reads the spread treatment and lambda the unspread one."""
+    rng = np.random.default_rng(9)
+    mu = rng.gamma(2.0, 4.0, 1500) + 0.1
+    ctl = rng.gamma(2.0, 2.0, 1500) + 0.1
+    d = float(CHIP_COV["frag_len"])
+    lam, _, rl, _ = A._chip_lambda(mu, S.box_spread(ctl, d), CHIP_COV, MACS2_GSIZE_HS)
+    ref = log10_upper_tail(np.floor(S.pileup_from_counts(S.box_spread(mu, d), d, rl)).astype(np.int64), lam)
+    sig, _ = S.signal_track(mu, None, "narrow_histone", ctl, CHIP_COV, mode="plug_in")
+    np.testing.assert_array_equal(sig, ref.astype(np.float32))
+    lam2, _, _, _ = A._chip_lambda(mu, ctl, CHIP_COV, MACS2_GSIZE_HS, "box_d")
+    np.testing.assert_array_equal(lam2, lam)
+    cov = {"depth_reads": 3e7, "read_length": 50}
+    lam, d, rl, _ = A._no_control_lambda(mu, cov, MACS2_GSIZE_HS)
+    ref = log10_upper_tail(np.floor(S.pileup_from_counts(S.box_spread(mu, 150), d, rl)).astype(np.int64), lam)
+    sig, _ = S.signal_track(mu, None, "accessibility_atac", None, cov, mode="plug_in")
+    np.testing.assert_array_equal(sig, ref.astype(np.float32))
 
 
 # ---------------------------------------------------------------- native_from_nb (adapter)
@@ -183,7 +206,9 @@ def test_peak_probability_matches_simulation():
     ctl = {"chr1": np.full(rb, 3.0)}
     mu = np.linspace(5.0, 60.0, rb)
     n = np.full(rb, 3.0)
-    p = A.peak_probability_from_nb(n, mu, _chip_row(), ds=_FakeDS(ctl), regions=[("chr1", 0)], rb=rb)
+    # the in-bin rule: each bin's own count (the simulation draws independent bins)
+    p = A.peak_probability_from_nb(n, mu, _chip_row(), ds=_FakeDS(ctl), regions=[("chr1", 0)], rb=rb,
+                                   pileup="inbin")
     # simulate: draw counts, score them with the D9b score, count how often -log10 p >= 2
     lam = S.macs2_lambda(lambda_bg=200 * 2e7 / MACS2_GSIZE_HS,
                          control_pileup=S.pileup_from_counts(ctl["chr1"], 200, 76), ratio_treat2control=2.0)

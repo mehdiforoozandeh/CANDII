@@ -18,7 +18,7 @@ Writes three directories of pinned interface F (plan, Amendment 5) under `<out>`
                          16,384 bins is two blocks of 8,000 and 8,384 bins.
 
 A training track has no `signal.h5` (`build_list.py:54`), so its signal is
-`signal_from_counts.signal_track(observed counts, mode="plug_in")` with its own observed control and
+`signal_from_counts.signal_track(observed counts, mode="plug_in", pileup=--signal-pileup)` with its own observed control and
 covariates, per eval region (as `signal_from_nb`), then asinh. A ChIP-seq training track with no
 control is left out and counted. A ChIP-seq training track with an empty `frag_len` takes the
 estimate of `--fraglen-table` when there is a plausible one (`signal_from_counts.with_fraglen`; a
@@ -140,7 +140,7 @@ def _h5_path(row: dict) -> Path | None:
     return Path(p[3:]) if p.startswith("h5:") else None
 
 
-def training_signal(row: dict, rows_by_id: dict, regions, rb: int):
+def training_signal(row: dict, rows_by_id: dict, regions, rb: int, pileup=None):
     """(asinh signal of a training track over the regions, None) or (None, reason)."""
     p = _h5_path(row)
     if p is None:
@@ -166,7 +166,8 @@ def training_signal(row: dict, rows_by_id: dict, regions, rb: int):
     for i in range(len(regions)):
         sl = slice(i * rb, (i + 1) * rb)
         sig, _ = SFC.signal_track(mu[sl], None, row["assay_class"] or row["assay"],
-                                  None if ctl is None else ctl[sl], cov, mode="plug_in")
+                                  None if ctl is None else ctl[sl], cov, mode="plug_in",
+                                  pileup=pileup or SFC.PILEUP_DEFAULT)
         out.append(sig)
     return asinh(np.concatenate(out)), None
 
@@ -216,7 +217,10 @@ def _utc() -> str:
 # ---------------------------------------------------------------------------------------- run
 
 def run(tables, evalset, truth_from, out, *, split="val", allow_blind=False,
-        repeat_blind_reason=None, log=print, fraglen_table=None) -> dict:
+        repeat_blind_reason=None, log=print, fraglen_table=None, signal_pileup=None) -> dict:
+    signal_pileup = signal_pileup or SFC.PILEUP_DEFAULT
+    if signal_pileup not in SFC.PILEUP_FORMS:
+        raise ValueError(f"signal_pileup {signal_pileup!r} not in {SFC.PILEUP_FORMS}")
     if split not in ("val", "blind"):
         raise ValueError(f"split {split!r} not in (val, blind)")
     if split == "blind" and not allow_blind:
@@ -281,7 +285,7 @@ def run(tables, evalset, truth_from, out, *, split="val", allow_blind=False,
         if mid not in sig_cache:
             if fl is not None and SFC.route_of(r["assay_class"] or r["assay"]) == "chip":
                 r, fl_src[mid], _ = SFC.with_fraglen(r, fl)
-            sig_cache[mid] = training_signal(r, by_id, regions, rb)
+            sig_cache[mid] = training_signal(r, by_id, regions, rb, pileup=signal_pileup)
         return sig_cache[mid]
 
     for regime, (d, meta) in regimes.items():
@@ -343,7 +347,8 @@ def run(tables, evalset, truth_from, out, *, split="val", allow_blind=False,
                  "targets": done[method], "truth_from": str(d.resolve()),
                  "left_out": {k: v for k, v in left_out[method].items()
                               if k in _truth_targets(meta)}}
-            if method != HALF:
+            if method != HALF:     # E2: the two counts-derived methods record the pileup form
+                m["signal_pileup"] = signal_pileup
                 m["training_tracks_left_out"] = dict(sorted(cand_left.items()))
                 m["n_training_tracks"] = n_cands
                 if fl is not None:
@@ -381,10 +386,14 @@ def main(argv=None) -> int:
     r.add_argument("--fraglen-table", default=None, metavar="TSV",
                    help="estimated fragment lengths for ChIP-seq training tracks whose frag_len is "
                         "empty (qc_fill.py collect --fraglen-out); default none")
+    r.add_argument("--signal-pileup", default=None, choices=SFC.PILEUP_FORMS,
+                   help="pileup form of the training-track signal (default box_d; recorded as "
+                        "signal_pileup in tracks.json)")
     a = ap.parse_args(argv)
     try:
         run(a.tables, a.evalset, a.truth_from, a.out, split=a.split, allow_blind=a.allow_blind,
-            repeat_blind_reason=a.repeat_blind_reason, fraglen_table=a.fraglen_table)
+            repeat_blind_reason=a.repeat_blind_reason, fraglen_table=a.fraglen_table,
+            signal_pileup=a.signal_pileup)
     except (Refused, PermissionError) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2

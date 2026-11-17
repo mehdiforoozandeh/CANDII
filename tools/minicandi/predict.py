@@ -76,6 +76,7 @@ KEY_PREFIX = "predict:"
 STARTED, PREDICTED = "started", "predicted"
 REGIME = "leave_one_assay_out"
 DNASE_ROUTE = "macs2_no_control"                     # PI ruling 19
+SIGNAL_PILEUP = "box_d"                               # E2, PI ruling 2026-11-17 (signal_pileup.txt)
 SIGNAL_DIRS = (("signal", "expectation"), ("signal_plug_in", "plug_in"))   # PI ruling 20
 F16_MAX = float(np.finfo(np.float16).max)
 DONE = "DONE"
@@ -337,7 +338,8 @@ class Predictor:
         sig, src = {}, None
         for _, mode in SIGNAL_DIRS:
             s, src = SIG.signal_from_nb(n, mu, row, ds=self.ds, regions=[(chrom, 0)], rb=nb,
-                                        predicted_control=ctl, dnase_route=DNASE_ROUTE, mode=mode)
+                                        predicted_control=ctl, dnase_route=DNASE_ROUTE, mode=mode,
+                                        pileup=SIGNAL_PILEUP)
             sig[mode] = np.asarray(s, np.float32)
         p = self._part(job, chrom)
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -423,6 +425,7 @@ class Predictor:
                 fh.write("\t".join(LAMBDA_COLUMNS) + "\n")
                 for j in self.jobs:
                     fh.write((self.out / "lambda" / f"{j['track']}.tsv").read_text(encoding="utf-8"))
+            (self.out / "signal_pileup.txt").write_text(SIGNAL_PILEUP + "\n", encoding="utf-8")
             if ledger is not None:
                 self._ledger_finish(ledger, entry)
             (self.out / DONE).write_text(time.strftime("%Y-%m-%dT%H:%M:%S") + "\n",
