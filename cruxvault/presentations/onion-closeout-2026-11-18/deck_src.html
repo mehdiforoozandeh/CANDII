@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="prezit-arc" content="paper">
+<title>Onion Close-out</title>
+
+<!--
+  Close-out deck of the peeling-the-onion run (2026-11-18; run ends 2026-11-18T20:00Z).
+  arc      paper arc, one part per success criterion of the PI (2026-11-16): (1) augmented EIC data with
+           counterfactual views, and where the views help; (2) the training objective; (3) the evaluation,
+           defined and tested; (4) the miniCANDI design, settled and ready for scaling. Then: the pending
+           256-region rescoring (a marked slide the foreman updates), what did not run and why, the ready queue,
+           the open PI decisions, a summary and a backup glossary (prezit references/paper-arc.md).
+  build    /Users/mforooz/miniforge3/bin/python build_deck.py  ->  index.html beside this file
+  numbers  every number comes from DATA, which build_deck.py reads from the vault files it lists:
+           results/ablations_closeout/ (arm summary, 16-region screening set), results/region_sampling_checks/
+           (16-versus-256 check), results/closeout_A3/ (views by pair type), and the tracked documents
+           INSTRUCTIONS/peeling_the_onion/{onion training objective.md, onion paper.md, closeout/*.md}.
+           Prose numbers are empty spans with a data-k attribute, filled from DATA.n; figures are matplotlib PNGs
+           (DATA.fig) built from the same files. Typed design constants: none; panel letters only.
+  depends  slides marked "depends on the 256-region rescoring" in their contract header change when the
+           rescoring of the 7 decisive arms lands: 5, 8, 12, 13, 14, 16, 20.
+  notes    every slide carries speaker notes (press n). All prose is drafted by the agent for the PI's review.
+-->
+<script type="application/json" id="deck-sources">__SOURCES__</script>
+<style>
+  :root{
+    --paper:#f7f7f4; --card:#ffffff; --ink:#1b1d1f; --ink2:#36393d; --muted:#6c6f73; --faint:#9a9c9f;
+    --hair:#e2e3df; --grid:#ececea; --accent:#2f6f8f;
+    --samp:#c8b88f; --rep:#4f9a8a; --ct:#b5543a;
+    --mnb:#8a8d92; --pa:#2f6f8f; --dos:#d9822b; --flr:#6b4fa0; --mdl:#3f8a5c;
+    --p256:#5c6f9e; --p16:#d9822b; --fit:#a7a9ad; --gen:#e6e6e1;
+    --ok:#3f8a5c; --wait:#c99a2e; --bad:#b5543a;
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --disp:"Space Grotesk","Inter",-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+    --paper:#141618; --card:#1d2023; --ink:#eceae6; --ink2:#d2d0cb; --muted:#a3a29d; --faint:#7d7d79;
+    --hair:#33373b; --grid:#2a2d30; --accent:#6fb3d2;
+    --samp:#a8996f; --rep:#5fb3a1; --ct:#d77657;
+    --mnb:#a3a6ab; --pa:#6fb3d2; --dos:#f0a050; --flr:#a58bd8; --mdl:#62b182;
+    --p256:#8496c8; --p16:#f0a050; --fit:#6d7075; --gen:#2c3034;
+    --ok:#62b182; --wait:#d9b04a; --bad:#d77657; color-scheme:dark }}
+  :root[data-theme="dark"]{
+    --paper:#141618; --card:#1d2023; --ink:#eceae6; --ink2:#d2d0cb; --muted:#a3a29d; --faint:#7d7d79;
+    --hair:#33373b; --grid:#2a2d30; --accent:#6fb3d2;
+    --samp:#a8996f; --rep:#5fb3a1; --ct:#d77657;
+    --mnb:#a3a6ab; --pa:#6fb3d2; --dos:#f0a050; --flr:#a58bd8; --mdl:#62b182;
+    --p256:#8496c8; --p16:#f0a050; --fit:#6d7075; --gen:#2c3034;
+    --ok:#62b182; --wait:#d9b04a; --bad:#d77657; color-scheme:dark }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;overflow:hidden}
+  #progress{position:fixed;top:0;left:0;height:3px;background:var(--accent);width:0;transition:width .5s ease;z-index:50}
+  #deck{position:fixed;inset:0}
+  .slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+    padding:4vh 6vw 8.5vh;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .5s ease,visibility .5s ease}
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+  .wrap{width:100%;max-width:1200px;margin:0 auto}
+  .kicker{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:14px}
+  .kicker .sec{display:inline-block;background:var(--accent);color:var(--paper);padding:3px 9px;border-radius:4px;margin-right:12px;letter-spacing:.14em}
+  h1{font-family:var(--disp);font-weight:600;line-height:1.1;font-size:clamp(30px,4.2vw,54px);letter-spacing:-.015em;text-wrap:balance}
+  h2{font-family:var(--disp);font-weight:600;line-height:1.16;font-size:clamp(20px,2.4vw,32px);letter-spacing:-.01em;margin-bottom:12px;text-wrap:balance;max-width:62ch}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;margin-top:18px;max-width:66ch}
+  .note{color:var(--muted);font-size:13.5px;line-height:1.5;margin-top:10px;max-width:120ch}
+  ul.pts{list-style:none;margin-top:8px;display:grid;gap:7px}
+  ul.pts li{position:relative;padding-left:22px;font-size:clamp(13.5px,1.3vw,17px);line-height:1.42;color:var(--ink2)}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.6em;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  ul.pts.cols{grid-template-columns:1fr 1fr;column-gap:40px}
+  [data-src],[data-derived],.v{font-variant-numeric:tabular-nums;font-weight:600}
+  .tag{display:inline-block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;border-radius:4px;padding:1px 7px;border:1px solid currentColor;font-weight:700;vertical-align:1px}
+  .tag.p{color:var(--wait)} .tag.n{color:var(--bad)} .tag.m{color:var(--ok)}
+  .fig{display:flex;justify-content:center}
+  .fig svg{width:100%;height:auto;max-height:47vh;display:block}
+  .fig.tall svg{max-height:53vh}
+  .fig.short svg{max-height:38vh}
+  .legend{display:flex;gap:22px;flex-wrap:wrap;margin-top:4px;justify-content:center;font-size:14.5px;color:var(--muted)}
+  .legend .item{display:flex;align-items:center;gap:8px}
+  .legend .sw{width:15px;height:15px;border-radius:3px;flex:none}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:8px}
+  .card{border:1px solid var(--hair);border-top:3px solid var(--c,var(--accent));background:var(--card);border-radius:8px;padding:14px 16px;min-width:0}
+  .card .rl{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--c,var(--accent));font-weight:700;margin-bottom:6px}
+  .card .big{font-family:var(--disp);font-size:clamp(20px,2.2vw,30px);font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .card p{font-size:clamp(13px,1.2vw,15.5px);line-height:1.45;color:var(--ink2);margin-top:5px}
+  .ptitle{font:600 20px var(--sans);fill:var(--ink)}
+  .axlbl{font:500 16px var(--sans);fill:var(--ink2)}
+  .lbl{font:500 15px var(--sans);fill:var(--ink2)}
+  .small{font:400 13.5px var(--sans);fill:var(--muted)}
+  .tick{font:400 14px var(--sans);fill:var(--faint)}
+  .val{font:600 15.5px var(--sans);fill:var(--ink)}
+  .big{font:600 26px var(--disp);fill:var(--ink)}
+  .panel{font:700 20px var(--sans);fill:var(--accent)}
+  .gridl{stroke:var(--grid);stroke-width:1}
+  .axis{stroke:var(--faint);stroke-width:1.2}
+  .sepl{stroke:var(--hair);stroke-width:1.5}
+  .foot{position:fixed;bottom:20px;left:6vw;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:6vw;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:15px;right:calc(6vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:var(--card);color:var(--muted);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px}
+  .nav button:hover,.nav button:focus-visible{border-color:var(--accent);color:var(--accent);outline:none}
+  .hint{margin-top:30px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:var(--card)}
+  .banner{display:inline-block;border:2px solid var(--wait);color:var(--wait);font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:13px;padding:4px 12px;border-radius:6px;margin-bottom:10px}
+  aside.notes{display:none}
+  body.shownotes .slide.active aside.notes{display:block;position:fixed;left:6vw;right:6vw;bottom:58px;max-height:52vh;overflow:auto;
+    background:var(--card);border:1px solid var(--hair);border-left:4px solid var(--accent);border-radius:10px;padding:16px 22px;
+    font-size:16px;line-height:1.55;color:var(--ink2);z-index:60;box-shadow:0 10px 40px rgba(0,0,0,.25)}
+  aside.notes::before{content:"Speaker notes · n to close";display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+  aside.notes p{margin:0 0 6px}
+  aside.notes p.srcs{font-size:13px;color:var(--muted);font-family:ui-monospace,Menlo,monospace}
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint{display:none}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;height:100vh;transition:none}
+    aside.notes{display:block;margin-top:14px;border-top:1px solid var(--hair);padding-top:8px;font-size:12px}
+  }
+  @media (max-width:760px){
+    .slide{justify-content:flex-start;overflow-y:auto;padding:24px max(16px,env(safe-area-inset-right,0px)) 80px max(16px,env(safe-area-inset-left,0px))}
+    .cards,ul.pts.cols{grid-template-columns:1fr}
+    .foot{display:none}
+  }
+</style>
+
+<style>
+  .figimg{display:block;margin:0 auto;max-width:100%;max-height:52vh;width:auto;height:auto;background:#fff;border-radius:10px;border:1px solid var(--hair);padding:6px}
+  .figimg.tall{max-height:60vh}
+  .figimg.xtall{max-height:68vh}
+  .figimg.short{max-height:44vh}
+  .verdict{display:inline-block;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;border:2px solid currentColor;border-radius:6px;padding:3px 10px;margin-left:10px;vertical-align:2px}
+  .verdict.ok{color:var(--ok)} .verdict.part{color:var(--wait)} .verdict.no{color:var(--bad)}
+  .cards.four{grid-template-columns:repeat(4,1fr)}
+  table.grid{border-collapse:collapse;width:100%;font-size:clamp(12px,1.08vw,15px);margin-top:6px}
+  table.grid th{text-align:left;color:var(--muted);font-weight:600;border-bottom:2px solid var(--hair);padding:6px 8px}
+  table.grid td{border-bottom:1px solid var(--hair);padding:6px 8px;color:var(--ink2);vertical-align:top}
+  .drafted{position:fixed;bottom:44px;left:6vw;font-size:12px;color:var(--muted)}
+  .pending{border:3px dashed var(--wait);border-radius:12px;padding:18px 22px;background:var(--card)}
+  @media (max-width:760px){.cards.four{grid-template-columns:1fr}.drafted{position:static;margin-top:12px}}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- 1 · TITLE
+       job      the close-out in one picture: the four success criteria and the plain verdict on each
+       source   closeout/closeout todo.md (criteria, statuses); final 24 hours plan.md; settled miniCANDI design.md
+       numbers  none typed; verdicts are the agent's reading of the item statuses
+       cut      the run history; the item list (in the todo file) -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">peeling the onion · close-out for the PI</div>
+      <h1>What the onion run delivered against its four success criteria</h1>
+      <div class="cards four" style="margin-top:26px">
+        <div class="card" style="--c:var(--wait)"><div class="rl"><span data-src="literal">(1)</span> Data + counterfactual views</div><div class="big">partial</div><p>Tables with views and filled covariates are delivered. Blind build, DNase-seq update and final model are not.</p></div>
+        <div class="card" style="--c:var(--ok)"><div class="rl"><span data-src="literal">(2)</span> Training objective</div><div class="big">delivered</div><p>One document, traced to the code. Its open choices are marked.</p></div>
+        <div class="card" style="--c:var(--wait)"><div class="rl"><span data-src="literal">(3)</span> Evaluation</div><div class="big">partial</div><p>Defined and tested. The decisive correction scores on all regions have not run.</p></div>
+        <div class="card" style="--c:var(--wait)"><div class="rl"><span data-src="literal">(4)</span> miniCANDI design</div><div class="big">partial</div><p>A design table with config files exists. Many rows are provisional, and the three models tie.</p></div>
+      </div>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd> &nbsp;·&nbsp; <kbd>n</kbd> shows the speaker notes and the source files of each slide</p>
+      <aside class="notes"><p>The four criteria are the PI's words of the sixteenth of November. Each verdict is my reading of the item statuses in the close-out todo list: delivered means the criterion is met as written; partial means part of it is met and the rest is built but not run; not delivered means nothing usable exists.</p><p class="srcs" data-s="title"></p></aside>
+    </div>
+    <div class="drafted">All text on these slides was drafted by the agent (Claude) for the PI's review; no sentence is the PI's.</div>
+  </section>
+
+  <!-- 2 · METHODS: how to read every number
+       job      the four score terms, the two tiers of regions, and the significance criterion
+       source   onion paper.md (Methods, Evaluation); arm summary (references); settled miniCANDI design.md section 0
+       numbers  DATA.n ev.*, ref.*
+       cut      the seven-metric list (in the paper note) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Methods</span>how to read every number in this deck</div>
+      <h2>Each model is scored on imputation, correction and calibration; a difference counts only when it is beyond the seed range</h2>
+      <div class="cards four">
+        <div class="card" style="--c:var(--pa)"><div class="rl">Imputation</div><p><b>Variance recovered</b>: the share of the cell-type-specific variance of a held-out track that the prediction explains, above the read-sampling noise floor. All <span data-k="ev.regions"></span> regions.</p></div>
+        <div class="card" style="--c:var(--dos)"><div class="rl">Correction</div><p><b>Gap closed</b> on the <span data-k="ev.crop"></span> never-trained crop pairs: zero is depth-only scaling, one is the oracle reference (the expected error of read sampling alone).</p></div>
+        <div class="card" style="--c:var(--flr)"><div class="rl">Calibration</div><p>One minus the model's PIT deviation over that of one constant Negative Binomial per track. PIT: the predicted cumulative probability at the observed count.</p></div>
+        <div class="card" style="--c:var(--ct)"><div class="rl">Composite</div><p><span data-k="ev.w1"></span> imputation + <span data-k="ev.w2"></span> correction + <span data-k="ev.w3"></span> calibration, each clipped to zero to one. Beside it: the <b>correction-only term</b>, the share of the covariate cost a model closes against its own same-view score.</p></div>
+      </div>
+      <ul class="pts">
+        <li><b>Two tiers.</b> Imputation and calibration use all <span data-k="ev.regions"></span> regions. The two correction terms use <span data-k="ev.p16"></span> pair regions: a screening score, not a settled one.</li>
+        <li><b>Significance criterion.</b> Every value is a mean over <span data-k="seeds"></span> seeds with its seed range (maximum minus minimum). "Beyond" means the difference exceeds the larger seed range; the selection rule asks for twice that range.</li>
+      </ul>
+      <aside class="notes"><p>The seed range is the project's seed statistic; no standard deviation is computed. The composite is the selection metric; the correction-only term is reported beside it because a model that ignores its input also scores well on gap closed. The correction scores rest on few pairs, so their seed ranges are wide.</p><p class="srcs" data-s="arms"></p></aside>
+    </div>
+  </section>
+
+  <!-- 3 · DATA (a): the views in training
+       job      what the augmented data hold: one base view and eight counterfactual views per measurement
+       source   onion paper.md (The freeze); onion training objective.md (Views in training)
+       numbers  DATA.n data.*
+       cut      per-assay counts; build cost (in the paper note) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec"><span data-src="literal">(1)</span> Data</span>(a) the augmented EIC tables <span class="verdict part">partial</span></div>
+      <h2>Of <span data-k="data.views_total"></span> training measurements, <span data-k="data.base"></span> are base views and <span data-k="data.cf"></span> are counterfactual views of the same experiments</h2>
+      <img class="figimg" data-fig="views" alt="Training measurements per view kind">
+      <ul class="pts">
+        <li>The first freeze wrote <span data-k="data.rows"></span> rows: <span data-k="data.train"></span> training, <span data-k="data.val"></span> validation and <span data-k="data.blindrows"></span> blind (evaluation-only) rows. Every track was rebuilt from its reads with the standard ENCODE pipeline of its assay.</li>
+        <li>A counterfactual view is the same reads processed another way (thinned, no duplicate removal, no mapping-quality filter, single-end, shorter reads). Read-level views are rare (<span data-k="data.readlevel"></span>), because most training reads are already short.</li>
+      </ul>
+      <aside class="notes"><p>The counts are for the table version with filled covariates, which is the default now. The views imitate only two real shifts, paired-end to single-end and long to short reads; they cannot imitate platform or lab.</p><p class="srcs" data-s="data"></p></aside>
+    </div>
+  </section>
+
+  <!-- 4 · DATA (b): what is delivered and what is not
+       job      the state of every data deliverable at the deadline
+       source   closeout/closeout todo.md (Data rows); settled miniCANDI design.md row 11; onion paper.md
+       numbers  DATA.n data.d2*, data.d3*, data.blind*, data.qc*
+       cut      the archive and removal steps on Nibi -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec"><span data-src="literal">(1)</span> Data</span>(b) deliverables at the deadline <span class="verdict part">partial</span></div>
+      <h2>The tables and the covariate fill are delivered; the blind build, the DNase-seq update and the final model are not</h2>
+      <img class="figimg" data-fig="data_state" alt="State of each data deliverable">
+      <ul class="pts">
+        <li>The blind build (<span data-k="data.blind"></span> blind rows, <span data-k="data.blindctl"></span> controls, <span data-k="data.blindre"></span> reruns) costs about <span data-k="data.blindcost"></span> CPU-hours and needs writable Nibi scratch. The PI runs its submit command.</li>
+        <li>The DNase-seq update needs four row rebuilds, about <span data-k="data.d3cost"></span> CPU-hours. Which table version trains the final model is a PI decision.</li>
+      </ul>
+      <aside class="notes"><p>Green is delivered and in use. Amber is built and checked but not scored or not complete. Red is not submitted or not built. The second-experiment add-on gives each such track a second experiment of the same cell, with half from another lab, which the replicate ladder and the cross-lab pairs need.</p><p class="srcs" data-s="data2"></p></aside>
+    </div>
+  </section>
+
+  <!-- 5 · DATA (c): where the counterfactual views help, part one
+       job      the PI's question, whether and where the views help: the correction-only term without views
+       source   results/ablations_closeout/arm_summary_p16_sv_2026-11-17.tsv; ABLATIONS_READ.md section 2.14
+       numbers  DATA.n vw.*
+       depends  on the 256-region rescoring (rule 2.2: base-view-only arms on three models)
+       cut      the same-view-only arm (it breaks the correction term; heatmap slide) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec"><span data-src="literal">(1)</span> Data</span>(c) where the counterfactual views help: the correction-only term</div>
+      <h2>Without counterfactual views, the correction-only term falls on all three models; the composite does not move</h2>
+      <img class="figimg" data-fig="views_conly" alt="Correction-only term by training views">
+      <ul class="pts">
+        <li>Base view only against all views: conv autoencoder <span data-k="vw.bo.convae.d"></span> (range <span data-k="vw.bo.convae.bar"></span>), conv + attention <span data-k="vw.bo.convattn.d"></span> (<span data-k="vw.bo.convattn.bar"></span>), U-Net <span data-k="vw.bo.unet.d"></span> (<span data-k="vw.bo.unet.bar"></span>). The composite moved <span data-k="vw.bocomp.convae.d"></span>, <span data-k="vw.bocomp.convattn.d"></span> and <span data-k="vw.bocomp.unet.d"></span>, all within the range.</li>
+        <li>Alignment-level views alone lower imputation on both conv models: <span data-k="vw.al.convae.d"></span> (range <span data-k="vw.al.convae.bar"></span>) and <span data-k="vw.al.convattn.d"></span> (<span data-k="vw.al.convattn.bar"></span>). Screening tier: the correction-only term rests on the pair regions; the rescoring on all regions decides it.</li>
+      </ul>
+      <aside class="notes"><p>The correction-only term asks whether a model can turn one view into another as well as it reconstructs the same view. Without views in training it cannot, on any of the three models. The composite does not see this, because its correction term uses only the crop pairs. This slide depends on the rescoring of the base-view-only arms on all regions.</p><p class="srcs" data-s="views"></p></aside>
+    </div>
+  </section>
+
+  <!-- 6 · DATA (d): where the counterfactual views help, part two
+       job      per pair type on the U-Net: depth views help on depth pairs; alignment-level views hurt on their pairs
+       source   results/closeout_A3/where_vs_allviews.tsv, WHERE_VIEWS.md
+       numbers  DATA.n wv.*
+       cut      per-assay rows (in WHERE_VIEWS.md) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec"><span data-src="literal">(1)</span> Data</span>(d) where the counterfactual views help: by pair type, U-Net</div>
+      <h2>Depth-thinning views make the U-Net reliable on depth pairs; alignment-level views alone break it on their own pairs</h2>
+      <img class="figimg" data-fig="views_pairs" alt="U-Net gap closed by pair type">
+      <ul class="pts">
+        <li>(a) All <span data-k="wv.thin.with.n"></span> seeds trained with depth views score at least <span data-k="wv.thin.with.min"></span> on depth-thinning pairs; all <span data-k="wv.thin.without.n"></span> seeds without them score at most <span data-k="wv.thin.without.max"></span>.</li>
+        <li>(b) Base + alignment-level views: <span data-k="wv.mq.al"></span> (range <span data-k="wv.mq.al.r"></span>) against <span data-k="wv.mq.all"></span> (<span data-k="wv.mq.all.r"></span>) for all views. (c) On the crop pairs, the term in the composite, no view arm moves.</li>
+      </ul>
+      <aside class="notes"><p>So the views help where they match the pair type: depth views on depth pairs. They do not help on the crop pairs that the composite scores. These are screening scores on the pair regions, three seeds, and the depth-thinning column is outside the composite.</p><p class="srcs" data-s="views2"></p></aside>
+    </div>
+  </section>
+
+  <!-- 7 · OBJECTIVE (a): the training objective in one figure
+       job      O1 document in one figure: window, three target kinds, NB head, NB negative log-likelihood
+       source   INSTRUCTIONS/peeling_the_onion/onion training objective.md sections 1 to 4, 6
+       numbers  DATA.n obj.*
+       cut      the two-step path, the switches, the optimizer table (in the document) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec"><span data-src="literal">(2)</span> Objective</span>(a) what miniCANDI is trained to do <span class="verdict ok">delivered</span></div>
+      <h2>One loss trains three goals: a Negative Binomial likelihood on hidden tracks, other views and hidden bins</h2>
+      <img class="figimg" data-fig="objective" alt="The training objective">
+      <ul class="pts">
+        <li>The same-view target counts only on its hidden bins, so the model cannot copy its input. The withheld view pairs are never drawn in training; they are the pairs that the correction score uses.</li>
+        <li>Open choices are marked in the document: the kind weights, the mask fractions and the training views wait for the rescoring and the mix-and-match round.</li>
+      </ul>
+      <aside class="notes"><p>The objective document traces every formula and default to a file and line of the code; the code is the authority. With every switch at its default, the total loss equals the plain Negative Binomial negative log-likelihood, bit for bit, and a test checks this.</p><p class="srcs" data-s="obj"></p></aside>
+    </div>
+  </section>
+
+  <!-- 8 · OBJECTIVE (b): the loss ablations
+       job      no other loss beats the NB negative log-likelihood on two or more models
+       source   arm summary; ABLATIONS_READ.md section 2.9
+       numbers  DATA.n loss.*
+       depends  on the 256-region rescoring (rule 2.6: imputation weight 4 on three models)
+       cut      calibration column (ranges too wide to read) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec"><span data-src="literal">(2)</span> Objective</span>(b) does another loss help a goal?</div>
+      <h2>No loss arm beats the Negative Binomial likelihood on two or more models</h2>
+      <img class="figimg" data-fig="losses" alt="Loss arms minus base">
+      <ul class="pts">
+        <li>The one clear gain: imputation weight four raises conv + attention imputation by <span data-k="loss.x4.ca.d"></span> (range <span data-k="loss.x4.ca.bar"></span>), beyond twice the range, on one model only. It enters the conv + attention mix-and-match pool.</li>
+        <li>CRPS (continuous ranked probability score, an error of a whole distribution) as a loss and a Poisson mean change no term on the conv autoencoder or the U-Net.</li>
+      </ul>
+      <aside class="notes"><p>A filled dot is beyond the larger seed range; an open dot is within it. The composite is a screening score because it holds the correction term; imputation uses all regions. The rescoring of the imputation-weight arm decides whether it stays in the pool.</p><p class="srcs" data-s="losses"></p></aside>
+    </div>
+  </section>
+
+  <!-- 9 · EVALUATION (a): the 16-versus-256 check
+       job      the pre-written check of the pair regions failed, so correction terms need all regions
+       source   results/region_sampling_checks/check_v3.tsv, PAIR_REGIONS_V3.md
+       numbers  DATA.n chk.*
+       cut      per-run and per-assay rows (in check_v3.tsv) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec"><span data-src="literal">(3)</span> Evaluation</span>(a) can a few pair regions stand in for all of them? <span class="verdict part">partial</span></div>
+      <h2>The pre-registered check failed at every subset size, so correction terms must be scored on all regions</h2>
+      <img class="figimg" data-fig="check" alt="Pass or fail of each condition">
+      <ul class="pts">
+        <li>The check (pre-registered: fixed in writing before any run) used <span data-k="chk.runs"></span> runs of <span data-k="chk.arms"></span> arms and <span data-k="chk.boot"></span> region-bootstrap draws. At <span data-k="ev.p16"></span> pair regions, condition one passed <span data-k="chk.c1.16"></span>, and only <span data-k="chk.c2.16"></span> of the run-by-assay cells sat inside their interval.</li>
+        <li>The selection verdicts did not change at any size (condition three). The levels and the seed ranges of the correction terms did.</li>
+      </ul>
+      <aside class="notes"><p>The amendment of the sixteenth put the corrected correction terms into the check before any score on all regions existed. The consequence is the tier rule of this deck: every ablation effect on a correction term is a screening result until the decisive arms are rescored on all regions.</p><p class="srcs" data-s="check"></p></aside>
+    </div>
+  </section>
+
+  <!-- 10 · EVALUATION (b): what is tested and what is not scored
+       job      the evaluation is defined and its code is tested; three evaluation items are not finished
+       source   settled miniCANDI design.md section 3; closeout todo.md (Evaluation rows); onion paper.md
+       numbers  DATA.n test.*, ev.*
+       cut      the scorer extension tables (by lab, by antigen) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec"><span data-src="literal">(3)</span> Evaluation</span>(b) defined, tested, and not yet complete</div>
+      <h2>The scorer and the selection rule are tested; the signal-space scores, the replicate ladder and the blind board are not finished</h2>
+      <div class="cards">
+        <div class="card" style="--c:var(--ok)"><div class="rl">Defined and tested</div><div class="big"><span data-k="test.pass"></span> passed</div><p>Scorer, pair-region subset, selection rule, sampler, loss and models, on synthetic data (<span data-k="test.skip"></span> skipped, <span data-k="test.fail"></span> failed: a config-key guard, fixed afterwards). The evaluation set holds <span data-k="ev.items"></span> imputation items and <span data-k="ev.pairs"></span> correction pairs.</p></div>
+        <div class="card" style="--c:var(--wait)"><div class="rl">Built, not complete</div><p><b>Signal p-value and peaks</b> from the predicted NB: one run scored, the corrected formula not yet run. <b>Replicate ladder</b>: the layers stage is ready to run; the mixed-model stage must not run yet. <b>Foreign covariates at scoring</b>: scored, read on screening scores.</p></div>
+        <div class="card" style="--c:var(--bad)"><div class="rl">Not run</div><p>Settled scores (all regions) of the decisive ablation arms. The blind pass and the EIC board row, which need the final model.</p></div>
+      </div>
+      <aside class="notes"><p>The tests use synthetic tables; the checks on real data are cluster runs. No test proves that a transform's output link trains from a zero-initialized head; the Anscombe defect passed its synthetic check.</p><p class="srcs" data-s="evaltest"></p></aside>
+    </div>
+  </section>
+
+  <!-- 11 · DESIGN (a): architectures on all regions
+       job      the three models tie on the composite; the U-Net leads imputation, the conv models lead correction
+       source   results/region_sampling_checks/check_v3.tsv (all-region values, condition 3 notes); arm summary (imputation)
+       numbers  DATA.n a256.*, tie.*, ref.*
+       cut      axial and Perceiver IO (left out by ruling); tuned recipes -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec"><span data-src="literal">(4)</span> Design</span>(a) which architecture? <span class="verdict part">partial</span></div>
+      <h2>On all regions the three models tie on the composite: the U-Net imputes best, the conv models correct best</h2>
+      <img class="figimg" data-fig="arch" alt="Three models on all regions">
+      <ul class="pts">
+        <li>Composite, conv autoencoder minus U-Net <span data-k="tie.convae"></span> (twice the range: <span data-k="tie.convae.bar"></span>); conv + attention minus U-Net <span data-k="tie.convattn"></span> (<span data-k="tie.convattn.bar"></span>): a tie by the selection rule.</li>
+        <li>Correction on crop pairs: U-Net <span data-k="a256.unet.correction_v3"></span> (range <span data-k="a256.unet.correction_v3.r"></span>) against <span data-k="a256.convae.correction_v3"></span> (<span data-k="a256.convae.correction_v3.r"></span>) and <span data-k="a256.convattn.correction_v3"></span> (<span data-k="a256.convattn.correction_v3.r"></span>). Imputation: U-Net <span data-k="ref.unet.imp"></span> (<span data-k="ref.unet.imp.r"></span>) against <span data-k="ref.convae.imp"></span> (<span data-k="ref.convae.imp.r"></span>) and <span data-k="ref.convattn.imp"></span> (<span data-k="ref.convattn.imp.r"></span>).</li>
+      </ul>
+      <aside class="notes"><p>These are settled scores: the base recipes are the only runs with correction scores on all regions. Which model goes to scaling is a PI decision. The U-Net's count skip connections buy imputation and cost correction; with skips that carry DNA only, it moves to the conv models' profile.</p><p class="srcs" data-s="arch"></p></aside>
+    </div>
+  </section>
+
+  <!-- 12 · DESIGN (b): ablation overview, inputs, DNA and covariates
+       job      every single-switch ablation on inputs, DNA and covariates, three models, three terms
+       source   arm summary; ABLATIONS_READ.md sections 2.1 to 2.13, 2.16
+       numbers  DATA.n ai.*, fd.*, ts.*, sc.*
+       depends  on the 256-region rescoring (columns b and c of the two-step, fixed depth, average input and scrambled covariate rows)
+       cut      calibration and composite columns (in ABLATIONS_READ.md) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec"><span data-src="literal">(4)</span> Design</span>(b) single switches: inputs, DNA and covariates</div>
+      <h2>Few switches move a term beyond the range; covariates drive correction on all three models</h2>
+      <img class="figimg xtall" data-fig="heat1" alt="Ablation overview, inputs and covariates">
+      <p class="note">Color: arm minus base in units of the larger seed range (blue up, red down). A number is shown when the difference is beyond the range; a dagger marks an arm with two seeds. Scrambled covariates: correction-only <span data-k="sc.convae"></span>, <span data-k="sc.convattn"></span>, <span data-k="sc.unet"></span>. Fixed input depth on the U-Net: correction <span data-k="fd.unet.cor"></span> (range <span data-k="fd.unet.cor.bar"></span>), imputation <span data-k="fd.unet.imp"></span> (<span data-k="fd.unet.imp.bar"></span>); a fixed input depth can be unrealistic in deployment (PI caveat).</p>
+      <aside class="notes"><p>Column a uses all regions, so its effects stand. Columns b and c are screening scores. The red block of the scrambled-covariate row says that all three models use the covariates for same-view correction. The two-step and fixed-depth rows are trade-offs, not wins. All of these rows are in the rescoring.</p><p class="srcs" data-s="heat"></p></aside>
+    </div>
+  </section>
+
+  <!-- 13 · DESIGN (c): ablation overview, loss, views and count transforms
+       job      the other single-switch ablations; local ratio and quantile transforms are worse on all three
+       source   arm summary; ABLATIONS_READ.md sections 2.9, 2.14, 2.15
+       numbers  DATA.n tf.*
+       depends  on the 256-region rescoring (imputation weight 4 and base-view-only rows, columns b and c)
+       cut      the void Anscombe arm (code defect, dropped by the PI) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec"><span data-src="literal">(4)</span> Design</span>(c) single switches: loss, views and count transforms</div>
+      <h2>The default count offset stays: two transforms lower imputation beyond twice the range on all three models</h2>
+      <img class="figimg xtall" data-fig="heat2" alt="Ablation overview, loss, views and transforms">
+      <p class="note">A dagger marks an arm with two seeds. Imputation, local ratio: <span data-k="tf.lr.convae"></span>, <span data-k="tf.lr.convattn"></span>, <span data-k="tf.lr.unet"></span>; per-window quantile: <span data-k="tf.q.convae"></span>, <span data-k="tf.q.convattn"></span>, <span data-k="tf.q.unet"></span> (conv autoencoder, conv + attention, U-Net). The Anscombe arm is void: a zero gradient at the zero-initialized head kept its output fixed.</p>
+      <aside class="notes"><p>The count-transform result is the strongest in the design table, because it is beyond twice the range on all three models on a term measured on all regions. The view rows repeat the result of the data part. Pearson residuals, asinh and soft clip help the U-Net only and enter its mix-and-match pool.</p><p class="srcs" data-s="heat"></p></aside>
+    </div>
+  </section>
+
+  <!-- 14 · DESIGN (d): the settled design table
+       job      the state of each of the design rows: settled, by ruling, mixed, provisional
+       source   closeout/settled miniCANDI design.md section 1
+       numbers  DATA.n des.*
+       depends  on the 256-region rescoring (rules 2.1 to 2.6 can move rows 8, 13, 20, 23, 24, 25)
+       cut      the evidence column (in the document) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec"><span data-src="literal">(4)</span> Design</span>(d) the design table</div>
+      <h2>Of <span data-k="des.rows"></span> design choices, <span data-k="des.settled"></span> are settled by evidence and <span data-k="des.provisional"></span> wait for a named run</h2>
+      <img class="figimg tall" data-fig="design" alt="Status of each design choice">
+      <p class="note">Settled by a PI ruling: <span data-k="des.ruling"></span>; settled for some models only: <span data-k="des.mixed"></span>. Confidence (right of each tile) is weak for <span data-k="des.weak"></span> rows. Each provisional row names its run, its cost and a decision rule written before the run.</p>
+      <aside class="notes"><p>Confidence follows the design document's scale: strong is beyond twice the range on two or more models on a term measured on all regions; weak is one model only, a correction term on the pair regions, or an untested default. The design is a usable recipe, but it is not settled.</p><p class="srcs" data-s="design"></p></aside>
+    </div>
+  </section>
+
+  <!-- 15 · DESIGN (e): ready for scaling
+       job      what a scaling session starts from, and the known risks
+       source   closeout/settled miniCANDI design.md section 4
+       numbers  DATA.n des.windows
+       cut      config sha256 values (in the document) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec"><span data-src="literal">(4)</span> Design</span>(e) what a scaling session starts from</div>
+      <h2>The three base configs are the recipe; scaling changes the parameter budget, the windows, the context and the data</h2>
+      <ul class="pts">
+        <li><b>Recipe.</b> The base config of each model equals the mix-and-match reference, key for key; every design-table value that a config key sets agrees with it.</li>
+        <li><b>Training length is not settled.</b> No architecture converged at <span data-k="des.windows"></span> windows, and twice the windows lowered the held-out loss but not the composite.</li>
+        <li><b>Correction needs all regions.</b> Each scoring of one run-seed costs tens of CPU-hours and a large prediction store on scratch.</li>
+        <li><b>Blind shift.</b> Blind tracks may differ in platform and lab; a value seen only in blind tracks has no learned embedding.</li>
+        <li><b>Records.</b> A run's own record does not hold its dataset and loss defaults; a scaled run should record them.</li>
+      </ul>
+      <aside class="notes"><p>The full risk list is in section four of the design document. The fixed input depth gain is deployment-unrealistic and must hold under native-depth scoring before it enters the recipe.</p><p class="srcs" data-s="design"></p></aside>
+    </div>
+  </section>
+
+  <!-- 16 · 256-REGION RESCORING: PENDING (marked slide; the foreman updates it when the scores land)
+       job      the place for the rescoring result; until then, what it decides and which slides it changes
+       source   closeout/settled miniCANDI design.md section 2.0; ready queue for scaling.md entry 5
+       numbers  DATA.n rs.*
+       depends  on the 256-region rescoring (this slide is its placeholder)
+       cut      the rule texts in full (in the design document) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Pending</span>the rescoring on all regions</div>
+      <div class="banner"><span data-k="ev.regions"></span>-region rescoring: pending</div>
+      <h2>The <span data-k="rs.arms"></span> decisive arms (<span data-k="rs.seeds"></span> run-seeds, about <span data-k="rs.cost"></span> CPU-hours) are not scored on all regions yet</h2>
+      <div class="pending">
+        <table class="grid">
+          <tr><th>arms</th><th>pre-written rule decides</th><th>slides it changes</th></tr>
+          <tr><td>scrambled covariates</td><td>do the models use covariates for correction?</td><td>design (b), summary</td></tr>
+          <tr><td>base view only</td><td>do the counterfactual views help correction?</td><td>data (c), design (c) and (d), summary</td></tr>
+          <tr><td>two-step, native and fixed base depth</td><td>does routing through the base view enter the pool?</td><td>design (b) and (d)</td></tr>
+          <tr><td>fixed input depth</td><td>does the U-Net trade-off hold?</td><td>design (b) and (d)</td></tr>
+          <tr><td>average baseline input; imputation weight four</td><td>do these stay in the mix-and-match pool?</td><td>objective (b), design (b) to (d)</td></tr>
+        </table>
+      </div>
+      <aside class="notes"><p>The jobs wait in the Fir queue during the outage. The PI decides whether they run there or on Nibi once its scratch is writable. Until they land, every effect on a correction term in this deck is a screening result. Foreman: replace this slide with the arm summary on all regions and the verdict of each rule.</p><p class="srcs" data-s="pending"></p></aside>
+    </div>
+  </section>
+
+  <!-- 17 · WHAT DID NOT RUN, AND WHY
+       job      the three limits: Fir outage, Nibi scratch quota, the 24-hour window
+       source   closeout/ready queue for scaling.md section 0; final 24 hours plan.md
+       numbers  DATA.n nr.*
+       cut      the archive and removal history -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Limits</span>what did not run, and why</div>
+      <h2>Fir was down, Nibi scratch refused writes, and the close-out window held no training round</h2>
+      <img class="figimg short" data-fig="notrun" alt="Nibi scratch and Fir outage">
+      <ul class="pts">
+        <li><b>Fir</b>: planned outage to <span data-k="nr.firend"></span>; <span data-k="nr.firjobs"></span> jobs wait in its queue, among them the rescoring and the matched-compute trainings. Never resubmit them.</li>
+        <li><b>Nibi</b>: <span data-k="nr.used"></span> GiB used against a soft quota of <span data-k="nr.quota"></span> GiB. Writes resume when the pipeline work folder (<span data-k="nr.work"></span> GiB) leaves, after the QC fill and the recount.</li>
+        <li><b>The window</b>: the run ends <span data-k="nr.deadline"></span>. A training round of several thousand CPU-hours cannot train, score and be read in it.</li>
+      </ul>
+      <aside class="notes"><p>Nothing was cancelled, and nothing was removed without a verified archive and the PI's yes. Every run that did not start is in the ready queue with its command.</p><p class="srcs" data-s="notrun"></p></aside>
+    </div>
+  </section>
+
+  <!-- 18 · THE READY QUEUE AS ONE PICTURE
+       job      every built, unsent run in sending order, with cost and what it waits for
+       source   closeout/ready queue for scaling.md section 1
+       numbers  DATA.n rq.*
+       cut      the commands (in the ready queue document) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Next</span>the ready queue</div>
+      <h2><span data-k="rq.n"></span> runs are queued in order; <span data-k="rq.now"></span> can go now, and the rest wait for Fir, an earlier entry or a PI decision</h2>
+      <img class="figimg tall" data-fig="queue" alt="The ready queue">
+      <p class="note">Bars sum to about <span data-k="rq.total"></span> allocated CPU-hours at the lower end of each range; <span data-k="rq.noscript"></span> entries have no submit script yet. Each entry in the document gives the command, the prerequisite and the decision rule.</p>
+      <aside class="notes"><p>The color is the first thing the entry waits for. The blind build dominates the cost. The mix-and-match round and the minimum covariate set need the PI's budget.</p><p class="srcs" data-s="queue"></p></aside>
+    </div>
+  </section>
+
+  <!-- 19 · DECISIONS THAT WAIT FOR THE PI
+       job      the open PI decisions, each with the queue entry that waits for it
+       source   closeout/ready queue for scaling.md section 4; settled miniCANDI design.md row 1
+       numbers  DATA.dec (text with costs, from the document)
+       cut      recommendations (the PI chooses) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Decisions</span>for the PI</div>
+      <h2>These decisions wait for the PI</h2>
+      <table class="grid" id="decTable"></table>
+      <aside class="notes"><p>Each line is copied from the ready queue, with its cost in CPU-hours. The architecture choice comes from the design document. No line carries a recommendation here; the documents state the agent's recommendation where it has one.</p><p class="srcs" data-s="dec"></p></aside>
+    </div>
+  </section>
+
+  <!-- 20 · SUMMARY
+       job      the four verdicts again, each with its one-line reason; restated from results, none new
+       source   the slides above
+       numbers  none new
+       depends  on the 256-region rescoring (criterion 4 and the views line)
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Summary</span>the four criteria</div>
+      <h2>One criterion is delivered and three are partial; the design is a usable recipe that is not yet settled</h2>
+      <ul class="pts">
+        <li><b><span data-src="literal">(1)</span> Data: partial.</b> Tables with counterfactual views and filled covariates are in use. The views help where they match the pair type and keep the correction-only term up; they do not move the composite.</li>
+        <li><b><span data-src="literal">(2)</span> Objective: delivered.</b> One Negative Binomial likelihood on three target kinds, traced to the code; no other loss beats it on two or more models.</li>
+        <li><b><span data-src="literal">(3)</span> Evaluation: partial.</b> Defined and tested; correction terms need all regions, and the decisive arms are not rescored yet.</li>
+        <li><b><span data-src="literal">(4)</span> Design: partial.</b> Three tied models with configs ready; the count offset is settled; many rows wait for the rescoring, the mix-and-match round and the covariate set.</li>
+      </ul>
+      <aside class="notes"><p>Each line restates a slide above. When the rescoring lands, the views line and the design line change first.</p><p class="srcs" data-s="status"></p></aside>
+    </div>
+  </section>
+
+  <!-- 21 · BACKUP: glossary
+       job      the terms of the deck, each in at most ten words
+       source   onion paper.md (Methods); onion training objective.md
+       numbers  none
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Backup</span>glossary</div>
+      <h2>Terms used in this deck</h2>
+      <table class="grid">
+        <tr><td><b>view</b></td><td>one way to process the reads of one track</td><td><b>seed range</b></td><td>maximum minus minimum of a score over training seeds</td></tr>
+        <tr><td><b>screening score</b></td><td>correction scored on a subset of pair regions only</td><td><b>settled score</b></td><td>every term scored on all evaluation regions</td></tr>
+        <tr><td><b>oracle reference</b></td><td>expected error of read sampling alone; top of the scale</td><td><b>depth-only scaling</b></td><td>source counts times the depth ratio; bottom of the scale</td></tr>
+        <tr><td><b>PIT</b></td><td>predicted cumulative probability at the observed count</td><td><b>CRPS</b></td><td>error of a whole predictive distribution against a count</td></tr>
+        <tr><td><b>FiLM</b></td><td>feature-wise scaling and shifting by the covariates</td><td><b>adaLN-zero</b></td><td>gated layer-norm modulation, initialized to do nothing</td></tr>
+        <tr><td><b>two-step routing</b></td><td>predict the base view first, then the target view</td><td><b>mix-and-match</b></td><td>combinations of the single switches that helped</td></tr>
+      </table>
+      <aside class="notes"><p>The glossary repeats the glosses given where each term first appears.</p><p class="srcs" data-s="obj"></p></aside>
+    </div>
+  </section>
+
+</div>
+
+<div class="foot">peeling the onion · close-out</div>
+<div class="nav"><button id="prev" aria-label="previous slide">&larr;</button><button id="next" aria-label="next slide">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+
+<script>
+/* Every number below comes from DATA, which build_deck.py embeds from the vault files. */
+const DATA = __DATA__;
+document.querySelectorAll('[data-k]').forEach(e=>{const v=DATA.n[e.dataset.k]; e.textContent=(v===undefined?'??':v); e.classList.add('v');});
+document.querySelectorAll('img[data-fig]').forEach(e=>{e.src=DATA.fig[e.dataset.fig];});
+document.querySelectorAll('p.srcs').forEach(e=>{e.textContent='Sources: '+(DATA.src[e.dataset.s]||[]).join('; ');});
+(function(){
+  const rows=DATA.dec.map(d=>{const m=d.match(/^(.*?)\s*\((entr(?:y|ies) [^)]*)\)\.?\s*(.*)$/); return m?[(m[1]+(m[3]?' '+m[3]:'')).replace(/\s+,/g,','),m[2]]:[d,''];});
+  rows.push(['Which model goes to scaling: conv autoencoder, conv + attention or U-Net (a tie on the composite).','design table, first row']);
+  document.getElementById('decTable').innerHTML='<tr><th></th><th>decision</th><th>ready-queue entry</th></tr>'+rows.map((r,i)=>`<tr><td>${String.fromCharCode(97+i)}</td><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('');
+})();
+
+/* navigation and speaker notes, as in the prezit template */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length; let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){
+  cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+}
+const next=()=>show(cur+1), prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;
+document.getElementById('prev').onclick=prev;
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='Home'){show(0);}
+  else if(e.key==='End'){show(tot-1);}
+  else if(e.key==='n'||e.key==='N'){e.preventDefault();document.body.classList.toggle('shownotes');}
+  else if(e.key==='Escape'){document.body.classList.remove('shownotes');}
+});
+show(0);
+
+</script>
+</body>
+</html>
