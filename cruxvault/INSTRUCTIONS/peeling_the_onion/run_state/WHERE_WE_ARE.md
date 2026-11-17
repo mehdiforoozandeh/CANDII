@@ -39,7 +39,7 @@ The close-out todo list is `../closeout/closeout todo.md`, with one item file pe
 
 ### Nibi archive to nearline (PI approved 2026-11-17)
 
-Four scratch folders are copied to tape as 23 tar files (3,991 GiB), each compared byte for byte with scratch. Note and restore steps: `NIBI_NEARLINE_ARCHIVE.md` in this folder. At 11:59 UTC: 4 of 23 verified, 1,213 GiB written, 0 failed. It runs in tmux session `nlarchive` on login node l1.nibi. Never start a second run.
+Four scratch folders are copied to tape as 23 tar files (3,990 GiB), each compared byte for byte with scratch. Note and restore steps: `NIBI_NEARLINE_ARCHIVE.md` in this folder. **Done at 16:30 UTC: 23 of 23 verified, 0 failed.** Never start a second run.
 
 Nothing is removed from scratch yet. Conditions for removal: (a) 23 of 23 tars OK, (b) the PI's yes, (c) for `onion/work`: a `build_list.py pending` call over rows 102, 418, 419, 425, 428, 431 first. The items "QC metrics on the input side" and "resolution 1 to 125 bp" read the large tagAlign files in `onion/work`; after removal they need a tape recall.
 
