@@ -202,9 +202,9 @@ for fpath in files:
 with _h5.File(f"{A7}/probe_store/{mid}/point1bp.h5", "r") as hf:
     x = _np.asarray(hf["r0"][()], _np.int64)
 st25 = x.reshape(-1, 25).sum(1)
+verdict = "PASS" if _np.array_equal(ind, st25) else "FAIL"   # no single quote: this text sits in a shell string
 print(f"[pointcheck] {mid} region 0 {c0}:{s0}: independent {int(ind.sum())} points, store "
-      f"{int(st25.sum())}, bins differing {int((ind != st25).sum())} -> "
-      f"{'PASS' if _np.array_equal(ind, st25) else 'FAIL'}", flush=True)
+      f"{int(st25.sum())}, bins differing {int((ind != st25).sum())} -> {verdict}", flush=True)
 sys.path.insert(0, "tools")
 import torch
 from minicandi.registry import build_model
