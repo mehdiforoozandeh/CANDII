@@ -57,6 +57,12 @@ Acceptance checks:
 - Cost: under 1 agent-day for the backlog, then minutes per result; `sacct` reads are read-only.
 - Risk: a paper sentence written from memory. Every number comes from a results file or a finding.
 
+## Specification as worked (pass of 2026-11-17, documents only)
+
+- Scope of this pass (foreman's brief): (1) every PI ruling from 2026-11-15 20:05 UTC to 2026-11-17 into the notepad with the PI's words, date and consequence; (2) the Status column of `closeout todo.md`; (3) the compute tally from `sacct` on Fir and Nibi since 2026-11-10, with the approved and the proposed budgets; (4) the numbers told to the PI and later corrected; (5) the paper note.
+- Done in this pass: notepad rulings 50 to 72, the tally (allocated CPU-hours by week and purpose, GPU-hours, storage), the list of corrections; the todo Status column and "Open PI decisions"; paper note: metric 4 and composite versions, pair regions, Results 9, Discussion items 1 and 3, Later phases, Conclusions.
+- Left for the next pass: Results on the close-out ablations (they wait for 256-region scores); `ARTIFACTS.md`; `crux validate --check=tree,tasks`; the vault close-out of step 6; a repeat of the tally at the end of the close-out.
+
 ## 8. Done when
 
 The notepad holds every PI ruling of the run, the compute and storage tally covers the run to the close-out, the paper note has updated Methods, Results, Discussion, Later phases and Conclusions, `ARTIFACTS.md` is complete, and `crux validate` exits 0.

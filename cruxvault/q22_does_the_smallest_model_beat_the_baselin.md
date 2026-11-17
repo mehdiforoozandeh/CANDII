@@ -35,9 +35,11 @@ Says whether a learned model adds anything over the training-free baselines on e
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**3 children** · open 0, leaning 3, settled 0, parked 0
+**5 children** · open 0, leaning 5, settled 0, parked 0
 
 - `h39` [[h39_rung_1_base_beats_the_position_average_o|Rung 1 base beats the position average on imputation by more than 2 seed spreads on the composite's imputation term and closes part of the correction gap]] — *leaning · moderate*
 - `q39` _(Q)_ [[q39_do_the_context_rungs_2_to_6_convolution_|Do the context rungs 2 to 6 (convolution, attention, U-Net, axial, Perceiver) beat the pointwise rung 1 and the baselines on each goal at equal training windows?]] — *leaning · moderate*
 - `q48` _(Q)_ [[q48_which_minicandi_design_choices_move_impu|Which miniCANDI design choices move imputation, correction or calibration beyond the seed range on the conv autoencoder, conv + attention and the U-Net at about 1.0 M parameters?]] — *leaning · moderate*
+- `q57` _(Q)_ [[q57_how_closely_can_a_formula_on_25_bp_binne|How closely can a formula on 25 bp binned counts reproduce the pipeline's signal p-value track and peaks?]] — *leaning · moderate*
+- `q58` _(Q)_ [[q58_can_the_second_experiments_separate_a_la|Can the second experiments separate a lab effect from a donor effect in the cross-experiment pairs?]] — *leaning · moderate*
 <!-- crux:ledger:end -->

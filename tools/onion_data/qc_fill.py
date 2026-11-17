@@ -39,8 +39,19 @@ Fixed facts and approximations (logged in every record):
 
     python qc_fill.py coverage --tables DIR [--qc-table TSV] [--missing-rows]
     python qc_fill.py run --tables DIR --rows 0-9,12 --work W --out /scratch/mforooz/onion/qc/
-    python qc_fill.py collect --tables DIR --out $O/tables/eic_v1_qc.tsv [--qc-dir DIR]
+    python qc_fill.py collect --tables DIR --out $O/tables/eic_v1_qc.tsv [--qc-dir DIR ...]
         [--fraglen-out $O/tables/eic_v1_fraglen.tsv]
+    python qc_fill.py run --half pr1 ...        # A4: measure the pr1 half only (<id>.pr1.json)
+    python qc_fill.py collect --half pr1 ...    # A4: the pr1 side table (dataset qc_table_pr1)
+
+Close-out item A4 (half mode). A scored correction source is read from its `pr1` half, and its
+`pr2` half may share reads with the target. `--half pr1` measures xcor on the pr1 files only, and
+NRF/PBC on the pr1 files of the nodedup sibling (a `nodedup` row: its own pr1 files), so no QC value
+of the source comes from reads outside the half. The record is `<out>/<id>.pr1.json` with
+`"half": "pr1"`. `collect --half pr1` lists only the rows with an ok pr1 record and never falls back
+to `measurements.tsv` (those are full-track values). `--qc-dir` may be given more than once (the
+2026-11-13 records on /scratch and a later pass elsewhere); a row takes its record from the LAST
+directory that holds a usable one.
 
 Row indices are 0-based data rows of `measurements.tsv` (the `run --rows` spec and the
 `coverage --missing-rows` spec use the same index).
@@ -183,11 +194,12 @@ def load_prov(mdir: Path, mid: str) -> dict:
     return prov
 
 
-def verify_readset(prov: dict) -> list:
-    """Every half file of a measurement: md5 against its READSET.json, lines against
-    provenance.json. Returns [{half, path, md5, lines}] in provenance order."""
+def verify_readset(prov: dict, halves=None) -> list:
+    """Every half file of a measurement (or of the listed `halves` only): md5 against its
+    READSET.json, lines against provenance.json. Returns [{half, path, md5, lines}] in provenance
+    order."""
     out = []
-    for h in AV.HALVES:
+    for h in (halves or AV.HALVES):
         files = prov["halves"][h]["tagalign"]
         files = [files] if isinstance(files, str) else files
         n = 0
@@ -217,9 +229,9 @@ def check_counts(row: dict, mdir: Path) -> str:
     return sha
 
 
-def predup_readset(mid: str, mdir: Path, prov: dict) -> tuple:
+def predup_readset(mid: str, mdir: Path, prov: dict, halves=None) -> tuple:
     """(source measurement id, verified files) of the reads before duplicate removal, or
-    (None, reason)."""
+    (None, reason). `halves` limits the files to those halves (A4 half mode)."""
     arm = prov.get("arm")
     if arm == "nodedup":
         return mid, None     # the caller reuses the kept read set
@@ -235,7 +247,7 @@ def predup_readset(mid: str, mdir: Path, prov: dict) -> tuple:
     nprov = load_prov(ndir, nmid)
     if nprov.get("lines_per_fragment") != prov.get("lines_per_fragment"):
         raise Refused(f"{nmid}: lines_per_fragment differs from {mid}")
-    return nmid, verify_readset(nprov)
+    return nmid, verify_readset(nprov, halves)
 
 
 # --------------------------------------------------------------------------------------------
@@ -307,11 +319,16 @@ def parse_cc_qc(line: str) -> dict:
     return {"frag_len": str(int(float(f[2]))), "nsc": f[8], "rsc": f[9]}
 
 
-def measure(row: dict, work: Path, nth: int = 4, xcor_fn=None, sort_mem: str = "4G") -> dict:
+def measure(row: dict, work: Path, nth: int = 4, xcor_fn=None, sort_mem: str = "4G",
+            half: str | None = None) -> dict:
+    """One measurement's QC record. `half` (A4): measure that pseudoreplicate half only."""
+    if half is not None and half not in AV.HALVES:
+        raise ValueError(f"half {half!r} not in {AV.HALVES}")
+    halves = (half,) if half else None
     xcor_fn = xcor_fn or run_xcor
     mid = row["measurement_id"]
     cost = AV.Cost()
-    rec = {"schema": 1, "measurement_id": mid, "status": "ok", "reason": "",
+    rec = {"schema": 1, "measurement_id": mid, "half": half or "", "status": "ok", "reason": "",
            "values": {c: "" for c in QC_COLUMNS}, "approximations": APPROXIMATIONS,
            "slurm_job_ids": bam_arm._job_ids(), "code": {"git_sha": AV.git_sha()}}
     try:
@@ -322,9 +339,9 @@ def measure(row: dict, work: Path, nth: int = 4, xcor_fn=None, sort_mem: str = "
         if pipe is None:
             raise NoReadset(f"pipeline {prov.get('pipeline')!r} has no xcor route here")
         lpu = int(prov["lines_per_fragment"])
-        kept = verify_readset(prov)
+        kept = verify_readset(prov, halves)
         rec["kept_readset"] = {"files": kept, "lines_per_fragment": lpu}
-        src, pre = predup_readset(mid, mdir, prov)
+        src, pre = predup_readset(mid, mdir, prov, halves)
         work.mkdir(parents=True, exist_ok=True)
         x = xcor_fn(kept, pipe, lpu == 2, nth, work, cost)
         rec["xcor"] = x
@@ -365,6 +382,36 @@ def cmd_coverage(a) -> int:
     return 0
 
 
+def record_name(mid: str, half: str | None = None) -> str:
+    """`<id>.json` (whole read set) or `<id>.<half>.json` (A4 half mode)."""
+    return f"{mid}.{half}.json" if half else f"{mid}.json"
+
+
+def pick_record(mid: str, sha: str, qc_dirs: list, half: str | None = None) -> tuple:
+    """(kind, record, path) of measurement `mid` over `qc_dirs`: kind is "ok" (the LAST directory
+    with a usable record wins), else the kind of the last record seen ("not_ok", "stale") or
+    "no_record". A usable record names `mid`, has status ok, the row's counts sha256 (when the row
+    has one) and the requested half."""
+    kind, got = "no_record", (None, None)
+    for d in qc_dirs:
+        f = Path(d) / record_name(mid, half)
+        if not f.is_file():
+            continue
+        rec = json.loads(f.read_text())
+        if (rec.get("measurement_id") != mid or rec.get("status") != "ok"
+                or (rec.get("half") or "") != (half or "")):
+            k = "not_ok"
+        elif sha and rec.get("counts_sha256") != sha:
+            k = "stale"
+        else:
+            k = "ok"
+        if k == "ok":
+            kind, got = "ok", (rec, f)
+        elif kind != "ok":
+            kind = k
+    return (kind, *got)
+
+
 def cmd_run(a) -> int:
     _, rows = read_tsv(Path(a.tables) / "measurements.tsv")
     out = Path(a.out)
@@ -376,15 +423,16 @@ def cmd_run(a) -> int:
             bad += 1
             continue
         row = rows[i]
-        f = out / f"{row['measurement_id']}.json"
+        f = out / record_name(row["measurement_id"], a.half)
         if f.is_file() and json.loads(f.read_text()).get("status") in ("ok", "no_readset"):
             print(f"[qc_fill] row {i} {row['measurement_id']}: done, skipped", flush=True)
             continue
         work = Path(a.work) / f"row{i}"
         try:
-            rec = measure(row, work, a.nth, sort_mem=a.sort_mem)
+            rec = measure(row, work, a.nth, sort_mem=a.sort_mem, half=a.half)
         except (Exception, SystemExit) as e:   # a failed step (Cost.shell exits): rerun by index
-            rec = {"schema": 1, "measurement_id": row["measurement_id"], "status": "failed",
+            rec = {"schema": 1, "measurement_id": row["measurement_id"], "half": a.half or "",
+                   "status": "failed",
                    "reason": f"{type(e).__name__}: {e}", "values": {c: "" for c in QC_COLUMNS},
                    "slurm_job_ids": bam_arm._job_ids(), "created_utc": AV.utc()}
         finally:
@@ -496,41 +544,53 @@ def cmd_collect(a) -> int:
     when the record has a value there; else it keeps the `measurements.tsv` value, so a value the
     build filled is never blanked (the side table overrides every listed row: dataset.py
     `_apply_qc_table`). `--fraglen-out` also writes the fragment-length side table
-    (`fraglen_rows`): one row per ChIP-seq measurement with an estimate, its kind and source."""
+    (`fraglen_rows`): one row per ChIP-seq measurement with an estimate, its kind and source.
+    `--half pr1` (A4): one row per measurement with an ok pr1 record only, values from the record
+    alone (dataset `qc_table_pr1`). A4: a row of a non-base view (`arm_knob` set) never keeps a
+    build value (the build copied the parent's); its cells come from its own record only."""
     _, rows = read_tsv(Path(a.tables) / "measurements.tsv")
-    qc_dir = Path(a.qc_dir)
+    qc_dirs = a.qc_dir or [OUT_DEFAULT]
+    if a.half and a.fraglen_out:
+        raise SystemExit("collect: --fraglen-out reads whole-read-set records; not with --half")
     n = {"rows": len(rows), "filled": 0, "no_record": 0, "stale": 0, "not_ok": 0,
-         "kept_build_cells": 0}
+         "kept_build_cells": 0, "frag_len_le0": 0, "blanked_nonbase_build_cells": 0}
     out_rows, xcor = [], {}
     for r in rows:
         mid = r["measurement_id"]
-        vals = {c: r.get(c, "") or "" for c in QC_COLUMNS}
-        f = qc_dir / f"{mid}.json"
-        if not f.is_file():
-            n["no_record"] += 1
+        vals = {c: "" for c in QC_COLUMNS} if a.half else {c: r.get(c, "") or "" for c in QC_COLUMNS}
+        if not a.half and (r.get("arm_knob") or "").strip() not in ("", "base"):
+            # A4: a view's build QC cells are copies of its parent base row (24 crop rows of
+            # eic_v1_2 equal the parent in all cells); only the view's own record may fill them
+            n["blanked_nonbase_build_cells"] += sum(1 for c in QC_COLUMNS if vals[c])
+            vals = {c: "" for c in QC_COLUMNS}
+        kind, rec, f = pick_record(mid, r.get("sha256") or "", qc_dirs, a.half)
+        if kind != "ok":
+            n[kind] += 1
+            if a.half:
+                continue
         else:
-            rec = json.loads(f.read_text())
-            if rec.get("measurement_id") != mid or rec.get("status") != "ok":
-                n["not_ok"] += 1
-            elif r.get("sha256") and rec.get("counts_sha256") != r["sha256"]:
-                n["stale"] += 1
-            else:
-                for c in QC_COLUMNS:
-                    v = rec["values"].get(c, "") or ""
-                    if v:
-                        vals[c] = v
-                    elif vals[c]:
-                        n["kept_build_cells"] += 1
-                vals["frip"] = ""
-                n["filled"] += any(vals[c] for c in INFORMATIVE)
-                if rec["values"].get("frag_len"):
-                    xcor[mid] = (rec, f)
+            for c in QC_COLUMNS:
+                v = rec["values"].get(c, "") or ""
+                if c == "frag_len" and v and float(v) <= 0:   # A4: xcor's peak at shift 0
+                    n["frag_len_le0"] += 1                    # (ATAC/DNase) is no length
+                    v = ""
+                if v:
+                    vals[c] = v
+                elif vals[c]:
+                    n["kept_build_cells"] += 1
+            vals["frip"] = ""
+            n["filled"] += any(vals[c] for c in INFORMATIVE)
+            if rec["values"].get("frag_len"):
+                xcor[mid] = (rec, f)
         out_rows.append({"measurement_id": mid, **vals})
     out = Path(a.out)
     _write_tsv(out, ["measurement_id", *QC_COLUMNS], out_rows)
-    msg = (f"[qc_fill] collect {out}: " + ", ".join(f"{k} {v}" for k, v in n.items())
-           + "; rows without a usable record keep the measurements.tsv values; pr1/pr2 halves use "
-           "their parent's row (approximation); frip empty")
+    msg = (f"[qc_fill] collect {out}{' half ' + a.half if a.half else ''}: "
+           + ", ".join(f"{k} {v}" for k, v in n.items())
+           + ("; only rows with an ok half record are listed (no fallback); frip empty"
+              if a.half else
+              "; rows without a usable record keep the measurements.tsv values; pr1/pr2 halves "
+              "use their parent's row (approximation); frip empty"))
     if a.fraglen_out:
         fl_rows = fraglen_rows(rows, xcor)
         _write_tsv(Path(a.fraglen_out), FRAGLEN_COLUMNS, fl_rows)
@@ -556,10 +616,16 @@ def main(argv=None) -> int:
     r.add_argument("--out", default=OUT_DEFAULT)
     r.add_argument("--nth", type=int, default=int(os.environ.get("SLURM_CPUS_PER_TASK", 4)))
     r.add_argument("--sort-mem", default="4G")
+    r.add_argument("--half", choices=("pr1", "pr2"), default=None,
+                   help="A4: measure this pseudoreplicate half only (record <id>.<half>.json)")
     k = sub.add_parser("collect")
     k.add_argument("--tables", required=True)
     k.add_argument("--out", required=True)
-    k.add_argument("--qc-dir", default=OUT_DEFAULT)
+    k.add_argument("--qc-dir", action="append", default=None,
+                   help=f"record directory; repeatable, the last usable record wins "
+                        f"(default {OUT_DEFAULT})")
+    k.add_argument("--half", choices=("pr1", "pr2"), default=None,
+                   help="A4: collect the half records into the half side table")
     k.add_argument("--fraglen-out", default=None,
                    help="also write the fragment-length side table (signal_from_counts "
                         "load_fraglen_table reads it)")

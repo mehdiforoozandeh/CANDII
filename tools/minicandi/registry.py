@@ -29,7 +29,8 @@ together with `dna = precomputed` is refused (`check_extra_config`). The rung ke
 `rna_track`, `cell_vector`, `cell_embedding` act inside the rung (`contract.MiniCandi`).
 
 Resolution (chunk RM): `res_bp` != 25 and `res_in_sub` / `res_out_sub` > 1 build in rungs 2 and 4
-only (else NotApplicable); `load_run` wraps a run of `res_bp` < 25 or `res_in_sub` > 1 in
+(else NotApplicable); item A7 adds `res_bp` alone on rung 3 (its DnaTower and CountTransform read
+it through `component_kwargs`); `load_run` wraps a run of `res_bp` < 25 or `res_in_sub` > 1 in
 `res_adapter.ResAdapter`, which presents it to the scorer at 25 bp, and refuses `res_bp` > 25
 (scored by `onion_eval/res_score.py` only).
 
@@ -149,7 +150,10 @@ def build_model(config: dict) -> C.MiniCandi:
     from minicandi.components import NotApplicable, res_bp_of, res_subs_of
     if (res_bp_of(config) != C.RES or max(res_subs_of(config)) > 1) and (
             config.get("model_file") or module_name(config["rung"]) not in ("conv_ae", "unet")):
-        raise NotApplicable("res_bp, res_in_sub and res_out_sub are built in rungs 2 and 4 only")
+        if (config.get("model_file") or module_name(config["rung"]) != "conv_attn_ae"
+                or max(res_subs_of(config)) > 1):     # item A7: rung 3 takes res_bp only
+            raise NotApplicable("res_bp is built in rungs 2, 3 and 4; res_in_sub and "
+                                "res_out_sub in rungs 2 and 4 only")
     if config.get("dna_fusion") is not None and not config.get("model_file"):
         from minicandi.dna_fusion import fusion_of        # item A11: rungs 2, 3 and 4 only
         fusion_of(config, module_name(config["rung"]))

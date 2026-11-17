@@ -360,7 +360,8 @@ def test_qc_table_changes_c_in_qc_columns_only_and_never_c_out(tables, tmp_path)
         if qc_on:
             av = b["x_avail"]
             assert not torch.equal(a["c_in"][..., C.K_META:][av], b["c_in"][..., C.K_META:][av])
-            want = torch.tensor([1.5, 2.5, 0.11, 0.22, 33.0, 0.2, 321.0])  # frip empty: centre
+            # frip empty: QC_ABSENT (A4; it was the column centre 0.2 before)
+            want = torch.tensor([1.5, 2.5, 0.11, 0.22, 33.0, -9999.0, 321.0])
             assert torch.allclose(b["c_in"][..., C.K_META:][av], want.expand(int(av.sum()), 7))
         else:
             assert torch.equal(a["c_in"], b["c_in"])

@@ -148,6 +148,8 @@ def test_res_defaults_build_the_same_components():
 def test_other_rungs_refuse_the_resolution_keys():
     for rung in (1, 3, 5, 6):
         for key in ({"res_bp": 5}, {"res_in_sub": 5}, {"res_out_sub": 5}):
+            if rung == 3 and "res_bp" in key:     # item A7: rung 3 takes res_bp alone
+                continue
             with pytest.raises(M.NotApplicable):
                 build_model({"rung": rung, **key})
 

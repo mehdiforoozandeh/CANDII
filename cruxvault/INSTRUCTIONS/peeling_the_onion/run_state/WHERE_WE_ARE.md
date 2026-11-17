@@ -2,7 +2,7 @@
 title: where we are (peeling the onion run)
 kind: live status page, maintained by the foreman agent
 parent: "[[peeling the onion]]"
-updated: 2026-11-16T08:30Z
+updated: 2026-11-17T12:10Z
 ---
 
 # Where we are
@@ -26,81 +26,52 @@ Working copies of items 2 and 3 live in the worktree at `.claude/worktrees/onion
 - Cluster root on Nibi: `/project/def-maxwl/mforooz/ONION`; scratch `/scratch/mforooz/onion`; code snapshots `/project/def-maxwl/mforooz/onion_kit/<id>`.
 - Never resubmit a job that the Log lists. Cancelling jobs is the PI's. Deletes need the PI's yes.
 
-## Schedule (ruling 43 to 46, Amendment 10)
+## State on 2026-11-17 12:10 UTC (close-out phase)
 
-| Shipment | Content | Due |
+The close-out todo list is `../closeout/closeout todo.md`, with one item file per item. The four success criteria of the PI are: (1) the augmented EIC data with counterfactuals, (2) a well-defined training objective, (3) a well-defined and tested evaluation, (4) a settled and tested miniCANDI design, ready for scaling.
+
+### Clusters
+
+| Cluster | State | Consequence |
 |---|---|---|
-| Ship 1 | Methods (data, evaluation) and model-free Results; one deck | 2026-11-15 06:00 (deck cut 03:00) |
-| Ship 2 | Model Results on screening scores and a first Discussion; one deck | 2026-11-15 18:00 (hard limit 2026-11-16 08:00) |
-| Iteration 2 | 16 versus 256 region check, budget curve, dataset update, CPU work on Fir | 2026-11-17 12:00 |
+| Fir | planned outage from 2026-11-17 07:00 UTC to about 2026-11-20; login works, no job starts | 570 jobs wait in the queue, among them the 62 rescoring runs on 256 regions (jobs 4535347 to 4535923) |
+| Nibi | `/scratch` refuses every write (4,324 GiB used, soft quota 1,024 GiB, grace expired) | no scoring and no build can run there until scratch is under the quota |
 
-## State on 2026-11-14 12:49
+### Nibi archive to nearline (PI approved 2026-11-17)
 
-**Done**
-- Dataset `eic_v1` frozen (249 of 267 training tracks, 42 of 45 validation, 37 of 40 controls).
-- Evaluation set frozen (256 regions); screening set `evalset_p16.json` with 16 pair regions (sha a82cdfd1).
-- Real-data variance layers with the sampling layer (results/t305/LAYERS_REAL.md); recorded in the vault (f51 to f54, q31).
-- AlphaGenome 2: 8,960 predictions cached, training-track audit done, scorer matches Max's script.
-- All 8 baselines SCORED: `eval/eic_v1/baselines/` (256 regions) and `eval/eic_v1/baselines_p16/` (screening).
-- Trainings DONE: rung 1 (24 runs, 8 arms), budget curve (42 runs), rungs 2 to 6 base x3, rung-4 `scrambled_covariates` x3, `rg_no_eval` x3, 7 selection arms x3 (`rg_variance_e50_w` 2 of 3 at 12:47), `average_input` seed 0.
-- Fast scorer complete and merged (umbrella db8fc0c): prediction store, predict command, job scripts, metric phase (0 differences against the old path on 3 models), score comparison.
-- Nibi file limit fixed at about 10:10 (PI approved the removal of 68 archived code snapshots); rule: file-heavy content goes to /scratch.
-- Globus: two transfers Nibi to Fir started at about 09:50; not verified on Fir yet.
-- Status deck 2026-11-14: `cruxvault/presentations/onion-status-2026-11-14/`, artifact https://claude.ai/artifact/FwKjytRr1UuhT3xhTpWDrL (private).
+Four scratch folders are copied to tape as 23 tar files (3,991 GiB), each compared byte for byte with scratch. Note and restore steps: `NIBI_NEARLINE_ARCHIVE.md` in this folder. At 11:59 UTC: 4 of 23 verified, 1,213 GiB written, 0 failed. It runs in tmux session `nlarchive` on login node l1.nibi. Never start a second run.
 
-**NEWEST (2026-11-16T08:30Z; read this block first)**
+Nothing is removed from scratch yet. Conditions for removal: (a) 23 of 23 tars OK, (b) the PI's yes, (c) for `onion/work`: a `build_list.py pending` call over rows 102, 418, 419, 425, 428, 431 first. The items "QC metrics on the input side" and "resolution 1 to 125 bp" read the large tagAlign files in `onion/work`; after removal they need a tape recall.
 
-Fir results read for the U-Net (3 seeds, 16 regions); table in `cruxvault/results/views_ablation/VIEWS_ABLATION.md` (on disk only, git-ignored). (1) Counterfactual views: no gain; base view only reached composite 0.483 and gap closed 0.415 against 0.444 and 0.298 for all views; alignment-level views alone dropped gap closed to 0.072; same-view pairs only gave gap closed below 0. (2) Split depth arms, final: hiding depth on the output side costs nothing (0.455); the loss is on the input side (0.382). Both are recorded as findings. Still running on Fir (42 pending, 29 running at 08:30Z): held-out reference runs, fair-chance round 1, tuning round 2. Next: read those by held-out loss (LEAD_PLAN.md section 5), stage B, round-3 proposal, add the view result to the report for Max, iteration 2 (due 2026-11-17 12:00 UTC).
+### Close-out items
 
-**Earlier block (2026-11-16T04:10Z)**
-- PI directives 2026-11-15 evening: make the architecture findings trustworthy (every architecture a fair chance; every named knob tested); one ablation lead with one agent per architecture, the foreman approves; compute may use Nibi and Fir; the report must show whether the counterfactual views help.
-- Audits: results/ladder_audit/FAIR_CHANCE.md (six-place order not trustworthy; three tiers) and COVERAGE.md (38 knobs: 10 full, 7 partial, 21 untested). Tuning plan: results/ladder_tuning/LEAD_PLAN.md (protocol, stage B rule, round 3 = winners at 3 seeds under equal windows and matched compute + mechanism arms).
-- NIBI COMPUTE DOWN since 2026-11-15 13:10. ALL CPU WORK NOW RUNS ON FIR: root /project/def-maxwl/mforooz/ONION/runs_fir, kit RTf, ids in runs_fir/SUBMITTED.tsv. 95 runs: counterfactual-view ablation (rung4_views_*), fair-chance round 1, base_heldout seeds 0-2, tuning round 2 (tune_rung{2..6}_*), score-only of rung4_hide_depth_output seeds 0,1. The same jobs on Nibi are HELD (never release, never resubmit; cancel is the PI's).
-- Fir recipe and differences: results/fir_failover/FIR_READY.md. Table tool on Fir: PYTHONPATH=$K/src python $K/tools/onion_eval/select_rule.py table --runs $O/runs_fir --prefix <p> --sub p16 (K = onion_kit/RTf).
-- Report for Max sent by the PI 2026-11-16: presentations/onion-update-max-2026-11-15/report.pdf (5 pages). Max has group read access to the onion folders on Nibi.
-- Owed: read Fir results (split arms, counterfactual ablation, round 1, round 2 by held-out loss per LEAD_PLAN section 5), stage B, round 3 proposal to the PI (matched compute about 1,660 CPU-h: bring a trimmed option), rung-1 GPU trials, vault findings, paper text fixes (Discussion items 1 and 3), 16 vs 256 region check, budget-curve scores.
+| Item | State |
+|---|---|
+| 16 ablations on three models | scored on 16 regions and read (`results/ablations_closeout/ABLATIONS_READ.md`) |
+| 16-versus-256 region check | failed its pre-written rule: correction terms are scored on all 256 regions from now on; the 7 decisive arms wait in the Fir queue for rescoring (about 2,225 CPU-hours, corrected from 1,430) |
+| Training objective document | written and merged: `../onion training objective.md`; open choices are marked in it |
+| Signal p-value and peaks from the predicted NB | merged; 1 of 9 runs scored; PI ruled the box-spread formula; its model-side formula was sent back by review (uncertainty understated), fix in progress |
+| Mix-and-match round (item A13) | specification, 24 provisional arms, native-depth scoring, gate on 256-region scores: merged; not submitted (about 5,390 CPU-hours plus 474 for the gate) |
+| Minimum useful covariate set (A12) | tools, 51 configs, ranking tool: merged; not submitted (plans from 1,927 to 17,900 CPU-hours) |
+| Learned cell-type embedding (A6) | configs, leak audit, zero-shot control: merged; not submitted (about 500 CPU-hours); it says nothing about unseen cell types |
+| Second experiments and cross-lab pairs (D2) | add-on table with 71 second experiments built and checked on Nibi; merged; scoring stages not submitted |
+| Data set update with DNase-seq (D3) | work-folder snapshot, candidate table (2,812 rows, DNase-seq correction-scorable), 10 row verifications passed; merged; 4 row rebuilds and the version build not submitted |
+| Blind build (D4) | not submitted; PI ruled Nibi; needs writable Nibi scratch; the PI runs the submit command |
+| Not started | QC metrics on input (A4), RNA-seq input (A5), resolution (A7), pointwise MLP (A10), replicate ladder (E4), settled design (M1), records (R1), close-out deck and report (R2) |
 
-**Latest (2026-11-15T07:35Z; newest block, read first)**
-- Ruling 48 (PI "Rung 4 only"): hard-offset arm (depth covariate hidden; key hide_depth_covariate; umbrella 8efe46f; kit HO). 3 seeds SCORED. Seed means against rung-4 base: composite 0.260 vs 0.444; specific variance recovered 0.406 vs 0.440; gap closed 0.218 vs 0.298; uncertainty term -0.098 vs 0.600. Hiding depth did not help.
-- Score tables with composite version 2 exist (results/metrics_screening/scores_{ladder,rung1_arms,rung4_arms,selection_arms}.md; refresh /scratch/mforooz/onion/tb2/tables_tb2.sh).
-- 58 runs scored. GPU queue: 36 GPU jobs pending (rung-1 arms inject_tokens, mask_token, matched_compute, scramble_all; trainings 27273016, 27272462).
-- rg_variance_e50_w seed 2: trained; predict + metric jobs 27402882 to 27402886 submitted.
-- Agent in work: ship-2 recorder and deck builder (deck folder presentations/onion-ship2-2026-11-15; the foreman publishes the artifact and mirrors the URL in ARTIFACTS.md). Ship 2 due 18:00.
-- SHIP 2 DELIVERED 2026-11-15 about 08:10: deck https://claude.ai/artifact/RHucrLM3AXXxVfzQtCqEDS (presentations/onion-ship2-2026-11-15); vault f78 to f81, q41 to q43.
-- 2026-11-15T19:55Z NIBI OUTAGE since 13:10 (674 nodes down at 19:46). Output-side seeds 0 and 1 are trained; their predict jobs failed with the nodes; score-only jobs 27445963 to 27445972 are queued, never resubmit. 11 onion_build array tasks also failed (not resubmitted yet). Nothing of mine runs until the nodes return.
-- 2026-11-15T12:40Z split arms: input-side arm 3 of 3 scored (seed means composite 0.382, specific variance 0.401, gap closed 0.215, clean-pair gap closed 0.601, uncertainty term 0.511); output-side arm seed 2 scored (inside the base seed range). Output-side seeds 0 and 1 timed out in training (slow nodes); resume jobs 27429644 to 27429655, never resubmit. Owed after they score: final comparison to the PI, vault finding, scores_rung4_arms.md.
-- Ruling 49 (PI "Yes", 2026-11-15): two split arms at rung 4, 3 seeds each: rung4_hide_depth_output (depth hidden in the output covariates only) and rung4_hide_depth_input (hidden in the input covariates only). Umbrella cfb57f3, kit HO2. 36 jobs 27405429 to 27405464 submitted about 08:05; never resubmit. At 09:13: 0 of 6 scored, 34 jobs in the queue. Owed: table (select_rule.py table --prefix rung4 --sub p16), comparison with rung-4 base and the hard-offset arm, vault finding, scores_rung4_arms.md. Caveat: the input depth is still readable from zero-count bins after the input transform.
-- Next: iteration 2 (16 vs 256 region check, budget-curve scores, rung-1 arms still in the GPU queue, miniCANDI row on the AlphaGenome 2 board), due 2026-11-17 12:00.
+### Decisions that wait for the PI
 
-**Earlier (2026-11-15T02:35Z; read this block before the older "In work" block below)**
-- Ship 1 is delivered. Ruling 47 is merged (umbrella code 2443ffb).
-- AlphaGenome 2 board DONE (results/t308/AG2_VS_BASELINES.md; jobs 27337502, 27337503, 27337505, 27337509; never resubmit). Fair set of 11 tracks: AlphaGenome 2 0.438, position average 0.222, noise floor 0.333 (recalibrated r_spec). No miniCANDI row on that board yet. Not run: control-free table, retrieval baseline.
-- 50 runs SCORED on the screening set: rungs 1 to 6 base x3, rung-4 scrambled x3, rung-1 base, dna_off, scrambled x3, inject_concat 1, rg_no_eval 3, selection arms 22 of 24.
-- GPU queue on Nibi is the limit: 98 GPU jobs pending on priority (rung-1 arms inject_tokens, mask_token, matched_compute, scramble_all; trainings average_input seed 1 27273016, two_step_native seed 0 27272462).
-- rg_variance_e50_w seed 2 training resubmitted as 27366823 (resume; 3 h limit). Owed after it: predict (4 CPU shards) and the metric job.
-- Agents in work: builder for the score tables with composite version 2 (kit TB2; results/metrics_screening/scores_{ladder,rung1_arms,rung4_arms,selection_arms}.md); recorder for the AlphaGenome 2 board, the paper text and the log-scale sampling-layer correction.
-- Then: ship-2 deck (prezit) and recorder, due 2026-11-15 18:00; rewrite of the layers section in eta terms.
+1. Remove the four archived folders from Nibi scratch when all 23 tars are verified.
+2. Budget of the mix-and-match round and of its gate.
+3. Scope of the minimum-covariate-set search.
+4. Lab effect in the cross-lab analysis: report lab together with donor (recommended), since the pure lab effect has too few pairs.
+5. Drop the 17 unbuilt DNase-seq second-experiment rows (recommended).
+6. Table version for the final model: the current one, or the candidate with DNase-seq (the 9 base runs then train again).
+7. The corrected cost of the queued rescoring (2,225 CPU-hours).
+8. Remove stale code snapshots on Nibi `/project`: the group is at 464K of 500K files, and 13 snapshots pushed on 2026-11-17 hold about 31,500 files. No more snapshots are pushed to Nibi until this is settled.
+9. The 1 bp recount for the resolution item (about 18 CPU-hours, 1,408 files to Nibi `/project`) must run before `onion/work` leaves scratch; the PI submits it (the permission check refused the agent's probe job).
 
-**In work** (state at 2026-11-14T21:26Z; older)
-- First screening scores exist: rung-1 base, scrambled_covariates, dna_off (8 of 9 scored; results/metrics_screening/first_scores.md). Baselines report done (results/t307/BASELINES.md; vault f55 to f60, q32).
-- Builder: metric jobs for every other store, then the ladder table and the rung-1 arm table (results/metrics_screening/scores_ladder.md, scores_rung1_arms.md).
-- Predict jobs released at 21:25: rung 5 seeds 1 and 2, the other 5 rung-1 arms, the 7 selection arms. All ladder stores of rungs 2, 3, 4, 6 and rung 5 seed 0 are complete.
-- SHIP 1 deck done: presentations/onion-ship1-2026-11-15, artifact https://claude.ai/artifact/4RSUdsFwJC3nYcyHb9s2bU (sent to the PI early). AlphaGenome 2 slide shows the audit only.
-- Investigator: oracle floor for the correction metric (0.5 E|half1 - half2|) and the eta split, after the PI question; results/gap_closed_floor/GAP_FLOOR.md.
-- PI question (2026-11-14 evening): can the eta formulation (mean = exp(log depth + eta)) be used throughout (model, variance layers, law of total variance)? Four investigators write results/eta_space/{THEORY,LAYERS_ETA,MODEL_DESIGN,LITERATURE}.md; the foreman owes one synthesis and a vault record.
-- Builder: fragment length for single-end tracks (frag_len is empty for them in the frozen tables, so signal-space metrics are undefined for those tracks; fix = estimated fragment length from the quality-control fill, scoring side only; results/fraglen_single_end/). The AlphaGenome 2 board waits for it.
-- GPU trainings still pending: average_input seed 1 (27273016), two_step_native seed 0 (27272462). Then seeds per results/arms_d10_d15/SUBMITTED.md (kit A1k2).
-- rg_variance_e50_w seed 2 training timed out (27266404): resubmit with a longer limit.
+### Shared prerequisites when a cluster frees
 
-**Next steps, in order**
-1. Ship 1 at 06:00: deck link to the PI, vault recorder (close t306, baselines and layers are recorded), snapshot.
-2. Collect the metric builder's tables; arm reports; rung-4 check of 16 against 256 pair regions (stores of rung4_base and rung4_scrambled_covariates are kept).
-3. After the fragment-length review: rescore baselines with the signal dump, rerun the AlphaGenome 2 chain.
-4. Ship 2 (due 2026-11-15 18:00; hard limit 2026-11-16 08:00): deck, vault recorder, snapshot.
-5. Verify the Globus copies on Fir; move new code snapshots to /scratch.
-6. RULE: never open a question dialog to the PI while held jobs or timed releases are owed (a dialog blocked the foreman for 7 hours on 2026-11-14).
-
-**Ruling 47 (2026-11-14, PI "yes")**: gap closed uses the oracle floor (half the mean absolute difference of the target's two read halves) as the top of scale; in the composite from ship 2 on; old value shown once as superseded. It is implemented and merged (umbrella 2443ffb; tools/onion_eval/oracle_floor.py; references eval/eic_v1/baselines{,_p16}/oracle_floor; results/oracle_floor/ORACLE_FLOOR.md). Composite version 2 is in use; the tools print composite_version and refuse a mix. Evidence: results/gap_closed_floor/GAP_FLOOR.md.
-
-**Open with the PI**
-- Approve the hard-offset arm (depth hidden from the network; rung 4 only recommended). The combined eta answer was given 2026-11-14 about 23:40 (vault q33, f61 to f67).
+- Build the 256-region reference scores of table version `eic_v1_2` and score its 9 base runs on 256 regions (about 320 CPU-hours). Every ablation on that version needs them.
+- Push one fresh code snapshot before any submission; the snapshots pushed during the night are stale.

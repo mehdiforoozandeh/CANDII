@@ -107,8 +107,10 @@ def res_subs_of(cfg: dict) -> tuple[int, int]:
     """(`res_in_sub`, `res_out_sub`) of a config, each 1 (default) or 5. A sub key above 1 needs
     `res_bp` = 25: the decoupled arms keep 25 bp tokens and change only the input or the output."""
     out = []
-    for key in ("res_in_sub", "res_out_sub"):
-        v = cfg.get(key, 1)
+    # literal keys, so that train.code_keys finds them (item A7 fix: a loop variable hid them and
+    # train.py refused `res_in_sub` and `res_out_sub` as unknown config keys)
+    for key, v in (("res_in_sub", cfg.get("res_in_sub", 1)),
+                   ("res_out_sub", cfg.get("res_out_sub", 1))):
         if isinstance(v, bool) or v not in RES_SUBS:
             raise ValueError(f"{key} {v!r} not in {RES_SUBS}")
         out.append(int(v))

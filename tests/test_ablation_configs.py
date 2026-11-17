@@ -61,6 +61,8 @@ EXPECTED = {
             "pipeline", "lab_platform", "donor_lab", "view_knobs", "categorical", "all_but_depth")}},
     # close-out A6: a learned cell-type embedding (n_cells = 51 training cells of eic_v1_2)
     "cell_embedding": {"cell_embedding": {"cell_embedding", "cell_state_dropout", "n_cells"}},
+    # close-out A4: read-derived QC on the input side (side tables of submit_qc_on_input.sh)
+    "qc_on_input": {"qc_on_input": {"qc_on_input", "qc_table", "qc_table_pr1"}},
 }
 UNET_VIEWS = _ROOT / "tools/minicandi/configs/views/rung4"
 #: arms outside 10% of 1.0e6 by design, with their exact count: the DNA-fusion arms keep the base

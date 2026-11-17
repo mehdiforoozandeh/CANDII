@@ -467,7 +467,7 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
     if cfg.get("heldout_loss"):
         held = heldout_batches(tables, cfg)
         h_every = int(cfg["heldout_loss"]["every"])
-        ds.exclude_windows([(m["chrom"], m["start_bin"], ds.L) for b in held for m in b["meta"]])
+        ds.exclude_windows([ds.window_span(m) for b in held for m in b["meta"]])
     torch.manual_seed(seed)
     model = build_model(cfg)
     model.to(dev)

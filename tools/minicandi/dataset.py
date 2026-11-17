@@ -101,6 +101,19 @@ byte-identical batches to the code before the arms (tested on the synthetic tabl
   qc_table                 a TSV `measurement_id` + the 7 QC columns that overrides the QC
                            columns of the rows it lists (chunk QCb writes it). It reaches C only
                            through `qc_on_input`, never C'.
+  qc_table_pr1             (A4) a TSV of the same columns, measured on the `pr1` half of each
+                           listed measurement (`qc_fill.py run --half pr1`). With it, an input read
+                           from its `pr1` file (a scored correction source) takes its QC from this
+                           table only; a row the table does not list has every QC cell absent. So
+                           no QC value of a `pr1` input comes from reads outside that half (the
+                           `pr2` half may share reads with the target). Absent (default): a half
+                           uses its parent measurement's QC row (today's approximation).
+  A4 leak guard (always on with `qc_on_input`): the NRF, PBC1 and PBC2 of a measurement other than
+  a nodedup view are computed from reads before duplicate removal, which the input does not hold.
+  When any nodedup target of the same window has the same `experiment` (the pooled nodedup holds
+  every replicate's pre-dedup reads), those three cells of the input are written absent.
+  `qc_table` values reach C only (inputs); the dataset rows, and so every target's `frag_len`,
+  keep the frozen values.
 
 Extra inputs (pinned interface E, chunk XI). Each key is emitted only when its config key is set,
 so a default batch is unchanged; every mode emits them (they are inputs, never targets).
@@ -252,6 +265,8 @@ MASK_SCHEMES = ("uniform", "dirichlet", "panel")
 BIN_MASK_SHAPES = ("random", "span")
 INPUT_DEPTHS = ("native", "fixed")
 QC_TABLE_COLUMNS = ("measurement_id",) + C.QC_COLUMNS
+#: A4: the QC cells computed from the reads before duplicate removal (qc_fill.py pbc)
+PBC_COLUMNS = ("nrf", "pbc1", "pbc2")
 #: D15 arm "fixed reference depth": log2 reads of the base per assay class (agent decision)
 FIXED_BASE_LOG2_DEPTH = {"accessibility_dnase": 23.0, "accessibility_atac": 23.0,
                          "broad_histone": 23.0, "narrow_histone": 23.0, "control": 23.0}
@@ -393,8 +408,13 @@ class OnionDataset(IterableDataset):
             self.rows[r["measurement_id"]] = r
         if mode == "train":
             self._refuse_addon_tables()
+        #: A4: measurement id -> QC cells of the `qc_table` side table (inputs only)
+        self.qc_override: dict = {}
         if self.config.get("qc_table"):
             self._apply_qc_table(self.config["qc_table"])
+        #: A4: measurement id -> QC cells measured on its pr1 half (None: no pr1 table)
+        self.qc_pr1 = (self._read_qc_pr1(self.config["qc_table_pr1"])
+                       if self.config.get("qc_table_pr1") else None)
         wp = self.tables_dir / "withheld.tsv"
         self.withheld = Withheld(read_tsv(wp, WITHHELD_COLUMNS) if wp.is_file() else [])
         self.encoder = CovariateEncoder(load_covariates_json(self.tables_dir / "covariates.json"))
@@ -612,18 +632,49 @@ class OnionDataset(IterableDataset):
         return out
 
     def _apply_qc_table(self, path) -> None:
-        """Override the 7 QC columns of every row that the side table lists (empty cells too:
-        the side table is the source for the rows it holds). Rows it does not list keep the
-        values of measurements.tsv. Ids that measurements.tsv lacks are ignored and counted."""
+        """Read the side table: the 7 QC columns of every row it lists (empty cells too: the side
+        table is the source for the rows it holds) replace those of measurements.tsv IN C ONLY
+        (`qc_input_row`). The dataset rows keep the frozen values, so a target's `frag_len`, which
+        the signal-space scoring reads, is the same with and without the table (A4). Rows it does
+        not list keep the values of measurements.tsv. Ids that measurements.tsv lacks are ignored
+        and counted."""
         self.qc_table_rows, self.qc_table_unknown = 0, 0
         for r in read_tsv(path, QC_TABLE_COLUMNS):
-            row = self.rows.get(r["measurement_id"])
-            if row is None:
+            if r["measurement_id"] not in self.rows:
                 self.qc_table_unknown += 1
                 continue
-            for c in C.QC_COLUMNS:
-                row[c] = (r.get(c) or "").strip()
+            self.qc_override[r["measurement_id"]] = {c: (r.get(c) or "").strip()
+                                                     for c in C.QC_COLUMNS}
             self.qc_table_rows += 1
+
+    def _read_qc_pr1(self, path) -> dict:
+        """A4: the pr1-half QC side table, measurement id -> {QC column: cell}."""
+        out = {}
+        for r in read_tsv(path, QC_TABLE_COLUMNS):
+            if r["measurement_id"] in out:
+                raise ValueError(f"{path}: duplicate measurement_id {r['measurement_id']!r}")
+            out[r["measurement_id"]] = {c: (r.get(c) or "").strip() for c in C.QC_COLUMNS}
+        return out
+
+    def qc_input_row(self, m: str, r: dict, input_file: str, targets: list) -> dict:
+        """A4: the row whose QC cells describe input `m` read from `input_file`, given the
+        window's `targets`. Returns `r` itself when nothing changes (so a default batch is
+        untouched), else a copy with the QC cells replaced."""
+        out = r
+        if m in self.qc_override:
+            out = {**r, **self.qc_override[m]}
+        if input_file == "pr1" and self.qc_pr1 is not None:
+            out = {**r, **self.qc_pr1.get(m, {c: "" for c in C.QC_COLUMNS})}
+        # NRF/PBC of an input other than a nodedup view come from reads it does not hold (the
+        # reads before duplicate removal of its library); a nodedup target of the same experiment
+        # (any unit: a replicate's pre-dedup reads are a subset of the pooled nodedup's) holds them
+        exp = (r.get("experiment") or "").strip()
+        if view_of(r)[0] != "nodedup" and any(
+                view_of(self.rows[t])[0] == "nodedup"
+                and (self.rows[t].get("experiment") or "").strip() == exp
+                for t in targets):
+            out = {**out, **{c: "" for c in PBC_COLUMNS}}
+        return out
 
     def group_tracks(self, roles: tuple) -> dict:
         """(cell, assay) -> sorted measurement ids of the rows whose `in_eic` is in `roles`.
@@ -811,6 +862,11 @@ class OnionDataset(IterableDataset):
         starts, end_max = hit
         i = int(np.searchsorted(starts, start + self.L, side="left")) - 1
         return i >= 0 and int(end_max[i]) > start
+
+    def window_span(self, meta: dict) -> tuple:
+        """(chrom, start bin, n bins) of a window's `meta` in the unit of `exclude_windows` (25 bp
+        bins). `ResDataset` overrides it (item A7)."""
+        return meta["chrom"], meta["start_bin"], self.L
 
     def exclude_windows(self, intervals) -> None:
         """Reject every training start whose window overlaps one of `intervals` ((chrom, start
@@ -1035,7 +1091,9 @@ class OnionDataset(IterableDataset):
             x_avail[t] = True
             m_in[t] = m
             x_counts[:, t] = self.read(m, chrom, start_bin, L, input_file)
-            c_in[t] = self.encoder.c_in(r, self.qc_on_input, input_depth_scale)
+            c_in[t] = self.encoder.c_in(
+                self.qc_input_row(m, r, input_file, targets) if self.qc_on_input else r,
+                self.qc_on_input, input_depth_scale)
             if fixed_in:
                 ref = FIXED_BASE_LOG2_DEPTH[r["assay_class"]]
                 if c_in[t, C.LOG2_DEPTH_COL] > ref:
