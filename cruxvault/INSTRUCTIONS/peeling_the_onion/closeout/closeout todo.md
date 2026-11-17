@@ -62,17 +62,17 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 
 | Item | File | Depends on | Status |
 |---|---|---|---|
-| The nine named ablations on three architectures | [[closeout A1 nine named ablations]] | none | running (144 runs submitted 2026-11-16; 2 DNA-source arms wait on the Globus transfer) |
-| Basic controls on all three models (scrambled covariates, mask mode, injection form) | [[closeout A2 basic controls on three models]] | none | running (33 runs submitted on Fir 2026-11-16) |
-| Counterfactual views on the two conv models | [[closeout A3 counterfactual views on conv models]] | none | running (30 runs and 15 U-Net score passes submitted on Fir 2026-11-16) |
+| The nine named ablations on three architectures | [[closeout A1 nine named ablations]] | none | scored and read 2026-11-17 ([[ABLATIONS_READ]], `results/ablations_closeout/`); findings recorded |
+| Basic controls on all three models (scrambled covariates, mask mode, injection form) | [[closeout A2 basic controls on three models]] | none | scored and read 2026-11-17 ([[ABLATIONS_READ]], `results/ablations_closeout/`); findings recorded |
+| Counterfactual views on the two conv models | [[closeout A3 counterfactual views on conv models]] | none | scored and read 2026-11-17 ([[ABLATIONS_READ]], `results/ablations_closeout/`); findings recorded |
 | Read-derived QC metrics on the input side | [[closeout A4 QC metrics on the input side]] | QC table fill | not started |
 | RNA-seq input | [[closeout A5 RNA-seq input]] | RNA fetch | not started |
 | Learned cell-type embedding | [[closeout A6 learned cell-type embedding]] | none | not started |
 | Resolution 1 to 125 bp | [[closeout A7 resolution]] | 1 bp region store | not started |
-| Count transforms | [[closeout A8 count transforms]] | none | running (90 runs on Fir incl. pseudocount 0.01; 5 arms also change the output link, see specification 15) |
+| Count transforms | [[closeout A8 count transforms]] | none | scored and read 2026-11-17 ([[ABLATIONS_READ]], `results/ablations_closeout/`); findings recorded (Anscombe arm void: code defect; 9 runs) |
 | Final tuning round: matched-compute runs | [[closeout A9 matched-compute runs]] | none | running (12 trainings pending on Fir) |
 | Pointwise MLP under the corrected composite | [[closeout A10 pointwise MLP corrected score]] | GPU | not started |
-| DNA fusion: how the DNA features join the count features | [[closeout A11 DNA fusion]] | none | running (24 runs submitted on Fir 2026-11-17, after review fixes; every arm keeps the base trunk width) |
+| DNA fusion: how the DNA features join the count features | [[closeout A11 DNA fusion]] | none | scored and read 2026-11-17 ([[ABLATIONS_READ]], `results/ablations_closeout/`); findings recorded |
 | Settle the miniCANDI design: one document, ready for scaling | [[closeout M1 settled miniCANDI design]] | A1 to A11, E1 | not started |
 
 ### Records and close-out

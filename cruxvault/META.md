@@ -86,17 +86,25 @@ Root: [[candii]]
     - ◐ `q42` [Q] [[q42_why_does_rung_4_the_u_net_recover_the_mo|**Why does rung 4 (the U-Net) recover the most specific variance of the ladder but close the least correction gap of rungs 1 to 5?**]] — *leaning* · moderate
     - ◐ `q46` [Q] [[q46_why_does_the_held_out_nb_loss_rank_the_u|**Why does the held-out NB loss rank the U-Net first and the conv models third and fourth while the composite ranks the conv models first, and why does more training lower held-out loss without raising the composite?**]] — *leaning* · moderate
     - ◐ `q47` [Q] [[q47_which_attention_axis_carries_the_axial_t|**Which attention axis carries the axial transformer's score: along positions, along assays, or both?**]] — *leaning* · weak
-- ◐ `q23` [Q] [[q23_is_the_model_wired_as_designed_does_scra|**Is the model wired as designed: does scrambling the covariates, switching the DNA off, another injection form, a mask token, or matched compute move the scores (the wiring checks of rung 1)?**]] — *leaning* · weak
+  - ◐ `q48` [Q] [[q48_which_minicandi_design_choices_move_impu|**Which miniCANDI design choices move imputation, correction or calibration beyond the seed range on the conv autoencoder, conv + attention and the U-Net at about 1.0 M parameters?**]] — *leaning* · moderate
+    - ◐ `q49` [Q] [[q49_does_the_chip_seq_control_help_minicandi|**Does the ChIP-seq control help miniCANDI as an input assay and as a predicted output?**]] — *leaning* · weak
+    - ◐ `q50` [Q] [[q50_does_the_leave_one_out_average_of_the_tr|**Does the leave-one-out average of the training cell types, given as an input, help miniCANDI?**]] — *leaning* · weak
+    - ◐ `q51` [Q] [[q51_does_two_step_correction_through_a_base_|**Does two-step correction through a base covariate set help miniCANDI, with native or fixed base depth?**]] — *leaning* · moderate
+    - ◐ `q52` [Q] [[q52_do_the_dna_source_and_the_way_dna_featur|**Do the DNA source and the way DNA features join the count features matter for miniCANDI?**]] — *leaning* · weak
+    - ◐ `q53` [Q] [[q53_does_the_form_of_the_covariate_embedding|**Does the form of the covariate embedding (numeric only, per-value numeric, dropout) matter for miniCANDI?**]] — *leaning* · weak
+    - ◐ `q54` [Q] [[q54_does_another_loss_poisson_mean_nb_crps_e|**Does another loss (Poisson mean, NB CRPS, equal bin weight, imputation weight 4) help one of the three goals of miniCANDI?**]] — *leaning* · moderate
+    - ◐ `q55` [Q] [[q55_does_a_count_transform_on_the_input_beat|**Does a count transform on the input beat the depth offset in miniCANDI?**]] — *leaning* · moderate
+- ◐ `q23` [Q] [[q23_is_the_model_wired_as_designed_does_scra|**Is the model wired as designed: does scrambling the covariates, switching the DNA off, another injection form, a mask token, or matched compute move the scores (the wiring checks of rung 1)?**]] — *leaning* · moderate
   - ◐ `h40` [H] [[h40_scrambled_covariates_lowers_the_correcti|scrambled_covariates lowers the correction term by more than 2 seed spreads and leaves imputation within 2; dna_off lowers imputation]] — *leaning* · weak · mixed
   - ○ `q43` [Q] [[q43_does_the_gain_of_scrambled_covariates_in|**Does the gain of scrambled covariates in gap closed at rung 4 come from the 84 headline pairs with a duplicate-keeping side, where source and target can share DNA fragments?**]] — *open*
-  - ◐ `q44` [Q] [[q44_does_training_the_u_net_on_the_counterfa|**Does training the U-Net on the counterfactual processing views of EIC (depth thinning, single-end, read crop, no duplicate removal, no MAPQ filter) raise the three goal terms over training on the base view alone, and for which view type and which evaluation pairs?**]] — *leaning* · weak
+  - ◐ `q44` [Q] [[q44_does_training_the_u_net_on_the_counterfa|**Does training the U-Net on the counterfactual processing views of EIC (depth thinning, single-end, read crop, no duplicate removal, no MAPQ filter) raise the three goal terms over training on the base view alone, and for which view type and which evaluation pairs?**]] — *leaning* · moderate
     - ○ `q45` [Q] [[q45_why_does_adding_the_no_duplicate_removal|**Why does adding the no-duplicate-removal and no-MAPQ-filter views to training lower gap closed on the never-trained pair that combines both (0.08 against 1.77 for base only, half-read floor scale)?**]] — *open*
 - ◐ `q27` [Q] [[q27_are_the_onion_run_s_estimators_scorers_a|**Are the onion run's estimators, scorers and training pipeline correct, fast and reproducible on the clusters?**]] — *leaning* · moderate
 - ● `q28` [Q] [[q28_did_flashzoi_train_on_eic_blind_tracks_o|**Did Flashzoi train on EIC blind tracks or on the genomic loci of the blind scoring?**]] — *settled* · strong
 
 ## Dashboard
 
-- **Questions** (47): open 13 · leaning 26 · settled 8 · parked 0
+- **Questions** (55): open 13 · leaning 34 · settled 8 · parked 0
 - **Hypotheses** (40): open 10 · leaning 18 · settled 6 · parked 6
-- **Confidence**: weak 20 · moderate 24 · strong 14
-- **Findings**: 87
+- **Confidence**: weak 22 · moderate 30 · strong 14
+- **Findings**: 98

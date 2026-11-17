@@ -35,9 +35,10 @@ Decides the open model choice of the parent: if the hard offset matches or beats
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**1 children** · open 1, leaning 0, settled 0, parked 0 · 2 finding(s) on this question
+**1 children** · open 1, leaning 0, settled 0, parked 0 · 3 finding(s) on this question
 
 - `q41` _(Q)_ [[q41_why_does_hiding_depth_from_rung_4_drop_i|Why does hiding depth from rung 4 drop its uncertainty term below the marginal NB while its mean-based terms move much less: does the predicted NB size lose a needed dependence on depth?]] — *open*
 - `f81` finding (moderate) [[f81_read_from_the_refreshed_rung_4_arm_table|Read from the refreshed rung-4 arm table and the select_rule terms, 3 paired…]]
 - `f83` finding (moderate) [[f83_3_seeds_per_arm_and_the_input_side_drop_|3 seeds per arm and the input-side drop exceeds both seed ranges; 16 regions…]]
+- `f100` finding (moderate) [[f100_beyond_the_range_on_the_u_net_on_three_t|Beyond the range on the U-Net on three terms; the mechanism is not checked.]]
 <!-- crux:ledger:end -->
