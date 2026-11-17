@@ -135,6 +135,13 @@ Per assay class, report every D12 rung with its increment, interval, pair count 
 
 - smoke (H3K36me3; done tonight, 9.9): at most 1x0.5 + 4x1 + 2x2 + 1x0.5 = 9.
 - layers (pair list, design, layers with per-pair values): 1x0.5 + 1x0.5 + 4x3 = 13 at most; t305 measured 1 h 19 min on 4 CPUs for 3,908 pairs -> about 5.3 + 1 = 6 expected.
-- mixed (4 bands, every assay, 200 bootstrap draws): set from the smoke's sacct (9.9).
+- mixed (4 bands, every assay, 200 bootstrap draws): the smoke took 1 min 57 s for 1 assay, 1 band, 20 draws on 2 CPUs (venv setup included). At 10 times the draws, about 15 min per assay and band at most, x 30 assays = 7.5 h per band -> submit with MIXED_CPUS=2 MIXED_TIME=10:00:00: 4 x 2 x 10 = 80 CPU-h allocated at most, about 60 expected.
 - report: 1x0.5.
 - Submit: `bash slurm/onion_eval/closeout_e4_submit.sh layers|mixed|report nibi` (dry run by default; `DRY_RUN=0` submits; kit COE4 on Nibi).
+
+### 9.9 Smoke run (2026-11-17; evidence `results/closeout_E4/E4_SMOKE.md`)
+
+- Nibi jobs 27607315 (pair list), 27607317 (layers), 27607318 (mixed model), 27607319 (report), kit COE4; 0.62 CPU-h allocated; 13 files under `/project/def-maxwl/mforooz/ONION/CO-E4`.
+- H3K36me3 sampling 0.04092 [0.0366, 0.0452] and biological replicate 0.000369 [0.0000069, 0.00073] agree with t305 (0.0409; 0.0004).
+- Telescoping check: 0 of 75 groups pass, because every rung above sampling holds other cells than the rung below. The acceptance check "telescoping passes" cannot hold as written on this pair set; the PI or the foreman decides whether to replace it by a check on common cells only.
+- Full layers stage not submitted tonight (foreman order: no more than 50 more files under /project; the stage writes 5 files and is about 6 CPU-h).
