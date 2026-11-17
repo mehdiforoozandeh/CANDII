@@ -919,6 +919,46 @@ def pair_metrics_from_records(cor_recs, rep_recs, scorable, n_boot, seed, not_ap
     return out
 
 
+ADDON_PAIR_CLASS_KEY = "other_experiment_gap_closed_by_pair_class"
+
+
+def other_experiment_pair_class_block(rep_recs) -> dict:
+    """Close-out D2 (add-on scores only): the other_experiment pair jobs (EIC track pr1 -> second
+    experiment pr2, the model given the second experiment's own covariates) split by pair class
+    (`experiment`, `experiment;lab`, `experiment;donor`, `experiment;lab;donor`, ... from
+    `knobs_differing`; `layers.pair_class_of`), with the per-pair records. The value is
+    `replicate_pair_gap_closed_vs_depth_only` restricted to a class: (depth-only - model) /
+    (depth-only - floor) on mean CRPS, floor = the second experiment's pr1 -> pr2. The class
+    `experiment;lab` is the cross-lab correction at the same donor; no aggregate reads this block."""
+    from onion_eval.layers import pair_class_of
+    recs = [r for r in rep_recs if r.get("rung") == "other_experiment"]
+    by_class, per_pair = defaultdict(list), []
+    for r in recs:
+        cls = pair_class_of(r.get("knob") or "")[0]
+        by_class[cls].append(r)
+        one = _gap_fn([r])
+        per_pair.append({**{k: r.get(k) for k in ("pair_id", "source", "target", "assay", "cell",
+                                                   "knob")},
+                         "pair_class": cls,
+                         **{k: (None if _undef(r.get(k)) else _j(r.get(k)))
+                            for k in ("crps_model", "crps_model_oracle_scaled", "crps_depth_only",
+                                      "crps_floor", "pred_total", "source_total",
+                                      "log2_depth_ratio")},
+                         "gap_closed": None if isinstance(one, Mx.Undefined) else _j(one)})
+
+    def blk(rs):
+        g = _gap_fn(rs)
+        return {"value": None if isinstance(g, Mx.Undefined) else _j(g),
+                "reason": g.reason if isinstance(g, Mx.Undefined) else "", "n_pairs": len(rs),
+                "n_cells": len({r["cell"] for r in rs}),
+                "assays": sorted({r["assay"] for r in rs})}
+    return {"definition": other_experiment_pair_class_block.__doc__.split("\n\n")[0],
+            "pooled": blk(recs) if recs else {"value": None, "reason": "no pair job",
+                                              "n_pairs": 0, "n_cells": 0, "assays": []},
+            "per_pair_class": {c: blk(rs) for c, rs in sorted(by_class.items())},
+            "per_pair": sorted(per_pair, key=lambda x: str(x["pair_id"]))}
+
+
 def _correction_metrics_of(recs, scorable, n_boot, seed) -> dict:
     nb, sd = n_boot, seed
     head = [r for r in recs if r["never_trained"] == 1 and r["subset_pair"] == 0]
@@ -2945,6 +2985,8 @@ class Scorer:
         ta = time.perf_counter()
         scores.update(pair_metrics_from_records(cor_recs, rep_recs, sc, self.n_boot, self.seed,
                                                 not_applicable=self.pairs_not_applicable))
+        if self.addon:                           # close-out D2: key only on an add-on score
+            scores[ADDON_PAIR_CLASS_KEY] = other_experiment_pair_class_block(rep_recs)
         if self.same_view:                       # CM: keys only with the switch
             self.same_view_records = sv_recs
             scores[CORRECTION_ONLY_KEY] = correction_only_block(cor_recs, sv_recs)
