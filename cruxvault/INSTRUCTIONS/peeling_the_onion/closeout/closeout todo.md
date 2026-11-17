@@ -73,7 +73,8 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 | Final tuning round: matched-compute runs | [[closeout A9 matched-compute runs]] | none | running (12 trainings pending on Fir) |
 | Pointwise MLP under the corrected composite | [[closeout A10 pointwise MLP corrected score]] | GPU | not started |
 | DNA fusion: how the DNA features join the count features | [[closeout A11 DNA fusion]] | none | scored and read 2026-11-17 ([[ABLATIONS_READ]], `results/ablations_closeout/`); findings recorded |
-| Settle the miniCANDI design: one document, ready for scaling | [[closeout M1 settled miniCANDI design]] | A1 to A11, E1 | not started |
+| Minimum useful covariate set: ranked list, exclusion curve, removable fields | [[closeout A12 minimum useful covariate set]] | D1, mix-and-match | not started (PI, 2026-11-17: last step of the session and a deliverable) |
+| Settle the miniCANDI design: one document, ready for scaling | [[closeout M1 settled miniCANDI design]] | A1 to A12, E1 | not started |
 
 ### Records and close-out
 
@@ -95,6 +96,13 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 - adaLN-zero covariate injection: an extra arm.
 - DNA embeddings: Globus transfer Nibi to Fir started 2026-11-16.
 - DNA fusion is a separate ablation on the 3 models (item A11).
+
+## PI rulings of 2026-11-17 (after the read of the 16 ablations)
+
+- Fixed input depth on the U-Net: test it as a mix-and-match arm. Keep in mind that a required fixed input depth can be unrealistic in real-world deployment and inference; state this caveat wherever the arm is reported.
+- Anscombe count transform: drop the arm. The 9 runs are void (zero gradient at the zero-initialized output head); record the defect, no retrain.
+- Conv autoencoder with fixed input depth: accept 2 seeds; no rerun of seed 1.
+- Covariates: include every covariate field that we can fill (the corrected tables are the default). The last step of the session, and a deliverable, is the minimum useful covariate set (item A12).
 
 ## Open PI decisions
 
