@@ -11,7 +11,7 @@
 #   DRY_RUN=0 STEP=... bash submit_a12.sh   # real submission -- the foreman's call only
 #
 # Inputs (env; defaults in brackets):
-#   CLUSTER [fir]: fir -> runs root $O/runs_fir; nibi -> $O/runs.
+#   CLUSTER [fir]: fir -> runs root $O/runs_fir; nibi -> $O/runs. RUNS overrides the runs root.
 #   K [/project/def-maxwl/mforooz/onion_kit/COA12]: the kit (code and configs).
 #   V [eic_v1_2]: tables version; T=$O/tables/$V, eval set $O/eval/$V/evalset.json (256 regions),
 #     reference terms REFS_FROM [$O/eval/$V/baselines] (the 256-region baselines and oracle floor).
@@ -44,7 +44,8 @@ O=/project/def-maxwl/mforooz/ONION
 K="${K:-/project/def-maxwl/mforooz/onion_kit/COA12}"
 V="${V:-eic_v1_2}"
 CLUSTER="${CLUSTER:-fir}"
-case "$CLUSTER" in fir) RUNS=$O/runs_fir ;; nibi) RUNS=$O/runs ;; *) echo "CLUSTER must be fir or nibi" >&2; exit 2 ;; esac
+case "$CLUSTER" in fir) R0=$O/runs_fir ;; nibi) R0=$O/runs ;; *) echo "CLUSTER must be fir or nibi" >&2; exit 2 ;; esac
+RUNS="${RUNS:-$R0}"
 STEP="${STEP:?set STEP=ref, screen, lofo, groups or curve}"
 export DRY_RUN="${DRY_RUN:-1}"
 T=$O/tables/$V
