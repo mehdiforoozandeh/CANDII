@@ -1,0 +1,2 @@
+arm	keys changed	comparison incumbent	d14_condition_1	needs	group	simpler_than_base	joins_design	status
+cell_embedding	cell_embedding=true;cell_state_dropout=0.1;n_cells=51	incumbent	false	n_cells=51	cell embedding	false	no: it cannot serve a cell type with no training track	write

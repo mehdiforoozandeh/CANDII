@@ -52,6 +52,8 @@ EXPECTED = {
     "count_transforms": {**{f"tf_{t}": {"count_transform"} for t in (
         "log1p", "asinh", "anscombe", "pearson", "local_ratio", "quantile", "raw", "soft_clip")},
         "offset_eps0.1": {"offset_eps"}, "offset_eps0.01": {"offset_eps"}},
+    # close-out A6: a learned cell-type embedding (n_cells = 51 training cells of eic_v1_2)
+    "cell_embedding": {"cell_embedding": {"cell_embedding", "cell_state_dropout", "n_cells"}},
 }
 UNET_VIEWS = _ROOT / "tools/minicandi/configs/views/rung4"
 #: arms outside 10% of 1.0e6 by design, with their exact count: the DNA-fusion arms keep the base
