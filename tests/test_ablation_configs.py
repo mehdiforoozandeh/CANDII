@@ -52,6 +52,13 @@ EXPECTED = {
     "count_transforms": {**{f"tf_{t}": {"count_transform"} for t in (
         "log1p", "asinh", "anscombe", "pearson", "local_ratio", "quantile", "raw", "soft_clip")},
         "offset_eps0.1": {"offset_eps"}, "offset_eps0.01": {"offset_eps"}},
+    # close-out A12: leave-one-field-out and grouped removal (covariate_field_arms.py), one key
+    "covariate_fields": {
+        **{f"lofo_{c}": {"covariate_drop_fields"} for c in (
+            "log2_depth", "run_type_pe", "read_length", "dedup_on", "mapq_threshold", "pipeline_id",
+            "pipeline_version_id", "lab_id", "platform_id", "antibody_id", "donor_id")},
+        **{f"group_{g}": {"covariate_drop_fields"} for g in (
+            "pipeline", "lab_platform", "donor_lab", "view_knobs", "categorical", "all_but_depth")}},
 }
 UNET_VIEWS = _ROOT / "tools/minicandi/configs/views/rung4"
 #: arms outside 10% of 1.0e6 by design, with their exact count: the DNA-fusion arms keep the base
