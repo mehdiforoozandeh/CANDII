@@ -46,6 +46,11 @@ unit that each experiment has (libraries `br<i>tr<j>`, else replicates `br<i>`, 
 no two observations share reads. A measurement with `has_pseudoreps = 1` and an `h5:` counts path enters
 as its two halves `pr1.h5` and `pr2.h5` (same folder as counts.h5), each at half its depth.
 
+Second experiments (close-out item E4; off by default, so every output above is unchanged):
+`--second-experiments` also takes the rows with `in_eic = evalonly` of an add-on table (`build_tables.py
+addon`, the second experiments of a cell and assay; close-out item D2). They give a cell two experiments, so
+experiment, donor (replicate) and lab get contrasts inside a cell; `ladder.py design` counts them.
+
 CLI: python tools/onion_eval/mixed_model.py run --tables <dir> --evalset <json> --band fine|peak|domain|broad
      --out <mixed_model.tsv> [--layer uniform|native|testbed] [--n-boot 200] [--seed 0]
 Columns: assay, band, factor, variance_fraction, ci_low, ci_high, n_levels, estimable (0|1), note.
@@ -281,10 +286,12 @@ def _unit_rank(unit):
     return -1  # lanes and anything else: not used
 
 
-def select_observations(meas_rows, assay, layer=None, extra=()):
+def select_observations(meas_rows, assay, layer=None, extra=(), second_experiments=False):
     """Observations of one assay: list of dicts with counts_path, depth, cell, experiment, replicate,
-    library, lab (see the module docstring for the rule), and each column of `extra` (E5) as read."""
-    rows = [m for m in meas_rows if m["assay"] == assay and m.get("in_eic") in ("train", "val")
+    library, lab (see the module docstring for the rule), and each column of `extra` (E5) as read.
+    second_experiments (E4): also the `in_eic = evalonly` rows of an add-on table."""
+    splits = ("train", "val", "evalonly") if second_experiments else ("train", "val")
+    rows = [m for m in meas_rows if m["assay"] == assay and m.get("in_eic") in splits
             and m.get("arm_knob", "") in ("", "base") and _unit_rank(m.get("unit", "")) >= 0]
     if layer is None:
         layers = {m.get("layer") for m in rows}
@@ -392,7 +399,36 @@ def extra_factor_rows(obs, extra, header):
     return fit, rows
 
 
-def run(tables, evalset, band, out, layer=None, n_boot=200, seed=0, reader=None, extra=()):
+BOUNDARY_FRACTION = 1e-6
+NOT_IDENTIFIED = "not identified inside cells"
+
+
+def quote_rule(rows, labels, min_cells):
+    """E4: blank the fraction (and interval) of a fitted factor other than cell that varies inside fewer
+    than `min_cells` cells (it is then identified only across cells, i.e. confounded with cell), and mark
+    a fraction below BOUNDARY_FRACTION as a fit at the lower bound. The fit itself is unchanged."""
+    cells = labels["cell"]
+    out = []
+    for r in rows:
+        r = dict(r)
+        f = r["factor"]
+        if r["estimable"] == 1 and f in labels and f != "cell":
+            k = len({c for c in set(cells)
+                     if len({x for x, cc in zip(labels[f], cells) if cc == c}) > 1})
+            if k < min_cells:
+                r.update(variance_fraction=float("nan"), ci_low=float("nan"), ci_high=float("nan"),
+                         note=f"{NOT_IDENTIFIED}: varies inside {k} cells < {min_cells} (fitted, not quoted)")
+                out.append(r)
+                continue
+        if r["estimable"] == 1 and math.isfinite(r["variance_fraction"]) and \
+                r["variance_fraction"] < BOUNDARY_FRACTION:
+            r["note"] = (r["note"] + "; " if r["note"] else "") + "at the lower bound of the fit (boundary)"
+        out.append(r)
+    return out
+
+
+def run(tables, evalset, band, out, layer=None, n_boot=200, seed=0, reader=None, extra=(),
+        second_experiments=False, assays=None, min_contrast_cells=0):
     if band not in BANDS:
         raise ValueError(f"band {band!r} not in {sorted(BANDS)}")
     tables = Path(tables)
@@ -405,10 +441,11 @@ def run(tables, evalset, band, out, layer=None, n_boot=200, seed=0, reader=None,
     bad = [c for c in extra if c not in EXTRA_FACTORS]
     if bad:
         raise ValueError(f"extra factors {bad} not in {EXTRA_FACTORS}")
-    assays = sorted({m["assay"] for m in meas if m.get("assay_class") != "control"})
+    assays = sorted({m["assay"] for m in meas if m.get("assay_class") != "control"}
+                    & (set(assays) if assays else {m["assay"] for m in meas}))   # E4: --assays (smoke)
     rows = []
     for assay in assays:
-        obs, used_layer = select_observations(meas, assay, layer, extra)
+        obs, used_layer = select_observations(meas, assay, layer, extra, second_experiments)
         if len(obs) < 3 or len({o["cell"] for o in obs}) < 2:
             rows.append(dict(assay=assay, band=band, factor="all", variance_fraction=float("nan"),
                              ci_low=float("nan"), ci_high=float("nan"), n_levels=len(obs), estimable=0,
@@ -428,10 +465,14 @@ def run(tables, evalset, band, out, layer=None, n_boot=200, seed=0, reader=None,
         else:
             fr, beta = decompose(S, ysum, K, labels, depth, n_boot=n_boot, seed=seed)
         halves = sum(1 for o in obs if o["half"])
+        if min_contrast_cells:                  # E4: quote a fraction only where it is identified
+            fr = quote_rule(fr, labels, min_contrast_cells)
         for r in fr:
             if r["factor"] == "residual":
                 r["note"] += (f"; layer {used_layer}; {halves} of {len(obs)} observations are"
                               " pseudoreplicate halves")
+                if second_experiments:
+                    r["note"] += "; second experiments included"
             rows.append(dict(assay=assay, band=band, **r))
         if "lab" not in extra:                  # E5: with lab as an extra factor its row is above
             rows.append(dict(assay=assay, band=band, **lab_row(obs)))
@@ -468,10 +509,17 @@ def main(argv=None):
     r.add_argument("--extra-factors", default="",
                    help=f"E5: comma list of artifact columns of measurements.tsv to add as crossed "
                         f"factors ({', '.join(EXTRA_FACTORS)}); default none (the rows above, unchanged)")
+    r.add_argument("--second-experiments", action="store_true",
+                   help="E4: also take the in_eic=evalonly rows (second experiments of an add-on table)")
+    r.add_argument("--min-contrast-cells", type=int, default=0,
+                   help="E4: blank a factor's fraction when it varies inside fewer cells (default 0: off)")
+    r.add_argument("--assays", default="", help="E4: comma list of assays to fit (default: every assay)")
     args = ap.parse_args(argv)
     extra = tuple(x for x in args.extra_factors.split(",") if x)
     rows = run(args.tables, args.evalset, args.band, args.out, args.layer, args.n_boot, args.seed,
-               extra=extra)
+               extra=extra, second_experiments=args.second_experiments,
+               assays=[x for x in args.assays.split(",") if x] or None,
+               min_contrast_cells=args.min_contrast_cells)
     n_ne = sum(1 for x in rows if x["estimable"] == 0 and x["factor"] in FACTORS)
     print(f"mixed_model: {len(rows)} rows -> {args.out}; {n_ne} non-estimable factor rows; {METHOD}")
     return 0

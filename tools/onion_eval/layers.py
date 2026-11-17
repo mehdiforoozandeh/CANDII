@@ -65,7 +65,13 @@ the table is not comparable with one built without them. `explained_table` adds 
 A table whose pairs carry no class is written exactly as before (no `pair_class`, `tech_diff_pairs`
 columns).
 
+Per-pair values (close-out item E4; off by default, so layers.tsv is unchanged): `--pairs-out <file.tsv.gz>`
+also writes one row per (pair, stratum, band) with `var_d` = Var(d) of `pair_variance` (twice the pair
+value), the pair's rung, pair class, cell, split and common depth (PAIR_COLUMNS). `ladder.py report`
+reads it to build the assay-matched ladder without reading the counts again.
+
 CLI: python tools/onion_eval/layers.py run --tables <dir> --evalset <json> --out <layers.tsv>
+     [--pairs-out <pair_values.tsv.gz>]
 """
 from __future__ import annotations
 
@@ -111,6 +117,8 @@ COLUMNS = ["assay_or_class", "pooled_by_class", "stratum", "band", "rung", "n_pa
            "variance", "layer_increment", "ci_low", "ci_high", "ci_width", "flag", "increment_over",
            "depth", "layer"]
 CLASS_COLUMNS = ["pair_class", "tech_diff_pairs"]          # written only when the pairs carry classes
+PAIR_COLUMNS = ["pair_id", "assay", "assay_class", "rung", "pair_class", "tech_diff", "cell", "split", "depth",
+                "stratum", "band", "var_d"]                # --pairs-out (E4)
 
 
 def pair_class_of(knobs):
@@ -628,7 +636,23 @@ def load_strata_regions(masks_path, names, regions, L):
     return out
 
 
-def run(tables, evalset, out, strata_path=None, n_boot=1000, seed=0):
+def write_pair_values(pair_rows, path):
+    """E4: the per-pair values as a gzip TSV (PAIR_COLUMNS), byte-reproducible (gzip mtime 0)."""
+    import gzip
+    import io
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "wb") as raw, gzip.GzipFile(filename="", fileobj=raw, mode="wb", mtime=0) as gz, \
+            io.TextIOWrapper(gz, encoding="utf-8", newline="") as fh:
+        w = csv.writer(fh, delimiter="\t", lineterminator="\n")
+        w.writerow(PAIR_COLUMNS)
+        for p in pair_rows:
+            for (s, bd), x in sorted(p["v"].items()):
+                w.writerow([p["pair_id"], p["assay"], p["assay_class"], p["rung"], p.get("pair_class", ""),
+                            int(bool(p.get("tech_diff"))), p["cell"], p["split"], repr(float(p["depth"])),
+                            s, bd, "" if not np.isfinite(x) else repr(float(x))])
+
+
+def run(tables, evalset, out, strata_path=None, n_boot=1000, seed=0, pairs_out=None):
     tables = Path(tables)
     ev = json.loads(Path(evalset).read_text())
     meas = {r["measurement_id"]: r for r in _read_tsv(tables / "measurements.tsv")}
@@ -665,7 +689,7 @@ def run(tables, evalset, out, strata_path=None, n_boot=1000, seed=0):
         (_, da), (_, db) = sides[p["pair_id"]]
         common[p["assay"]] = min(common.get(p["assay"], np.inf), da, db)
 
-    reader, records = CountsReader(), []
+    reader, records, pair_rows = CountsReader(), [], []
     for p in sel:
         (pa, da), (pb, db) = sides[p["pair_id"]]
         a = np.stack([reader.read(pa, c, s, s + L) for c, s in regions])
@@ -680,6 +704,8 @@ def run(tables, evalset, out, strata_path=None, n_boot=1000, seed=0):
             if cls:
                 rec.update(pair_class=cls, tech_diff=tech)
         records.append(rec)
+        if pairs_out is not None:
+            pair_rows.append(dict(rec, pair_id=p["pair_id"], split=p.get("split", "")))
     # assays in the evalset's layers scope with no pair at all still get their empty rows
     scope = set()
     for assays in (ev.get("scorable", {}).get("layers", {}) or {}).values():
@@ -698,6 +724,8 @@ def run(tables, evalset, out, strata_path=None, n_boot=1000, seed=0):
                         rows[-1].update(pair_class="", tech_diff_pairs="",
                                         flag=_add_flag(FLAG_EMPTY, FLAG_SECOND))
     write_tsv(rows, out)
+    if pairs_out is not None:
+        write_pair_values(pair_rows, pairs_out)
     return rows
 
 
@@ -711,8 +739,10 @@ def main(argv=None):
     r.add_argument("--strata", default=None, help="masks.h5 (default <tables>/../../eval/strata/masks.h5)")
     r.add_argument("--n-boot", type=int, default=1000)
     r.add_argument("--seed", type=int, default=0)
+    r.add_argument("--pairs-out", default=None,
+                   help="E4: also write the per-pair values (gzip TSV) for ladder.py report; default off")
     args = ap.parse_args(argv)
-    rows = run(args.tables, args.evalset, args.out, args.strata, args.n_boot, args.seed)
+    rows = run(args.tables, args.evalset, args.out, args.strata, args.n_boot, args.seed, args.pairs_out)
     empty = sorted({(x["assay_or_class"], x["rung"]) for x in rows if x["flag"] == FLAG_EMPTY})
     print(f"layers: {len(rows)} rows -> {args.out}; {len(empty)} (assay, rung) not populated by EIC")
     return 0
