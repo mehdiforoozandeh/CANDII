@@ -33,5 +33,5 @@ Not published as a page (local files only):
 
 Left out as not about CANDII: Max's Research Playbook (https://claude.ai/artifact/WEMEPLxz8qFcxo5JVjbKwj, no vault copy found).
 
-No close-out artifact of the peeling-the-onion run (settled design, ready queue, close-out deck and report) is published at this pass.
+Close-out deck of the peeling-the-onion run: "Onion Close-out" (21 slides), https://claude.ai/artifact/Kp1yqCgAUpCBDo19Q6oL9J, vault copy `presentations/onion-closeout-2026-11-18/` (version 1, 2026-11-17; the 256-region rescoring slide is pending). The close-out report is not published at this pass.
 

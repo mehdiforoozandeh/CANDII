@@ -1,6 +1,6 @@
 # Onion Close-out: the close-out deck of the peeling-the-onion run
 
-Artifact: not published yet (the foreman publishes it, then adds the URL here and a row to `../ARTIFACTS.md`).
+Artifact: https://claude.ai/artifact/Kp1yqCgAUpCBDo19Q6oL9J (private; version 1 published 2026-11-17, with the 256-region rescoring slide pending).
 
 Source: `index.html` beside this file, built by `build_deck.py` from `deck_src.html` (prezit paper arc, 21 slides). One part per success criterion of the PI (data and where the counterfactual views help; training objective; evaluation; miniCANDI design), then a marked slide for the pending rescoring on all regions, what did not run, the ready queue, the open PI decisions, a summary and a glossary. The deck is derived, not evidence: no finding cites it. All slide text is drafted by the agent for the PI's review; the title slide says so.
 
