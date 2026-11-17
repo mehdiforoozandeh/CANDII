@@ -546,17 +546,23 @@ def cmd_collect(a) -> int:
     `_apply_qc_table`). `--fraglen-out` also writes the fragment-length side table
     (`fraglen_rows`): one row per ChIP-seq measurement with an estimate, its kind and source.
     `--half pr1` (A4): one row per measurement with an ok pr1 record only, values from the record
-    alone (dataset `qc_table_pr1`)."""
+    alone (dataset `qc_table_pr1`). A4: a row of a non-base view (`arm_knob` set) never keeps a
+    build value (the build copied the parent's); its cells come from its own record only."""
     _, rows = read_tsv(Path(a.tables) / "measurements.tsv")
     qc_dirs = a.qc_dir or [OUT_DEFAULT]
     if a.half and a.fraglen_out:
         raise SystemExit("collect: --fraglen-out reads whole-read-set records; not with --half")
     n = {"rows": len(rows), "filled": 0, "no_record": 0, "stale": 0, "not_ok": 0,
-         "kept_build_cells": 0, "frag_len_le0": 0}
+         "kept_build_cells": 0, "frag_len_le0": 0, "blanked_nonbase_build_cells": 0}
     out_rows, xcor = [], {}
     for r in rows:
         mid = r["measurement_id"]
         vals = {c: "" for c in QC_COLUMNS} if a.half else {c: r.get(c, "") or "" for c in QC_COLUMNS}
+        if not a.half and (r.get("arm_knob") or "").strip() not in ("", "base"):
+            # A4: a view's build QC cells are copies of its parent base row (24 crop rows of
+            # eic_v1_2 equal the parent in all cells); only the view's own record may fill them
+            n["blanked_nonbase_build_cells"] += sum(1 for c in QC_COLUMNS if vals[c])
+            vals = {c: "" for c in QC_COLUMNS}
         kind, rec, f = pick_record(mid, r.get("sha256") or "", qc_dirs, a.half)
         if kind != "ok":
             n[kind] += 1

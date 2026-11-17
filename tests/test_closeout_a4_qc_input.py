@@ -243,3 +243,64 @@ def test_qc_values_are_clipped_and_zero_fragment_length_is_absent(tmp_path):
     assert QF.main(["collect", "--tables", str(t), "--out", str(out), "--qc-dir", str(d)]) == 0
     got = _read(out)["Z"]
     assert got["frag_len"] == "" and got["nsc"] == "1.6"
+
+
+# ------------------------------------------------------------------ review fixes (2026-11-17)
+
+def test_guard_covers_a_replicate_base_and_the_pooled_nodedup_of_its_experiment(tables, tmp_path):
+    ds = D.OnionDataset(tables, "train", {"context_bins": L, "qc_on_input": True}, seed=1)
+    full = {"nsc": "1.5", "rsc": "2", "nrf": "0.9", "pbc1": "0.9", "pbc2": "20", "frip": "",
+            "frag_len": "180"}
+    ds.rows["E1.br1.base"] = {"experiment": "E1", "arm_knob": "", **full}
+    ds.rows["E1.br1.nodedup"] = {"experiment": "E1", "arm_knob": "nodedup", **full}
+    ds.rows["E1.pooled.nodedup"] = {"experiment": "E1", "arm_knob": "nodedup", **full}
+    ds.rows["E2.pooled.nodedup"] = {"experiment": "E2", "arm_knob": "nodedup", **full}
+    r = ds.rows["E1.br1.base"]
+    got = ds.qc_input_row("E1.br1.base", r, "counts", ["E1.pooled.nodedup"])
+    assert all(got[c] == "" for c in D.PBC_COLUMNS) and got["nsc"] == "1.5"
+    assert ds.qc_input_row("E1.br1.base", r, "counts", ["E2.pooled.nodedup"]) is r
+    n = ds.rows["E1.br1.nodedup"]                    # a nodedup input: its own reads, kept
+    assert ds.qc_input_row("E1.br1.nodedup", n, "counts", ["E1.pooled.nodedup"])["nrf"] == "0.9"
+
+
+def test_qc_table_reaches_inputs_only_and_targets_keep_frozen_frag_len(tables, tmp_path):
+    base, child, other = _base_and_child(tables)
+    mids = [r["measurement_id"] for r in _rows(tables)]
+    qc = _qc_table(tmp_path / "qc.tsv", mids)                      # frag_len 321 everywhere
+    on = D.OnionDataset(tables, "val", {"context_bins": L, "qc_on_input": True,
+                                        "qc_table": str(qc)}, seed=1)
+    off = D.OnionDataset(tables, "val", {"context_bins": L}, seed=1)
+    for m in mids:                                      # what score.py's signal routes read
+        assert on.rows[m] == off.rows[m]
+    chrom = sorted(on.n_bins)[0]
+    t = C.TRACK_INDEX[base["assay"]]
+    w = on.window(chrom, 0, [base["measurement_id"]], [other["measurement_id"]])
+    v = off.window(chrom, 0, [base["measurement_id"]], [other["measurement_id"]])
+    assert w["c_in"][t, QI["frag_len"]] == 321.0                    # the input reads the table
+    for k in ("y_counts", "x_counts", "c_out"):
+        assert torch.equal(w[k], v[k]), k
+
+
+def test_collect_blanks_build_copies_of_non_base_views(tmp_path, capsys):
+    cols = ["measurement_id", "in_eic", "arm_knob", *QF.QC_COLUMNS, "counts_path", "sha256"]
+    t = tmp_path / "tables"
+    t.mkdir()
+    rows = [{"measurement_id": "B", "in_eic": "train", "arm_knob": "", "nsc": "1.4",
+             "frag_len": "150", "sha256": "sB"},
+            {"measurement_id": "X", "in_eic": "train", "arm_knob": "crop", "nsc": "1.4",
+             "rsc": "1.2", "frag_len": "150", "sha256": "sX"},
+            {"measurement_id": "Y", "in_eic": "train", "arm_knob": "crop", "nsc": "1.4",
+             "nrf": "0.8", "sha256": "sY"}]
+    with open(t / "measurements.tsv", "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=cols, delimiter="\t", lineterminator="\n")
+        w.writeheader()
+        w.writerows(rows)
+    d = tmp_path / "q"
+    _rec(d, "Y", "sY", nsc="1.7")                      # own record: nsc, rsc, frag_len only
+    out = tmp_path / "qc.tsv"
+    assert QF.main(["collect", "--tables", str(t), "--out", str(out), "--qc-dir", str(d)]) == 0
+    got = _read(out)
+    assert got["B"]["nsc"] == "1.4" and got["B"]["frag_len"] == "150"      # base kept
+    assert all(got["X"][c] == "" for c in QF.QC_COLUMNS)                    # copies blanked
+    assert got["Y"]["nsc"] == "1.7" and got["Y"]["nrf"] == ""               # own record only
+    assert "blanked_nonbase_build_cells 5" in capsys.readouterr().out

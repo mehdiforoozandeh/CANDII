@@ -6,9 +6,9 @@
 #   MODE=fill bash submit_qc_on_input.sh      # Nibi only. The two QC fill passes that READ the
 #                                             # tagAligns under /scratch/mforooz/onion/work; they
 #                                             # must run BEFORE that folder leaves scratch:
-#                                             #   whole: the 1,262 training/validation rows that lack a
-#                                             #          QC column and have no record (2026-11-13 array
-#                                             #          ran batches 1-2 only), whole read set
+#                                             #   whole: the training/validation rows with no record
+#                                             #          that lack a QC column or are a non-base view
+#                                             #          (2026-11-13 array ran batches 1-2 only)
 #                                             #   pr1:   the scored correction sources (275), pr1 half
 #                                             # Records go to $SLURM_TMPDIR; each task writes ONE tar to
 #                                             # $Q/fill/rec_<pass>_<k>.tar (Q below). Nothing on /scratch
@@ -63,8 +63,12 @@ QC = ("nsc", "rsc", "nrf", "pbc1", "pbc2", "frag_len")          # informative (f
 rows = list(csv.DictReader(open(tab, newline=""), delimiter="\t"))
 idx = {r["measurement_id"]: i for i, r in enumerate(rows)}
 have = {Path(n).name[:-5] for n in tarfile.open(old).getnames() if n.endswith(".json")}
+# rows lacking a QC column, plus every non-base view (its build QC cells are copies of the
+# parent's and collect blanks them), unless the row has its own record already
 whole = [i for i, r in enumerate(rows) if r["in_eic"] in ("train", "val")
-         and any(not (r.get(c) or "").strip() for c in QC) and r["measurement_id"] not in have]
+         and r["measurement_id"] not in have
+         and (any(not (r.get(c) or "").strip() for c in QC)
+              or (r.get("arm_knob") or "").strip() not in ("", "base"))]
 ev = json.load(open(evs))
 src = sorted({idx[p["source"]] for p in ev["correction_pairs"]})
 child = {r["parent_measurement_id"]: r["measurement_id"] for r in rows
@@ -122,6 +126,7 @@ PY
     RF=$PLAN/rows_$pass.txt
     n=$(wc -l < "$RF" | tr -d ' ')
     [ "$n" -gt 0 ] || { echo "PASS $pass: nothing to run"; continue; }
+    [ ! -e "$Q/fill/rows_$pass.txt" ] || { echo "REFUSED: $Q/fill/rows_$pass.txt exists: pass $pass was submitted already (set Q to a new path)" >&2; exit 3; }
     for k in $(seq 0 $((n - 1))); do
       [ ! -e "$Q/fill/rec_${pass}_${k}.tar" ] || { echo "REFUSED: $Q/fill/rec_${pass}_${k}.tar exists; a pass is never resubmitted (set Q to a new path)" >&2; exit 3; }
     done

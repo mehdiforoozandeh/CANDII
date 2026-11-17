@@ -80,9 +80,11 @@ Question: does adding read-derived QC (NSC, RSC, NRF, PBC1, PBC2, fragment lengt
 ### What the model may know at inference (the leak rule)
 
 An input's QC must be computable from the reads of that input alone, as a user can compute it from the track they give. Three cases break this in the data, and the code handles each:
-1. A base row's NRF, PBC1 and PBC2 come from the reads of its nodedup child (the reads before duplicate removal). When that child is the target of the same window, the three values are computed from the target's own reads. Rule (dataset, always on with `qc_on_input`): those three cells of the input are written absent. In eic_v1 scoring this concerns 43 correction pairs (base source, nodedup target); training draws the same pair kind.
+1. The NRF, PBC1 and PBC2 of any row other than a nodedup view come from reads before duplicate removal, which the input does not hold. A pooled nodedup target holds the pre-dedup reads of every replicate of its experiment: 396 replicate-level base rows (342 training, 54 validation) carry NRF/PBC from their own pre-dedup reads, a subset of the pooled nodedup's (independent review, 2026-11-17). Rule (dataset, always on with `qc_on_input`): when any nodedup target of the window has the same `experiment`, those three cells of a non-nodedup input are written absent. A nodedup input keeps them (its own reads). In eic_v1 scoring this concerns at least 43 correction pairs (base source, nodedup target); training draws the same pair kinds.
+1b. 24 crop rows (17 training, 7 validation) carry NSC, RSC and fragment length copied from the parent base row (equal in 24 of 24, no own record); 25 non-base rows carry the parent's fragment length. In a crop-to-base pair the input would carry the target's cross-correlation values. Rule: `collect` never keeps a build value of a non-base view (it prints the number of blanked cells), and the "whole" fill pass measures every non-base training/validation row that has no own record.
+1c. The `qc_table` values reach C only. The dataset rows keep the frozen values, so a target's `fragment length` (read by the signal-space scoring) is the same with the arm on and off (test).
 2. A scored correction source is read from its `pr1` half, but its QC comes from the whole read set, whose `pr2` half may share reads with the target's `pr2` half. Rule: config `qc_table_pr1`, a side table measured on the `pr1` half (`qc_fill.py run --half pr1`); a `pr1` input reads only that table, and a row it does not list is all absent.
-3. Reconstruction items and same-view training pairs feed the target as its own input. Its QC is then the target's QC, but the input is the same reads (minus masked bins), so this is the input's own QC. Accepted, stated as a limit: the masked bins are a small part of the reads behind a genome-wide QC value.
+3. Accepted limit: in same-view reconstruction (and same-view training pairs) every QC value is computed from all reads of the track, hidden bins included. The depth covariate has the same property.
 C' never holds QC (D6; tests check that `c_out` is identical with the arm on and off).
 
 ### QC values of validation and blind rows
@@ -99,16 +101,16 @@ An empty QC cell is written as `QC_ABSENT` (-9999). The embedding reads each QC 
 ### Fill passes that must run BEFORE `/scratch/mforooz/onion/work` leaves scratch
 
 Both read the tagAligns under `onion/work` (checked by dry run: 0 of 4,043 files missing) and the `counts.h5` under `/scratch/mforooz/onion/measurements`. Neither writes to /scratch: each array task keeps its records in `$SLURM_TMPDIR` and writes one tar to `/project/def-maxwl/mforooz/ONION/CO-A4/fill/`.
-1. Pass "whole": 1,262 rows (190 have no read-set route and end in seconds), 3,568 files, 300 GB read, 64 tasks of 20 rows.
+1. Pass "whole": 1,287 rows (1,149 training, 138 validation; 190 have no read-set route and end in seconds), 3,618 files, 308 GB read, 65 tasks of 20 rows. (Before the review fix: 1,262 rows.)
 2. Pass "pr1": the 275 scored correction sources (36 without a route), 475 files, 39 GB read, 14 tasks.
 The collect step reads only the tars on /project and can run after `onion/work` leaves.
 
 ### Cost (allocated CPU-hours)
 
 - Fill rate measured on the 953 records: 222.3 CPU-h (sacct of the 3 jobs) / 859 rows with a read set = 0.259 CPU-h per row (4 CPUs).
-- Pass whole: 1,072 x 0.259 = 278 CPU-h. Pass pr1: 239 x 0.259 = 62 CPU-h (upper bound; a half has half the reads). Collect: 0.5 CPU-h. Fill total about 340 CPU-h, 79 jobs, about 162 files on /project.
+- Pass whole: 1,097 x 0.259 = 284 CPU-h. Pass pr1: 239 x 0.259 = 62 CPU-h (upper bound; a half has half the reads). Collect: 0.5 CPU-h. Fill total about 347 CPU-h, 80 jobs, about 164 files on /project.
 - Training: the eic_v1_2 base runs used 82.2 CPU-h for 9 runs (conv autoencoder 17.9, conv + attention 43.0, U-Net 21.2). Scoring on 256 regions: 3 x 30.0 + 3 x 25.4 + 3 x 52 = 322.2 CPU-h. Arm total 404 CPU-h, 90 jobs.
-- Item total about 745 CPU-h. Prerequisites not counted here: eic_v1_2 eval set and 256-region baselines on the training cluster, and the 9 reference scorings into `p256_sv`.
+- Item total about 751 CPU-h. Prerequisites not counted here: eic_v1_2 eval set and 256-region baselines on the training cluster, and the 9 reference scorings into `p256_sv`.
 
 ### Expectation (before any run)
 
@@ -128,4 +130,4 @@ Fill after the 953 old records alone: NSC on 1,302 of 2,662 training and validat
 
 ### Limits
 
-FRiP is empty (no peaks are called). 284 rows have no read-set route and stay absent. The foreign-covariate scoring path (`score.py`) builds C from rows directly and does not apply rules 1 and 2; do not run it on this arm without that change. Signal-space scores read `frag_len` from the dataset row, which the QC side table overrides; count-space metrics do not read it.
+FRiP is empty (no peaks are called). 284 rows have no read-set route and stay absent. Accepted limit: the foreign-covariate scoring path (`score.py`) builds C from the dataset rows directly, so it applies neither the leak rules nor the QC side table; do not run it on this arm without that change. A fill pass is never resubmitted: the script refuses when `fill/rows_<pass>.txt` or a chunk tar exists.

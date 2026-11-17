@@ -108,10 +108,12 @@ byte-identical batches to the code before the arms (tested on the synthetic tabl
                            no QC value of a `pr1` input comes from reads outside that half (the
                            `pr2` half may share reads with the target). Absent (default): a half
                            uses its parent measurement's QC row (today's approximation).
-  A4 leak guard (always on with `qc_on_input`): the NRF, PBC1 and PBC2 of a base measurement are
-  computed from the reads of its nodedup child (the reads before duplicate removal). When that child
-  is a target of the same window, those three cells of the input are written absent, because
-  they would be computed from the target's own reads.
+  A4 leak guard (always on with `qc_on_input`): the NRF, PBC1 and PBC2 of a measurement other than
+  a nodedup view are computed from reads before duplicate removal, which the input does not hold.
+  When any nodedup target of the same window has the same `experiment` (the pooled nodedup holds
+  every replicate's pre-dedup reads), those three cells of the input are written absent.
+  `qc_table` values reach C only (inputs); the dataset rows, and so every target's `frag_len`,
+  keep the frozen values.
 
 Extra inputs (pinned interface E, chunk XI). Each key is emitted only when its config key is set,
 so a default batch is unchanged; every mode emits them (they are inputs, never targets).
@@ -406,6 +408,8 @@ class OnionDataset(IterableDataset):
             self.rows[r["measurement_id"]] = r
         if mode == "train":
             self._refuse_addon_tables()
+        #: A4: measurement id -> QC cells of the `qc_table` side table (inputs only)
+        self.qc_override: dict = {}
         if self.config.get("qc_table"):
             self._apply_qc_table(self.config["qc_table"])
         #: A4: measurement id -> QC cells measured on its pr1 half (None: no pr1 table)
@@ -628,17 +632,19 @@ class OnionDataset(IterableDataset):
         return out
 
     def _apply_qc_table(self, path) -> None:
-        """Override the 7 QC columns of every row that the side table lists (empty cells too:
-        the side table is the source for the rows it holds). Rows it does not list keep the
-        values of measurements.tsv. Ids that measurements.tsv lacks are ignored and counted."""
+        """Read the side table: the 7 QC columns of every row it lists (empty cells too: the side
+        table is the source for the rows it holds) replace those of measurements.tsv IN C ONLY
+        (`qc_input_row`). The dataset rows keep the frozen values, so a target's `frag_len`, which
+        the signal-space scoring reads, is the same with and without the table (A4). Rows it does
+        not list keep the values of measurements.tsv. Ids that measurements.tsv lacks are ignored
+        and counted."""
         self.qc_table_rows, self.qc_table_unknown = 0, 0
         for r in read_tsv(path, QC_TABLE_COLUMNS):
-            row = self.rows.get(r["measurement_id"])
-            if row is None:
+            if r["measurement_id"] not in self.rows:
                 self.qc_table_unknown += 1
                 continue
-            for c in C.QC_COLUMNS:
-                row[c] = (r.get(c) or "").strip()
+            self.qc_override[r["measurement_id"]] = {c: (r.get(c) or "").strip()
+                                                     for c in C.QC_COLUMNS}
             self.qc_table_rows += 1
 
     def _read_qc_pr1(self, path) -> dict:
@@ -655,11 +661,18 @@ class OnionDataset(IterableDataset):
         window's `targets`. Returns `r` itself when nothing changes (so a default batch is
         untouched), else a copy with the QC cells replaced."""
         out = r
+        if m in self.qc_override:
+            out = {**r, **self.qc_override[m]}
         if input_file == "pr1" and self.qc_pr1 is not None:
             out = {**r, **self.qc_pr1.get(m, {c: "" for c in C.QC_COLUMNS})}
-        child = [t for t in targets if view_of(self.rows[t])[0] == "nodedup"
-                 and (self.rows[t].get("parent_measurement_id") or "").strip() == m]
-        if child and view_of(r)[0] == "base":
+        # NRF/PBC of an input other than a nodedup view come from reads it does not hold (the
+        # reads before duplicate removal of its library); a nodedup target of the same experiment
+        # (any unit: a replicate's pre-dedup reads are a subset of the pooled nodedup's) holds them
+        exp = (r.get("experiment") or "").strip()
+        if view_of(r)[0] != "nodedup" and any(
+                view_of(self.rows[t])[0] == "nodedup"
+                and (self.rows[t].get("experiment") or "").strip() == exp
+                for t in targets):
             out = {**out, **{c: "" for c in PBC_COLUMNS}}
         return out
 
