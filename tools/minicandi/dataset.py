@@ -113,6 +113,10 @@ so a default batch is unchanged; every mode emits them (they are inputs, never t
   cell_embedding cell_id int64 [B]: `extra_data.cell_index(tables)` (sorted training cells from
                  1, 0 = unknown). The config key `n_cells` (not pinned by interface E; pinned here)
                  must equal the number of those cells, since the model sizes its table from it.
+                 `cell_id_eval` (close-out A6): "own" (default; absent = the same) or "unknown".
+                 Under "unknown", modes val and blind give every window cell_id 0 (the unknown
+                 row), the zero-shot control: the model scored as it would serve a new cell type.
+                 Refused in mode train and without `cell_embedding`.
   aug_revcomp    train mode only: each training window is read on the other strand with
                  probability REVCOMP_PROB (`extra_data.revcomp_window`; meta `revcomp` = True),
                  drawn from the window's generator after the window is built. Refused with a
@@ -576,6 +580,13 @@ class OnionDataset(IterableDataset):
             if self.expression.n_genes != n_genes:
                 raise ValueError(f"{tsv}: genes.tsv lists {self.expression.n_genes} genes; the "
                                  f"config's n_genes is {n_genes}")
+        cid_eval = cfg.get("cell_id_eval", "own")
+        if cid_eval not in ("own", "unknown"):
+            raise ValueError(f"cell_id_eval {cid_eval!r}: want 'own' or 'unknown'")
+        if cid_eval == "unknown" and (self.mode == "train" or not cfg.get("cell_embedding")):
+            raise ValueError("cell_id_eval = unknown applies to modes val and blind of a "
+                             "cell_embedding run only")
+        self.cell_id_unknown = cid_eval == "unknown"
         if cfg.get("cell_embedding"):
             self.cell_ids = cell_index(self.tables_dir)
             n = cfg.get("n_cells")
@@ -596,7 +607,8 @@ class OnionDataset(IterableDataset):
             out["x_cell_vec"] = torch.from_numpy(v)
             out["x_cell_vec_avail"] = torch.tensor(bool(ok))
         if self.cell_ids is not None:
-            out["cell_id"] = torch.tensor(int(self.cell_ids.get(cell, 0)), dtype=torch.int64)
+            cid = 0 if self.cell_id_unknown else int(self.cell_ids.get(cell, 0))
+            out["cell_id"] = torch.tensor(cid, dtype=torch.int64)
         return out
 
     def _apply_qc_table(self, path) -> None:
