@@ -565,7 +565,8 @@ def write_tsv(rows, path):
         w = csv.writer(fh, delimiter="\t", lineterminator="\n")
         w.writerow(cols)
         for r in rows:
-            w.writerow([fmt(r[c]) for c in cols])
+            # a row that carries no class (e.g. a row pooled by assay class) writes empty class columns
+            w.writerow([fmt(r.get(c, "") if c in CLASS_COLUMNS else r[c]) for c in cols])
 
 
 # ---------------------------------------------------------------------------------------------------
