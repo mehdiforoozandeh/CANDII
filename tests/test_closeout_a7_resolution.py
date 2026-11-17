@@ -160,3 +160,59 @@ def test_rung3_refuses_the_decoupled_arms(key):
     from minicandi.rungs import conv_attn_ae
     with pytest.raises(M.NotApplicable):
         conv_attn_ae.Model({"context_bins": 64, "param_budget": 2.0e5, **key}, width=32)
+
+
+# ----------------------------------------------------------------------------- shipped configs
+
+from test_minicandi_resolution import env  # noqa: E402,F401
+from minicandi.res_dataset import train as res_train  # noqa: E402
+
+CONFIGS = sorted((REPO / "tools" / "minicandi" / "configs" / "resolution").glob("rung*/*.json"))
+
+
+def test_config_set_is_complete():
+    names = {(p.parent.name, p.stem) for p in CONFIGS}
+    arms = {"res1", "res5", "res25", "res50", "res125", "res5_ctx"}
+    want = {(f"rung{r}", a) for r in (2, 3, 4) for a in arms}
+    want |= {(f"rung{r}", a) for r in (2, 4) for a in ("in5_out25", "in25_out5")}
+    assert names == want
+    for p in CONFIGS:
+        cfg = json.loads(p.read_text())
+        base = json.loads((REPO / "tools" / "minicandi" / "configs" / p.parent.name /
+                           "base_heldout.json").read_text())
+        extra = {k: v for k, v in cfg.items() if base.get(k, None) != v}
+        assert set(extra) - {"res_bp", "res_in_sub", "res_out_sub", "context_bins",
+                             "res_store"} == set(), (p, extra)
+        assert cfg["res_store"] and cfg["windows_seen"] == 80000
+
+
+@pytest.mark.parametrize("path", CONFIGS, ids=lambda p: f"{p.parent.name}_{p.stem}")
+def test_shipped_config_trains_two_steps(env, tmp_path, path):
+    """Each shipped config, with its own keys (heldout_loss included) and a small window: the
+    store is the synthetic one (res_store off: the point files lie beside counts_path)."""
+    cfg = json.loads(path.read_text())
+    ctx = 160 if cfg.get("context_bins", 1024) == 5120 else 32
+    cfg.update({"windows_seen": 4, "batch_size": 2, "context_bins": ctx, "param_budget": 2.0e5,
+                "heldout_loss": {"batches": 1, "every": 1}})
+    cfg.pop("res_store")
+    if cfg.get("res_bp", 25) == 25 and cfg.get("res_in_sub", 1) == 1 \
+            and cfg.get("res_out_sub", 1) == 1:
+        cfg["res_store"] = str(Path(env["tables"]).parent)     # forces ResDataset at 25 bp
+        _link_store(env, Path(cfg["res_store"]))
+    info = res_train(cfg, env["tables"], 0, tmp_path / "run")
+    assert info["steps"] == 2 and info["done"] and np.isfinite(info["last_train_loss"])
+
+
+def _link_store(env, root: Path) -> None:
+    """A res_store layout (<root>/<measurement id>/point1bp*.h5) over the synthetic tables."""
+    from minicandi.dataset import read_tsv
+    for r in read_tsv(Path(env["tables"]) / "measurements.tsv"):
+        src = Path(r["counts_path"][3:]).parent
+        dst = root / r["measurement_id"]
+        if dst.exists():
+            continue
+        dst.mkdir(parents=True)
+        for f in src.glob("point1bp*.h5"):
+            (dst / f.name).symlink_to(f)
+    if not (root / "regions.tsv").exists():
+        (root / "regions.tsv").symlink_to(Path(env["tables"]) / "regions.tsv")
