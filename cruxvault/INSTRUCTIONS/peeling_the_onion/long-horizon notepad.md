@@ -566,3 +566,223 @@ Each line gives the fact, then its source. Sources are files in this vault or on
 - **Ruling 48 (2026-11-15, PI "Rung 4 only")**: the hard-offset arm (depth hidden from the network, mean = depth x 2^eta) runs at rung 4 only, 3 seeds, existing pipeline. No rung-1 arm.
 
 - **Ruling 49 (2026-11-15, PI "Yes")**: two split arms at rung 4, 3 seeds each: depth covariate hidden on the output side only, and on the input side only; the input count normalization by depth is kept in both.
+
+## How the rulings from 2026-11-15 20:05 UTC on are recorded (records item, 2026-11-17)
+
+- Source: the foreman's Log, i.e. the `## Log` of `.orchestrate/plan.md` in the onion worktree (snapshot in `run_state/plan.md`). Each entry below gives the Log stamp, the PI's words, the date and the consequence.
+- "PI's words" is a verbatim quote only where the Log quotes the PI (in quotation marks). Elsewhere the Log paraphrases the PI, and the entry copies the Log's wording under "Log wording". No ruling below comes from memory.
+- The ruling numbers 50 to 72 are assigned here, in Log order, to continue the notepad's series.
+- Clock. Two stretches of the Log carry wrong stamps, and the order of the lines is right in both. (1) 2026-11-16: the line stamped 08:00Z says "(true UTC; the two entries above carry stamps about 5 to 8 h late)", i.e. the lines stamped 08:30Z ("FIR RESULTS READ") and 12:45Z were written before 08:00Z. (2) 2026-11-17: the line "2026-11-17T10:45Z CLOCK CORRECTION" says "the Log lines of today stamped 09:45Z to 14:35Z carry estimated times that run ahead of the real clock (real time now: 10:45Z); their order is right." Rulings 68 to 72 carry such estimated stamps; their real times are before 10:45Z. The archive of ruling 70 started at 10:19Z real time, so ruling 70 was given before 10:19Z.
+
+## Ruling 50 (2026-11-15, Log 20:05Z): make the architecture-ablation findings trustworthy
+
+- Log wording: "PI directive: make the architecture-ablation findings trustworthy; every rung must have had a fair chance; every knob and ablation he named must be tested with a lead."
+- Consequence: two read-only audits, `cruxvault/results/ladder_audit/FAIR_CHANCE.md` and `COVERAGE.md`. The fair-chance audit found the six-place ladder order not trustworthy (three tiers survive the seeds). Fair-chance round 1 followed (Log 2026-11-15T22:10Z, 126 Nibi jobs, later moved to Fir).
+
+## Ruling 51 (2026-11-15, Log 22:10Z, directive of 22:00Z): one lead agent for the architecture ablations
+
+- Log wording: "PI directive 22:00Z: one architecture-ablation lead agent with one sub-agent per rung; the foreman approves their work."
+- Consequence: the tuning programme (lead agent and six per-rung agents, Log 22:20Z), which led to tuning round 2 and the final tuning round.
+
+## Ruling 52 (2026-11-16, Log 01:10Z): both clusters; where the views help
+
+- Log wording: "PI directives: (1) compute may use both Nibi and Fir; (2) the final report must show whether and where the counterfactual views (EIC processed in different ways) help."
+- Consequence: a Fir-readiness check (`cruxvault/results/fir_failover/FIR_READY.md`) and the counterfactual-view ablation at the U-Net (Log 02:15Z), later extended to the two conv models (close-out item A3).
+
+## Ruling 53 (2026-11-16, Log 01:50Z): short report for Max; read access for Max on Nibi
+
+- Log wording: "PI: (1) PDF for Max must be succinct (target 4-5 pages, answer-so-far to the plan file); builder told. (2) PI approved read access for Max on Nibi for anything onion".
+- Consequence: the report shrank to 5 pages (v2, Log 03:10Z). Group read permission was set on `/scratch/mforooz/onion`, `/project/def-maxwl/mforooz/ONION` and `onion_kit` on Nibi; Fir access was not changed. Files written later by jobs may need the same fix again.
+
+## Ruling 54 (2026-11-16, Log 04:10Z): report sent; table folders to Fir
+
+- PI's words: "rsync ok" (for the two table folders). Log wording: "PI: PDF sent to Max".
+- Consequence: `tables/eic_v1` and `eval/eic_v1` were streamed Nibi to Fir (53 files, 43,137,121 bytes, checksums equal). All queued CPU work moved to Fir; the Nibi copies were held.
+
+## Ruling 55 (2026-11-16, Log 08:30Z): metric review first; full final round; cancel the held Nibi jobs
+
+- Log wording: "(1) correction-metric review first, then the final tuning round; (2) final round FULL, no trimming (equal windows + matched compute, about 1,660 CPU-h on Fir); (3) cancel the held Nibi jobs".
+- Consequence: 283 held Nibi jobs were cancelled (27446721 to 27448273, 27445963 to 27445972). The correction-metric review ran (`cruxvault/results/correction_metric_review/REVIEW.md`). The final round was submitted on Fir at 12:15Z (42 runs).
+
+## Ruling 56 (2026-11-16, Log 08:50Z): both correction terms; mechanism arms in the final round
+
+- Log wording: "(1) correction term: BOTH. Now: composite switches to the 18 crop pairs with no duplicate-keeping side (new composite version, recompute from stored files). For the final round: add a correction-only term (one more prediction pass per run). (2) Mechanism arms run WITH the final round at equal windows."
+- Consequence: composite version 3 (merged 14:10Z, umbrella cdaadb6) and the same-view prediction pass (`SCORE_SUBDIR=p16_sv`). Version 3 base composites on Fir: conv autoencoder 0.528, conv + attention 0.525, axial 0.498, U-Net 0.495, Perceiver 0.335.
+
+## Ruling 57 (2026-11-16, Log 21:10Z): run the 9 untested constitution ablations on three models
+
+- Log wording: "PI ORDER: run all 9 untested constitution ablations (ChIP control as input, predict control, average as input, two-step correction, DNA source, DNA off, covariate embedding variants, depth-controlled input, other losses) on conv autoencoder, conv + attention and U-Net; one lead subagent that spawns one agent per ablation; each level checks its immediate subagents; each ablation gets a spec first (question, prior leads, how the result answers)."
+- Consequence: chunk AB, 14 arms x 3 architectures x 3 seeds = 126 runs on Fir (jobs 4437139 to 4438442).
+
+## Ruling 58 (2026-11-16, Log 21:15Z): the close-out list and the success criteria
+
+- PI's words (success criteria, verbatim in `closeout/closeout todo.md`): "in this peeling the onion work, the success criteria is briefly to: have the new augmented EIC data + counterfactuals etc.; have a training objective well defined; have a well defined and tested set of evals according to peeling the onion goals; have the minicandi design settled and tested and ready for scaling in the next session."
+- Log wording: "PI selected ALL data items ..., ALL evaluation items ..., ALL ablation items .... Region questions, scaling and the new extended dataset go to follow-up work. ... ORDER: a todo list file with one linked md per item ...; one Opus agent per item when its turn comes, each may have subagents, each level checks its children; the foreman makes sure every item is completed."
+- Consequence: `closeout/closeout todo.md` and its item files (22 at 22:05Z; A11, A12, A13 and E5 were added later).
+
+## Ruling 59 (2026-11-16, Log 22:05Z): DNA embeddings by Globus; reference depth per assay class; adaLN-zero
+
+- Log wording: "(1) move the DNA embeddings Nibi -> Fir by Globus through his logged-in Chrome (foreman does it); (2) two-step fixed reference depth = one per assay class (D15 as written); (3) adaLN-zero covariate injection wanted as an extra arm."
+- Consequence: the Globus transfer finished and was verified at 2026-11-17T05:40Z (50 files, 62,109,754,019 bytes). The per-class depths (log2 reads: ATAC 25.0, DNase 24.5, broad histone 24.0, narrow histone 23.5, control 23.5) and the adaLN-zero arm ran as 18 runs on Fir (jobs 4446021 to 4446138).
+
+## Ruling 60 (2026-11-16, Log 22:20Z, dialog): answers to the item files' open decisions
+
+- Log wording: "blind rebuild = ALL 722 remaining rows; new dataset version -> retrain 3 base recipes + final model only; count transforms = all 9 on all 3 models; amend the pair-region plan to the corrected correction terms; RNA tracks may move to Fir by Globus; no matched compute for ablation arms; mix-and-match combinations in this work."
+- Consequence: the common brief for item agents and close-out wave 1 (8 item agents, Log 22:30Z). The blind-rebuild scope was later narrowed by ruling 63.
+
+## Ruling 61 (2026-11-16, Log 22:55Z): DNA fusion is its own ablation
+
+- Log wording: "PI RULING: DNA fusion (how DNA features join count features) is a SEPARATE ablation on the 3 models."
+- Consequence: close-out item A11; 24 runs on Fir (jobs 4455341 to 4455492).
+
+## Ruling 62 (2026-11-16, Log 23:40Z): foreign covariates at scoring; three scorer extensions
+
+- Log wording: "(i) add a scorer option for foreign covariates at scoring time: yes; (ii) scorer extensions (artifact variance by platform/antigen/scale, per-stratum values, robust variance-ratio aggregate): yes, all three."
+- Consequence: close-out item E5, merged 2026-11-17T06:10Z; foreign-covariate scoring of the 9 base seeds in 4 modes (180 jobs, all scored).
+
+## Ruling 63 (2026-11-17, Log 00:25Z): blind rows only; pseudocount 0.01
+
+- Log wording: "blind rebuild scope = BLIND ONLY (batch 1 of slurm/onion_data/closeout_d4_submit.sh: 51 blind base rows + 11 controls + 10 outage reruns, about 22,700 allocated CPU-h); pseudocount epsilon 0.01: yes."
+- Consequence: this replaces the 722-row scope of ruling 60. The blind build was not submitted: the permission check refused the real submission, so the PI runs the submit command. The pseudocount arm `offset_eps0.01` ran on 3 models x 3 seeds (jobs 4452636 to 4452696).
+
+## Ruling 64 (2026-11-17, Log 02:45Z): scratch quota note; cancel duplicates; keep Nibi scratch; blind build where compute is fastest
+
+- PI's words: (a) "the soft quota on nibi scratch is 20TB ... write the 20TB soft quota in project's claude.md"; (d) "do it where we can get the compute allocation fastest". Log wording: "(b) Cancel the 6 duplicates: yes ... (c) Do not free Nibi scratch."
+- Consequence: (a) done in `CLAUDE.md` (commit c713d74). The measured quota differs: `quota -w` shows a soft quota of 1,024 GiB and a hard limit of 20 TiB, and the PI was told. (b) jobs 4452673 to 4452678 were cancelled. (d) the fair-share was 0.44 on Fir and 0.14 on Nibi, so the blind build was ported to Fir (item D4b). Ruling 68 moved it back to Nibi.
+
+## Ruling 65 (2026-11-17, Log line "(foreman) Fir scratch file limit", no stamp): delete 9 old folders on Fir scratch
+
+- Log wording: "PI approved deleting 9 old folders on Fir /scratch/mforooz (sagaconf_golden, t53_lavawizard, t48_enformer_spike, t51_chromimpute, t81_chromimpute, t81_pred, teammate2, teammate_sim, .cursor-server)".
+- Consequence: the file count fell to 358K of 1,000K (log `/scratch/mforooz/tmp/cleanup_2026-11-16.log`); the held prediction jobs were released, and 53 run-seeds were rescored.
+
+## Ruling 66 (2026-11-17, Log line "(foreman) CO-READ accepted", no stamp): after the read of the ablations
+
+- Log wording: "fixed input depth = mix-and-match arm with the deployment caveat; Anscombe arm dropped (code defect, no retrain); conv autoencoder fixed-depth arm stays at 2 seeds; all fillable covariate fields included (eic_v1_2 default); NEW deliverable item A12 minimum useful covariate set (ranked list, exclusion curve) as the last ablation step."
+- The fuller wording is in `closeout/closeout todo.md`, section "PI rulings of 2026-11-17".
+- Consequence: the fixed-depth arm enters item A13 with the caveat that a fixed input depth can be unrealistic at deployment; the 9 Anscombe runs are void; item A12 was created.
+
+## Ruling 67 (2026-11-17, Log line "(foreman) PI concern: 16 regions too few", no stamp): region checks 3 and 4
+
+- Log wording: "PI concern: 16 regions too few." and "PI approved checks 3 and 4 if found necessary (up to ~1,450 CPU-h for 4)."
+- Consequence: checks 1 and 2 ran (`cruxvault/results/region_sampling_checks/REGION_CHECKS.md`). The 16-versus-256 check then failed its rule, and check 4 (62 run-seeds of 7 decisive arms on 256 regions) was queued on Fir (jobs 4535347 to 4535923). Its cost was later corrected to about 2,225 CPU-h (see the corrections entry below).
+
+## Ruling 68 (2026-11-17, Log 10:40Z, estimated stamp, dialog): rescoring and blind build to Nibi
+
+- Log wording: "move the 256-region rescoring to Nibi now; move the blind build to Nibi (PI runs the submit command)."
+- Consequence: 74 checkpoints were staged and copied by Globus to Nibi `/project/def-maxwl/mforooz/ONION/runs_fir`. Nothing was submitted, because Nibi `/scratch` refuses writes. This replaces ruling 64 (d).
+
+## Ruling 69 (2026-11-17, Log line 11:15Z, ruling stamped 11:00Z, estimated): a list of Nibi scratch folders for nearline
+
+- Log wording: "PI RULING 11:00Z: propose a list of Nibi scratch folders to move to /nearline; nothing deleted before approval."
+- Consequence: the four-folder list that ruling 70 approved.
+
+## Ruling 70 (2026-11-17, Log 12:20Z, estimated stamp): archive the four Nibi scratch folders
+
+- PI's words: "please archive all and note it somewhere so we can later recover them if needed". The Log also records that the PI approved "archive ... then remove from scratch" in the dialog.
+- PI comment (verbatim, same Log line): "for chip seq assays, in the ablation in which we predict the control, it's very interesting to see if we can predict peaks and signal p values from the predicted signal and the predicted control".
+- Consequence: 23 tar files (3,991 GiB) of `t112_cf`, `onion/work`, `onion/fastq` and `EIC_REPRO` go to `/nearline/def-maxwl/mforooz/scratch_archive_2026-11-17` (tmux session `nlarchive` on l1.nibi; recovery note `run_state/NIBI_NEARLINE_ARCHIVE.md`). Removal from scratch waits for 23 of 23 verified tars, the PI's yes (foreman night rule) and, for `onion/work`, the items that read it. The predicted-control route of item E2 became a headline row for all 3 models.
+
+## Ruling 71 (2026-11-17, Log 13:25Z, estimated stamp): the box-spread signal formula
+
+- Log wording: "PI RULING: adopt the box spread (counts spread over a centered box of the fragment length) as the signal formula, for the observed-control and predicted-control routes."
+- Consequence: on observed counts, ChIP-seq Pearson with the pipeline -log10 p rose from 0.831 to 0.921 and peak-tile F1 from 0.573 to 0.782 (`cruxvault/results/closeout_E2/FORMULA_EXTENSION.md`). The model-side form was sent back by review (Log 11:33Z).
+
+## Ruling 72 (2026-11-17, Log 14:00Z, estimated stamp): work overnight, nothing dangerous
+
+- PI's words: "i'm going to sleep. keep working on it autonomously overnight. don't do anything dangerous".
+- Consequence: the foreman's night rule (no deletion, no large submission, no cancel) and the night briefs (`.orchestrate/brief_overnight_2026-11-17.md`), with two batches of item agents.
+
+## Compute tally, 2026-11-10 to 2026-11-17 12:02 UTC (decision D3; records item, 2026-11-17)
+
+- Command, run read-only on each cluster at 2026-11-17 12:02 UTC: `sacct -u mforooz -S 2026-11-10T00:00:00 -E now -X -P --format=JobID,JobName%80,State,AllocCPUS,ElapsedRaw,CPUTimeRAW,AllocTRES%100,Submit,Start,End,Partition,StdOut%250`. `-S` reads local time (Fir UTC-7, Nibi UTC-5). The first job of this user in the window was submitted on 2026-11-11, so the offset changes nothing.
+- Allocated CPU-hours = `CPUTimeRAW` / 3600 = AllocCPUS x elapsed. They are not the CPU-hours the jobs used, and not billing units (a high-memory job bills more). A job still running at the read counts up to 12:02 UTC. Weeks: week 1 = 2026-11-10 00:00 to 2026-11-17 00:00 UTC; week 2 = 2026-11-17 00:00 to 12:02 UTC. A job that spans midnight is split by its run time in each week.
+- Purpose comes from the job name (`mc_<run>_s<seed>` for model runs) and from the output path (`train_*.out` is training; `predict_*`, `metrics_*`, `score_*` is scoring; the folder `p16_sv`, `p256_sv` etc. is the scoring tier).
+
+| Cluster | Week 1 | Week 2 (to 12:02 UTC) | Total | GPU-hours |
+|---|---|---|---|---|
+| Fir | 13,021.3 | 5,745.3 | 18,766.6 | 2.8 (pilot, week 1) |
+| Nibi | 52,820.3 | 9.8 | 52,830.1 | 152.3 (week 1) |
+| Both | 65,841.6 | 5,755.1 | 71,596.7 | 155.1 |
+
+Arithmetic: 13,021.3 + 52,820.3 = 65,841.6; 5,745.3 + 9.8 = 5,755.1; 18,766.6 + 52,830.1 = 71,596.7. GPU-hours count each GPU slice as one GPU (Nibi: 300 jobs on 1g.10gb and 49 on 2g.20gb slices of H100 cards; Fir: 12 jobs on 1g.10gb slices).
+
+Fir by purpose (allocated CPU-hours; training + scoring = total):
+
+| Work | Training | Scoring | Total |
+|---|---|---|---|
+| Ablations (constitution and close-out arms, `abl_*`) | 3,669.8 | 6,157.1 | 9,826.9 |
+| Final tuning round (`final_*`) | 692.9 | 1,399.3 | 2,092.2 |
+| Base references with held-out loss (`rung*_base_heldout`) | 312.2 | 1,651.1 | 1,963.3 |
+| Fair-chance round 1 | 563.5 | 936.7 | 1,500.2 |
+| Tuning round 2 trials (`tune_*`) | 1,042.3 | 0 | 1,042.3 |
+| Counterfactual-view ablation, U-Net (`rung4_views_*`) | 171.4 | 590.8 | 762.2 |
+| Foreign-covariate scoring | 0 | 629.7 | 629.7 |
+| Pilot (training and scoring not separated) | | | 354.6 |
+| Base recipes on table `eic_v1_2` | 82.2 | 157.0 | 239.2 |
+| Scorer development, baselines and probes (includes the 8 baseline jobs on tables `eic_v1_1` and `eic_v1_2`, 56.8) | | | 195.3 |
+| Config smoke runs | 61.8 | 14.3 | 76.1 |
+| Earlier ladder arms (mostly score-only `rung4_hide_depth_output`) | 16.2 | 39.6 | 55.8 |
+| Close-out item checks and probes | | | 24.9 |
+| Data set checks, AlphaGenome 2 checks | | | 3.9 |
+| Total | 6,612.3 | 11,575.6 | 18,766.6 |
+
+Fir in week 2 (5,745.3): ablation scoring 4,302.1, ablation training 86.9, foreign-covariate scoring 629.7, scoring of the base references 326.8, `eic_v1_2` base recipes 229.2 (training 72.2, scoring 157.0), final-round scoring 150.9, close-out probes 19.7. Every other Fir row is week 1 only. Nibi in week 2 (9.8): data set checks 9.5 and close-out item checks 0.4 (rounded). Every other Nibi row is week 1 only.
+
+Fir scoring by tier: 16 regions with the same-view pass (`p16_sv`) 8,411.4; 16 regions, older pass (`p16`) 1,474.6; 256 regions (`p256_sv`) 1,045.6, of which 588.1 in completed jobs; foreign covariates 629.7; smoke scoring 14.3. Sum 11,575.6.
+
+Nibi by purpose:
+
+| Work | Total |
+|---|---|
+| Data set build and checks (`onion_build` 45,963.5, staging, FASTQ, signal, DNase-seq, kit builds, verify jobs) | 46,549.2 |
+| Ladder rungs and their arms (training 522.8, scoring 1,946.1) | 2,468.9 |
+| Region selection and budget curve (training 168.7, scoring 1,425.0) | 1,593.7 |
+| EIC board reproduction and AlphaGenome 2 | 1,258.3 |
+| Scorer development, baselines and probes | 615.0 |
+| QC-metric fill | 222.9 |
+| Fair-chance round 1 copies before the move to Fir | 85.3 |
+| DNA embeddings | 36.5 |
+| Close-out item checks | 0.4 |
+| Total | 52,830.1 |
+
+- Jobs that did not complete. Fir: FAILED 639.2 (of it 633.8 in 427 prediction jobs: the file-count limit and the missing `typing_extensions` package), TIMEOUT 36.1, CANCELLED 11.3. Nibi: TIMEOUT 8,231.5, NODE_FAIL 7,765.7, FAILED 4,240.8, OUT_OF_MEMORY 484.5, CANCELLED 116.7, i.e. 20,839.2 of 52,830.1; 20,362.9 of it is in `onion_build` (8,065.2 + 7,745.1 + 4,069.0 + 483.6).
+- Earlier figures for comparison: the FASTQ build of `eic_v1` used 4,511 CPU-h of 19,894 allocated (entry "Dataset version eic_v1 frozen" above).
+- What the tally cannot separate: (1) the CPU-hours a job used, against what it held (`-X` reads the allocation only); (2) training against scoring in the pilot jobs; (3) which close-out item a shared prerequisite served; (4) jobs of other sessions of the same user: every job name in the window belongs to this run, but the tally does not prove it; (5) the queued work: Fir holds 508 pending jobs (the 12 matched-compute trainings and 496 jobs of the 256-region rescoring), with 0 CPU-hours so far.
+- Storage, `diskusage_report` at 2026-11-17 12:05 UTC. Fir: `/scratch` (user) 1,734 GiB of 19 TiB, 232K of 1,000K files; `/project` (group) 22 TiB of 28 TiB, 3,904K of 5,000K files; `/nearline` 80 KiB. Nibi: `/scratch` (user) 4,324 GiB against a quota of 1,024 GiB (over quota), 133K of 1,000K files; `/project` (group) 4,255 GiB of 4,657 GiB, 456K of 500K files; `/nearline` (def-maxwl) 1,500 GiB of 9,537 GiB, 68 of 1,025 files.
+
+### Budgets approved and not yet spent (from the Log)
+
+| Budget | Approved | Cost in the Log | Spent at 12:02 UTC |
+|---|---|---|---|
+| Final round, matched-compute part | ruling 55 ("about 1,660 CPU-h on Fir" for the whole round) | matched compute 1,507 to 2,393 CPU-h (Log 08:12Z, `tools/minicandi/configs/final/MANIFEST.tsv`) | the 12 matched trainings (Fir 4345024 to 4345035) are pending, 0 CPU-h |
+| Blind build, blind rows only | ruling 63 | about 22,700 allocated CPU-h on Nibi; the Fir port about 23,300 allocated, 31,600 billed (Log 05:15Z) | not submitted; ruling 68 moved it to Nibi |
+| Region check 4 (and check 3 if needed) | ruling 67, "up to ~1,450 CPU-h for 4" | corrected to about 2,225 CPU-h (Log 11:04Z); the PI has not approved the corrected figure in the Log | queued on Fir, 0 CPU-h; ruling 68 moved it to Nibi |
+
+### Budgets proposed and not approved (from the Log)
+
+| Work | Cost in the Log | Log line |
+|---|---|---|
+| Mix-and-match round (item A13) | about 5,390 CPU-h on Nibi or 5,308 on Fir, plus a 256-region gate of 474 CPU-h | 2026-11-17T11:10Z |
+| Minimum useful covariate set (item A12) | full 17,900; without screening 11,366; final model only (17 arms x 3 seeds) conv autoencoder 1,927, conv + attention 2,105, U-Net 3,245 (with the exclusion curve 3,008, 3,298, 5,060) | 2026-11-17T11:20Z |
+| Learned cell-type embedding (item A6) | about 498 CPU-h, counted at the old 23 CPU-h per scoring | 2026-11-17T11:02Z |
+| Data set update with DNase-seq (item D3) | 4 row rebuilds, about 5,000 CPU-h (needs writable scratch) | 2026-11-17T11:19Z |
+| Second experiments (item D2) | layers about 50 to 96, baselines about 80 to 140, models not costed; the 17 unbuilt DNase-seq second-experiment rows about 7,300 (drop recommended) | 2026-11-17T11:30Z |
+| Signal p-value and peaks (item E2) | 8 score jobs on Fir, about 154 CPU-h, then the same on Nibi | 2026-11-17T11:15Z |
+| 256-region references for table `eic_v1_2` | about 320 CPU-h (4 baselines, oracle floor, 9 base runs) | status page `run_state/WHERE_WE_ARE.md` (the Log line 11:02Z names the work, not the cost) |
+| Blind build, all 721 unbuilt priority-4 rows | about 94,300 allocated CPU-h (74,778 to 110,772); superseded by ruling 63 | 2026-11-16T23:40Z |
+
+## Numbers told to the PI and later corrected (records item, 2026-11-17)
+
+Each entry gives the first value, the corrected value and the Log lines.
+
+1. Cost of one 256-region scoring of one run-seed. First: about 23 CPU-h (overnight brief; Log 11:02Z "at 23 CPU-h per scoring"). Corrected: conv autoencoder 30.0, conv + attention 25.4, U-Net about 52, mean 39.8 allocated CPU-h (Log 2026-11-17T11:04Z: "Fir sacct of the 12 base runs scored on 256 regions, jobs 4492698-4492823: 477.5 allocated CPU-h, predict 367.4 + metrics 110.1"; "The 23 CPU-h quoted to the PI was too low").
+2. Cost of region check 4. First: "up to ~1,450 CPU-h for 4" (Log line "(foreman) PI concern"); the correction line calls the old figure 1,430. Corrected: 20 x 30.0 + 21 x 25.4 + 21 x 52 = 600 + 533.4 + 1,092 = 2,225 CPU-h (Log 11:04Z: "costs about ... 2,225 CPU-h, not 1,430: TELL THE PI").
+3. Archive rate on Nibi. First: "230 GiB of 3,991 written after about 1 h (slower than the first estimate; expect more than a day with the compare step)" (Log 13:25Z, estimated stamp). Corrected: the 230 GiB took about 10 minutes; 546 GiB by 10:45Z after a start at 10:19Z, about 350 MB/s; writing ends about 13:30Z, then the compare step (Log 10:45Z "CLOCK CORRECTION"). Later reading: 1,213 GiB written at 11:59Z (Log 12:01Z).
+4. Cost of the full blind rebuild. First: 14,920 CPU-h for priority 4 (entry "Compute tally: kit smokes and pilot" above), which is CPU time used. Corrected: about 94,300 allocated CPU-h on Nibi (range 74,778 to 110,772) for all 721 unbuilt rows (Log 2026-11-16T23:40Z: "the 14,920 the PI saw was CPU time USED. PI must re-approve at the true cost").
+5. Cost of the mix-and-match round. First: about 6,100 CPU-h (Log 11:02Z). Corrected after review with per-model scoring costs: about 5,390 on Nibi or 5,308 on Fir, plus the 474 CPU-h gate (Log 11:10Z).
+6. Report for Max, version 2 to version 3. An independent check found 3 defects; the foreman fixed the cell-type share range, the depth-pair headroom (now 0.081 [0.049, 0.125]) and the caption of Fig. 5 (Log 2026-11-16T03:25Z). The Log does not give the version-2 values.
+7. Nibi scratch quota. The PI's figure is a soft quota of 20 TB (ruling 64). The measurement is a soft quota of 1,024 GiB and a hard limit of 20 TiB, with the grace expired (Log 2026-11-17T02:45Z and 10:40Z). The PI was told; the Log does not record a resolution.
+8. Cluster offset. First: "Every Fir run has lower gap closed than its Nibi base: offset not excluded" (Log line stamped 2026-11-16T12:45Z). Corrected: "NO CLUSTER OFFSET"; U-Net gap closed 0.300 on Fir against 0.298 on Nibi (Log 2026-11-16T08:00Z, true UTC). The Log does not say whether the first statement reached the PI.
+9. Still to correct: the cost of item A6 (about 498 CPU-h) uses the old 23 CPU-h per scoring (Log 11:02Z).
+
+Values that changed because a definition changed (not errors): the composite moved from version 2 to version 3 on 2026-11-16 (ruling 56). Same-cluster base composites under version 2 (Log 08:00Z): conv autoencoder 0.491, conv + attention 0.498, U-Net 0.443, axial 0.464, Perceiver 0.294. Under version 3 (Log 14:10Z): 0.528, 0.525, 0.495, 0.498, 0.335. Under version 2 the U-Net view arms differed (base view only 0.483 against all views 0.444, Log 08:30Z); under version 3 the view arms are 0.498 to 0.517, i.e. "no view effect" (Log 14:10Z). The key `selection.composite` in `scores.json` still holds version 1 and must not be quoted (Log 2026-11-16T23:20Z).
