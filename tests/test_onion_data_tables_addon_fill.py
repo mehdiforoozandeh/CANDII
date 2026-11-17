@@ -148,3 +148,28 @@ def test_fill_table_and_changes_cover_the_addon_rows(filled_base):
         for c in ("lab", "antibody", "donor", "platform"):
             assert side[m][c] == r[c], (m, c)
     assert "## Add-on: second experiments (close-out D2)" in (on / FC.CHANGES).read_text()
+
+
+def test_catalog_and_work_snapshot_together(tmp_path):
+    """Close-out D2 + D3: `--catalog` (covariate fill) and `--work-snapshot` (QC after the work
+    folder left the disk) in one call give the QC of the disk build and the fill of the catalog."""
+    t = make_addon_tree(tmp_path / "tree")
+    run = t["work"] / SXA / "base"
+    run.mkdir(parents=True, exist_ok=True)
+    (run / "qc.json").write_text(json.dumps({"align_enrich": {"xcor_score": {"rep1": {
+        "NSC": 1.7, "RSC": 1.1, "estimated_fragment_len": 190}}}}))
+    cat = _catalog(tmp_path / "catalog")
+    disk = tmp_path / "disk"
+    assert BT.main(addon_argv(t, disk) + ["--catalog", str(cat)]) == 0
+    snap = tmp_path / "work.json.gz"
+    assert BT.main(["snapshot-work", "--work", str(t["work"]), "--out", str(snap)]) == 0
+    t["work"].rename(tmp_path / "work_archived")
+    both = tmp_path / "both"
+    assert BT.main(addon_argv(t, both) + ["--catalog", str(cat), "--work-snapshot", str(snap)]) == 0
+    for n in ("measurements.tsv", "pairs.tsv", "missing.tsv", "evaluation_only.tsv"):
+        assert (disk / n).read_bytes() == (both / n).read_bytes(), n
+    a = _rows(both)[f"{SXA}.pooled.uniform.base"]
+    assert (a["nsc"], a["lab"], a["donor"]) == ("1.7", "Lab Other", "DONX")
+    info = json.loads((both / "build_info.json").read_text())
+    assert info["covariates_filled_from"] == str(cat.resolve())
+    assert info["work_snapshot_sha256"] == BT.sha256_bytes(snap.read_bytes())

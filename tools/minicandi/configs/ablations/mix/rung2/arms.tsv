@@ -1,0 +1,2 @@
+arm	run_name	switches	n_switches	keys_changed	native_depth_scoring	design
+svonly	mix_convae_svonly	same_view_only	1	same_view_prob	no	full

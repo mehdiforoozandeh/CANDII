@@ -75,7 +75,7 @@ from minicandi.components import (ConvBlock, CountTransform, CovariateInjector, 
                                   DnaTower, MaskHandler, NBHead, NotApplicable, _check,
                                   component_kwargs, sinusoidal_positions)
 from minicandi.contract import A, K_META, LOG2_DEPTH_COL, MiniCandi, k_input  # noqa: E402
-from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
+from minicandi.covariates import drop_field_indices, model_covariates, scramble_mode  # noqa: E402
 
 RUNG = 5
 NAME = "axial"
@@ -170,6 +170,8 @@ class Model(MiniCandi):
         self.scramble = scramble_mode(cfg)
         kw = component_kwargs(cfg)
         self.cov_dropout = kw["covariate_dropout"]
+        _drop = drop_field_indices(cfg)   # A12: None unless covariate_drop_fields
+        self.cov_drop = {} if _drop is None else {"drop": _drop}   # off: today's call
         self.inj_mode = _check(cfg.get("covariate_injection", "tokens"),
                                ("concat", "film", "tokens", "adaln_zero"), "covariate_injection")
         self.mask_mode = _check(cfg.get("mask_mode", "drop"), ("token", "drop"), "mask_mode")
@@ -297,7 +299,8 @@ class Model(MiniCandi):
     def forward(self, batch: dict) -> dict:
         self.begin_extras(batch)
         c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training,
-                                                         self.cov_dropout)
+                                                         self.cov_dropout,
+                                                         **self.cov_drop)
         x, allow, tie, dna = self._rows(batch, c_in, c_out, c_in_t)
         tied = tie if self.axis == "tied_position" else None
         for blk in self.layers:

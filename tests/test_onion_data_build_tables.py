@@ -332,3 +332,119 @@ def test_failed_verify_goes_to_missing(tmp_path):
     miss = {m["measurement_id"]: m["reason"] for m in read_tsv(out / "missing.tsv")}
     assert miss[f"{TRN2}.pooled.uniform.base"].startswith("verify failed: ")
     assert "sha256" in miss[f"{TRN2}.pooled.uniform.base"]
+
+
+# ---- close-out D3: the work-folder snapshot (build_tables.py snapshot-work / --work-snapshot)
+
+def _tree_with_na(tmp_path):
+    """make_tree plus one NOT_APPLICABLE row (priority 3, TRN2 `se`)."""
+    t = make_tree(tmp_path)
+    rows = BL.read_tsv(t["build_list"])
+    assay, cell, track, role, *_ = EXPS[TRN2]
+    rows.append({"row": str(len(rows) + 1), "priority": "3", "experiment": TRN2,
+                 "eic_track": track, "role": role, "assay": assay, "assay_class": AV_class(assay),
+                 "unit": "pooled", "arm": "se", "pipeline": "chip-seq-pipeline2 v2.2.2",
+                 "expected_measurements": _tok([f"{TRN2}.pooled.uniform.se"])})
+    _write_tsv(t["build_list"], BL.BUILD_LIST_COLUMNS, rows)
+    na = t["work"] / TRN2 / "se"
+    na.mkdir(parents=True, exist_ok=True)
+    (na / BL.NOT_APPLICABLE).write_text("no single-end arm\n")
+    return t
+
+
+HASHED = ("measurements.tsv", "pairs.tsv", "pairs_shared_reads.tsv", "missing.tsv",
+          "covariates.json", "evaluation_only.tsv", "withheld.tsv")
+
+
+def test_work_snapshot_rebuilds_byte_identical_tables_after_the_work_folder_leaves(tmp_path,
+                                                                                   capsys):
+    t = _tree_with_na(tmp_path / "tree")
+    v1 = tmp_path / "v1"
+    assert BT.main(build_argv(t, v1)) == 0                       # the switch off: work on disk
+    snap = tmp_path / "snap" / "work.json.gz"
+    assert BT.main(["snapshot-work", "--work", str(t["work"]), "--out", str(snap)]) == 0
+    assert BT.main(["snapshot-work", "--work", str(t["work"]), "--out", str(snap)]) == 2
+    s = json.loads(gzip.decompress(snap.read_bytes()))
+    names = {Path(k).name for k in s["files"]}
+    assert {"qc.json", "rep1.xcor.qc", "READSET.json", BL.NOT_APPLICABLE} <= names
+    assert not any(k.endswith(".tagAlign.gz") for k in s["files"])
+    capsys.readouterr()
+    chk = ["check-work-snapshot", "--snapshot", str(snap), "--work", str(t["work"]),
+           "--measurements", str(t["measurements"]), "--build-list", str(t["build_list"])]
+    assert BT.main(chk) == 0
+    assert "PASS" in capsys.readouterr().out
+    # the work folder leaves the disk (the half tagAligns go with it)
+    t["work"].rename(tmp_path / "work_archived")
+    v2 = tmp_path / "v2"
+    assert BT.main(build_argv(t, v2, "1,2,3", "--work-snapshot", str(snap),
+                              "--superset-of", str(v1))) == 0
+    for n in HASHED:
+        assert (v1 / n).read_bytes() == (v2 / n).read_bytes(), n
+    info = json.loads((v2 / "build_info.json").read_text())
+    assert info["work_snapshot_sha256"] == BT.sha256_bytes(snap.read_bytes())
+    assert "work_snapshot" not in json.loads((v1 / "build_info.json").read_text())
+    miss = {m["measurement_id"]: m["reason"] for m in read_tsv(v2 / "missing.tsv")}
+    assert miss[f"{TRN2}.pooled.uniform.se"].startswith("not applicable")
+    # without the snapshot the same build loses QC cells and designed pairs, and is refused
+    v3 = tmp_path / "v3"
+    assert BT.main(build_argv(t, v3, "1,2,3", "--superset-of", str(v1))) == 1
+    assert not v3.exists()
+    v4 = tmp_path / "v4"
+    assert BT.main(build_argv(t, v4)) == 0
+    assert (v4 / "measurements.tsv").read_bytes() != (v1 / "measurements.tsv").read_bytes()
+    assert len(_pairs(v4)) < len(_pairs(v1))
+    # the snapshot is unloaded after a build: nothing leaks into the next call
+    assert BT._WORK_SNAP["files"] == {}
+
+
+def test_check_work_snapshot_fails_on_a_stale_snapshot(tmp_path, capsys):
+    t = _tree_with_na(tmp_path / "tree")
+    snap = tmp_path / "work.json.gz"
+    assert BT.main(["snapshot-work", "--work", str(t["work"]), "--out", str(snap)]) == 0
+    qj = t["work"] / TRN / "base" / "qc.json"
+    q = json.loads(qj.read_text())
+    q["align_enrich"]["xcor_score"]["rep1"]["NSC"] = 9.9
+    qj.write_text(json.dumps(q))
+    capsys.readouterr()
+    assert BT.main(["check-work-snapshot", "--snapshot", str(snap), "--work", str(t["work"]),
+                    "--measurements", str(t["measurements"]),
+                    "--build-list", str(t["build_list"])]) == 1
+    out = capsys.readouterr().out
+    assert "QC cells:" in out and "1 differ" in out and "FAIL" in out
+
+
+def test_work_text_disk_wins_over_the_snapshot(tmp_path):
+    w = tmp_path / "work"
+    (w / "E" / "base").mkdir(parents=True)
+    (w / "E" / "base" / "qc.json").write_text("disk")
+    snap = tmp_path / "s.json.gz"
+    assert BT.main(["snapshot-work", "--work", str(w), "--out", str(snap)]) == 0
+    (w / "E" / "base" / "qc.json").write_text("newer")
+    BT.load_work_snapshot(snap)
+    try:
+        assert BT.work_text(w / "E" / "base" / "qc.json") == "newer"
+        (w / "E" / "base" / "qc.json").unlink()
+        assert BT.work_text(w / "E" / "base" / "qc.json") == "disk"
+        assert BT.work_text(tmp_path / "elsewhere" / "qc.json") is None
+    finally:
+        BT.clear_work_snapshot()
+    assert BT.work_text(w / "E" / "base" / "qc.json") is None
+
+
+def test_build_reports_rows_with_no_qc_file_or_split_signature(tmp_path, capsys):
+    """Close-out D3 review: a file missing on the disk and in the snapshot is reported, for the
+    new rows of a --superset-of build separately."""
+    t = _tree_with_na(tmp_path / "tree")
+    v1 = tmp_path / "v1"
+    assert BT.main(build_argv(t, v1, "1,2")) == 0
+    out = capsys.readouterr().out
+    n_qc = int(out.split("no QC file was found (disk or snapshot): ")[1].split()[0])
+    n_sig = int(out.split("unknown split signature (no READSET.json; testbed excluded): ")[1].split()[0])
+    t["work"].rename(tmp_path / "work_archived")
+    v2 = tmp_path / "v2"
+    assert BT.main(build_argv(t, v2, "1,2,3", "--superset-of", str(v1))) == 1   # old rows lose QC
+    out = capsys.readouterr().out
+    m_qc = out.split("no QC file was found (disk or snapshot): ")[1].split("\n")[0]
+    m_sig = out.split("unknown split signature (no READSET.json; testbed excluded): ")[1].split("\n")[0]
+    assert int(m_qc.split(";")[0]) > n_qc and int(m_sig.split(";")[0]) > n_sig
+    assert "of them new since --superset-of: " in m_qc and f"{TRN}.pooled.uniform.se" in m_sig
