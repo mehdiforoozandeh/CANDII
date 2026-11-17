@@ -2,6 +2,7 @@
 
     python tools/onion_eval/nb_signal_checks.py formula --evalset <json> --out <dir>
         [--fraglen-table <tsv>] [--dnase-route macs2_no_control|hotspot2_density] [--targets a,b]
+        [--pileup inbin|box_d|box_ext|box_ext_submean]
     -> <out>/formula_check.tsv (one row per validation imputation target) and formula_check.json
 
     python tools/onion_eval/nb_signal_checks.py lambda --evalset <json> --dump [name=]<regime dir>
@@ -25,6 +26,15 @@ difference, the least-squares slope of the pipeline on the formula, and the peak
 (precision and recall of the formula's calls against the pipeline's, F1, Jaccard). The rows, the
 fragment length and the lambda source come from the scorer's own code (`Scorer._sig_row`,
 `Scorer._signal_files`, `signal_from_counts.signal_from_nb`), so the check runs the scorer's route.
+
+`--pileup` (E2 formula extension; default `inbin` = the scorer's route, unchanged): the read-span
+count of a bin is spread over neighbouring bins by a centred box before the MACS2 score, i.e.
+pileup = count * d / (rl + 24) convolved with a box of `kernel_width_bp`: `box_d` (width d),
+`box_ext` (width d - rl, the part of the fragment the read span does not cover; the strand is lost
+at binning, so it is spread to both sides), `box_ext_submean` (box_ext, and the score is averaged
+over 5 interpolated positions per bin, emulating the pipeline's 25 bp MEAN of a bp-level score in
+place of the score of the bin's mean pileup). For ChIP-seq the control's d-window term takes the
+same variant. ATAC-seq and DNase-seq use d = 150 (`--extsize 150`).
 
 `lambda`: the MACS2 local lambda of each ChIP-seq target from the model's predicted control
 (`<mid>.ctl_pred.npy`, dumped by `score.py --dump-signal ... --lambda-source predicted_control`)
@@ -60,6 +70,11 @@ from onion_eval.ag2_score import corr, spearman  # noqa: E402
 
 ZERO_COUNT = 1e-9
 WITHIN = 0.10
+#: pileup variants of `formula --pileup` (E2 formula extension); `inbin` is the scorer's route
+PILEUPS = ("inbin", "box_d", "box_ext", "box_ext_submean")
+#: sub-positions per 25 bp bin of `box_ext_submean` (the pipeline track is a 25 bp MEAN of a
+#: base-pair -log10 p; the mean of the score is emulated on this many interpolated positions)
+SUBPOS = 5
 
 FORMULA_COLS = ["target", "cell", "assay", "assay_class", "route", "lambda_source", "fraglen_source",
                 "frag_len", "n_bins", "n_masked", "frac_zero_counts", "pearson_raw", "pearson_asinh", "spearman",
@@ -133,6 +148,80 @@ def lambda_compare(lam_pred, lam_obs, lam_bg_pred, lam_bg_obs) -> dict:
             "within_10pct_median": int(abs(med - 1.0) <= WITHIN)}
 
 
+def box_weights(width_bp: float, bin_bp: int = SG.BIN) -> np.ndarray:
+    """Weights over bins of a centred box of `width_bp` (bin i covers [i - 0.5, i + 0.5] bins);
+    the weights sum to 1. A width of one bin or less is the identity."""
+    half = float(width_bp) / bin_bp / 2.0
+    if half <= 0.5:
+        return np.ones(1)
+    reach = int(np.ceil(half - 0.5))
+    k = np.arange(-reach, reach + 1, dtype=np.float64)
+    w = np.clip(np.minimum(k + 0.5, half) - np.maximum(k - 0.5, -half), 0.0, None)
+    return w / w.sum()
+
+
+def kernel_width_bp(variant: str, d: float, read_length: float) -> float:
+    """Width (bp) of the centred box that spreads a read-span count over neighbouring bins.
+    `inbin`: none. `box_d`: the fragment length d. `box_ext`, `box_ext_submean`: d - rl, i.e. the
+    part of the fragment beyond the read span that the count already covers (the read sits at
+    one end of its fragment and the strand is lost at binning, so the extension is spread on both
+    sides); at least one bin."""
+    if variant == "inbin":
+        return 0.0
+    if variant == "box_d":
+        return float(d)
+    if variant in ("box_ext", "box_ext_submean"):
+        return max(float(d) - float(read_length), float(SG.BIN))
+    raise ValueError(f"pileup {variant!r} not in {PILEUPS}")
+
+
+def pileup_variant(counts, d: float, read_length: float, variant: str) -> np.ndarray:
+    """MACS2 pileup per bin from read-span counts: count * d / (rl + 24) (the scorer's in-bin
+    rule), smoothed by the variant's box. The box keeps the total mass."""
+    p = SG.pileup_from_counts(counts, d, read_length)
+    w = box_weights(kernel_width_bp(variant, d, read_length))
+    return p if w.size == 1 else np.convolve(p, w, mode="same")
+
+
+def _score_submean(pile, lam, sub: int = SUBPOS) -> np.ndarray:
+    """Mean over `sub` positions inside each bin of -log10 P(Poisson(lam) > floor(pileup)), with the
+    pileup and lambda linearly interpolated between bin centres (the bp-mean aggregation)."""
+    from candi.store.pval_from_counts import log10_upper_tail
+    n = pile.size
+    x = np.arange(n, dtype=np.float64)
+    out = np.zeros(n)
+    for j in range(sub):
+        xs = np.clip(x + (j + 0.5) / sub - 0.5, 0, n - 1)
+        pj, lj = np.interp(xs, x, pile), np.interp(xs, x, lam)
+        out += log10_upper_tail(np.floor(pj).astype(np.int64), lj)
+    return out / sub
+
+
+def variant_signal_region(c, row: dict, crow, ctl, variant: str,
+                          gsize: float = MACS2_GSIZE_HS) -> np.ndarray:
+    """-log10 p of one region from OBSERVED read-span counts `c` under a pileup variant, by the
+    rules of `signal_track` (ChIP-seq: the control's d-window term is the control pileup under the
+    same variant; slocal and llocal are window means and do not change; ATAC-seq / DNase-seq:
+    MACS2 without control, d = 150)."""
+    from candi.store.pval_from_counts import log10_upper_tail
+    route = SG.route_of(row["assay_class"] or row["assay"])
+    depth, rl = float(row["depth_reads"]), float(row["read_length"])
+    if route == "chip":
+        d = float(row["frag_len"])
+        cdepth, crl = float(crow["depth_reads"]), float(crow["read_length"])
+        lam = SG.macs2_lambda(lambda_bg=d * depth / gsize,
+                              control_pileup=pileup_variant(ctl, d, crl, variant),
+                              ratio_treat2control=depth / cdepth)
+    else:
+        d = float(SG.ATAC_SMOOTH_WIN)
+        lam = SG.macs2_lambda(lambda_bg=d * depth / gsize,
+                              treat_pileup=SG.pileup_from_counts(c, d, rl))
+    pile = pileup_variant(c, d, rl, variant)
+    if variant == "box_ext_submean":
+        return _score_submean(pile, lam)
+    return log10_upper_tail(np.floor(pile).astype(np.int64), lam)
+
+
 def _scorer(evalset, fraglen_table, dnase_route):
     from onion_eval.score import Scorer
     return Scorer(evalset, main="marginal_nb", fraglen_table=fraglen_table, dnase_route=dnase_route,
@@ -176,8 +265,11 @@ def cmd_formula(a) -> int:
             truth = np.concatenate([np.asarray(f[c][s:s + rb], np.float64) for c, s in regions])
         mu = np.where(y > 0, y, ZERO_COUNT)
         try:
-            sig, src = SG.signal_from_nb(np.ones_like(mu), mu, row, ds=sc.ds, regions=regions, rb=rb,
-                                         dnase_route=sc.dnase_route, mode="plug_in")
+            if a.pileup == "inbin":     # the scorer's own route, unchanged
+                sig, src = SG.signal_from_nb(np.ones_like(mu), mu, row, ds=sc.ds, regions=regions,
+                                             rb=rb, dnase_route=sc.dnase_route, mode="plug_in")
+            else:
+                sig, src = _variant_signal(sc, row, y, a.pileup)
         except (ValueError, KeyError) as e:
             rows.append(dict(rec, reason=f"no formula signal: {e}"))
             continue
@@ -190,7 +282,7 @@ def cmd_formula(a) -> int:
     out.mkdir(parents=True, exist_ok=True)
     _write_tsv(out / "formula_check.tsv", FORMULA_COLS, rows)
     ok = [r for r in rows if not r.get("reason")]
-    summ = {"evalset": str(sc.evalset_path), "fraglen_table": a.fraglen_table,
+    summ = {"evalset": str(sc.evalset_path), "fraglen_table": a.fraglen_table, "pileup": a.pileup,
             "dnase_route": sc.dnase_route, "n_targets": len(rows), "n_checked": len(ok),
             "by_route": {}}
     for route in sorted({r["route"] for r in ok}):
@@ -205,6 +297,26 @@ def cmd_formula(a) -> int:
     (out / "formula_check.json").write_text(json.dumps(summ, indent=1, sort_keys=True) + "\n")
     print(json.dumps(summ, indent=1, sort_keys=True))
     return 0
+
+
+def _variant_signal(sc, row, y, variant):
+    """`variant_signal_region` over the scorer's regions, with the scorer's control rows."""
+    rb, regions = sc.rb, sc.regions
+    route = SG.route_of(row["assay_class"] or row["assay"])
+    if route == "dnase" and sc.dnase_route != "macs2_no_control":
+        raise ValueError("pileup variants exist for the MACS2 routes only")
+    ctl_id = (row.get("control_measurement_id") or "").strip()
+    crow = sc.ds.rows.get(ctl_id) if ctl_id else None
+    if route == "chip":
+        if crow is None:
+            raise ValueError("no observed control")
+        SG._need(row, "frag_len")
+    out = []
+    for i, (c, s) in enumerate(regions):
+        ctl = sc.ds.read(ctl_id, c, s, rb).astype(np.float64) if route == "chip" else None
+        out.append(variant_signal_region(y[i * rb:(i + 1) * rb], row, crow, ctl, variant))
+    src = "observed_control" if route == "chip" else "local_background"
+    return np.concatenate(out).astype(np.float32), src
 
 
 def cmd_lambda(a) -> int:
@@ -358,6 +470,8 @@ def main(argv=None) -> int:
     f.add_argument("--fraglen-table", default=None)
     f.add_argument("--dnase-route", default=None, choices=SG.DNASE_ROUTES)
     f.add_argument("--targets", default=None, help="comma list of target ids (default: all)")
+    f.add_argument("--pileup", default="inbin", choices=PILEUPS,
+                   help="pileup variant (default inbin: the scorer's route, unchanged)")
     lm = sub.add_parser("lambda")
     lm.add_argument("--evalset", required=True)
     lm.add_argument("--dump", required=True, action="append",

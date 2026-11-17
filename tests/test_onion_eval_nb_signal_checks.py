@@ -110,3 +110,65 @@ def test_table_common_macro_uses_one_assay_set(tmp_path):
     assert c["n_assays_common"] == g["n_assays_common"] == "1"
     assert float(c["macro_defined"]) == 0.5 and g["missing_scorable"] == "C"
     assert g["n_missing_scorable"] == "1"
+
+
+# ---------------------------------------------------------------- E2 formula extension (pileups)
+
+def _row(**kw):
+    r = dict(assay_class="narrow_histone", assay="H3K4me3", depth_reads=2.0e7, read_length=36,
+             frag_len=180)
+    r.update(kw)
+    return r
+
+
+def test_inbin_variant_is_the_scorer_route():
+    rng = np.random.default_rng(4)
+    c = rng.poisson(2.0, 2000).astype(float)
+    ctl = rng.poisson(1.0, 2000).astype(float)
+    crow = dict(depth_reads=3.0e7, read_length=50)
+    got = NC.variant_signal_region(c, _row(), crow, ctl, "inbin")
+    mu = np.where(c > 0, c, NC.ZERO_COUNT)
+    want, _ = SG.signal_track(mu, np.ones_like(mu), "narrow_histone", ctl,
+                              dict(depth_reads=2.0e7, read_length=36, frag_len=180,
+                                   control_depth_reads=3.0e7, control_read_length=50),
+                              mode="plug_in")
+    np.testing.assert_array_equal(got.astype(np.float32), want)
+    row = _row(assay_class="accessibility_dnase", assay="DNase-seq", read_length=76)
+    got = NC.variant_signal_region(c, row, None, None, "inbin")
+    want, _ = SG.signal_track(mu, np.ones_like(mu), "accessibility_dnase", None,
+                              dict(depth_reads=2.0e7, read_length=76), mode="plug_in")
+    # the scorer route reads its llocal lambda off mu, where a zero count is 1e-9: 1e-7 relative
+    np.testing.assert_allclose(got.astype(np.float32), want, rtol=1e-6, atol=0)
+
+
+def test_box_weights_and_widths():
+    np.testing.assert_array_equal(NC.box_weights(25), [1.0])
+    w = NC.box_weights(75)                       # exactly three bins
+    np.testing.assert_allclose(w, [1 / 3] * 3)
+    w = NC.box_weights(100)                      # 4 bins: 0.5, 1, 1, 1, 0.5 over 4
+    np.testing.assert_allclose(w, np.array([0.5, 1, 1, 1, 0.5]) / 4)
+    assert NC.kernel_width_bp("inbin", 180, 36) == 0
+    assert NC.kernel_width_bp("box_d", 180, 36) == 180
+    assert NC.kernel_width_bp("box_ext", 180, 36) == 144
+    assert NC.kernel_width_bp("box_ext", 30, 36) == 25
+
+
+def test_box_variants_spread_one_count_and_keep_the_mass():
+    c = np.zeros(101)
+    c[50] = 6.0
+    for v, width in (("box_d", 180.0), ("box_ext", 144.0)):
+        p = NC.pileup_variant(c, 180, 36, v)
+        assert abs(p.sum() - 6.0 * 180 / 60) < 1e-9          # mass count * d / (rl + 24)
+        assert np.count_nonzero(p) == NC.box_weights(width).size
+        assert p[50] == p.max() and np.allclose(p, p[::-1])  # centred
+    assert np.count_nonzero(NC.pileup_variant(c, 180, 36, "inbin")) == 1
+
+
+def test_submean_of_a_flat_track_is_the_plain_score():
+    from candi.store.pval_from_counts import log10_upper_tail
+    pile, lam = np.full(50, 7.3), np.full(50, 2.0)
+    want = log10_upper_tail(np.full(50, 7, dtype=np.int64), lam)
+    np.testing.assert_allclose(NC._score_submean(pile, lam), want, rtol=1e-12)
+    pile[25] = 30.0                               # a peak: the mean of the scores is below the
+    got = NC._score_submean(pile, lam)            # score of the bin's mean pileup at its centre
+    assert got[25] < log10_upper_tail(np.array([30]), np.array([2.0]))[0]
