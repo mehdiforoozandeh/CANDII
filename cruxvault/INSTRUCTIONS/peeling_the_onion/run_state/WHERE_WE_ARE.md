@@ -75,3 +75,26 @@ Nothing is removed from scratch yet. Conditions for removal: (a) 23 of 23 tars O
 
 - Build the 256-region reference scores of table version `eic_v1_2` and score its 9 base runs on 256 regions (about 320 CPU-hours). Every ablation on that version needs them.
 - Push one fresh code snapshot before any submission; the snapshots pushed during the night are stale.
+
+## Night update, 2026-11-17 13:15 UTC
+
+All eleven overnight items are merged on the umbrella branch after independent reviews (510 tests of the night's work pass together). Nothing was submitted beyond small check jobs (under 20 CPU-hours in total), and nothing was deleted.
+
+| Item (added or changed since the table above) | State |
+|---|---|
+| Signal formula | box spread with a corrected model-side formula, merged after two reviews; both dependence bounds are recorded options; the 9 runs are rescored when a cluster frees (about 300 CPU-hours) |
+| QC metrics on the input side (A4) | merged; fill pass 347 CPU-hours (reads `onion/work`), arm 404 CPU-hours |
+| Resolution 1 to 125 bp (A7) | merged; reduced design 405 CPU-hours, full 2,340; the 1 bp recount (18 CPU-hours) reads `onion/work` |
+| Replicate ladder (E4) | merged; the mixed-model stage must NOT run until the model has a noise level per library; the layers stage (6 CPU-hours) can run |
+| Records (R1) | rulings 50 to 72, compute tally (71,597 CPU-hours since 2026-11-10), list of corrected numbers |
+
+### More decisions that wait for the PI (continuing the list above)
+
+10. Run the QC fill (347 CPU-hours) and the 1 bp recount (18 CPU-hours) before `onion/work` leaves Nibi scratch, or keep that folder on scratch, or accept a tape recall later.
+11. Replicate ladder: adopt the two-sided subtraction (it lowers the cell-type rung by 23% on the smoke data and changes the ladder's definition); replace the add-up acceptance check by the check on common cell types.
+12. Resolution design: reduced (405 CPU-hours) or full (2,340).
+13. QC-on-input arm: accept the changes to the "QC in C" design (presence flags, leak guards) and its 404 CPU-hours.
+
+### Earlier numbers that carry a known flaw
+
+The in-bin signal formula overstates the counting noise of a pileup built from a predicted NB. It affects: conv autoencoder seed 0 in signal space (0.178; 0.143 with the predicted control; specific-signal correlation 0.234 and 0.267) and the position-average (0.222) and marginal-NB (0.121) rows of the AlphaGenome 2 board with their peak columns. AlphaGenome 2 itself, plug-in values, the noise floor and all count-space metrics are not affected. The rows are recomputed with the box-spread formula.
