@@ -37,19 +37,19 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 
 | Item | File | Depends on | Status |
 |---|---|---|---|
-| Fill the lab, antibody and donor covariates | [[closeout D1 lab antibody donor covariates]] | none | running: table version eic_v1_2 merged 2026-11-17 (train-only category lists; check_dataset PASS); its 4 baselines equal the eic_v1 baselines (largest relative difference 3.3e-13); the 9 base-recipe runs on eic_v1_2 scored on 16 regions (9 of 9); owed: 256-region references and 256-region scores of the 9 runs (about 320 CPU-hours) |
-| Second experiments: table, evaluation set, cross-lab pairs | [[closeout D2 second experiments and cross-lab pairs]] | D1 | spec: add-on table eic_v1_2x (71 second experiments, 71 other-experiment pairs) built and checked on Nibi, merged 2026-11-17; scoring stages not submitted; 2 PI decisions open (report lab with donor; drop the 17 unbuilt DNase-seq rows) |
-| Data set update with DNase-seq in the headline | [[closeout D3 dataset update with DNase-seq]] | D1 | blocked: work-folder snapshot and candidate table (2,812 rows; DNase-seq correction-scorable) merged 2026-11-17, all 10 Nibi verify jobs pass; the 4 row rebuilds (about 5,000 CPU-hours) need writable Nibi scratch; the PI chooses the table version of the final model |
-| Blind tracks, final model, blind pass, EIC board row | [[closeout D4 blind tracks final model EIC board]] | D1, D3, M1 | blocked: blind-only scope ruled 2026-11-17 (51 blind rows + 11 controls + 10 reruns, about 22,700 allocated CPU-hours); Fir port merged, then the PI moved the build to Nibi; needs writable Nibi scratch; the PI runs the submit command |
+| Fill the lab, antibody and donor covariates | [[closeout D1 lab antibody donor covariates]] | none | running: table version eic_v1_2 merged 2026-11-17 (train-only category lists; check_dataset PASS); its 4 baselines equal the eic_v1 baselines (largest relative difference 3.3e-13); the 9 base-recipe runs on eic_v1_2 scored on 16 regions (9 of 9); owed: 256-region references and 256-region scores of the 9 runs (95.1 + 322.2 = 417.3 CPU-hours; [[ready queue for scaling]] entry 6) |
+| Second experiments: table, evaluation set, cross-lab pairs | [[closeout D2 second experiments and cross-lab pairs]] | D1 | spec: add-on table eic_v1_2x (71 second experiments, 71 other-experiment pairs) built and checked on Nibi, merged 2026-11-17; scoring stages not submitted; layers and baselines can run now on Nibi with kit CO8; 2 PI decisions open (report lab with donor; drop the 17 unbuilt DNase-seq rows); [[ready queue for scaling]] entries 4, 13 |
+| Data set update with DNase-seq in the headline | [[closeout D3 dataset update with DNase-seq]] | D1 | blocked: work-folder snapshot and candidate table (2,812 rows; DNase-seq correction-scorable) merged 2026-11-17, all 10 Nibi verify jobs pass; the 4 row rebuilds (about 5,000 CPU-hours) need writable Nibi scratch, and their FASTQs are downloaded again (removed from scratch 2026-11-17); the PI chooses the table version of the final model; [[ready queue for scaling]] entry 15 |
+| Blind tracks, final model, blind pass, EIC board row | [[closeout D4 blind tracks final model EIC board]] | D1, D3, M1 | blocked: blind-only scope ruled 2026-11-17 (51 blind rows + 11 controls + 10 reruns, about 22,700 allocated CPU-hours); Fir port merged, then the PI moved the build to Nibi; needs writable Nibi scratch; the PI runs the submit command; dry run of 2026-11-17 20:12 UTC: 72 rows to submit, 0 skipped; the final model and the board row are not built ([[ready queue for scaling]] entries 16, 17) |
 
 ### Evaluation (success criterion 3)
 
 | Item | File | Depends on | Status |
 |---|---|---|---|
-| The 16-versus-256 region check and settled scores | [[closeout E1 256-region check and settled scores]] | none | read: the 16-versus-256 check failed its pre-written rule, so correction terms are scored on all 256 regions from now on; rescoring of 7 decisive arms (62 run-seeds, about 2,225 CPU-hours) blocked: queued on Fir in the outage, moved to Nibi by the PI, Nibi scratch refuses writes |
-| Signal p-value and peaks from the predicted NB; AlphaGenome 2 board row; signal-space score | [[closeout E2 p-value and peaks from the predicted NB]] | none | running: merged 2026-11-17 (partial, 1 of 9 runs scored in signal space); box-spread signal formula ruled by the PI and merged for observed counts; its model-side form sent back by review; predicted-control route is a headline row (PI) |
+| The 16-versus-256 region check and settled scores | [[closeout E1 256-region check and settled scores]] | none | read: the 16-versus-256 check failed its pre-written rule, so correction terms are scored on all 256 regions from now on; rescoring of 7 decisive arms (62 run-seeds, 2,225 CPU-hours, PI yes 2026-11-17) blocked: queued on Fir in the outage (jobs 4535347 to 4535923), moved to Nibi by the PI, Nibi scratch refuses writes until `onion/work` leaves; [[ready queue for scaling]] entry 5 |
+| Signal p-value and peaks from the predicted NB; AlphaGenome 2 board row; signal-space score | [[closeout E2 p-value and peaks from the predicted NB]] | none | running: merged 2026-11-17 (partial, 1 of 9 runs scored in signal space); box-spread signal formula ruled by the PI; its model-side form merged after two reviews (Log 13:09Z); box-spread rescoring of the 9 runs under both dependence bounds not submitted (Fir outage; [[ready queue for scaling]] entry 7); predicted-control route is a headline row (PI) |
 | Report the metrics that are computed and never reported | [[closeout E3 report the computed metrics]] | none | done 2026-11-16 for the screening scores ([[computed metrics report]]); rerun on settled scores after E1 |
-| Complete the replicate ladder and the crossed mixed model | [[closeout E4 complete the replicate ladder]] | D2 | spec (item agent started 2026-11-17 12:01 UTC) |
+| Complete the replicate ladder and the crossed mixed model | [[closeout E4 complete the replicate ladder]] | D2 | spec: merged 2026-11-17 13:00Z after review; the layers stage (about 6 CPU-hours) can run now with kit CO8; the mixed-model stage must not run until a per-library residual variance exists (not built); 3 PI decisions open; [[ready queue for scaling]] entry 3 |
 | Scorer extensions: foreign covariates at scoring, artifact variance by platform, antigen and scale, per-stratum values, robust variance ratio | [[closeout E5 scorer extensions]] | D1 for lab and antigen | running: code merged 2026-11-17 after review; foreign-covariate scoring of the 9 base seeds scored (36 of 36, 4 modes), not yet read; by-lab and by-antigen tables possible on eic_v1_2, not yet run |
 
 ### Training objective (success criterion 2)
@@ -65,24 +65,24 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 | The nine named ablations on three architectures | [[closeout A1 nine named ablations]] | none | scored and read 2026-11-17 ([[ABLATIONS_READ]], `results/ablations_closeout/`); findings recorded |
 | Basic controls on all three models (scrambled covariates, mask mode, injection form) | [[closeout A2 basic controls on three models]] | none | scored and read 2026-11-17 ([[ABLATIONS_READ]], `results/ablations_closeout/`); findings recorded |
 | Counterfactual views on the two conv models | [[closeout A3 counterfactual views on conv models]] | none | scored and read 2026-11-17 ([[ABLATIONS_READ]], `results/ablations_closeout/`); findings recorded |
-| Read-derived QC metrics on the input side | [[closeout A4 QC metrics on the input side]] | QC table fill | spec (item agent started 2026-11-17 12:01 UTC; the QC-fill pass reads onion/work on Nibi scratch, which is being archived) |
-| RNA-seq input | [[closeout A5 RNA-seq input]] | RNA fetch | not started |
-| Learned cell-type embedding | [[closeout A6 learned cell-type embedding]] | none | spec: configs, leak audit and zero-shot control merged 2026-11-17; not submitted (about 498 CPU-hours at the old cost of 23 CPU-hours per scoring; to be recounted) |
-| Resolution 1 to 125 bp | [[closeout A7 resolution]] | 1 bp region store | spec (item agent started 2026-11-17 12:01 UTC; the recount pass reads onion/work on Nibi scratch, which is being archived) |
+| Read-derived QC metrics on the input side | [[closeout A4 QC metrics on the input side]] | QC table fill | running: merged 2026-11-17 12:40Z; QC fill submitted on Nibi (arrays 27658288 and 27658295, kit CO8, about 347 CPU-hours, PI yes); collect and arm (404 CPU-hours) not submitted ([[ready queue for scaling]] entries 1, 11) |
+| RNA-seq input | [[closeout A5 RNA-seq input]] | RNA fetch | not started: no configs, no eval subset, no submit script ([[ready queue for scaling]] entry 18) |
+| Learned cell-type embedding | [[closeout A6 learned cell-type embedding]] | none | spec: configs, leak audit and zero-shot control merged 2026-11-17; not submitted; recounted at the measured scoring cost: 728.6 CPU-hours (was 498 at 23 per scoring; [[ready queue for scaling]] entry 12) |
+| Resolution 1 to 125 bp | [[closeout A7 resolution]] | 1 bp region store | running: merged 2026-11-17 12:47Z; recount plan written (412 views, 21 tasks) and probe 27658461 submitted on Nibi (PI: 'You submit it'); recount next, then tables, variance, arms ([[ready queue for scaling]] entries 2, 9) |
 | Count transforms | [[closeout A8 count transforms]] | none | scored and read 2026-11-17 ([[ABLATIONS_READ]], `results/ablations_closeout/`); findings recorded (Anscombe arm void: code defect; 9 runs) |
-| Final tuning round: matched-compute runs | [[closeout A9 matched-compute runs]] | none | running: 12 trainings pending on Fir (jobs 4345024 to 4345035, 0 CPU-hours; Fir outage until about 2026-11-20) |
-| Pointwise MLP under the corrected composite | [[closeout A10 pointwise MLP corrected score]] | GPU | not started |
+| Final tuning round: matched-compute runs | [[closeout A9 matched-compute runs]] | none | running: 12 trainings pending on Fir (jobs 4345024 to 4345035, 0 CPU-hours; Fir outage until about 2026-11-20); their scoring is [[ready queue for scaling]] entry 8 |
+| Pointwise MLP under the corrected composite | [[closeout A10 pointwise MLP corrected score]] | GPU | not started: no script ([[ready queue for scaling]] entry 19) |
 | DNA fusion: how the DNA features join the count features | [[closeout A11 DNA fusion]] | none | scored and read 2026-11-17 ([[ABLATIONS_READ]], `results/ablations_closeout/`); findings recorded |
-| Mix-and-match combinations of the single choices that helped, per model | [[closeout A13 mix-and-match combinations]] | A1, A2, A3, A8, A11, D1, E1 | spec: merged 2026-11-17 after review: 24 arms + 3 references on eic_v1_2, 256 regions; fixed-depth arms also scored at native depth; pool provisional until a 256-region qualification gate passes (5 single runs, 474 CPU-hours); round about 5,390 CPU-hours on Nibi (5,308 on Fir); not submitted; PI budget approval open |
-| Minimum useful covariate set: ranked list, exclusion curve, removable fields | [[closeout A12 minimum useful covariate set]] | D1, A13 | spec: per-field drop switch, ranking tool and 51 configs merged 2026-11-17; not submitted; needs the final recipe from A13, the eic_v1_2 256-region references and the PI's choice of scope (1,927 to 17,900 CPU-hours) (PI, 2026-11-17: last step of the session and a deliverable) |
-| Settle the miniCANDI design: one document, ready for scaling | [[closeout M1 settled miniCANDI design]] | A1 to A13, E1 | not started |
+| Mix-and-match combinations of the single choices that helped, per model | [[closeout A13 mix-and-match combinations]] | A1, A2, A3, A8, A11, D1, E1 | spec: merged 2026-11-17 after review: 24 arms + 3 references on eic_v1_2, 256 regions; fixed-depth arms also scored at native depth; pool provisional until a 256-region qualification gate passes (5 single runs, 474 CPU-hours); round about 5,390 CPU-hours on Nibi (5,308 on Fir); not submitted; PI budget approval open; [[ready queue for scaling]] entry 10 |
+| Minimum useful covariate set: ranked list, exclusion curve, removable fields | [[closeout A12 minimum useful covariate set]] | D1, A13 | spec: per-field drop switch, ranking tool and 51 configs merged 2026-11-17; not submitted; needs the final recipe from A13, the eic_v1_2 256-region references and the PI's choice of scope (1,927 to 17,900 CPU-hours) (PI, 2026-11-17: last step of the session and a deliverable); [[ready queue for scaling]] entry 14 |
+| Settle the miniCANDI design: one document, ready for scaling | [[closeout M1 settled miniCANDI design]] | A1 to A13, E1 | running: item agent started 2026-11-17 20:25Z (branch chunk/onion-CO-M1), from the 16-region evidence |
 
 ### Records and close-out
 
 | Item | File | Depends on | Status |
 |---|---|---|---|
-| Bring the records up to date (rulings, compute tallies, paper note) | [[closeout R1 records up to date]] | none | running: rulings 50 to 72, compute tally and corrected numbers entered in the notepad 2026-11-17; paper note partly updated; artifact index and crux validate not done |
-| Close-out deck and written report | [[closeout R2 close-out deck and report]] | all | not started |
+| Bring the records up to date (rulings, compute tallies, paper note) | [[closeout R1 records up to date]] | none | running: rulings 50 to 72, compute tally and corrected numbers entered in the notepad 2026-11-17; paper note partly updated; second pass 2026-11-17 20:30Z: rulings 73 to 75, artifact index, todo statuses, open decisions, `crux validate` run (483 errors: 472 are evidence files that exist only in other worktrees, 11 are pre-onion records), [[ready queue for scaling]], `run_state/HANDOFF_NEXT_SESSION.md`; left: final tally repeat, vault close-out of step 6 |
+| Close-out deck and written report | [[closeout R2 close-out deck and report]] | all | not started (hours 8 to 20 of [[final 24 hours plan]]) |
 
 ## PI rulings of 2026-11-16 (answers to the item files' open decisions)
 
@@ -105,14 +105,32 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 - Conv autoencoder with fixed input depth: accept 2 seeds; no rerun of seed 1.
 - Covariates: include every covariate field that we can fill (the corrected tables are the default). The last step of the session, and a deliverable, is the minimum useful covariate set (item A12).
 
-Every PI ruling and directive from 2026-11-15 20:05 UTC on (including the later rulings of 2026-11-17: rescoring and blind build to Nibi, nearline archive, box-spread signal formula, overnight order) is entered with the PI's words and its consequence in [[long-horizon notepad]], rulings 50 to 72.
+## PI rulings of 2026-11-17 (after the archive, and the 24-hour order)
+
+- (i) Remove `t112_cf`, `onion/fastq` and `EIC_REPRO` from Nibi scratch: yes. Done 19:45Z, 81 of 81 targets, with `t112_cf/pseudoreps`, `t112_cf/fastqarms/genome` and `EIC_REPRO/003` kept.
+- (ii) The QC fill and the 1 bp recount run before `onion/work` leaves scratch: yes. The QC fill was submitted 19:58Z; for the recount probe and the recount the PI said "You submit it" (probe 27658461, 20:10Z).
+- (iii) Remove today's superseded code snapshots on Nibi `/project`: yes. 14 kits packed to `onion_kit_archive`; kit CO8 is the only current one.
+- (iv) The 256-region rescoring at about 2,225 CPU-hours: yes.
+- PI condition, verbatim: "please make absolutely sure before you remove something we don't need it anymore or it's easy to regenerate or access from the archive".
+- 24-hour order, verbatim: "you have 24 hours to wrap up the peeling the onion work. plan wisely to cover everything remaining in the next 24 hours." Deadline 2026-11-18T20:00Z ([[final 24 hours plan]]).
+
+Every PI ruling and directive from 2026-11-15 20:05 UTC on is entered with the PI's words and its consequence in [[long-horizon notepad]], rulings 50 to 75.
 
 ## Open PI decisions
 
-From the foreman's Log up to 2026-11-17T12:01Z (records item, 2026-11-17):
-- Remove the four archived folders from Nibi scratch when 23 of 23 tars are verified (Log 12:20Z; night rule 14:00Z).
-- Budget of the mix-and-match round (about 5,390 CPU-hours) and of its gate (474 CPU-hours) (Log 11:10Z).
-- Scope of the minimum-covariate-set search (1,927 to 17,900 CPU-hours) (Log 11:20Z).
-- Second experiments: report lab together with donor (recommended); drop the 17 unbuilt DNase-seq rows (recommended) (Log 11:30Z).
-- Table version of the final model: eic_v1_2, or the DNase-seq candidate, which retrains the 9 base runs (Log 11:19Z).
-- The corrected cost of the queued 256-region rescoring: about 2,225 CPU-hours, not about 1,450 (Log 11:04Z).
+From the foreman's Log up to 2026-11-17T20:25Z (records item, second pass). Each one names the entry of [[ready queue for scaling]] that waits for it.
+
+Settled since the first pass: removal of the archived folders (ruling (i); `onion/work` waits for the QC fill and the recount, ruling (ii)); the corrected cost of the rescoring (ruling (iv)); the stale kits (ruling (iii)); the signal formula (box spread, ruling 71).
+
+Still open:
+1. Which cluster runs the 256-region rescoring. The Fir jobs 4535347 to 4535923 stay queued; a Nibi run duplicates them unless the PI cancels them (entry 5).
+2. Budget of the mix-and-match gate (474 CPU-hours) and round (about 5,390 on Nibi, 5,308 on Fir) (Log 11:10Z; entry 10).
+3. Scope of the minimum-covariate-set search (1,927 to 17,901 CPU-hours) (Log 11:20Z; entry 14).
+4. Second experiments: report lab together with donor (recommended); drop the 17 unbuilt DNase-seq rows (recommended) (Log 11:30Z; entries 4, 13).
+5. Table version of the final model: eic_v1_2, or the DNase-seq candidate, which retrains the 9 base runs (Log 11:19Z; entry 15).
+6. Resolution design: reduced (about 405 CPU-hours) or full (about 2,340) (Log 12:47Z; entry 9).
+7. QC-on-input arm: accept the changes to the "QC in C" design (presence flags, leak guards) and its 404 CPU-hours (Log 12:29Z; entry 11).
+8. Replicate ladder: adopt the two-sided subtraction; replace the telescoping acceptance check by the common-unit check; the lab-layer report (Log 13:00Z; entry 3).
+9. Learned cell-type embedding at the corrected 728.6 CPU-hours (entry 12).
+10. Matched compute: confirm or reverse the per-rung narrowing of notepad L289 (item A9; entry 8).
+11. Nibi scratch quota: the PI's figure is a soft quota of 20 TB; the measurement is 1,024 GiB soft and 20 TiB hard (notepad, corrected numbers, item 7). No resolution in the Log.

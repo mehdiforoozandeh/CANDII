@@ -692,6 +692,23 @@ Each line gives the fact, then its source. Sources are files in this vault or on
 - PI's words: "i'm going to sleep. keep working on it autonomously overnight. don't do anything dangerous".
 - Consequence: the foreman's night rule (no deletion, no large submission, no cancel) and the night briefs (`.orchestrate/brief_overnight_2026-11-17.md`), with two batches of item agents.
 
+## Ruling 73 (2026-11-17, Log line "PI RULINGS (after the archive)", no stamp, after 16:45Z): removals, QC fill, recount, kits, rescoring cost
+
+- Log wording: "(i) yes, remove t112_cf, onion/fastq, EIC_REPRO from Nibi scratch; (ii) yes, QC fill and 1 bp recount run before onion/work leaves (PI submits the recount); (iii) yes, remove today's superseded code snapshots on Nibi /project; (iv) yes, the 256-region rescoring at about 2,225 CPU-hours."
+- PI condition, verbatim: "please make absolutely sure before you remove something we don't need it anymore or it's easy to regenerate or access from the archive".
+- Consequence: the pre-removal check (repo half and cluster half) kept `EIC_REPRO/003` (genome reference cache), `t112_cf/fastqarms/genome` and `t112_cf/pseudoreps` (the `/project` copy is not proven complete) on scratch. 81 of 81 other targets were removed by 19:45Z; scratch fell from 4,324 to 1,740 GiB, still over the 1,024 GiB soft quota. The staged FASTQs of the 722 priority-4 rows were removed too; the stage step downloads them again from ENCODE with an md5 check. 14 kits were packed to `/project/def-maxwl/mforooz/onion_kit_archive`; the fresh kit CO8 (git d257503) is the only current Nibi kit. The QC fill was submitted at 19:58Z (arrays 27658288, 27658295). This settles the budget of region check 4 at 2,225 CPU-hours (table "Budgets approved and not yet spent" below).
+
+## Ruling 74 (2026-11-17, Log 20:10Z): the agent submits the recount probe and the recount
+
+- PI's words: "You submit it".
+- Consequence: the foreman wrote the recount plan (412 views, 21 tasks) and submitted the probe job 27658461. The recount follows when the probe prints `[pointcheck] PASS`. `onion/work` stays on scratch until the QC fill and the recount end.
+
+## Ruling 75 (2026-11-17, Log 20:15Z): 24 hours to wrap up
+
+- PI's words: "you have 24 hours to wrap up the peeling the onion work. plan wisely to cover everything remaining in the next 24 hours."
+- Consequence: deadline 2026-11-18T20:00Z; plan `closeout/final 24 hours plan.md`. No new training round in the window. Every run that is built and not sent goes to `closeout/ready queue for scaling.md`, with its command, cost, prerequisite and decision rule. Deliverables: the settled-design document (item M1), the ready queue, the close-out deck and report (item R2), the records (item R1), and the PR ready for the PI.
+- Clock note: the Nibi clock read 20:12 UTC when the Log line stamped 20:25Z was the newest; the Log stamps of the evening run ahead of the real clock by a few minutes.
+
 ## Compute tally, 2026-11-10 to 2026-11-17 12:02 UTC (decision D3; records item, 2026-11-17)
 
 - Command, run read-only on each cluster at 2026-11-17 12:02 UTC: `sacct -u mforooz -S 2026-11-10T00:00:00 -E now -X -P --format=JobID,JobName%80,State,AllocCPUS,ElapsedRaw,CPUTimeRAW,AllocTRES%100,Submit,Start,End,Partition,StdOut%250`. `-S` reads local time (Fir UTC-7, Nibi UTC-5). The first job of this user in the window was submitted on 2026-11-11, so the offset changes nothing.
@@ -756,7 +773,7 @@ Nibi by purpose:
 |---|---|---|---|
 | Final round, matched-compute part | ruling 55 ("about 1,660 CPU-h on Fir" for the whole round) | matched compute 1,507 to 2,393 CPU-h (Log 08:12Z, `tools/minicandi/configs/final/MANIFEST.tsv`) | the 12 matched trainings (Fir 4345024 to 4345035) are pending, 0 CPU-h |
 | Blind build, blind rows only | ruling 63 | about 22,700 allocated CPU-h on Nibi; the Fir port about 23,300 allocated, 31,600 billed (Log 05:15Z) | not submitted; ruling 68 moved it to Nibi |
-| Region check 4 (and check 3 if needed) | ruling 67, "up to ~1,450 CPU-h for 4" | corrected to about 2,225 CPU-h (Log 11:04Z); the PI has not approved the corrected figure in the Log | queued on Fir, 0 CPU-h; ruling 68 moved it to Nibi |
+| Region check 4 (and check 3 if needed) | ruling 67, "up to ~1,450 CPU-h for 4"; the corrected figure approved by ruling 73 (iv) | corrected to about 2,225 CPU-h (Log 11:04Z) | queued on Fir, 0 CPU-h; ruling 68 moved it to Nibi |
 
 ### Budgets proposed and not approved (from the Log)
 
@@ -764,11 +781,11 @@ Nibi by purpose:
 |---|---|---|
 | Mix-and-match round (item A13) | about 5,390 CPU-h on Nibi or 5,308 on Fir, plus a 256-region gate of 474 CPU-h | 2026-11-17T11:10Z |
 | Minimum useful covariate set (item A12) | full 17,900; without screening 11,366; final model only (17 arms x 3 seeds) conv autoencoder 1,927, conv + attention 2,105, U-Net 3,245 (with the exclusion curve 3,008, 3,298, 5,060) | 2026-11-17T11:20Z |
-| Learned cell-type embedding (item A6) | about 498 CPU-h, counted at the old 23 CPU-h per scoring | 2026-11-17T11:02Z |
+| Learned cell-type embedding (item A6) | about 498 CPU-h at the old 23 CPU-h per scoring; recounted 728.6 (82.2 + 322.2 + 2 + 322.2; `closeout/ready queue for scaling.md` entry 12) | 2026-11-17T11:02Z |
 | Data set update with DNase-seq (item D3) | 4 row rebuilds, about 5,000 CPU-h (needs writable scratch) | 2026-11-17T11:19Z |
 | Second experiments (item D2) | layers about 50 to 96, baselines about 80 to 140, models not costed; the 17 unbuilt DNase-seq second-experiment rows about 7,300 (drop recommended) | 2026-11-17T11:30Z |
 | Signal p-value and peaks (item E2) | 8 score jobs on Fir, about 154 CPU-h, then the same on Nibi | 2026-11-17T11:15Z |
-| 256-region references for table `eic_v1_2` | about 320 CPU-h (4 baselines, oracle floor, 9 base runs) | status page `run_state/WHERE_WE_ARE.md` (the Log line 11:02Z names the work, not the cost) |
+| 256-region references for table `eic_v1_2` | about 320 CPU-h (4 baselines, oracle floor, 9 base runs); recounted 95.1 + 322.2 = 417.3 (ready queue entry 6) | status page `run_state/WHERE_WE_ARE.md` (the Log line 11:02Z names the work, not the cost) |
 | Blind build, all 721 unbuilt priority-4 rows | about 94,300 allocated CPU-h (74,778 to 110,772); superseded by ruling 63 | 2026-11-16T23:40Z |
 
 ## Numbers told to the PI and later corrected (records item, 2026-11-17)
@@ -783,6 +800,7 @@ Each entry gives the first value, the corrected value and the Log lines.
 6. Report for Max, version 2 to version 3. An independent check found 3 defects; the foreman fixed the cell-type share range, the depth-pair headroom (now 0.081 [0.049, 0.125]) and the caption of Fig. 5 (Log 2026-11-16T03:25Z). The Log does not give the version-2 values.
 7. Nibi scratch quota. The PI's figure is a soft quota of 20 TB (ruling 64). The measurement is a soft quota of 1,024 GiB and a hard limit of 20 TiB, with the grace expired (Log 2026-11-17T02:45Z and 10:40Z). The PI was told; the Log does not record a resolution.
 8. Cluster offset. First: "Every Fir run has lower gap closed than its Nibi base: offset not excluded" (Log line stamped 2026-11-16T12:45Z). Corrected: "NO CLUSTER OFFSET"; U-Net gap closed 0.300 on Fir against 0.298 on Nibi (Log 2026-11-16T08:00Z, true UTC). The Log does not say whether the first statement reached the PI.
-9. Still to correct: the cost of item A6 (about 498 CPU-h) uses the old 23 CPU-h per scoring (Log 11:02Z).
+9. Cost of item A6. First: about 498 CPU-h, with 23 CPU-h per 256-region scoring (Log 11:02Z). Corrected: 82.2 training + 3 x (30.0 + 25.4 + 52) = 322.2 arm scoring + 2 audit and derive + 322.2 zero-shot scoring = 728.6 CPU-h (records item, second pass; `closeout/ready queue for scaling.md` entry 12).
+10. Cost of the `eic_v1_2` 256-region references with the 9 base scorings. First: about 320 CPU-h (status page). Corrected: 95.1 for the 4 baselines and the oracle floor (16 CPUs x the `eic_v1` 256-region wall times, item A13 file 4.8) + 322.2 for the 9 scorings = 417.3 CPU-h (ready queue entry 6).
 
 Values that changed because a definition changed (not errors): the composite moved from version 2 to version 3 on 2026-11-16 (ruling 56). Same-cluster base composites under version 2 (Log 08:00Z): conv autoencoder 0.491, conv + attention 0.498, U-Net 0.443, axial 0.464, Perceiver 0.294. Under version 3 (Log 14:10Z): 0.528, 0.525, 0.495, 0.498, 0.335. Under version 2 the U-Net view arms differed (base view only 0.483 against all views 0.444, Log 08:30Z); under version 3 the view arms are 0.498 to 0.517, i.e. "no view effect" (Log 14:10Z). The key `selection.composite` in `scores.json` still holds version 1 and must not be quoted (Log 2026-11-16T23:20Z).
