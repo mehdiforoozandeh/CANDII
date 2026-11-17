@@ -9,11 +9,19 @@
 #   bash submit_cell_embedding.sh                   # MODE=train: 9 trainings + their scoring
 #   MODE=audit bash submit_cell_embedding.sh        # after the 9 trainings: one CPU job, the
 #                                                   # zero-shot trap checks (cell_embedding_audit.py runs)
+#   MODE=derive bash submit_cell_embedding.sh       # after the 9 trainings: one CPU job writes the 9
+#                                                   # zero-shot control runs (derive-unknown: the same
+#                                                   # weights, cell_id_eval = unknown, every cell reads row 0)
+#   MODE=zeroshot bash submit_cell_embedding.sh     # after derive: score the 9 control runs (no training)
 #   DRY_RUN=0 bash submit_cell_embedding.sh         # real submission -- the foreman's call only
 #
 # CLUSTER=fir|nibi (default: from the host name). Runs root: Fir runs_fir, Nibi runs. The reference
 # runs eic_v1_2_rung{2,3,4}_base_heldout exist on Fir only, so the arm belongs on Fir (one cluster per
-# comparison). Run names: <runs root>/eic_v1_2_abl_cell_embedding_<convae|convattn|unet>/seed<s>.
+# comparison). Run names: <runs root>/eic_v1_2_abl_cell_embedding_<convae|convattn|unet>/seed<s>;
+# zero-shot control runs: <runs root>/eic_v1_2_abl_cell_embedding_zeroshot_<arch>/seed<s>.
+# The zero-shot control is required before any "the embedding helps" conclusion is recorded.
+# CLUSTER=nibi refuses MODE=train and MODE=zeroshot unless PRED_STORE_ROOT is set explicitly
+# (Nibi /scratch refused writes on 2026-11-17).
 # Scoring: the options of slurm/onion_eval/e1_pair_check_p256.sh (256 pair regions, same-view pass,
 # 8 CPU predict shards, inference batch 8, 16-CPU metrics job) with REFS_FROM = eval/<V>/baselines.
 # Training: --time 03:00:00 (submit_all.sh; the eic_v1_2 base runs took 0.40 to 1.44 h on Fir, 12 CPUs).
@@ -23,7 +31,7 @@
 # submission refuses when one is missing (exit 3). A dry run with a missing eval set or baselines
 # prints the training lines only. The reference scorings <base run>/seed<s>/p256_sv/SCORED are not a
 # precondition of submission; they are a precondition of the reading and are listed.
-set -u
+set -u -o pipefail
 module load python/3.10.13 >/dev/null 2>&1; unset EBPYTHONPREFIXES
 O=/project/def-maxwl/mforooz/ONION
 K="${K:-/project/def-maxwl/mforooz/onion_kit/COA6}"
@@ -69,6 +77,11 @@ for r in 2 3 4; do for s in $SEED_LIST; do
   p=$ROOT/${V}_rung${r}_base_heldout/seed$s/p256_sv/SCORED
   [ -e "$p" ] || { echo "READING NEEDS $p (reference scoring, not submitted here)"; nref=$((nref + 1)); }
 done; done
+case "$MODE" in train|zeroshot)
+  if [ "$CL" = nibi ] && [ -z "${PRED_STORE_ROOT:-}" ]; then
+    echo "REFUSED: on nibi set PRED_STORE_ROOT explicitly (the default is on /scratch)" >&2; exit 3
+  fi ;;
+esac
 case "$(dirname "${PRED_STORE_ROOT:-/scratch/mforooz/onion/pred_store}")" in /scratch*)
   echo "NOTE prediction stores go to ${PRED_STORE_ROOT:-/scratch/mforooz/onion/pred_store} (~55 GB, ~1,700 files per run while scoring); check that /scratch on $CL takes writes" ;;
 esac
@@ -93,10 +106,49 @@ train)
   n=0
   for r in 2 3 4; do
     bash $K/slurm/minicandi/submit_arms.sh $K $T "$EVS" $ROOT $r \
-      "${V}_abl_cell_embedding_${ARCH[$r]}=$A/rung$r/cell_embedding.json" 2>&1 | grep -v "^$"
+      "${V}_abl_cell_embedding_${ARCH[$r]}=$A/rung$r/cell_embedding.json" 2>&1 | { grep -v "^$" || true; }
+    rc=${PIPESTATUS[0]}
+    [ "$rc" = 0 ] || { echo "FAILED submit_arms.sh rung $r (exit $rc); stopping" >&2; exit "$rc"; }
     n=$((n + 1))
   done
   echo "architectures submitted (or printed): $n x seeds ($SEED_LIST); reference scorings missing: $nref; DRY_RUN=$DRY_RUN"
+  ;;
+derive)
+  OUT="${OUT:-$O/CO-A6/derive}"
+  ARGS=(); notdone=0
+  for r in 2 3 4; do for s in $SEED_LIST; do
+    src=$ROOT/${V}_abl_cell_embedding_${ARCH[$r]}/seed$s
+    dst=$ROOT/${V}_abl_cell_embedding_zeroshot_${ARCH[$r]}/seed$s
+    [ -e "$src/DONE" ] || { echo "NOT TRAINED $src"; notdone=$((notdone + 1)); }
+    [ ! -e "$dst" ] || { echo "EXISTS $dst (derive refuses it)"; notdone=$((notdone + 1)); }
+    ARGS+=(--run "$src" --out "$dst")
+  done; done
+  if [ "$notdone" -gt 0 ] && [ "$DRY_RUN" != 1 ]; then echo "REFUSED: $notdone runs not ready" >&2; exit 3; fi
+  BODY="set -eu; module load python/3.10.13; virtualenv --no-download \$SLURM_TMPDIR/venv; \
+source \$SLURM_TMPDIR/venv/bin/activate; pip install --no-index --upgrade pip; \
+pip install --no-index -r $K/requirements-fir.txt; \
+pip install --no-index --find-links $K/wheels -r $K/requirements-pypi.txt; cd $K; \
+export PYTHONPATH=$K/src:$K/tools PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1 OMP_NUM_THREADS=2; \
+python $K/tools/minicandi/cell_embedding_audit.py derive-unknown ${ARGS[*]}"
+  CMD=(sbatch --account=def-maxwl --job-name=a6_cell_embedding_derive --time=00:30:00
+       --cpus-per-task=2 --mem=8000M --gres=none "--output=$OUT/derive_%j.out" --wrap "$BODY")
+  if [ "$DRY_RUN" = 1 ]; then echo "DRY RUN"; printf '%q ' "${CMD[@]}"; echo
+  else mkdir -p "$OUT" && "${CMD[@]}"; fi
+  ;;
+zeroshot)
+  [ "${#miss[@]}" -eq 0 ] || { echo "REFUSED: the zero-shot runs are scoring only, and the eval set or baselines are missing" >&2; exit 3; }
+  export CLUSTER=$CL NICE="${NICE:-100}" SEEDS="$SEED_LIST" SCORE_ONLY=1
+  export SCORE_SAME_VIEW=1 SCORE_PHASES=1 SCORE_SUBDIR=p256_sv SCORE_SHARDS=8 \
+    SCORE_PRED_DEVICE=cpu SCORE_PRED_CPUS=8 SCORE_PRED_MEM=32000 SCORE_INFER_BATCH=8 \
+    SCORE_PRED_TIME=06:00:00 SCORE_CPUS=16 SCORE_MEM=64000 SCORE_TIME=06:00:00 \
+    REFS_FROM=$B KEEP_PRED_STORE=0
+  for r in 2 3 4; do
+    bash $K/slurm/minicandi/submit_arms.sh $K $T $EV $ROOT $r \
+      "${V}_abl_cell_embedding_zeroshot_${ARCH[$r]}=$A/rung$r/cell_embedding.json" 2>&1 | { grep -v "^$" || true; }
+    rc=${PIPESTATUS[0]}
+    [ "$rc" = 0 ] || { echo "FAILED submit_arms.sh rung $r (exit $rc); stopping" >&2; exit "$rc"; }
+  done
+  echo "zero-shot control scorings submitted (or printed); DRY_RUN=$DRY_RUN"
   ;;
 audit)
   OUT="${OUT:-$O/CO-A6/audit}"
@@ -120,5 +172,5 @@ python $K/tools/minicandi/cell_embedding_audit.py runs --tables $T --evalset $EV
   if [ "$DRY_RUN" = 1 ]; then echo "DRY RUN"; printf '%q ' "${CMD[@]}"; echo
   else mkdir -p "$OUT" && "${CMD[@]}"; fi
   ;;
-*) echo "MODE must be train or audit" >&2; exit 2 ;;
+*) echo "MODE must be train, audit, derive or zeroshot" >&2; exit 2 ;;
 esac

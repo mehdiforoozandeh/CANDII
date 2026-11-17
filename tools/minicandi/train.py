@@ -386,6 +386,19 @@ def set_pearson_stats(model, batches: list) -> None:
             mod.set_pearson_stats(lam.float(), size.float())
 
 
+#: close-out A6: the initial cell-embedding table, written beside the checkpoint at the start of a
+#: run with `cell_embedding` (never on a resume); `cell_embedding_audit.py` reads it
+INIT_CELL_EMB_NAME = "init_cell_embedding.pt"
+
+
+def _save_initial_cell_embedding(model, seed: int, out: Path) -> None:
+    keys = [k for k in model.state_dict() if k.endswith("cell_state.emb.weight")]
+    if len(keys) != 1:
+        raise ValueError(f"cell_embedding: want one '*cell_state.emb.weight', found {keys}")
+    w = model.state_dict()[keys[0]].detach().cpu().clone()
+    _save({"key": keys[0], "seed": int(seed), "weight": w}, out / INIT_CELL_EMB_NAME)
+
+
 def _save(obj, path: Path) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     torch.save(obj, tmp)
@@ -465,6 +478,8 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
     region = ds.region_record()                      # interface I; {} without its keys
     strata: dict = {}
     excl: dict = {}                                  # exclude_regions: rejections and windows
+    #: close-out A6: training windows per cell-embedding row (cell_id); None when the arm is off
+    cell_windows: dict | None = {} if cfg.get("cell_embedding") else None
 
     ckpt_path, state_path = out / CKPT_NAME, out / STATE_NAME
     resumed = ckpt_path.is_file()
@@ -489,6 +504,8 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
         n_resumes = int(st.get("n_resumes", 0)) + 1
         strata = dict(st.get("windows_per_stratum", {}))
         excl = dict(st.get("exclude_counts", {}))
+        if cell_windows is not None:
+            cell_windows = dict(st.get("cell_id_windows", {}))
         prev = json.loads((out / "run.json").read_text(encoding="utf-8")) \
             if (out / "run.json").is_file() else {}
         for k in ("train_regions_sha256", "exclude_regions_sha256"):
@@ -563,6 +580,7 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
                 **({"heldout": {"seed": HELDOUT_SEED, "windows": sum(len(b["meta"]) for b in held),
                                 "loci": [[m["chrom"], m["start_bin"]] for b in held
                                          for m in b["meta"]]}} if held else {}),
+                **({"cell_id_windows": dict(cell_windows)} if cell_windows is not None else {}),
                 **recipe, **region, **last}
 
     def checkpoint(done: bool, last: dict) -> dict:
@@ -574,11 +592,15 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
                "flops_per_window_forward": fpw_fwd, "n_resumes": n_resumes,
                **({"workers": workers} if workers else {}),
                **({"windows_per_stratum": dict(strata)} if strata else {}),
-               **({"exclude_counts": dict(excl)} if excl else {})}, state_path)
+               **({"exclude_counts": dict(excl)} if excl else {}),
+               **({"cell_id_windows": dict(cell_windows)} if cell_windows is not None else {})},
+              state_path)
         info = summary(done, last)
         _write_json(info, out / "run.json")
         return info
 
+    if cell_windows is not None and not resumed:      # close-out A6: the audit's reference
+        _save_initial_cell_embedding(model, seed, out)
     log = open(out / "log.jsonl", "a", encoding="utf-8")
     t0 = time.time()
     t_ckpt = t0
@@ -598,6 +620,9 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
             for m in batch["meta"]:
                 excl["rejections"] = excl.get("rejections", 0) + int(m["exclude_rejections"])
                 excl["windows"] = excl.get("windows", 0) + 1
+        if cell_windows is not None:                 # A6: windows drawn per cell_id (before dropout)
+            for i in batch["cell_id"].tolist():
+                cell_windows[str(i)] = cell_windows.get(str(i), 0) + 1
         for g in opt.param_groups:
             g["lr"] = lr_at(step, total_steps, float(cfg["lr"]), warm)
         parts: dict = {}

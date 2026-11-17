@@ -82,11 +82,13 @@ Runs: 3 architectures x 3 seeds = 9 runs, 80,000 windows, tables eic_v1_2, score
 
 - Row numbering: `extra_data.cell_index` numbers the cells of the `in_eic = train` rows from 1 (`extra_data.py`:179-187). Any other cell reads row 0 (unknown). The vocabulary is built from training rows only, so the eic_v1 defect (category lists that held validation and blind values, and so had embedding rows that no training row reached) cannot recur through the index.
 - Row 0 is trained in two ways: the per-sample dropout 0.1 sends a known cell to row 0 (`extra_inputs.py`:130), and the sampler draws the shared-control pseudo-cell "" (124 control rows, 1 of 52 cell groups; `dataset.py`:616-624 and 867), whose id is 0.
-- Held-out (validation) cells: all 25 cells with a scored item have a training track and so a trained row (ids 2 to 48). A validation track never trains its own cell's row, because mode `train` never reads a validation row (`dataset.py`, role table at line 13).
+- Scope. EIC holds out tracks, not cells. The arm measures whether a per-cell lookup helps impute a missing assay in a cell seen in training. It concludes nothing about cell types never seen in training: those read row 0. Cell identity is given to the model by design, and the no-leak check passes by construction of the split.
+- Cells with held-out tracks: all 25 cells with a scored item have a training track and so a trained row (ids 2 to 48). A validation track never trains its own cell's row, because mode `train` never reads a validation row (`dataset.py`, role table at line 13).
 - Blind cells: the 4 cells with blind rows all have training rows (eic_v1_2, Nibi). This item scores no blind track.
 - A cell type with no training row: it reads row 0. The arm then gives the model as trained with 10% "unknown" samples. That is why the arm never joins the design.
 - Control 1 (before training; done 2026-11-17 on Nibi): `cell_embedding_audit.py tables` on eic_v1_2 with the eval-set items (identical in eic_v1 and eic_v1_2; only `tables`, `tables_dir`, `tables_sha256` differ, checked on Fir). Result: PASS served (25 of 25 scored cells have an id > 0), PASS no leak (no scored imputation, control or correction measurement is a training row). Evidence: `cruxvault/results/closeout_A6/tables_audit_eic_v1_2.json`.
-- Control 2 (after training, one CPU job): `cell_embedding_audit.py runs` on the 9 runs. It checks `n_cells` = 51 and the table hash, and that each row read by a scored cell, and row 0, left the direction of its initial value (rebuilt with the run's seed). AdamW weight decay changes an unused row only by a positive factor, so "changed" is not enough; the share of the row orthogonal to its initial value must be at least 1e-3. A unit test trains a model in which one row gets gradient: that row passes, and every other row has a share below 1e-6 although weight decay changed it.
+- Control 2 (after training, one CPU job): `cell_embedding_audit.py runs` on the 9 runs. It checks `n_cells` = 51 and the table hash, and that each row read by a scored cell, and row 0, left the direction of its initial value. The initial value is the table that `train.py` saves at the start of a `cell_embedding` run (`init_cell_embedding.pt`); without that file the check fails, because a rebuilt table can differ by torch version or random stream and would pass every row falsely. The report also gives the training windows drawn per row (run.json `cell_id_windows`, before the dropout sends about 10% to row 0). AdamW weight decay changes an unused row only by a positive factor, so "changed" is not enough; the share of the row orthogonal to its initial value must be at least 1e-3. A unit test trains a model in which one row gets gradient: that row passes, and every other row has a share below 1e-6 although weight decay changed it.
+- Control 3, the zero-shot control (required before any "helps" conclusion): each trained run is copied by `cell_embedding_audit.py derive-unknown` to a run whose config adds `cell_id_eval = unknown` (same weights), and scored. In modes val and blind the dataset then gives every window `cell_id` 0 (`dataset.py`, `_extra_keys`); mode train refuses the key. Absent or `own`, batches are unchanged (the default-digest test passes).
 - Built-in refusals: the dataset refuses `n_cells` that differs from the index (`dataset.py`:579-584), and the scorer refuses a run whose tables hash differs from the eval set (`predict.py`:193-197).
 
 ### 9.5 Prior leads (numbers read from files)
@@ -106,7 +108,9 @@ Variance recovered within the seed range on all three architectures. The model s
 | outcome | conclusion |
 |---|---|
 | Control 2 fails on any run | the arm is void for that run; find the cause (untrained row, wrong `n_cells`, wrong tables); no reading |
-| variance recovered beyond the reference on 2+ architectures | cell identity carries information that the input assays and the donor do not; motivates cell-state inputs (A5) for the scaling phase; then score the trained arm with every `cell_id` set to 0 to measure what a new cell type loses (needs a scorer switch; not built) |
+| variance recovered beyond the reference on 2+ architectures, and the zero-shot control falls back to the reference | a per-cell lookup helps a cell seen in training; cell identity carries information that the input assays and the donor do not; motivates cell-state inputs (A5) for the scaling phase |
+| variance recovered beyond the reference on 2+ architectures, and the zero-shot control is also beyond | the gain does not come from the per-cell rows (it comes from the extra FiLM path or the dropout); record no "identity helps" conclusion |
+| zero-shot control lower than the reference, beyond | a new cell type would be served worse than by the base recipe; state this beside any gain |
 | within the range on all three, or beyond on 1 only | the input assays and covariates already describe the cell at this scale |
 | variance recovered lower, beyond, on 2+ | the embedding overfits training tracks; report it as a warning for any identity input |
 | correction terms move beyond while imputation is within | a per-cell code changes the processing correction; check for a wiring fault first |
@@ -117,10 +121,11 @@ Report the four metrics, the composite and the correction-only term beside the R
 
 - Training: the eic_v1_2 base runs on Fir used (sacct `CPUTimeRAW`, 12 CPUs) conv autoencoder 19,740 + 17,424 + 27,468 s; conv + attention 57,792 + 62,256 + 34,872 s; U-Net 28,392 + 23,508 + 24,312 s. Sum 295,764 s = 82.2 CPU-h. The arm adds 1.5% parameters, so training is about 82 CPU-h.
 - Scoring on 256 regions: 9 x 23 CPU-h = 207 CPU-h (overnight addendum figure).
-- Audit: 1 job x 2 CPUs x at most 0.5 h = 1 CPU-h.
-- Total for the arm: 82 + 207 + 1 = 290 CPU-h; 90 jobs (9 training + 72 predict + 9 metrics) and 1 audit job.
+- Audit and derive: 2 jobs x 2 CPUs x at most 0.5 h = 2 CPU-h.
+- Zero-shot control scoring: 9 x 23 CPU-h = 207 CPU-h (no training).
+- Total for the arm: 82 + 207 + 2 + 207 = 498 CPU-h; 90 jobs (9 training + 72 predict + 9 metrics), 2 small jobs, then 81 scoring jobs (72 predict + 9 metrics).
 - Prerequisites, not in this total: the reference scoring of the 9 eic_v1_2 base runs into `p256_sv` (9 x 23 = 207 CPU-h) and the 256-region baselines of eic_v1_2 (`eval/eic_v1_2/baselines`, 4 baselines and `oracle_floor`), which do not exist on either cluster today.
 
 ### 9.9 Submission
 
-`tools/minicandi/configs/ablations/cell_embedding/submit_cell_embedding.sh` (dry run by default; `MODE=train` or `MODE=audit`; `CLUSTER=fir|nibi`). Run it on Fir, where the reference runs are. The dry run on Nibi (kit COA6) found n_cells = 51 in all 3 configs and printed the 9 training lines; it listed the missing eic_v1_2 eval set and baselines on Nibi and the 9 missing reference scorings.
+`tools/minicandi/configs/ablations/cell_embedding/submit_cell_embedding.sh` (dry run by default; `MODE=train`, then `audit` and `derive`, then `zeroshot`; `CLUSTER=fir|nibi`; on Nibi `PRED_STORE_ROOT` must be set). Run it on Fir, where the reference runs are. The dry run on Nibi (kit COA6) found n_cells = 51 in all 3 configs and printed the 9 training lines; it listed the missing eic_v1_2 eval set and baselines on Nibi and the 9 missing reference scorings.
