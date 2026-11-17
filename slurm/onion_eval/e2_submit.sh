@@ -34,8 +34,9 @@ O=/project/def-maxwl/mforooz/ONION
 K=/project/def-maxwl/mforooz/onion_kit/$KIT_ID
 ARCH=(conv_ae:rung2_base_heldout conv_attn:rung3_base_heldout unet:rung4_base_heldout)
 SSH=(ssh -o BatchMode=yes -o ConnectTimeout=15)
-# score job shape: 2 CPUs, 20 GB (the timing job reached 12.3 GB RSS under a 12 GB limit)
-SCORE_TIME="${SCORE_TIME:-12:00:00}"
+# score job shape: 2 CPUs, 20 GB, 14 h. Timing job 4448330 (rung2 seed0, with pairs): 11 h 44 min,
+# targets 32,517 s (9.0 h), pairs 9,294 s, RSS 12.3 GB under a 12 GB limit
+SCORE_TIME="${SCORE_TIME:-14:00:00}"
 SCORE_MEM="${SCORE_MEM:-20000M}"
 
 remote() {   # run one command on the cluster, or print it
