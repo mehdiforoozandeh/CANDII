@@ -255,14 +255,16 @@ def neutral_value(col: str) -> float:
 def drop_field_indices(cfg: dict) -> tuple | None:
     """A12: (c_in indices, c_out indices) of `covariate_drop_fields`, or None when the key is absent
     or empty (the default: today's behavior). META columns sit at the same index in C and C'; a QC
-    column is in C only and needs `qc_on_input`. Unknown or repeated names are a ValueError."""
+    column is in C only and needs `qc_on_input`. Unknown or repeated names are a ValueError.
+    With `two_step` the switch acts on both legs: registry.build_model builds the inner rung
+    without the wrapper keys and two_step.TwoStep runs that inner model twice, so leg 1 (C' =
+    the base covariates c_leg1) and leg 2 (C = c_leg1, C' = the target's) both pass through the
+    rung's `model_covariates` and read the field's neutral value."""
     names = (cfg or {}).get(DROP_FIELDS_KEY) or []
     if not names:
         return None
     if isinstance(names, str) or len(set(names)) != len(names):
         raise ValueError(f"{DROP_FIELDS_KEY} {names!r}: want a list of distinct column names")
-    if cfg.get("two_step"):   # the base leg's c_base would keep the column
-        raise ValueError(f"{DROP_FIELDS_KEY} is not defined with two_step (c_base is not dropped)")
     cols_in = list(META_COLUMNS) + (list(QC_COLUMNS) if cfg.get("qc_on_input") else [])
     bad = [n for n in names if n not in cols_in]
     if bad:

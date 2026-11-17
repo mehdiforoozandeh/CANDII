@@ -76,7 +76,7 @@ Overlap between fields, as H(a | b) / H(a) on training rows (0: b fixes a; 1: b 
 0. **References (prerequisite).** The full-set runs are the recipe that mix-and-match selects, trained on `eic_v1_2`, 3 seeds, per model. Their 256-region scores (`p256_sv`) are the reference of every comparison. The 256-region references of `eic_v1_2` (4 baselines and the oracle floor under `eval/eic_v1_2/baselines`) do not exist yet on Fir or Nibi (checked 2026-11-17); only `baselines_p16` exists on Fir. Nibi has no `eval/eic_v1_2` at all.
 1. **Screening (scoring only, no training).** For each of the 10 fields other than log2 depth, and each side (C' = `out`, C = `in`), score the full-set runs with that ONE field replaced: (a) foreign, i.e. the value of a donor experiment of the same assay in another cell (the E5 donor draw, seed 0), mode `<side>_keep_depth.<field>`; (b) optionally neutral, i.e. the column's fixed centre or id 0, mode `<side>_neutral.<field>`. This extends the whole-row foreign-covariate scoring of E5 (ABLATIONS_READ section 3.1) to one column; the code is `score.py` FOREIGN_COLUMNS_DEFINITION. log2 depth is not screened at scoring, because the batch depth also feeds the count transform and the NB offset.
 2. **Confirmation, leave-one-field-out (LOFO).** One training per field (11 fields), 3 models, 3 seeds, with `covariate_drop_fields: [<field>]`: the field reads its neutral value in the two covariate encoders, in training and at scoring; the count transform and the NB depth offset keep the true depth.
-3. **Control, grouped removal.** Six group arms (`tools/minicandi/covariate_field_arms.py` GROUPS): pipeline pair; lab + platform; donor + lab; the four view knobs (run_type_pe, read_length, dedup_on, mapq_threshold); all six categorical fields; all fields except log2 depth.
+3. **Control, grouped removal.** Six group arms (`tools/minicandi/covariate_field_arms.py` GROUPS): pipeline pair; lab + platform; donor + lab; the four view knobs (run_type_pe, read_length, dedup_on, mapq_threshold); all six categorical fields; all fields except log2 depth. The first four are the correlated groups that the rule reads (`CORRELATED_GROUPS`). The last two are reference arms: a useful "all but depth" arm says only that not every field can go at once, so the rule does not read them.
 4. **Exclusion curve (rank-guided backward elimination).** Order the 11 fields by the LOFO score S (least useful first). Step k trains with the first k fields removed, k = 2 to 11 (k = 1 is the first LOFO arm): 10 arms. A full greedy search re-ranks at each step and needs 11 + 10 + ... + 2 = 65 arms (585 trainings and 256-region scorings); I chose the fixed order for cost. The curve then shows the hidden value of a correlated pair as a drop at the step that removes the second member.
 5. **Read.** `tools/onion_eval/covariate_ranking.py` writes `ranked.tsv`, `effects.tsv`, `curve.tsv`, `curve.svg`, `order.txt` and `RANKING.md`.
 
@@ -87,8 +87,12 @@ Rule terms, all on the 256-region scoring: imputation (variance recovered), gap 
 | outcome | conclusion |
 |---|---|
 | a cell with z > 1 on at least 2 of 3 models, or z > 2 on one model | the field is **useful**: keep |
-| no cell with z > 1 on any model and term (S = max z <= 1), and the field's group arm is also S <= 1 | **safe to remove** |
-| LOFO safe, but its group arm useful | the members share the value: keep one member (the one with the larger S); remove the others |
+| no cell with z > 1 on any model and term (S = max z <= 1), and every scored correlated group arm that holds the field is also S <= 1 | **safe to remove** |
+| LOFO safe, but its correlated group arm useful | the members share the value: keep the member with the largest LOFO S (`shared: keep`); the others are `shared: removable if <keeper> kept`. The curve order puts the keeper last |
+| LOFO safe, its group arm unclear | **unclear** (group): keep |
+| LOFO safe, no group arm scored | `safe alone (group not scored)`: not yet safe to remove |
+| fewer than 2 seeds, or a zero seed range, in a cell | the cell is undefined; the field is `undefined` and stays in the kept set |
+| one model only (the cheaper plan, 7.7) | useful = z > 1 on that model; otherwise as above |
 | z > 1 on exactly one model, below 2x | **unclear**: keep (the PI's default is every field); list it for the PI |
 | screening beyond, LOFO within | the retrained model recovers the information from other fields; LOFO governs removal |
 | imputation lower beyond for a single field | unexpected (E5: covariates carried no imputation information at test time); check the wiring before any conclusion |
@@ -110,19 +114,19 @@ Expectation: (1) imputation within for every field and group. (2) The view knobs
 
 ### 7.6 Controls and traps
 
-- Correlated fields hide each other's value in LOFO (pipeline pair; lab with donor and platform; antibody with assay). Control: the group arms and the cumulative curve. Antibody's information beyond the assay is the only part testable, because the assay is the track index.
+- Correlated fields hide each other's value in LOFO (pipeline pair; lab with donor and platform; antibody with assay). Control: the group arms and the cumulative curve. There is no antibody + assay group arm: assay identity is not a covariate column. The assay is the track index (`contract.TRACK_INDEX`), i.e. which output channel a row belongs to, so no switch can remove it, and the tables hold no other assay-level column (`assay_class` is not encoded; `contract.META_COLUMNS`). The LOFO antibody arm therefore measures exactly antibody's information beyond the assay, which is the only part that can be removed.
 - A same-assay foreign donor cannot change a field that is constant within the assay (pipeline varies in 8 of 36 assays, run_type_pe in 14). The scorer records, per column, how many measurements the swap changed (`foreign_covariates.n_changed_by_column`); a screen with few changes is blind, not null.
 - Neutral id 0 is an embedding row that training never updates for a field filled in every training row (lab, donor, platform, pipeline). A neutral screen is therefore out of distribution; read it with that caveat. The LOFO arms do not have this problem: the neutral value is present from the first step of training.
 - donor_id nearly fixes the cell (0.05). A donor field can let a model memorize cell identity; 6 validation rows and 0 blind rows hold an unseen donor.
 - Antibody: 18 validation and 48 blind rows hold an antibody outside the vocabulary (id 0 at test time).
 - Power: 3 seeds; calibration seed ranges are 0.108 to 0.178, so a calibration loss below about 0.11 to 0.18 cannot show. "Safe to remove" means no loss detectable at this power. 11 fields x 12 cells give many chances for one false "beyond"; the 2-model requirement limits this.
-- The drop switch refuses `two_step` (the base leg's covariates would keep the field). The ablation read recommends two-step off.
+- Two-step recipes are supported. `registry.build_model` builds the inner rung without the wrapper keys, and both legs of `two_step.TwoStep` run that inner model, so the field reads its neutral value in leg 1 (C' = base covariates) and in leg 2 (test `test_two_step_drops_the_field_in_both_legs`).
 
 ### 7.7 Cost (CPU-hours; measured with sacct on Fir, read-only, 2026-11-17)
 
-- Training per run, `eic_v1_2_rung{2,3,4}_base_heldout`, jobs 4472547 to 4472600 (12 CPUs each): conv autoencoder (19,740 + 17,424 + 27,468) s / 3 = 5.99 h; conv + attention (57,792 + 62,256 + 34,872) s / 3 = 14.34 h; U-Net (28,392 + 23,508 + 24,312) s / 3 = 7.06 h. One arm (3 models x 3 seeds) = 3 x (5.99 + 14.34 + 7.06) = 82.2.
-- 256-region scoring per run (8 predict jobs of 8 CPUs + 1 metrics job of 16 CPUs), the E1 scorings of `rung{2,3,4}_base_heldout` (jobs 4492698 and after): conv autoencoder 22.8, 28.5, 38.8 (mean 30.03); conv + attention 25.8, 23.1, 27.4 (mean 25.43); U-Net 42.2, 47.6, 70.5 (mean 53.43). One arm = 3 x (30.03 + 25.43 + 53.43) = 326.7, i.e. 36.3 per run. The brief's figure of about 23 per run is below this measurement.
-- One training arm with its scoring = 82.2 + 326.7 = 408.9.
+- Training per run, `eic_v1_2_rung{2,3,4}_base_heldout`, jobs 4472547 to 4472600 (12 CPUs each): conv autoencoder (19,740 + 17,424 + 27,468) s = 64,632 s; 64,632 / 3 / 3,600 = 5.98 h; conv + attention 154,920 / 3 / 3,600 = 14.34 h; U-Net 76,212 / 3 / 3,600 = 7.06 h. One arm (3 models x 3 seeds) = 3 x (5.98 + 14.34 + 7.06) = 82.2.
+- 256-region scoring per run (8 predict jobs of 8 CPUs + 1 metrics job of 16 CPUs), the E1 scorings of `rung{2,3,4}_base_heldout` (jobs 4492698 and after): conv autoencoder 22.8, 28.5, 38.8 (mean 30.03); conv + attention 25.8, 23.1, 27.4 (mean 25.43); U-Net 42.2, 47.6, 70.5 (mean 53.43). These are the per-model rates per run-seed: conv autoencoder 30.0, conv + attention 25.4, U-Net 53.4 (the foreman's figure, about 52, is from another set of jobs; I use my measurement). One arm = 3 x (30.03 + 25.43 + 53.43) = 326.7, i.e. 36.3 per run on average. The brief's figure of about 23 per run is below this measurement.
+- One training arm with its scoring, 3 models x 3 seeds = 82.2 + 326.7 = 408.9. Per model (3 seeds): conv autoencoder 3 x (5.98 + 30.03) = 108.1; conv + attention 3 x (14.34 + 25.43) = 119.3; U-Net 3 x (7.06 + 53.43) = 181.5.
 
 | step | arms | trainings | 256-region scorings | CPU-hours |
 |---|---|---|---|---|
@@ -135,6 +139,16 @@ Expectation: (1) imputation within for every field and group. (2) The view knobs
 | 4. curve, k = 2 to 11 | 10 | 90 | 90 | 10 x 408.9 = 4,089 |
 
 Full plan (0 + 1 + 2 + 3 + 4) = 326.7 + 6,534 + 4,498 + 2,453 + 4,089 = 17,901. Without screening: 11,366. Not counted: the full-set trainings (mix-and-match item) and the 256-region references of `eic_v1_2` (the 4 baselines took 28.1 CPU-hours in total on 16 pair regions, Fir jobs 4463699 to 4463702). At 256 regions, a per-field screening on both sides (653 CPU-hours per field) costs more than a LOFO training with its scoring (409). My recommendation: run step 1'' (1,089) or no screening, then steps 2 to 4; the PI decides.
+
+Cheaper plan, for the PI to choose: LOFO (11 arms) and groups (6 arms) on the final model only (the one mix-and-match selects; 1 model x 3 seeds), plus its 3 reference scorings, no screening:
+
+| final model | reference (3 scorings) | LOFO + groups (17 arms) | total | with the curve (10 more arms) |
+|---|---|---|---|---|
+| conv autoencoder | 3 x 30.03 = 90.1 | 17 x 108.1 = 1,837 | 1,927 | + 10 x 108.1 = 3,008 |
+| conv + attention | 3 x 25.43 = 76.3 | 17 x 119.3 = 2,029 | 2,105 | + 10 x 119.3 = 3,298 |
+| U-Net | 3 x 53.43 = 160.3 | 17 x 181.5 = 3,085 | 3,245 | + 10 x 181.5 = 5,060 |
+
+The submit script runs it with `RUNGS=<2|3|4>`. The ranking tool then applies the one-model rule (7.4). The cost of this plan: the result holds for one architecture only.
 
 Storage: each scoring writes a prediction store of about 55 GB and 1,700 files on /scratch, removed by its metrics job. 180 scorings at once would hold about 306,000 files; Fir scratch was at 834K of 1,000K files. Submit in batches (`ARMS=`, `FIELDS=`, `SIDES=`, `SEEDS=` of the submit script).
 

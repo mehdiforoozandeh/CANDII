@@ -73,8 +73,7 @@ def test_indices_and_refusals():
     for bad in ({"covariate_drop_fields": ["nsc"]},                    # QC needs qc_on_input
                 {"covariate_drop_fields": ["lab"]},                    # not a column name
                 {"covariate_drop_fields": ["lab_id", "lab_id"]},
-                {"covariate_drop_fields": "lab_id"},
-                {"covariate_drop_fields": ["lab_id"], "two_step": True}):
+                {"covariate_drop_fields": "lab_id"}):
         with pytest.raises(ValueError):
             CV.drop_field_indices(bad)
     assert CV.neutral_value("lab_id") == 0.0 and CV.neutral_value("read_length") == 75.0
@@ -138,3 +137,34 @@ def test_depth_drop_keeps_the_offset(batch, r):
     with torch.no_grad():
         od, on = drop(batch), plain(_neutral_batch(batch, "log2_depth"))
     assert not torch.equal(od["mu"], on["mu"])
+
+
+def test_two_step_drops_the_field_in_both_legs(tmp_path):
+    """registry builds the inner rung without `two_step`; both legs run it, so both read the
+    neutral value: the dropped model equals the plain two-step model on a batch whose lab column is
+    neutral in C (x_avail rows), C' and c_base (y_avail rows), for leg 1 (mu_base) and leg 2 (mu)."""
+    from minicandi import registry as R
+    tables = synth.make_synthetic_tables(tmp_path)
+    cfg = _cfg(2, two_step=True)
+    b = D.OnionDataset(tables, "train", cfg, seed=0).batch(B, np.random.default_rng(0))
+    assert "c_base" in b
+
+    def build(c):
+        torch.manual_seed(0)
+        m = R.build_model(c)
+        g = torch.Generator().manual_seed(1)
+        with torch.no_grad():
+            for p in m.parameters():
+                p.add_(0.05 * torch.randn(p.shape, generator=g))
+        return m.eval()
+    drop, plain = build({**cfg, "covariate_drop_fields": ["lab_id"]}), build(cfg)
+    assert type(drop).__name__ == "TwoStep" and drop.inner.cov_drop == {"drop": ((7,), (7,))}
+    nb = _neutral_batch(b, "lab_id")
+    cb = b["c_base"].clone()
+    cb[..., 7] = torch.where(b["y_avail"].bool(), torch.zeros_like(cb[..., 7]), cb[..., 7])
+    nb["c_base"] = cb
+    with torch.no_grad():
+        od, on, op = drop(b), plain(nb), plain(b)
+    for k in ("n", "mu", "n_base", "mu_base"):
+        torch.testing.assert_close(od[k], on[k], rtol=0, atol=0)
+    assert not torch.equal(od["mu_base"], op["mu_base"]) and not torch.equal(od["mu"], op["mu"])

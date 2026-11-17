@@ -25,6 +25,8 @@
 #   FIELDS [the 10 META columns other than log2_depth]: screened fields (STEP=screen).
 #   SIDES ["out in"], SCREEN_KINDS ["keep_depth"] (add "neutral" for neutral values; read with the
 #     caveat of score.py FOREIGN_COLUMNS_DEFINITION), FOREIGN_SEED [0]: STEP=screen.
+#   RUNGS ["2 3 4"]: the models (2 conv autoencoder, 3 conv + attention, 4 U-Net); e.g. RUNGS=4
+#     runs the leave-one-field-out and group arms on the final model only.
 #   SEEDS ["0 1 2"]; ARMS [all arms of the step in CFG]: a subset, e.g. "lofo_lab_id lofo_donor_id".
 #   PRED_STORE_ROOT [/scratch/mforooz/onion/pred_store]: one store per scoring (~55 GB, ~1,700
 #     files; the metrics job removes it). On Nibi /scratch refuses writes (2026-11-17): real
@@ -35,11 +37,12 @@
 # tools/onion_eval/covariate_ranking.py (runs | screen). Idempotent through submit_arms.sh.
 #
 # Cost (CPU-hours, measured on Fir, read with sacct; arithmetic in the item file):
-#   training per run (eic_v1_2 base recipes, jobs 4472547-4472600): conv autoencoder 5.99,
+#   training per run (eic_v1_2 base recipes, jobs 4472547-4472600): conv autoencoder 5.98,
 #     conv + attention 14.34, U-Net 7.06 -> one arm on 3 models x 3 seeds = 82.2
 #   256-region scoring per run (8 predict + 1 metrics jobs, eic_v1 base runs, jobs 4492698 ff.):
 #     conv autoencoder 30.03, conv + attention 25.43, U-Net 53.43 -> 3 models x 3 seeds = 326.7
 set -u
+set -o pipefail
 O=/project/def-maxwl/mforooz/ONION
 K="${K:-/project/def-maxwl/mforooz/onion_kit/COA12}"
 V="${V:-eic_v1_2}"
@@ -55,12 +58,14 @@ CFG="${CFG:-$K/tools/minicandi/configs/ablations/covariate_fields}"
 SUBMIT="$K/slurm/minicandi/submit_arms.sh"
 declare -A ARCH=([2]=convae [3]=convattn [4]=unet)
 declare -A REF=([2]="${REF2:-${V}_rung2_base_heldout}" [3]="${REF3:-${V}_rung3_base_heldout}" [4]="${REF4:-${V}_rung4_base_heldout}")
-declare -A TRAIN_CPUH=([2]=5.99 [3]=14.34 [4]=7.06)
+declare -A TRAIN_CPUH=([2]=5.98 [3]=14.34 [4]=7.06)
 declare -A SCORE_CPUH=([2]=30.03 [3]=25.43 [4]=53.43)
 FIELDS="${FIELDS:-run_type_pe read_length dedup_on mapq_threshold pipeline_id pipeline_version_id lab_id platform_id antibody_id donor_id}"
 SIDES="${SIDES:-out in}"
 SCREEN_KINDS="${SCREEN_KINDS:-keep_depth}"
 export SEEDS="${SEEDS:-0 1 2}"
+RUNGS="${RUNGS:-2 3 4}"   # 2 = conv autoencoder, 3 = conv + attention, 4 = U-Net
+for r in $RUNGS; do [[ "$r" =~ ^[234]$ ]] || { echo "RUNGS holds 2, 3 or 4" >&2; exit 2; }; done
 read -r -a SEED_LIST <<< "$SEEDS"
 NS=${#SEED_LIST[@]}
 
@@ -79,7 +84,7 @@ if [ "$CLUSTER" = nibi ] && [ -z "${PRED_STORE_ROOT:-}" ]; then
   blocked="$blocked; Nibi /scratch refuses writes: set PRED_STORE_ROOT to a writable path"
 fi
 case $STEP in ref|screen)
-  for r in 2 3 4; do
+  for r in $RUNGS; do
     for s in "${SEED_LIST[@]}"; do
       [ -f "$RUNS/${REF[$r]}/seed$s/DONE" ] || { blocked="$blocked; full-set run $RUNS/${REF[$r]}/seed$s not DONE"; break; }
     done
@@ -101,7 +106,7 @@ export SCORE_SAME_VIEW=1 SCORE_PHASES=1 SCORE_SHARDS=8 SCORE_PRED_DEVICE=cpu SCO
   SCORE_TIME=06:00:00 REFS_FROM="$B" KEEP_PRED_STORE=0 PRED_STORE_ROOT="$PSR"
 unset FOREIGN_COVARIATES FOREIGN_SEED
 
-n_train=0; n_score=0; cpu_train=0; cpu_score=0
+n_train=0; n_score=0; cpu_train=0; cpu_score=0; n_fail=0
 add() {   # <rung> <trainings per seed 0|1>: count one run x seeds
   local r="$1" t="$2"
   n_score=$((n_score + NS)); cpu_score=$(python3 -c "print($cpu_score + $NS * ${SCORE_CPUH[$r]})")
@@ -113,12 +118,19 @@ run_submit() {   # run_submit [VAR=value ...] -- <rung> <name=config>; a dry run
   local envs=()
   while [ "$1" != -- ]; do envs+=("$1"); shift; done
   shift
-  env ${envs[@]+"${envs[@]}"} bash "$SUBMIT" "$K" "$T" "$EV" "$RUNS" "$@" 2>&1 | grep -v "^$"
+  local rc
+  env ${envs[@]+"${envs[@]}"} bash "$SUBMIT" "$K" "$T" "$EV" "$RUNS" "$@" 2>&1 | { grep -v "^$" || true; }
+  rc=${PIPESTATUS[0]}
+  if [ "$rc" != 0 ]; then
+    n_fail=$((n_fail + 1))
+    echo "FAILED submit_arms.sh exit $rc: $*"
+    [ "$DRY_RUN" = 1 ] || { echo "refused: stopping at the first failed submission" >&2; exit "$rc"; }
+  fi
 }
 
 case $STEP in
 ref)
-  for r in 2 3 4; do
+  for r in $RUNGS; do
     run_submit SCORE_ONLY=1 SCORE_SUBDIR=p256_sv -- "$r" "${REF[$r]}=$RUNS/${REF[$r]}/seed0/run.json"
     add "$r" 0
   done ;;
@@ -129,7 +141,7 @@ screen)
       for f in $FIELDS; do
         mode="${side}_${kind}.${f}"
         echo "## screen $mode -> p256_foreign_$mode"
-        for r in 2 3 4; do
+        for r in $RUNGS; do
           run_submit FOREIGN_COVARIATES="$mode" FOREIGN_SEED="$FOREIGN_SEED" \
             SCORE_SUBDIR="p256_foreign_$mode" -- "$r" "${REF[$r]}=$RUNS/${REF[$r]}/seed0/run.json"
           add "$r" 0
@@ -140,7 +152,7 @@ screen)
 lofo|groups|curve)
   case $STEP in lofo) pre=lofo_ ;; groups) pre=group_ ;; curve) pre=curve_k ;; esac
   [ -f "$CFG/arms.tsv" ] || { echo "no $CFG/arms.tsv (run covariate_field_arms.py $STEP)" >&2; exit 2; }
-  for r in 2 3 4; do
+  for r in $RUNGS; do
     for c in "$CFG/rung$r/$pre"*.json; do
       [ -e "$c" ] || { echo "no $STEP arm configs in $CFG/rung$r"; continue; }
       arm=$(basename "$c" .json)
@@ -151,9 +163,11 @@ lofo|groups|curve)
   done ;;
 esac
 
-python3 - "$STEP" "$n_train" "$cpu_train" "$n_score" "$cpu_score" "$DRY_RUN" <<'EOF'
+python3 - "$STEP" "$n_train" "$cpu_train" "$n_score" "$cpu_score" "$DRY_RUN" "$n_fail" <<'EOF'
 import sys
 step, nt, ct, nsc, cs, dry = sys.argv[1], int(sys.argv[2]), float(sys.argv[3]), int(sys.argv[4]), float(sys.argv[5]), sys.argv[6]
+if int(sys.argv[7]):
+    print(f"A12: {sys.argv[7]} submit_arms.sh calls FAILED (see FAILED lines)")
 print(f"A12 STEP={step}: {nt} trainings ({ct:.1f} CPU-h) + {nsc} 256-region scorings "
       f"({cs:.1f} CPU-h, {9 * nsc} jobs: 8 predict + 1 metrics each) = {ct + cs:.1f} CPU-h; "
       f"sbatch jobs {nt + 9 * nsc}; peak prediction-store files if all scorings run at once "

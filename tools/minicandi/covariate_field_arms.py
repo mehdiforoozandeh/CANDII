@@ -16,7 +16,8 @@ is the shape `configs/ablations/submit_all.sh` reads (ABLATIONS=<folder name>).
 - curve: the rank-guided backward elimination, `curve_k<NN>` drops the first NN fields of
   `--order`, for NN = 2 .. len(order) (NN = 1 is the LOFO arm of the first field).
 
-A base that already drops a field, or has two_step on, is refused (`drop_field_indices`).
+A base that already drops a field is refused. A two_step base is accepted: the switch drops the
+field in both legs (`drop_field_indices`).
 Writes only under --out; an existing arm file with other content is refused (never overwritten).
 """
 from __future__ import annotations
@@ -49,6 +50,10 @@ GROUPS = {
                     "antibody_id", "donor_id"),               # = the numeric-only embedding arm
     "all_but_depth": tuple(c for c in META_COLUMNS if c != "log2_depth"),
 }
+#: the groups whose arm the "safe to remove" rule reads (covariate_ranking.classify): fields whose
+#: information overlaps. `categorical` and `all_but_depth` are reference arms, read beside the
+#: curve: a useful `all_but_depth` says only that not every field can go at once.
+CORRELATED_GROUPS = ("pipeline", "lab_platform", "donor_lab", "view_knobs")
 KINDS = ("lofo", "groups", "curve")
 
 
@@ -82,7 +87,7 @@ def arms_for(kind: str, base: dict, skip=(), order=None) -> list:
         out = [(f"curve_k{k:02d}", list(order[:k])) for k in range(2, len(order) + 1)]
     else:
         raise ValueError(f"kind {kind!r} not in {KINDS}")
-    for _, fs in out:                       # the switch's own validation (QC, two_step, names)
+    for _, fs in out:                       # the switch's own validation (QC, names)
         drop_field_indices({**base, DROP_FIELDS_KEY: fs})
     return out
 

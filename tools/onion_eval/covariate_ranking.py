@@ -14,11 +14,18 @@ Rule (stated in the item file before any run; DECISION_RULE). Per condition (a d
 group, a curve step or a screening mode), model m and term t of TERMS: delta = mean(condition) -
 mean(full), over the done seeds; R = the larger of the two seed ranges (max - min); the loss in
 range units is z = -delta / R. A cell is "lower, beyond" when z > 1 and "2x" when z > 2.
-- useful: lower beyond on at least 2 of the 3 models (any term), or 2x on any one model;
-- safe to remove: no cell lower beyond (every model, every term), i.e. score S <= 1;
+- useful: lower beyond on at least 2 of the 3 models (any term), or 2x on any one model (with a
+  single model scored: lower beyond on it);
+- safe to remove: no cell lower beyond (every model, every term), i.e. score S <= 1, AND every
+  scored correlated group arm that holds the field (covariate_field_arms.CORRELATED_GROUPS) has
+  S <= 1. A field safe alone whose group is useful is `shared: keep` when it has the largest S of
+  the group's members, else `shared: removable if <keeper> kept`; a field safe alone whose group
+  is unclear is `unclear (group ...)`; with no scored group it is `safe alone (group not scored)`;
 - unclear: otherwise (lower beyond on one model, below 2x); kept by default.
+A cell is undefined (z None) when either side has fewer than 2 seeds or a zero seed range.
 Score S = the largest z over the (model, term) cells; the ranked list sorts by S, most useful
-first. The curve order is the single-field conditions by S, least useful first. The composite is
+first. The curve order is the single-field conditions by S, least useful first, except that the
+largest-S member of each useful correlated group goes to the end. The composite is
 reported beside the terms, and is not a rule term (it is a weighted sum of three of them).
 
 Outputs in --out: `ranked.tsv`, `effects.tsv` (every cell), `curve.tsv` and `curve.svg` (when
@@ -56,7 +63,9 @@ DECISION_RULE = (
     "delta = mean(condition) - mean(full set) over seeds; R = larger seed range (max - min) of the "
     "two; z = -delta / R. Lower beyond: z > 1; 2x: z > 2. Useful: lower beyond on >= 2 of 3 models "
     "(any of imputation, gap closed, calibration, correction-only), or 2x on one model. Safe to "
-    "remove: no cell lower beyond (S = max z <= 1). Unclear: otherwise; kept by default.")
+    "remove: no cell lower beyond (S = max z <= 1) and every scored correlated group arm holding "
+    "the field also S <= 1 (a useful group keeps its largest-S member). Unclear: otherwise; kept "
+    "by default. Fewer than 2 seeds or a zero range: undefined.")
 
 
 def _f(x):
@@ -77,7 +86,7 @@ def summarize(rows) -> dict:
     out = {}
     for k, v in acc.items():
         ok = [x for x in v if x is not None]
-        full = bool(ok) and len(ok) == len(v)
+        full = bool(ok) and len(ok) == len(v) and len(v) >= 2      # < 2 seeds: undefined
         out[k] = {"mean": sum(ok) / len(ok) if full else None,
                   "range": (max(ok) - min(ok)) if full else None, "n": len(v)}
     return out
@@ -97,7 +106,7 @@ def effects(summ: dict, ref: str = FULL) -> list:
         else:
             d = s["mean"] - r0["mean"]
             R = max(s["range"], r0["range"])
-            z = (-d / R) if R > 0 else (math.inf if d < 0 else 0.0)
+            z = (-d / R) if R > 0 else None                         # no range: undefined
         out.append({"condition": c, "model": m, "term": t, "mean": s["mean"], "range": s["range"],
                     "n_seeds": s["n"], "ref_mean": r0["mean"], "ref_range": r0["range"],
                     "delta": d, "R": R, "z": z,
@@ -119,19 +128,61 @@ def classify(eff: list) -> list:
     for c, es in by.items():
         if any(e["z"] is None for e in es):
             out.append({"condition": c, "S": None, "class": "undefined", "models_lower_beyond": "",
-                        "worst_cell": "", "n_cells_lower_beyond": None})
+                        "worst_cell": "", "n_cells_lower_beyond": None, "group_note": ""})
             continue
         top = max(es, key=lambda e: e["z"])
         mb = sorted({e["model"] for e in es if e["lower_beyond"]})
         two = any(e["lower_2x"] for e in es)
-        cls = ("useful" if len(mb) >= 2 or two else "safe to remove" if not mb else "unclear")
+        need = min(2, len({e["model"] for e in es}))
+        cls = ("useful" if len(mb) >= need or two else "safe to remove" if not mb else "unclear")
         out.append({"condition": c, "S": top["z"], "class": cls, "models_lower_beyond": ",".join(mb),
                     "worst_cell": f"{top['model']}:{top['term']}",
-                    "n_cells_lower_beyond": sum(bool(e["lower_beyond"]) for e in es)})
+                    "n_cells_lower_beyond": sum(bool(e["lower_beyond"]) for e in es),
+                    "group_note": ""})
+    _apply_groups(out)
     out.sort(key=lambda r: (r["S"] is None, -(r["S"] if r["S"] is not None else 0), r["condition"]))
     for i, r in enumerate(out, 1):
         r["rank"] = i
     return out
+
+
+def _groups():
+    from minicandi.covariate_field_arms import CORRELATED_GROUPS, GROUPS
+    return {g: GROUPS[g] for g in CORRELATED_GROUPS}
+
+
+def _keeper(members, by):
+    """The member of a group with the largest defined LOFO S (ties: by name); None if none."""
+    ss = [(by[f"lofo_{f}"]["S"], f) for f in members
+          if f"lofo_{f}" in by and by[f"lofo_{f}"]["S"] is not None]
+    return max(ss, key=lambda x: (x[0], [-ord(ch) for ch in x[1]]))[1] if ss else None
+
+
+def _apply_groups(rows: list) -> None:
+    """The group part of DECISION_RULE, in place: a LOFO field that is safe alone is safe to remove
+    only when every scored correlated group arm holding it is safe (module docstring)."""
+    by = {r["condition"]: r for r in rows}
+    for r in rows:
+        f = single_field(r["condition"])
+        if f is None or r["class"] != "safe to remove":
+            continue
+        gs = [(g, by.get(f"group_{g}")) for g, fs in _groups().items() if f in fs]
+        scored = [(g, x) for g, x in gs if x is not None]
+        if not scored:
+            r["class"], r["group_note"] = "safe alone (group not scored)", ",".join(g for g, _ in gs)
+            continue
+        useful = [g for g, x in scored if x["class"] == "useful"]
+        other = [g for g, x in scored if x["class"] not in ("useful", "safe to remove")]
+        if useful:
+            keep = [g for g in useful if _keeper(_groups()[g], by) == f]
+            if keep:
+                r["class"], r["group_note"] = "shared: keep", ",".join(keep)
+            else:
+                ks = sorted({_keeper(_groups()[g], by) for g in useful} - {None})
+                r["class"] = f"shared: removable if {'+'.join(ks)} kept"
+                r["group_note"] = ",".join(useful)
+        elif other:
+            r["class"], r["group_note"] = f"unclear (group {','.join(other)})", ",".join(other)
 
 
 def single_field(cond: str):
@@ -140,9 +191,15 @@ def single_field(cond: str):
 
 
 def curve_order(ranked: list) -> list:
-    """The single-field (lofo_<field>) conditions by S, least useful first (ties: by name)."""
+    """The single-field (lofo_<field>) conditions by S, least useful first (ties: by name); then
+    the largest-S member of each useful correlated group is moved to the end (in order of S), so the
+    curve removes a correlated group's carrier last."""
+    by = {r["condition"]: r for r in ranked}
     rs = [r for r in ranked if single_field(r["condition"]) and r["S"] is not None]
-    return [single_field(r["condition"]) for r in sorted(rs, key=lambda r: (r["S"], r["condition"]))]
+    order = [single_field(r["condition"]) for r in sorted(rs, key=lambda r: (r["S"], r["condition"]))]
+    late = {_keeper(fs, by) for g, fs in _groups().items()
+            if by.get(f"group_{g}", {}).get("class") == "useful"} - {None}
+    return [f for f in order if f not in late] + [f for f in order if f in late]
 
 
 def curve(summ: dict, order: list) -> list:
@@ -175,10 +232,11 @@ def minimum_set(curve_rows: list, order: list, all_fields: list):
     set (and every model has a score at each step); the minimum set is all_fields minus order[:k].
     None when the curve has no step."""
     ks = sorted({r["k"] for r in curve_rows if r["k"] > 0})
+    models = {r["model"] for r in curve_rows if r["k"] == 0}     # the models with a full-set score
     best = 0
     for k in ks:
         rs = [r for r in curve_rows if r["k"] == k and r["term"] in TERMS]
-        if {r["model"] for r in rs} != set(MODELS) or any(r["within"] is not True for r in rs):
+        if {r["model"] for r in rs} != models or any(r["within"] is not True for r in rs):
             break
         if k != best + 1:
             break
@@ -265,8 +323,16 @@ def plot_curve(curve_rows: list, order: list, path: Path) -> bool:
     return True
 
 
-def report(rows: list, out: Path, all_fields=None, order=None) -> dict:
-    """Write every output of the module docstring from per-seed rows; return a summary dict."""
+def default_fields(qc: bool = False) -> list:
+    """Every covariate field of a run: the META columns, plus the QC columns when it reads them."""
+    from minicandi.contract import META_COLUMNS, QC_COLUMNS
+    return list(META_COLUMNS) + (list(QC_COLUMNS) if qc else [])
+
+
+def report(rows: list, out: Path, all_fields=None, order=None, qc: bool = False) -> dict:
+    """Write every output of the module docstring from per-seed rows; return a summary dict.
+    `all_fields` (default `default_fields(qc)`) is the set the minimum set is taken from, so a
+    field with an undefined result stays in the kept list."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     summ = summarize(rows)
@@ -276,7 +342,7 @@ def report(rows: list, out: Path, all_fields=None, order=None) -> dict:
                                           "ref_mean", "ref_range", "delta", "R", "z",
                                           "lower_beyond", "lower_2x", "higher_beyond"])
     _write_tsv(out / "ranked.tsv", ranked, ["rank", "condition", "class", "S", "models_lower_beyond",
-                                            "n_cells_lower_beyond", "worst_cell"])
+                                            "n_cells_lower_beyond", "worst_cell", "group_note"])
     order = list(order) if order else curve_order(ranked)
     (out / "order.txt").write_text(",".join(order) + "\n", encoding="utf-8")
     cur = curve(summ, order)
@@ -286,7 +352,7 @@ def report(rows: list, out: Path, all_fields=None, order=None) -> dict:
         _write_tsv(out / "curve.tsv", cur, ["k", "removed", "condition", "model", "term", "mean",
                                             "range", "delta", "R", "within"])
         png = plot_curve(cur, order, out / "curve.svg")
-        ms = minimum_set(cur, order, list(all_fields or order))
+        ms = minimum_set(cur, order, list(all_fields or default_fields(qc)))
     lines = ["# Covariate fields: ranked list and exclusion curve", "",
              f"Rule (stated before the runs): {DECISION_RULE}", "",
              "| rank | condition | class | S | models lower beyond | worst cell |",
@@ -303,6 +369,16 @@ def report(rows: list, out: Path, all_fields=None, order=None) -> dict:
         lines.append("Minimum set: not yet (no curve step is scored).")
     (out / "RANKING.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     return {"ranked": ranked, "order": order, "minimum_set": ms, "curve_svg": png}
+
+
+def qc_of_refs(runs, refs: dict) -> bool:
+    """True when a full-set run reads the QC columns (run.json config qc_on_input, seed 0)."""
+    for d in refs.values():
+        p = Path(runs) / d / "seed0" / "run.json"
+        if p.is_file() and (json.loads(p.read_text(encoding="utf-8")).get("config") or {}).get(
+                "qc_on_input"):
+            return True
+    return False
 
 
 def rows_from_tsv(path) -> list:
@@ -356,6 +432,7 @@ def main(argv=None) -> int:
         p.add_argument("--fields", default="", help="all fields, for the minimum set")
         if name == "tsv":
             p.add_argument("--scores", required=True)
+            p.add_argument("--qc", action="store_true", help="the runs read the QC columns")
             continue
         p.add_argument("--runs", required=True)
         p.add_argument("--sub", default="p256_sv")
@@ -366,7 +443,7 @@ def main(argv=None) -> int:
             p.add_argument("--screen-sub", action="append", required=True)
     a = ap.parse_args(argv)
     if a.cmd == "tsv":
-        rows = rows_from_tsv(a.scores)
+        rows, qc = rows_from_tsv(a.scores), a.qc
     else:
         refs = dict(x.split("=", 1) for x in a.ref)
         bad = set(refs) - set(MODELS)
@@ -374,9 +451,10 @@ def main(argv=None) -> int:
             ap.error(f"--ref models {sorted(bad)} not in {MODELS}")
         rows = (rows_from_runs(a.runs, a.sub, refs, a.prefix) if a.cmd == "runs"
                 else rows_from_screen(a.runs, a.sub, refs, a.screen_sub))
+        qc = qc_of_refs(a.runs, refs)
     order = [s for s in a.order.split(",") if s] or None
     fields = [s for s in a.fields.split(",") if s] or None
-    res = report(rows, Path(a.out), fields, order)
+    res = report(rows, Path(a.out), fields, order, qc)
     print(json.dumps({"n_rows": len(rows), "order": res["order"], "minimum_set": res["minimum_set"],
                       "curve_svg": res["curve_svg"],
                       "ranked": [(r["condition"], r["class"], r["S"]) for r in res["ranked"]]},

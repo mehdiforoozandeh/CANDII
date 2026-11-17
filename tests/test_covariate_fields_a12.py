@@ -3,6 +3,7 @@ exclusion curve (covariate_ranking.py), on synthetic scores with a known answer.
 from __future__ import annotations
 
 import json
+import math
 import sys
 import xml.dom.minidom
 from pathlib import Path
@@ -57,8 +58,8 @@ def test_qc_skip_groups_curve_and_refusals(tmp_path):
     for kw in ({"order": None}, {"order": ["lab_id", "lab_id"]}, {"order": ["lab"]}):
         with pytest.raises(ValueError):
             G.arms_for("curve", base, **kw)
-    with pytest.raises(ValueError):
-        G.arms_for("lofo", {**base, "two_step": True})
+    ts = {**json.loads(BASES[0].read_text()), "two_step": True}       # two-step bases accepted
+    assert len(G.arms_for("lofo", ts)) == len(META_COLUMNS)
     with pytest.raises(ValueError):
         G.arms_for("lofo", {**base, "covariate_drop_fields": ["lab_id"]})
     with pytest.raises(ValueError):
@@ -89,18 +90,21 @@ SHIFTS = {
     "lofo_lab_id": {"convae": -0.05, "convattn": -0.05, "unet": 0.0},     # useful (2 models)
     "lofo_antibody_id": {"convae": 0.0, "convattn": 0.0, "unet": -0.06},  # useful (2x, 1 model)
     "lofo_donor_id": {"convae": -0.03, "convattn": 0.0, "unet": 0.0},     # unclear (1 model, <2x)
-    "lofo_dedup_on": {"convae": 0.001, "convattn": -0.005, "unet": 0.0},  # safe (S = 0.25)
-    "lofo_pipeline_id": {"convae": 0.0, "convattn": 0.0, "unet": -0.01},  # safe (S = 0.5)
+    "lofo_mapq_threshold": {"convae": 0.0, "convattn": -0.002, "unet": 0.0},  # safe alone, S 0.1
+    "lofo_dedup_on": {"convae": 0.001, "convattn": -0.005, "unet": 0.0},  # safe alone, S 0.25
+    "lofo_pipeline_id": {"convae": 0.0, "convattn": 0.0, "unet": -0.01},  # safe alone, S 0.5
+    "group_pipeline": {"convae": 0.0, "convattn": -0.004, "unet": 0.0},   # group safe
+    "group_view_knobs": {"convae": -0.05, "convattn": -0.05, "unet": 0.0},  # group useful
     "curve_k02": {"convae": -0.004, "convattn": -0.01, "unet": -0.012},   # within
     "curve_k03": {"convae": -0.04, "convattn": -0.03, "unet": -0.05},     # beyond
 }
 
 
-def _rows(shifts=SHIFTS, undefined=None):
+def _rows(shifts=SHIFTS, undefined=None, seeds=(-0.01, 0.0, 0.01), models=CR.MODELS):
     rows = []
     for cond, sh in [("full", {m: 0.0 for m in FULL})] + list(shifts.items()):
-        for m in CR.MODELS:
-            for seed, e in enumerate((-0.01, 0.0, 0.01)):                    # range 0.02
+        for m in models:
+            for seed, e in enumerate(seeds):                                 # range 0.02
                 r = {"condition": cond, "model": m, "seed": seed}
                 for t in CR.REPORTED:
                     r[t] = FULL[m] + sh[m] + e
@@ -110,40 +114,72 @@ def _rows(shifts=SHIFTS, undefined=None):
     return rows
 
 
-def test_effects_classes_and_rank():
+def _cls(rows):
+    return {r["condition"]: r["class"] for r in CR.classify(CR.effects(CR.summarize(rows)))}
+
+
+def test_effects_classes_rank_and_groups():
     ranked = CR.classify(CR.effects(CR.summarize(_rows())))
     cls = {r["condition"]: r["class"] for r in ranked}
     assert cls["lofo_lab_id"] == "useful" and cls["lofo_antibody_id"] == "useful"
     assert cls["lofo_donor_id"] == "unclear"
-    assert cls["lofo_dedup_on"] == "safe to remove" and cls["lofo_pipeline_id"] == "safe to remove"
+    assert cls["lofo_pipeline_id"] == "safe to remove"                  # its group is safe
+    assert cls["group_view_knobs"] == "useful"
+    assert cls["lofo_dedup_on"] == "shared: keep"                         # largest S of the group
+    assert cls["lofo_mapq_threshold"] == "shared: removable if dedup_on kept"
     S = {r["condition"]: r["S"] for r in ranked}
     assert S["lofo_antibody_id"] == pytest.approx(3.0) and S["lofo_lab_id"] == pytest.approx(2.5)
     assert S["lofo_dedup_on"] == pytest.approx(0.25)
-    assert [r["condition"] for r in ranked][:2] == ["lofo_antibody_id", "lofo_lab_id"]
-    assert CR.curve_order(ranked) == ["dedup_on", "pipeline_id", "donor_id", "lab_id", "antibody_id"]
+    order = [r["condition"] for r in ranked]
+    assert order[0] == "lofo_antibody_id" and set(order[1:3]) == {"group_view_knobs", "lofo_lab_id"}
+    # the useful group's carrier goes last
+    assert CR.curve_order(ranked) == ["mapq_threshold", "pipeline_id", "donor_id", "lab_id",
+                                      "antibody_id", "dedup_on"]
 
 
-def test_undefined_cell_is_undefined_and_last():
+def test_group_unclear_or_not_scored():
+    sh = {k: v for k, v in SHIFTS.items() if k != "group_pipeline"}
+    assert _cls(_rows(sh))["lofo_pipeline_id"] == "safe alone (group not scored)"
+    sh["group_pipeline"] = {"convae": -0.03, "convattn": 0.0, "unet": 0.0}  # unclear group
+    assert _cls(_rows(sh))["lofo_pipeline_id"] == "unclear (group pipeline)"
+
+
+def test_undefined_cells():
     ranked = CR.classify(CR.effects(CR.summarize(_rows(undefined=("lofo_lab_id", "unet")))))
     assert ranked[-1]["condition"] == "lofo_lab_id" and ranked[-1]["class"] == "undefined"
+    one = CR.effects(CR.summarize(_rows(seeds=(0.0,))))                  # 1 seed: undefined
+    assert all(e["z"] is None and e["lower_beyond"] is None for e in one)
+    flat = CR.effects(CR.summarize(_rows(seeds=(0.0, 0.0))))             # zero range: undefined
+    assert all(e["z"] is None for e in flat)
+    assert not any(e["z"] == math.inf for e in flat)
+
+
+def test_single_model_rule():
+    cls = _cls(_rows(models=("unet",)))
+    assert cls["lofo_antibody_id"] == "useful" and cls["lofo_pipeline_id"] == "safe to remove"
+    cls = _cls(_rows(models=("convae",)))
+    assert cls["lofo_donor_id"] == "useful"                               # beyond on the only model
 
 
 def test_report_curve_minimum_set_and_figure(tmp_path):
-    fields = ["dedup_on", "pipeline_id", "donor_id", "lab_id", "antibody_id", "log2_depth"]
-    res = CR.report(_rows(), tmp_path, all_fields=fields)
-    assert res["order"][:3] == ["dedup_on", "pipeline_id", "donor_id"]
-    # k = 1 (lofo_dedup_on) within, k = 2 (curve_k02) within, k = 3 (curve_k03) beyond
-    assert res["minimum_set"] == {"k": 2, "removed": ["dedup_on", "pipeline_id"],
-                                  "kept": ["donor_id", "lab_id", "antibody_id", "log2_depth"]}
+    res = CR.report(_rows(), tmp_path)
+    assert res["order"][:3] == ["mapq_threshold", "pipeline_id", "donor_id"]
+    # k = 1 (lofo_mapq_threshold) within, k = 2 (curve_k02) within, k = 3 (curve_k03) beyond;
+    # the kept list is every META field minus the two removed (undefined fields stay)
+    ms = res["minimum_set"]
+    assert ms["k"] == 2 and ms["removed"] == ["mapq_threshold", "pipeline_id"]
+    assert ms["kept"] == [c for c in META_COLUMNS if c not in ("mapq_threshold", "pipeline_id")]
+    assert CR.report(_rows(), tmp_path / "qc", qc=True)["minimum_set"]["kept"][-len(QC_COLUMNS):] \
+        == list(QC_COLUMNS)
     cur = (tmp_path / "curve.tsv").read_text().splitlines()
     assert cur[0].startswith("k\tremoved") and {ln.split("\t")[0] for ln in cur[1:]} == {"0", "1", "2", "3"}
     svg = xml.dom.minidom.parse(str(tmp_path / "curve.svg"))
     assert len(svg.getElementsByTagName("polyline")) == len(CR.REPORTED) * len(CR.MODELS)
     md = (tmp_path / "RANKING.md").read_text()
-    assert "Minimum set: donor_id, lab_id, antibody_id, log2_depth" in md
-    assert (tmp_path / "order.txt").read_text().strip().startswith("dedup_on,pipeline_id")
+    assert "Minimum set: log2_depth, run_type_pe" in md
+    assert (tmp_path / "order.txt").read_text().strip().startswith("mapq_threshold,pipeline_id")
     ranked = (tmp_path / "ranked.tsv").read_text().splitlines()
-    assert ranked[1].split("\t")[1] == "lofo_antibody_id"
+    assert ranked[1].split("\t")[1] == "lofo_antibody_id" and ranked[0].endswith("group_note")
 
 
 def test_tsv_cli(tmp_path, capsys):
