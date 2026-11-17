@@ -1,0 +1,529 @@
+p	condition	scope	quantity	value	value_all_regions	lo	hi	threshold	pass	note
+	consistency	rung2_base_heldout/seed0	correction_v3 recomputed - select_rule	0	0.7212066348					
+	consistency	rung2_base_heldout/seed0	correction_only recomputed - scores.json	1.443289932e-15	0.6500041426					
+	consistency	rung2_base_heldout/seed0	h5 recomputed - scores.json	0	0.179020091					
+	consistency	rung2_base_heldout/seed1	correction_v3 recomputed - select_rule	0	0.7141023105					
+	consistency	rung2_base_heldout/seed1	correction_only recomputed - scores.json	2.553512957e-15	0.6518345027					
+	consistency	rung2_base_heldout/seed1	h5 recomputed - scores.json	0	0.1846820262					
+	consistency	rung2_base_heldout/seed2	correction_v3 recomputed - select_rule	0	0.7057528869					
+	consistency	rung2_base_heldout/seed2	correction_only recomputed - scores.json	4.884981308e-15	0.6497577786					
+	consistency	rung2_base_heldout/seed2	h5 recomputed - scores.json	0	0.1596684352					
+	consistency	rung3_base_heldout/seed0	correction_v3 recomputed - select_rule	0	0.6823941302					
+	consistency	rung3_base_heldout/seed0	correction_only recomputed - scores.json	3.774758284e-15	0.5949971716					
+	consistency	rung3_base_heldout/seed0	h5 recomputed - scores.json	0	0.1454985825					
+	consistency	rung3_base_heldout/seed1	correction_v3 recomputed - select_rule	3.330669074e-16	0.6733135017					
+	consistency	rung3_base_heldout/seed1	correction_only recomputed - scores.json	8.881784197e-16	0.6410160229					
+	consistency	rung3_base_heldout/seed1	h5 recomputed - scores.json	0	0.2038486759					
+	consistency	rung3_base_heldout/seed2	correction_v3 recomputed - select_rule	0	0.6991352495					
+	consistency	rung3_base_heldout/seed2	correction_only recomputed - scores.json	2.442490654e-15	0.6124783187					
+	consistency	rung3_base_heldout/seed2	h5 recomputed - scores.json	0	0.1178377621					
+	consistency	rung4_base_heldout/seed0	correction_v3 recomputed - select_rule	0	0.5400925932					
+	consistency	rung4_base_heldout/seed0	correction_only recomputed - scores.json	1.498801083e-15	0.2798863022					
+	consistency	rung4_base_heldout/seed0	h5 recomputed - scores.json	1.387778781e-17	0.1232406229					
+	consistency	rung4_base_heldout/seed1	correction_v3 recomputed - select_rule	3.885780586e-16	0.474223602					
+	consistency	rung4_base_heldout/seed1	correction_only recomputed - scores.json	4.357625372e-15	0.2188797952					
+	consistency	rung4_base_heldout/seed1	h5 recomputed - scores.json	8.326672685e-17	0.1371049703					
+	consistency	rung4_base_heldout/seed2	correction_v3 recomputed - select_rule	1.665334537e-16	0.496821504					
+	consistency	rung4_base_heldout/seed2	correction_only recomputed - scores.json	2.886579864e-15	0.3477745302					
+	consistency	rung4_base_heldout/seed2	h5 recomputed - scores.json	0	0.1114104278					
+	consistency	final_rung4_mech_skip_dna/seed0	correction_v3 recomputed - select_rule	2.220446049e-16	0.6882129379					
+	consistency	final_rung4_mech_skip_dna/seed0	correction_only recomputed - scores.json	5.884182031e-15	0.700065306					
+	consistency	final_rung4_mech_skip_dna/seed0	h5 recomputed - scores.json	2.775557562e-17	0.162685125					
+	consistency	final_rung4_mech_skip_dna/seed1	correction_v3 recomputed - select_rule	1.110223025e-16	0.744247119					
+	consistency	final_rung4_mech_skip_dna/seed1	correction_only recomputed - scores.json	5.218048216e-15	0.6848452323					
+	consistency	final_rung4_mech_skip_dna/seed1	h5 recomputed - scores.json	8.326672685e-17	0.1584935617					
+	consistency	final_rung4_mech_skip_dna/seed2	correction_v3 recomputed - select_rule	1.110223025e-16	0.7127170007					
+	consistency	final_rung4_mech_skip_dna/seed2	correction_only recomputed - scores.json	1.110223025e-15	0.6667328053					
+	consistency	final_rung4_mech_skip_dna/seed2	h5 recomputed - scores.json	2.775557562e-17	0.1729051442					
+8	1	rung2_base_heldout/seed0	correction_v3	0.6797860856	0.7212066348	0.7009712802	0.7403200488	inside 95% interval	fail	
+8	1	rung2_base_heldout/seed0	correction_only	0.6658898153	0.6500041426	0.6303371299	0.6710637295	inside 95% interval	pass	
+8	1	rung2_base_heldout/seed0	h5	0.1873142445	0.179020091	0.1698770356	0.1875170495	inside 95% interval	pass	
+8	2	rung2_base_heldout/seed0/H3K36me3	correction_v3 per assay	0.7605160574	0.7424771863	0.7280658719	0.7573075108	inside 95% interval	fail	
+8	2	rung2_base_heldout/seed0/H3K4me2	correction_v3 per assay	0.6653519382	0.6997273464	0.681137885	0.716970915	inside 95% interval	fail	
+8	2	rung2_base_heldout/seed0/H3K4me3	correction_v3 per assay	0.7098612997	0.7107609619	0.6829803362	0.7349810887	inside 95% interval	pass	
+8	2	rung2_base_heldout/seed0/H3K79me2	correction_v3 per assay	0.3646934007	0.6461121645	0.6061740927	0.6825594743	inside 95% interval	fail	
+8	2	rung2_base_heldout/seed0/H3K9ac	correction_v3 per assay	0.7014484121	0.6794593518	0.6275917762	0.7163247361	inside 95% interval	pass	
+8	2	rung2_base_heldout/seed0/H3K9me3	correction_v3 per assay	0.8768454054	0.8487027977	0.8291763177	0.8641548671	inside 95% interval	fail	
+8	5	rung2_base_heldout/seed0	metric 7 keys equal; no key outside B.4	3				equal	pass	
+8	1	rung2_base_heldout/seed1	correction_v3	0.6683957732	0.7141023105	0.6923081432	0.7339367554	inside 95% interval	fail	
+8	1	rung2_base_heldout/seed1	correction_only	0.6896126416	0.6518345027	0.6327778381	0.6722520723	inside 95% interval	fail	
+8	1	rung2_base_heldout/seed1	h5	0.1765464469	0.1846820262	0.178185301	0.19225447	inside 95% interval	fail	
+8	2	rung2_base_heldout/seed1/H3K36me3	correction_v3 per assay	0.765629361	0.7444787718	0.7274778582	0.7612212094	inside 95% interval	fail	
+8	2	rung2_base_heldout/seed1/H3K4me2	correction_v3 per assay	0.6449327841	0.681921717	0.6576605143	0.7031512425	inside 95% interval	fail	
+8	2	rung2_base_heldout/seed1/H3K4me3	correction_v3 per assay	0.721603193	0.7129673032	0.6897263887	0.7325748738	inside 95% interval	pass	
+8	2	rung2_base_heldout/seed1/H3K79me2	correction_v3 per assay	0.3187606064	0.6245705578	0.5818435158	0.6632992852	inside 95% interval	fail	
+8	2	rung2_base_heldout/seed1/H3K9ac	correction_v3 per assay	0.6821070391	0.6628696451	0.6050658261	0.703408004	inside 95% interval	pass	
+8	2	rung2_base_heldout/seed1/H3K9me3	correction_v3 per assay	0.8773416554	0.8578058681	0.8448001578	0.8683704227	inside 95% interval	fail	
+8	5	rung2_base_heldout/seed1	metric 7 keys equal; no key outside B.4	3				equal	pass	
+8	1	rung2_base_heldout/seed2	correction_v3	0.6702130788	0.7057528869	0.6840613082	0.7269076989	inside 95% interval	fail	
+8	1	rung2_base_heldout/seed2	correction_only	0.6871664047	0.6497577786	0.632230501	0.6683172516	inside 95% interval	fail	
+8	1	rung2_base_heldout/seed2	h5	0.1834603811	0.1596684352	0.1525595039	0.1704533942	inside 95% interval	fail	
+8	2	rung2_base_heldout/seed2/H3K36me3	correction_v3 per assay	0.7004484858	0.6564992063	0.6258834023	0.6867222279	inside 95% interval	fail	
+8	2	rung2_base_heldout/seed2/H3K4me2	correction_v3 per assay	0.640100113	0.6835010667	0.6579595449	0.7052319462	inside 95% interval	fail	
+8	2	rung2_base_heldout/seed2/H3K4me3	correction_v3 per assay	0.7180313278	0.7192654196	0.6992167778	0.7368290093	inside 95% interval	pass	
+8	2	rung2_base_heldout/seed2/H3K79me2	correction_v3 per assay	0.4020914068	0.6524481911	0.6155622828	0.687553861	inside 95% interval	fail	
+8	2	rung2_base_heldout/seed2/H3K9ac	correction_v3 per assay	0.6879880218	0.6667858277	0.6101600604	0.7076806062	inside 95% interval	pass	
+8	2	rung2_base_heldout/seed2/H3K9me3	correction_v3 per assay	0.8726191176	0.8560176102	0.8449117074	0.8649066936	inside 95% interval	fail	
+8	5	rung2_base_heldout/seed2	metric 7 keys equal; no key outside B.4	3				equal	pass	
+8	1	rung3_base_heldout/seed0	correction_v3	0.6171824904	0.6823941302	0.6621756687	0.7004606485	inside 95% interval	fail	
+8	1	rung3_base_heldout/seed0	correction_only	0.6207362035	0.5949971716	0.5729335431	0.6180922388	inside 95% interval	fail	
+8	1	rung3_base_heldout/seed0	h5	0.1619504957	0.1454985825	0.1398114179	0.1514838144	inside 95% interval	fail	
+8	2	rung3_base_heldout/seed0/H3K36me3	correction_v3 per assay	0.7500337931	0.7169512084	0.7014267354	0.732855816	inside 95% interval	fail	
+8	2	rung3_base_heldout/seed0/H3K4me2	correction_v3 per assay	0.6423822928	0.6867313579	0.666027994	0.7062715278	inside 95% interval	fail	
+8	2	rung3_base_heldout/seed0/H3K4me3	correction_v3 per assay	0.5499970108	0.5546925976	0.5423997491	0.565083381	inside 95% interval	pass	
+8	2	rung3_base_heldout/seed0/H3K79me2	correction_v3 per assay	0.234012318	0.6410265843	0.5878874802	0.6870940774	inside 95% interval	fail	
+8	2	rung3_base_heldout/seed0/H3K9ac	correction_v3 per assay	0.6868012099	0.6729572927	0.6205930106	0.7106995796	inside 95% interval	pass	
+8	2	rung3_base_heldout/seed0/H3K9me3	correction_v3 per assay	0.8398683178	0.8220057402	0.8094872504	0.8323928049	inside 95% interval	fail	
+8	5	rung3_base_heldout/seed0	metric 7 keys equal; no key outside B.4	3				equal	pass	
+8	1	rung3_base_heldout/seed1	correction_v3	0.5980062501	0.6733135017	0.6498239763	0.6938948548	inside 95% interval	fail	
+8	1	rung3_base_heldout/seed1	correction_only	0.6729020953	0.6410160229	0.6214271527	0.6603146807	inside 95% interval	fail	
+8	1	rung3_base_heldout/seed1	h5	0.2044672096	0.2038486759	0.1983442818	0.2120895689	inside 95% interval	pass	
+8	2	rung3_base_heldout/seed1/H3K36me3	correction_v3 per assay	0.7237707531	0.698243875	0.6813938595	0.7158007705	inside 95% interval	fail	
+8	2	rung3_base_heldout/seed1/H3K4me2	correction_v3 per assay	0.6723144822	0.7045118663	0.6824087912	0.7232757616	inside 95% interval	fail	
+8	2	rung3_base_heldout/seed1/H3K4me3	correction_v3 per assay	0.6043949527	0.6007298493	0.5806974135	0.6176151249	inside 95% interval	pass	
+8	2	rung3_base_heldout/seed1/H3K79me2	correction_v3 per assay	0.1111950322	0.592821111	0.530960175	0.6485846486	inside 95% interval	fail	
+8	2	rung3_base_heldout/seed1/H3K9ac	correction_v3 per assay	0.6703770052	0.6505632188	0.5941967825	0.6898970027	inside 95% interval	pass	
+8	2	rung3_base_heldout/seed1/H3K9me3	correction_v3 per assay	0.805985275	0.7930110895	0.7819103893	0.8022797817	inside 95% interval	fail	
+8	5	rung3_base_heldout/seed1	metric 7 keys equal; no key outside B.4	3				equal	pass	
+8	1	rung3_base_heldout/seed2	correction_v3	0.6399748953	0.6991352495	0.677109386	0.7186814431	inside 95% interval	fail	
+8	1	rung3_base_heldout/seed2	correction_only	0.6529702283	0.6124783187	0.5926837037	0.6337794616	inside 95% interval	fail	
+8	1	rung3_base_heldout/seed2	h5	0.138759898	0.1178377621	0.1118727486	0.1271553028	inside 95% interval	fail	
+8	2	rung3_base_heldout/seed2/H3K36me3	correction_v3 per assay	0.7866131455	0.7657060821	0.7497242223	0.7821515483	inside 95% interval	fail	
+8	2	rung3_base_heldout/seed2/H3K4me2	correction_v3 per assay	0.6696480743	0.7017262889	0.6791096659	0.7206932516	inside 95% interval	fail	
+8	2	rung3_base_heldout/seed2/H3K4me3	correction_v3 per assay	0.6035267404	0.5993193588	0.5736735625	0.6220863635	inside 95% interval	pass	
+8	2	rung3_base_heldout/seed2/H3K79me2	correction_v3 per assay	0.2904251444	0.6711782355	0.6258769986	0.7113784883	inside 95% interval	fail	
+8	2	rung3_base_heldout/seed2/H3K9ac	correction_v3 per assay	0.6442062919	0.6240713443	0.5656271912	0.6667121778	inside 95% interval	pass	
+8	2	rung3_base_heldout/seed2/H3K9me3	correction_v3 per assay	0.8454299755	0.8328101871	0.8211713792	0.8420460341	inside 95% interval	fail	
+8	5	rung3_base_heldout/seed2	metric 7 keys equal; no key outside B.4	3				equal	pass	
+8	1	rung4_base_heldout/seed0	correction_v3	0.5324263807	0.5400925932	0.5338368655	0.5455645446	inside 95% interval	fail	
+8	1	rung4_base_heldout/seed0	correction_only	0.2431422001	0.2798863022	0.2383565005	0.3244646167	inside 95% interval	pass	
+8	1	rung4_base_heldout/seed0	h5	0.1329826988	0.1232406229	0.1198863377	0.1265094377	inside 95% interval	fail	
+8	2	rung4_base_heldout/seed0/H3K36me3	correction_v3 per assay	0.548391384	0.5238105495	0.5180848241	0.5298029631	inside 95% interval	fail	
+8	2	rung4_base_heldout/seed0/H3K4me2	correction_v3 per assay	0.465635888	0.5394210746	0.5153968806	0.5626243268	inside 95% interval	fail	
+8	2	rung4_base_heldout/seed0/H3K4me3	correction_v3 per assay	0.5164603935	0.514467605	0.5085922632	0.5199870946	inside 95% interval	pass	
+8	2	rung4_base_heldout/seed0/H3K79me2	correction_v3 per assay	0.4458285824	0.4523995138	0.4467851404	0.4580432768	inside 95% interval	fail	
+8	2	rung4_base_heldout/seed0/H3K9ac	correction_v3 per assay	0.597495652	0.5934596355	0.5887410384	0.5977394022	inside 95% interval	pass	
+8	2	rung4_base_heldout/seed0/H3K9me3	correction_v3 per assay	0.6207463843	0.616997181	0.6133924762	0.6202798263	inside 95% interval	fail	
+8	5	rung4_base_heldout/seed0	metric 7 keys equal; no key outside B.4	3				equal	pass	
+8	1	rung4_base_heldout/seed1	correction_v3	0.4608674769	0.474223602	0.4691890632	0.479147013	inside 95% interval	fail	
+8	1	rung4_base_heldout/seed1	correction_only	0.1674477615	0.2188797952	0.1766005346	0.2630070759	inside 95% interval	fail	
+8	1	rung4_base_heldout/seed1	h5	0.1426195735	0.1371049703	0.1340726563	0.1401013746	inside 95% interval	fail	
+8	2	rung4_base_heldout/seed1/H3K36me3	correction_v3 per assay	0.537379327	0.5216687795	0.5158724836	0.5277464801	inside 95% interval	fail	
+8	2	rung4_base_heldout/seed1/H3K4me2	correction_v3 per assay	0.4090043355	0.4776833666	0.4522361081	0.5019794772	inside 95% interval	fail	
+8	2	rung4_base_heldout/seed1/H3K4me3	correction_v3 per assay	0.4714585675	0.4620768408	0.4574210097	0.466835464	inside 95% interval	fail	
+8	2	rung4_base_heldout/seed1/H3K79me2	correction_v3 per assay	0.3095491113	0.3477816387	0.3415280565	0.3536284397	inside 95% interval	fail	
+8	2	rung4_base_heldout/seed1/H3K9ac	correction_v3 per assay	0.5522297226	0.5504412691	0.5468037804	0.5539476291	inside 95% interval	pass	
+8	2	rung4_base_heldout/seed1/H3K9me3	correction_v3 per assay	0.4855837974	0.4856897173	0.4831148064	0.4880546254	inside 95% interval	pass	
+8	5	rung4_base_heldout/seed1	metric 7 keys equal; no key outside B.4	3				equal	pass	
+8	1	rung4_base_heldout/seed2	correction_v3	0.4906339077	0.496821504	0.4928803108	0.5006102758	inside 95% interval	fail	
+8	1	rung4_base_heldout/seed2	correction_only	0.3058482075	0.3477745302	0.309890239	0.3868779648	inside 95% interval	fail	
+8	1	rung4_base_heldout/seed2	h5	0.1148740515	0.1114104278	0.1077571751	0.1135942958	inside 95% interval	fail	
+8	2	rung4_base_heldout/seed2/H3K36me3	correction_v3 per assay	0.5158771043	0.5032903527	0.4995686042	0.5069849107	inside 95% interval	fail	
+8	2	rung4_base_heldout/seed2/H3K4me2	correction_v3 per assay	0.5068646603	0.5634437798	0.5459938091	0.5804792348	inside 95% interval	fail	
+8	2	rung4_base_heldout/seed2/H3K4me3	correction_v3 per assay	0.5224355478	0.519440295	0.5158132469	0.5230603844	inside 95% interval	pass	
+8	2	rung4_base_heldout/seed2/H3K79me2	correction_v3 per assay	0.3846928928	0.3824167259	0.3785970992	0.385894461	inside 95% interval	pass	
+8	2	rung4_base_heldout/seed2/H3K9ac	correction_v3 per assay	0.5650085004	0.5592987608	0.5520672712	0.5651435846	inside 95% interval	pass	
+8	2	rung4_base_heldout/seed2/H3K9me3	correction_v3 per assay	0.4489247407	0.4530391099	0.4505910106	0.4553345789	inside 95% interval	fail	
+8	5	rung4_base_heldout/seed2	metric 7 keys equal; no key outside B.4	3				equal	pass	
+8	1	final_rung4_mech_skip_dna/seed0	correction_v3	0.6359621239	0.6882129379	0.6620881079	0.7132468038	inside 95% interval	fail	
+8	1	final_rung4_mech_skip_dna/seed0	correction_only	0.6920177242	0.700065306	0.6824523079	0.7189703371	inside 95% interval	pass	
+8	1	final_rung4_mech_skip_dna/seed0	h5	0.1554591002	0.162685125	0.1552863011	0.1716809798	inside 95% interval	pass	
+8	2	final_rung4_mech_skip_dna/seed0/H3K36me3	correction_v3 per assay	0.5981729405	0.4807077142	0.4377708697	0.5235650789	inside 95% interval	fail	
+8	2	final_rung4_mech_skip_dna/seed0/H3K4me2	correction_v3 per assay	0.6554871342	0.7150617269	0.6967663026	0.7329193356	inside 95% interval	fail	
+8	2	final_rung4_mech_skip_dna/seed0/H3K4me3	correction_v3 per assay	0.7750486067	0.7720027528	0.7493399297	0.7915037271	inside 95% interval	pass	
+8	2	final_rung4_mech_skip_dna/seed0/H3K79me2	correction_v3 per assay	0.2083129712	0.6273639315	0.5697808449	0.6785324473	inside 95% interval	fail	
+8	2	final_rung4_mech_skip_dna/seed0/H3K9ac	correction_v3 per assay	0.7481653831	0.7489993581	0.6952417346	0.7876919387	inside 95% interval	pass	
+8	2	final_rung4_mech_skip_dna/seed0/H3K9me3	correction_v3 per assay	0.8305857073	0.7851421439	0.7525795353	0.8113576922	inside 95% interval	fail	
+8	5	final_rung4_mech_skip_dna/seed0	metric 7 keys equal; no key outside B.4	3				equal	pass	
+8	1	final_rung4_mech_skip_dna/seed1	correction_v3	0.7121198386	0.744247119	0.722279452	0.7659614437	inside 95% interval	fail	
+8	1	final_rung4_mech_skip_dna/seed1	correction_only	0.6707393037	0.6848452323	0.6666031013	0.7023828942	inside 95% interval	pass	
+8	1	final_rung4_mech_skip_dna/seed1	h5	0.1865393073	0.1584935617	0.1535145915	0.1683184148	inside 95% interval	fail	
+8	2	final_rung4_mech_skip_dna/seed1/H3K36me3	correction_v3 per assay	0.6691871602	0.5546006763	0.5097987417	0.5997329906	inside 95% interval	fail	
+8	2	final_rung4_mech_skip_dna/seed1/H3K4me2	correction_v3 per assay	0.6901663169	0.7492698613	0.734705221	0.7636503306	inside 95% interval	fail	
+8	2	final_rung4_mech_skip_dna/seed1/H3K4me3	correction_v3 per assay	0.7749660773	0.7775004801	0.754564304	0.7983274609	inside 95% interval	pass	
+8	2	final_rung4_mech_skip_dna/seed1/H3K79me2	correction_v3 per assay	0.45764631	0.7290082589	0.6893371223	0.7654873871	inside 95% interval	fail	
+8	2	final_rung4_mech_skip_dna/seed1/H3K9ac	correction_v3 per assay	0.7657466384	0.7731937444	0.7216914572	0.8109958426	inside 95% interval	pass	
+8	2	final_rung4_mech_skip_dna/seed1/H3K9me3	correction_v3 per assay	0.9150065285	0.8819096928	0.8588721794	0.9000916144	inside 95% interval	fail	
+8	5	final_rung4_mech_skip_dna/seed1	metric 7 keys equal; no key outside B.4	3				equal	pass	
+8	1	final_rung4_mech_skip_dna/seed2	correction_v3	0.6870250749	0.7127170007	0.6886221513	0.7365194757	inside 95% interval	fail	
+8	1	final_rung4_mech_skip_dna/seed2	correction_only	0.6457282625	0.6667328053	0.645146794	0.6904500136	inside 95% interval	pass	
+8	1	final_rung4_mech_skip_dna/seed2	h5	0.1988645992	0.1729051442	0.1633122852	0.1859174819	inside 95% interval	fail	
+8	2	final_rung4_mech_skip_dna/seed2/H3K36me3	correction_v3 per assay	0.6137262076	0.5147382379	0.4593384196	0.5715953844	inside 95% interval	fail	
+8	2	final_rung4_mech_skip_dna/seed2/H3K4me2	correction_v3 per assay	0.6409471099	0.717137336	0.7017806847	0.7336600004	inside 95% interval	fail	
+8	2	final_rung4_mech_skip_dna/seed2/H3K4me3	correction_v3 per assay	0.7370654189	0.742756292	0.7168970895	0.7657863594	inside 95% interval	pass	
+8	2	final_rung4_mech_skip_dna/seed2/H3K79me2	correction_v3 per assay	0.516774357	0.7080305787	0.6786232613	0.7355509628	inside 95% interval	fail	
+8	2	final_rung4_mech_skip_dna/seed2/H3K9ac	correction_v3 per assay	0.7099776204	0.7127963378	0.6522439329	0.7590268804	inside 95% interval	pass	
+8	2	final_rung4_mech_skip_dna/seed2/H3K9me3	correction_v3 per assay	0.9036597358	0.8808432216	0.8653726064	0.8932839904	inside 95% interval	fail	
+8	5	final_rung4_mech_skip_dna/seed2	metric 7 keys equal; no key outside B.4	3				equal	pass	
+8	3	rung2_base_heldout vs rung3_base_heldout	D13 verdict (composite v3)	TIE_ASK_PI	TIE_ASK_PI			equal	pass	subset: composite delta -0.005994 within 2 x spread 0.05012; neither arm is clearly simpler; all regions: composite delta 0.0004238 within 2 x spread 0.04759; neither arm is clearly simpler
+8	3	rung2_base_heldout vs rung4_base_heldout	D13 verdict (composite v3)	TIE_ASK_PI	TIE_ASK_PI			equal	pass	subset: composite delta -0.02502 within 2 x spread 0.04544; neither arm is clearly simpler; all regions: composite delta -0.03297 within 2 x spread 0.0429; neither arm is clearly simpler
+8	3	rung3_base_heldout vs rung4_base_heldout	D13 verdict (composite v3)	TIE_ASK_PI	TIE_ASK_PI			equal	pass	subset: composite delta -0.01902 within 2 x spread 0.05012; neither arm is clearly simpler; all regions: composite delta -0.0334 within 2 x spread 0.04759; neither arm is clearly simpler
+8	3	rung4_base_heldout vs final_rung4_mech_skip_dna	D13 verdict (composite v3)	TIE_ASK_PI	TIE_ASK_PI			equal	pass	subset: composite delta 0.02741 within 2 x spread 0.03196; neither arm is clearly simpler; all regions: composite delta 0.03432 within 2 x spread 0.02693; neither arm is clearly simpler
+8	4	rung2_base_heldout	seed spread of correction_v3	0.01139031243	0.01545374783		0.02318062175	<= 1.5 x all regions	pass	
+8	4	rung2_base_heldout	seed spread of correction_only	0.0237228263	0.002076724034		0.003115086051	<= 1.5 x all regions	fail	
+8	4	rung3_base_heldout	seed spread of correction_v3	0.04196864527	0.02582174781		0.03873262172	<= 1.5 x all regions	fail	
+8	4	rung3_base_heldout	seed spread of correction_only	0.05216589187	0.04601885128		0.06902827693	<= 1.5 x all regions	pass	
+8	4	rung4_base_heldout	seed spread of correction_v3	0.07155890381	0.06586899124		0.09880348685	<= 1.5 x all regions	pass	
+8	4	rung4_base_heldout	seed spread of correction_only	0.138400446	0.1288947351		0.1933421026	<= 1.5 x all regions	pass	
+8	4	final_rung4_mech_skip_dna	seed spread of correction_v3	0.0761577147	0.05603418108		0.08405127162	<= 1.5 x all regions	pass	
+8	4	final_rung4_mech_skip_dna	seed spread of correction_only	0.04628946167	0.03333250076		0.04999875114	<= 1.5 x all regions	pass	
+8	6	rung2_base_heldout vs rung3_base_heldout	composite_v3 difference	-0.005993945144	0.0004237507656			|d| > 0.04759		a tie on all regions: not tested
+8	6	rung2_base_heldout vs rung4_base_heldout	composite_v3 difference	-0.02501728841	-0.03297203515			|d| > 0.0429		a tie on all regions: not tested
+8	6	rung2_base_heldout vs final_rung4_mech_skip_dna	composite_v3 difference	0.002396790546	0.001347051004			|d| > 0.0429		a tie on all regions: not tested
+8	6	rung3_base_heldout vs rung4_base_heldout	composite_v3 difference	-0.01902334327	-0.03339578591			|d| > 0.04759		a tie on all regions: not tested
+8	6	rung3_base_heldout vs final_rung4_mech_skip_dna	composite_v3 difference	0.00839073569	0.0009233002381			|d| > 0.04759		a tie on all regions: not tested
+8	6	rung4_base_heldout vs final_rung4_mech_skip_dna	composite_v3 difference	0.02741407896	0.03431908615			same sign	pass	seed-range bar 0.02693
+8	6	rung2_base_heldout vs rung3_base_heldout	correction_v3 difference	-0.05441043393	-0.02873965029			same sign	pass	seed-range bar 0.02582
+8	6	rung2_base_heldout vs rung4_base_heldout	correction_v3 difference	-0.1781557241	-0.209974711			same sign	pass	seed-range bar 0.06587
+8	6	rung2_base_heldout vs final_rung4_mech_skip_dna	correction_v3 difference	0.005570699937	0.001371741768			|d| > 0.05603		a tie on all regions: not tested
+8	6	rung3_base_heldout vs rung4_base_heldout	correction_v3 difference	-0.1237452901	-0.1812350607			same sign	pass	seed-range bar 0.06587
+8	6	rung3_base_heldout vs final_rung4_mech_skip_dna	correction_v3 difference	0.05998113386	0.03011139206			|d| > 0.05603		a tie on all regions: not tested
+8	6	rung4_base_heldout vs final_rung4_mech_skip_dna	correction_v3 difference	0.183726424	0.2113464528			same sign	pass	seed-range bar 0.06587
+8	6	rung2_base_heldout vs rung3_base_heldout	correction_only difference	-0.03202011154	-0.03436830359			|d| > 0.04602		a tie on all regions: not tested
+8	6	rung2_base_heldout vs rung4_base_heldout	correction_only difference	-0.4420768975	-0.3683519321			same sign	pass	seed-range bar 0.1289
+8	6	rung2_base_heldout vs final_rung4_mech_skip_dna	correction_only difference	-0.01139452377	0.03334897322			same sign	fail	seed-range bar 0.03333
+8	6	rung3_base_heldout vs rung4_base_heldout	correction_only difference	-0.410056786	-0.3339836285			same sign	pass	seed-range bar 0.1289
+8	6	rung3_base_heldout vs final_rung4_mech_skip_dna	correction_only difference	0.02062558777	0.0677172768			same sign	pass	seed-range bar 0.04602
+8	6	rung4_base_heldout vs final_rung4_mech_skip_dna	correction_only difference	0.4306823738	0.4017009053			same sign	pass	seed-range bar 0.1289
+8	1	ALL	8 of 36 pass					all	fail	
+8	2	ALL	share of cells inside	0.3472222222				>= 0.95	fail	72 cells
+8	3	ALL	4 of 4 pass					all	pass	
+8	4	ALL	6 of 8 pass					all	fail	
+8	5	ALL	12 of 12 pass					all	pass	
+8	6	ALL	9 of 10 pass					all	fail	
+16	1	rung2_base_heldout/seed0	correction_v3	0.7256155884	0.7212066348	0.7009712802	0.7403200488	inside 95% interval	pass	
+16	1	rung2_base_heldout/seed0	correction_only	0.680098507	0.6500041426	0.6303371299	0.6710637295	inside 95% interval	fail	
+16	1	rung2_base_heldout/seed0	h5	0.1727597523	0.179020091	0.1698770356	0.1875170495	inside 95% interval	pass	
+16	2	rung2_base_heldout/seed0/H3K36me3	correction_v3 per assay	0.7822707341	0.7424771863	0.7280658719	0.7573075108	inside 95% interval	fail	
+16	2	rung2_base_heldout/seed0/H3K4me2	correction_v3 per assay	0.6978076154	0.6997273464	0.681137885	0.716970915	inside 95% interval	pass	
+16	2	rung2_base_heldout/seed0/H3K4me3	correction_v3 per assay	0.7429348244	0.7107609619	0.6829803362	0.7349810887	inside 95% interval	fail	
+16	2	rung2_base_heldout/seed0/H3K79me2	correction_v3 per assay	0.5451470258	0.6461121645	0.6061740927	0.6825594743	inside 95% interval	fail	
+16	2	rung2_base_heldout/seed0/H3K9ac	correction_v3 per assay	0.7033581074	0.6794593518	0.6275917762	0.7163247361	inside 95% interval	pass	
+16	2	rung2_base_heldout/seed0/H3K9me3	correction_v3 per assay	0.8821752234	0.8487027977	0.8291763177	0.8641548671	inside 95% interval	fail	
+16	5	rung2_base_heldout/seed0	metric 7 keys equal; no key outside B.4	3				equal	pass	
+16	1	rung2_base_heldout/seed1	correction_v3	0.7135926076	0.7141023105	0.6923081432	0.7339367554	inside 95% interval	pass	
+16	1	rung2_base_heldout/seed1	correction_only	0.699030192	0.6518345027	0.6327778381	0.6722520723	inside 95% interval	fail	
+16	1	rung2_base_heldout/seed1	h5	0.1800801881	0.1846820262	0.178185301	0.19225447	inside 95% interval	pass	
+16	2	rung2_base_heldout/seed1/H3K36me3	correction_v3 per assay	0.7909247793	0.7444787718	0.7274778582	0.7612212094	inside 95% interval	fail	
+16	2	rung2_base_heldout/seed1/H3K4me2	correction_v3 per assay	0.6678566137	0.681921717	0.6576605143	0.7031512425	inside 95% interval	pass	
+16	2	rung2_base_heldout/seed1/H3K4me3	correction_v3 per assay	0.7442898751	0.7129673032	0.6897263887	0.7325748738	inside 95% interval	fail	
+16	2	rung2_base_heldout/seed1/H3K79me2	correction_v3 per assay	0.5103555876	0.6245705578	0.5818435158	0.6632992852	inside 95% interval	fail	
+16	2	rung2_base_heldout/seed1/H3K9ac	correction_v3 per assay	0.6880591067	0.6628696451	0.6050658261	0.703408004	inside 95% interval	pass	
+16	2	rung2_base_heldout/seed1/H3K9me3	correction_v3 per assay	0.880069683	0.8578058681	0.8448001578	0.8683704227	inside 95% interval	fail	
+16	5	rung2_base_heldout/seed1	metric 7 keys equal; no key outside B.4	3				equal	pass	
+16	1	rung2_base_heldout/seed2	correction_v3	0.7139314148	0.7057528869	0.6840613082	0.7269076989	inside 95% interval	pass	
+16	1	rung2_base_heldout/seed2	correction_only	0.6920098627	0.6497577786	0.632230501	0.6683172516	inside 95% interval	fail	
+16	1	rung2_base_heldout/seed2	h5	0.1790066687	0.1596684352	0.1525595039	0.1704533942	inside 95% interval	fail	
+16	2	rung2_base_heldout/seed2/H3K36me3	correction_v3 per assay	0.7494544564	0.6564992063	0.6258834023	0.6867222279	inside 95% interval	fail	
+16	2	rung2_base_heldout/seed2/H3K4me2	correction_v3 per assay	0.6611173684	0.6835010667	0.6579595449	0.7052319462	inside 95% interval	pass	
+16	2	rung2_base_heldout/seed2/H3K4me3	correction_v3 per assay	0.741268056	0.7192654196	0.6992167778	0.7368290093	inside 95% interval	fail	
+16	2	rung2_base_heldout/seed2/H3K79me2	correction_v3 per assay	0.5692898371	0.6524481911	0.6155622828	0.687553861	inside 95% interval	fail	
+16	2	rung2_base_heldout/seed2/H3K9ac	correction_v3 per assay	0.6904258109	0.6667858277	0.6101600604	0.7076806062	inside 95% interval	pass	
+16	2	rung2_base_heldout/seed2/H3K9me3	correction_v3 per assay	0.8720329599	0.8560176102	0.8449117074	0.8649066936	inside 95% interval	fail	
+16	5	rung2_base_heldout/seed2	metric 7 keys equal; no key outside B.4	3				equal	pass	
+16	1	rung3_base_heldout/seed0	correction_v3	0.670324875	0.6823941302	0.6621756687	0.7004606485	inside 95% interval	pass	
+16	1	rung3_base_heldout/seed0	correction_only	0.6383646508	0.5949971716	0.5729335431	0.6180922388	inside 95% interval	fail	
+16	1	rung3_base_heldout/seed0	h5	0.1563540838	0.1454985825	0.1398114179	0.1514838144	inside 95% interval	fail	
+16	2	rung3_base_heldout/seed0/H3K36me3	correction_v3 per assay	0.7641437295	0.7169512084	0.7014267354	0.732855816	inside 95% interval	fail	
+16	2	rung3_base_heldout/seed0/H3K4me2	correction_v3 per assay	0.6832263572	0.6867313579	0.666027994	0.7062715278	inside 95% interval	pass	
+16	2	rung3_base_heldout/seed0/H3K4me3	correction_v3 per assay	0.5610972951	0.5546925976	0.5423997491	0.565083381	inside 95% interval	pass	
+16	2	rung3_base_heldout/seed0/H3K79me2	correction_v3 per assay	0.4780986213	0.6410265843	0.5878874802	0.6870940774	inside 95% interval	fail	
+16	2	rung3_base_heldout/seed0/H3K9ac	correction_v3 per assay	0.6918866704	0.6729572927	0.6205930106	0.7106995796	inside 95% interval	pass	
+16	2	rung3_base_heldout/seed0/H3K9me3	correction_v3 per assay	0.8434965769	0.8220057402	0.8094872504	0.8323928049	inside 95% interval	fail	
+16	5	rung3_base_heldout/seed0	metric 7 keys equal; no key outside B.4	3				equal	pass	
+16	1	rung3_base_heldout/seed1	correction_v3	0.6585820893	0.6733135017	0.6498239763	0.6938948548	inside 95% interval	pass	
+16	1	rung3_base_heldout/seed1	correction_only	0.6818556999	0.6410160229	0.6214271527	0.6603146807	inside 95% interval	fail	
+16	1	rung3_base_heldout/seed1	h5	0.1988790632	0.2038486759	0.1983442818	0.2120895689	inside 95% interval	pass	
+16	2	rung3_base_heldout/seed1/H3K36me3	correction_v3 per assay	0.7480595408	0.698243875	0.6813938595	0.7158007705	inside 95% interval	fail	
+16	2	rung3_base_heldout/seed1/H3K4me2	correction_v3 per assay	0.6982243739	0.7045118663	0.6824087912	0.7232757616	inside 95% interval	pass	
+16	2	rung3_base_heldout/seed1/H3K4me3	correction_v3 per assay	0.618605616	0.6007298493	0.5806974135	0.6176151249	inside 95% interval	fail	
+16	2	rung3_base_heldout/seed1/H3K79me2	correction_v3 per assay	0.4010817292	0.592821111	0.530960175	0.6485846486	inside 95% interval	fail	
+16	2	rung3_base_heldout/seed1/H3K9ac	correction_v3 per assay	0.67553201	0.6505632188	0.5941967825	0.6898970027	inside 95% interval	pass	
+16	2	rung3_base_heldout/seed1/H3K9me3	correction_v3 per assay	0.8099892657	0.7930110895	0.7819103893	0.8022797817	inside 95% interval	fail	
+16	5	rung3_base_heldout/seed1	metric 7 keys equal; no key outside B.4	3				equal	pass	
+16	1	rung3_base_heldout/seed2	correction_v3	0.6898749259	0.6991352495	0.677109386	0.7186814431	inside 95% interval	pass	
+16	1	rung3_base_heldout/seed2	correction_only	0.6581799416	0.6124783187	0.5926837037	0.6337794616	inside 95% interval	fail	
+16	1	rung3_base_heldout/seed2	h5	0.1309180749	0.1178377621	0.1118727486	0.1271553028	inside 95% interval	fail	
+16	2	rung3_base_heldout/seed2/H3K36me3	correction_v3 per assay	0.8064837237	0.7657060821	0.7497242223	0.7821515483	inside 95% interval	fail	
+16	2	rung3_base_heldout/seed2/H3K4me2	correction_v3 per assay	0.6930929316	0.7017262889	0.6791096659	0.7206932516	inside 95% interval	pass	
+16	2	rung3_base_heldout/seed2/H3K4me3	correction_v3 per assay	0.6265649688	0.5993193588	0.5736735625	0.6220863635	inside 95% interval	fail	
+16	2	rung3_base_heldout/seed2/H3K79me2	correction_v3 per assay	0.5162230754	0.6711782355	0.6258769986	0.7113784883	inside 95% interval	fail	
+16	2	rung3_base_heldout/seed2/H3K9ac	correction_v3 per assay	0.6453123927	0.6240713443	0.5656271912	0.6667121778	inside 95% interval	pass	
+16	2	rung3_base_heldout/seed2/H3K9me3	correction_v3 per assay	0.8515724635	0.8328101871	0.8211713792	0.8420460341	inside 95% interval	fail	
+16	5	rung3_base_heldout/seed2	metric 7 keys equal; no key outside B.4	3				equal	pass	
+16	1	rung4_base_heldout/seed0	correction_v3	0.5465113103	0.5400925932	0.5338368655	0.5455645446	inside 95% interval	fail	
+16	1	rung4_base_heldout/seed0	correction_only	0.3201653298	0.2798863022	0.2383565005	0.3244646167	inside 95% interval	pass	
+16	1	rung4_base_heldout/seed0	h5	0.128926563	0.1232406229	0.1198863377	0.1265094377	inside 95% interval	fail	
+16	2	rung4_base_heldout/seed0/H3K36me3	correction_v3 per assay	0.5471421174	0.5238105495	0.5180848241	0.5298029631	inside 95% interval	fail	
+16	2	rung4_base_heldout/seed0/H3K4me2	correction_v3 per assay	0.5273921266	0.5394210746	0.5153968806	0.5626243268	inside 95% interval	pass	
+16	2	rung4_base_heldout/seed0/H3K4me3	correction_v3 per assay	0.5234211842	0.514467605	0.5085922632	0.5199870946	inside 95% interval	fail	
+16	2	rung4_base_heldout/seed0/H3K79me2	correction_v3 per assay	0.4575906686	0.4523995138	0.4467851404	0.4580432768	inside 95% interval	pass	
+16	2	rung4_base_heldout/seed0/H3K9ac	correction_v3 per assay	0.6021276166	0.5934596355	0.5887410384	0.5977394022	inside 95% interval	fail	
+16	2	rung4_base_heldout/seed0/H3K9me3	correction_v3 per assay	0.6213941482	0.616997181	0.6133924762	0.6202798263	inside 95% interval	fail	
+16	5	rung4_base_heldout/seed0	metric 7 keys equal; no key outside B.4	3				equal	pass	
+16	1	rung4_base_heldout/seed1	correction_v3	0.4753328166	0.474223602	0.4691890632	0.479147013	inside 95% interval	pass	
+16	1	rung4_base_heldout/seed1	correction_only	0.2536463134	0.2188797952	0.1766005346	0.2630070759	inside 95% interval	pass	
+16	1	rung4_base_heldout/seed1	h5	0.1391742464	0.1371049703	0.1340726563	0.1401013746	inside 95% interval	pass	
+16	2	rung4_base_heldout/seed1/H3K36me3	correction_v3 per assay	0.5412939766	0.5216687795	0.5158724836	0.5277464801	inside 95% interval	fail	
+16	2	rung4_base_heldout/seed1/H3K4me2	correction_v3 per assay	0.4699772288	0.4776833666	0.4522361081	0.5019794772	inside 95% interval	pass	
+16	2	rung4_base_heldout/seed1/H3K4me3	correction_v3 per assay	0.4641006076	0.4620768408	0.4574210097	0.466835464	inside 95% interval	pass	
+16	2	rung4_base_heldout/seed1/H3K79me2	correction_v3 per assay	0.332742199	0.3477816387	0.3415280565	0.3536284397	inside 95% interval	fail	
+16	2	rung4_base_heldout/seed1/H3K9ac	correction_v3 per assay	0.5556372703	0.5504412691	0.5468037804	0.5539476291	inside 95% interval	fail	
+16	2	rung4_base_heldout/seed1/H3K9me3	correction_v3 per assay	0.4882456171	0.4856897173	0.4831148064	0.4880546254	inside 95% interval	fail	
+16	5	rung4_base_heldout/seed1	metric 7 keys equal; no key outside B.4	3				equal	pass	
+16	1	rung4_base_heldout/seed2	correction_v3	0.4998612461	0.496821504	0.4928803108	0.5006102758	inside 95% interval	pass	
+16	1	rung4_base_heldout/seed2	correction_only	0.3802304248	0.3477745302	0.309890239	0.3868779648	inside 95% interval	pass	
+16	1	rung4_base_heldout/seed2	h5	0.1125057349	0.1114104278	0.1077571751	0.1135942958	inside 95% interval	pass	
+16	2	rung4_base_heldout/seed2/H3K36me3	correction_v3 per assay	0.5127568001	0.5032903527	0.4995686042	0.5069849107	inside 95% interval	fail	
+16	2	rung4_base_heldout/seed2/H3K4me2	correction_v3 per assay	0.5572489631	0.5634437798	0.5459938091	0.5804792348	inside 95% interval	pass	
+16	2	rung4_base_heldout/seed2/H3K4me3	correction_v3 per assay	0.5198523808	0.519440295	0.5158132469	0.5230603844	inside 95% interval	pass	
+16	2	rung4_base_heldout/seed2/H3K79me2	correction_v3 per assay	0.3891535683	0.3824167259	0.3785970992	0.385894461	inside 95% interval	fail	
+16	2	rung4_base_heldout/seed2/H3K9ac	correction_v3 per assay	0.5680307619	0.5592987608	0.5520672712	0.5651435846	inside 95% interval	fail	
+16	2	rung4_base_heldout/seed2/H3K9me3	correction_v3 per assay	0.4521250023	0.4530391099	0.4505910106	0.4553345789	inside 95% interval	pass	
+16	5	rung4_base_heldout/seed2	metric 7 keys equal; no key outside B.4	3				equal	pass	
+16	1	final_rung4_mech_skip_dna/seed0	correction_v3	0.700475671	0.6882129379	0.6620881079	0.7132468038	inside 95% interval	pass	
+16	1	final_rung4_mech_skip_dna/seed0	correction_only	0.7086671429	0.700065306	0.6824523079	0.7189703371	inside 95% interval	pass	
+16	1	final_rung4_mech_skip_dna/seed0	h5	0.1531721009	0.162685125	0.1552863011	0.1716809798	inside 95% interval	fail	
+16	2	final_rung4_mech_skip_dna/seed0/H3K36me3	correction_v3 per assay	0.6369543221	0.4807077142	0.4377708697	0.5235650789	inside 95% interval	fail	
+16	2	final_rung4_mech_skip_dna/seed0/H3K4me2	correction_v3 per assay	0.6972921378	0.7150617269	0.6967663026	0.7329193356	inside 95% interval	pass	
+16	2	final_rung4_mech_skip_dna/seed0/H3K4me3	correction_v3 per assay	0.8034256022	0.7720027528	0.7493399297	0.7915037271	inside 95% interval	fail	
+16	2	final_rung4_mech_skip_dna/seed0/H3K79me2	correction_v3 per assay	0.4579025671	0.6273639315	0.5697808449	0.6785324473	inside 95% interval	fail	
+16	2	final_rung4_mech_skip_dna/seed0/H3K9ac	correction_v3 per assay	0.7641639103	0.7489993581	0.6952417346	0.7876919387	inside 95% interval	pass	
+16	2	final_rung4_mech_skip_dna/seed0/H3K9me3	correction_v3 per assay	0.8431154864	0.7851421439	0.7525795353	0.8113576922	inside 95% interval	fail	
+16	5	final_rung4_mech_skip_dna/seed0	metric 7 keys equal; no key outside B.4	3				equal	pass	
+16	1	final_rung4_mech_skip_dna/seed1	correction_v3	0.7630804682	0.744247119	0.722279452	0.7659614437	inside 95% interval	pass	
+16	1	final_rung4_mech_skip_dna/seed1	correction_only	0.6877857883	0.6848452323	0.6666031013	0.7023828942	inside 95% interval	pass	
+16	1	final_rung4_mech_skip_dna/seed1	h5	0.1769080685	0.1584935617	0.1535145915	0.1683184148	inside 95% interval	fail	
+16	2	final_rung4_mech_skip_dna/seed1/H3K36me3	correction_v3 per assay	0.7108021175	0.5546006763	0.5097987417	0.5997329906	inside 95% interval	fail	
+16	2	final_rung4_mech_skip_dna/seed1/H3K4me2	correction_v3 per assay	0.731247808	0.7492698613	0.734705221	0.7636503306	inside 95% interval	fail	
+16	2	final_rung4_mech_skip_dna/seed1/H3K4me3	correction_v3 per assay	0.805405128	0.7775004801	0.754564304	0.7983274609	inside 95% interval	fail	
+16	2	final_rung4_mech_skip_dna/seed1/H3K79me2	correction_v3 per assay	0.6212068293	0.7290082589	0.6893371223	0.7654873871	inside 95% interval	fail	
+16	2	final_rung4_mech_skip_dna/seed1/H3K9ac	correction_v3 per assay	0.790430504	0.7731937444	0.7216914572	0.8109958426	inside 95% interval	pass	
+16	2	final_rung4_mech_skip_dna/seed1/H3K9me3	correction_v3 per assay	0.9193904225	0.8819096928	0.8588721794	0.9000916144	inside 95% interval	fail	
+16	5	final_rung4_mech_skip_dna/seed1	metric 7 keys equal; no key outside B.4	3				equal	pass	
+16	1	final_rung4_mech_skip_dna/seed2	correction_v3	0.7371273192	0.7127170007	0.6886221513	0.7365194757	inside 95% interval	fail	
+16	1	final_rung4_mech_skip_dna/seed2	correction_only	0.6718319239	0.6667328053	0.645146794	0.6904500136	inside 95% interval	pass	
+16	1	final_rung4_mech_skip_dna/seed2	h5	0.1805795497	0.1729051442	0.1633122852	0.1859174819	inside 95% interval	pass	
+16	2	final_rung4_mech_skip_dna/seed2/H3K36me3	correction_v3 per assay	0.6907525213	0.5147382379	0.4593384196	0.5715953844	inside 95% interval	fail	
+16	2	final_rung4_mech_skip_dna/seed2/H3K4me2	correction_v3 per assay	0.6920495321	0.717137336	0.7017806847	0.7336600004	inside 95% interval	fail	
+16	2	final_rung4_mech_skip_dna/seed2/H3K4me3	correction_v3 per assay	0.7711363716	0.742756292	0.7168970895	0.7657863594	inside 95% interval	fail	
+16	2	final_rung4_mech_skip_dna/seed2/H3K79me2	correction_v3 per assay	0.6357783232	0.7080305787	0.6786232613	0.7355509628	inside 95% interval	fail	
+16	2	final_rung4_mech_skip_dna/seed2/H3K9ac	correction_v3 per assay	0.7267191761	0.7127963378	0.6522439329	0.7590268804	inside 95% interval	pass	
+16	2	final_rung4_mech_skip_dna/seed2/H3K9me3	correction_v3 per assay	0.9063279907	0.8808432216	0.8653726064	0.8932839904	inside 95% interval	fail	
+16	5	final_rung4_mech_skip_dna/seed2	metric 7 keys equal; no key outside B.4	3				equal	pass	
+16	3	rung2_base_heldout vs rung3_base_heldout	D13 verdict (composite v3)	TIE_ASK_PI	TIE_ASK_PI			equal	pass	subset: composite delta -0.003588 within 2 x spread 0.04826; neither arm is clearly simpler; all regions: composite delta 0.0004238 within 2 x spread 0.04759; neither arm is clearly simpler
+16	3	rung2_base_heldout vs rung4_base_heldout	D13 verdict (composite v3)	TIE_ASK_PI	TIE_ASK_PI			equal	pass	subset: composite delta -0.0331 within 2 x spread 0.04507; neither arm is clearly simpler; all regions: composite delta -0.03297 within 2 x spread 0.0429; neither arm is clearly simpler
+16	3	rung3_base_heldout vs rung4_base_heldout	D13 verdict (composite v3)	TIE_ASK_PI	TIE_ASK_PI			equal	pass	subset: composite delta -0.02951 within 2 x spread 0.04826; neither arm is clearly simpler; all regions: composite delta -0.0334 within 2 x spread 0.04759; neither arm is clearly simpler
+16	3	rung4_base_heldout vs final_rung4_mech_skip_dna	D13 verdict (composite v3)	TIE_ASK_PI	TIE_ASK_PI			equal	pass	subset: composite delta 0.03806 within 2 x spread 0.02857; neither arm is clearly simpler; all regions: composite delta 0.03432 within 2 x spread 0.02693; neither arm is clearly simpler
+16	4	rung2_base_heldout	seed spread of correction_v3	0.01202298084	0.01545374783		0.02318062175	<= 1.5 x all regions	pass	
+16	4	rung2_base_heldout	seed spread of correction_only	0.01893168497	0.002076724034		0.003115086051	<= 1.5 x all regions	fail	
+16	4	rung3_base_heldout	seed spread of correction_v3	0.03129283667	0.02582174781		0.03873262172	<= 1.5 x all regions	pass	
+16	4	rung3_base_heldout	seed spread of correction_only	0.04349104909	0.04601885128		0.06902827693	<= 1.5 x all regions	pass	
+16	4	rung4_base_heldout	seed spread of correction_v3	0.07117849371	0.06586899124		0.09880348685	<= 1.5 x all regions	pass	
+16	4	rung4_base_heldout	seed spread of correction_only	0.1265841114	0.1288947351		0.1933421026	<= 1.5 x all regions	pass	
+16	4	final_rung4_mech_skip_dna	seed spread of correction_v3	0.06260479724	0.05603418108		0.08405127162	<= 1.5 x all regions	pass	
+16	4	final_rung4_mech_skip_dna	seed spread of correction_only	0.03683521899	0.03333250076		0.04999875114	<= 1.5 x all regions	pass	
+16	6	rung2_base_heldout vs rung3_base_heldout	composite_v3 difference	-0.003587813373	0.0004237507656			|d| > 0.04759		a tie on all regions: not tested
+16	6	rung2_base_heldout vs rung4_base_heldout	composite_v3 difference	-0.03309787721	-0.03297203515			|d| > 0.0429		a tie on all regions: not tested
+16	6	rung2_base_heldout vs final_rung4_mech_skip_dna	composite_v3 difference	0.004966102859	0.001347051004			|d| > 0.0429		a tie on all regions: not tested
+16	6	rung3_base_heldout vs rung4_base_heldout	composite_v3 difference	-0.02951006384	-0.03339578591			|d| > 0.04759		a tie on all regions: not tested
+16	6	rung3_base_heldout vs final_rung4_mech_skip_dna	composite_v3 difference	0.008553916232	0.0009233002381			|d| > 0.04759		a tie on all regions: not tested
+16	6	rung4_base_heldout vs final_rung4_mech_skip_dna	composite_v3 difference	0.03806398007	0.03431908615			same sign	pass	seed-range bar 0.02693
+16	6	rung2_base_heldout vs rung3_base_heldout	correction_v3 difference	-0.04478590684	-0.02873965029			same sign	pass	seed-range bar 0.02582
+16	6	rung2_base_heldout vs rung4_base_heldout	correction_v3 difference	-0.2104780793	-0.209974711			same sign	pass	seed-range bar 0.06587
+16	6	rung2_base_heldout vs final_rung4_mech_skip_dna	correction_v3 difference	0.01584794919	0.001371741768			|d| > 0.05603		a tie on all regions: not tested
+16	6	rung3_base_heldout vs rung4_base_heldout	correction_v3 difference	-0.1656921724	-0.1812350607			same sign	pass	seed-range bar 0.06587
+16	6	rung3_base_heldout vs final_rung4_mech_skip_dna	correction_v3 difference	0.06063385603	0.03011139206			|d| > 0.05603		a tie on all regions: not tested
+16	6	rung4_base_heldout vs final_rung4_mech_skip_dna	correction_v3 difference	0.2263260285	0.2113464528			same sign	pass	seed-range bar 0.06587
+16	6	rung2_base_heldout vs rung3_base_heldout	correction_only difference	-0.03091275645	-0.03436830359			|d| > 0.04602		a tie on all regions: not tested
+16	6	rung2_base_heldout vs rung4_base_heldout	correction_only difference	-0.3723654979	-0.3683519321			same sign	pass	seed-range bar 0.1289
+16	6	rung2_base_heldout vs final_rung4_mech_skip_dna	correction_only difference	-0.0009512355139	0.03334897322			same sign	fail	seed-range bar 0.03333
+16	6	rung3_base_heldout vs rung4_base_heldout	correction_only difference	-0.3414527414	-0.3339836285			same sign	pass	seed-range bar 0.1289
+16	6	rung3_base_heldout vs final_rung4_mech_skip_dna	correction_only difference	0.02996152094	0.0677172768			same sign	pass	seed-range bar 0.04602
+16	6	rung4_base_heldout vs final_rung4_mech_skip_dna	correction_only difference	0.3714142623	0.4017009053			same sign	pass	seed-range bar 0.1289
+16	1	ALL	22 of 36 pass					all	fail	
+16	2	ALL	share of cells inside	0.3333333333				>= 0.95	fail	72 cells
+16	3	ALL	4 of 4 pass					all	pass	
+16	4	ALL	7 of 8 pass					all	fail	
+16	5	ALL	12 of 12 pass					all	pass	
+16	6	ALL	9 of 10 pass					all	fail	
+16	S	rung2_base_heldout/seed0	correction_v3: stored 16-region score - p 16 subset	0.7256155884	0.7256155884			rtol 1e-06	pass	
+16	S	rung2_base_heldout/seed0	correction_only: stored 16-region score - p 16 subset	0.680098507	0.680098507			rtol 1e-06	pass	
+16	S	rung2_base_heldout/seed1	correction_v3: stored 16-region score - p 16 subset	0.7135926076	0.7135926076			rtol 1e-06	pass	
+16	S	rung2_base_heldout/seed1	correction_only: stored 16-region score - p 16 subset	0.699030192	0.699030192			rtol 1e-06	pass	
+16	S	rung2_base_heldout/seed2	correction_v3: stored 16-region score - p 16 subset	0.7139314148	0.7139314148			rtol 1e-06	pass	
+16	S	rung2_base_heldout/seed2	correction_only: stored 16-region score - p 16 subset	0.6920098627	0.6920098627			rtol 1e-06	pass	
+16	S	rung3_base_heldout/seed0	correction_v3: stored 16-region score - p 16 subset	0.670324875	0.670324875			rtol 1e-06	pass	
+16	S	rung3_base_heldout/seed0	correction_only: stored 16-region score - p 16 subset	0.6383646508	0.6383646508			rtol 1e-06	pass	
+16	S	rung3_base_heldout/seed1	correction_v3: stored 16-region score - p 16 subset	0.6585820893	0.6585820893			rtol 1e-06	pass	
+16	S	rung3_base_heldout/seed1	correction_only: stored 16-region score - p 16 subset	0.6818556999	0.6818556999			rtol 1e-06	pass	
+16	S	rung3_base_heldout/seed2	correction_v3: stored 16-region score - p 16 subset	0.6898749259	0.6898749259			rtol 1e-06	pass	
+16	S	rung3_base_heldout/seed2	correction_only: stored 16-region score - p 16 subset	0.6581799416	0.6581799416			rtol 1e-06	pass	
+16	S	rung4_base_heldout/seed0	correction_v3: stored 16-region score - p 16 subset	0.5465113103	0.5465113103			rtol 1e-06	pass	
+16	S	rung4_base_heldout/seed0	correction_only: stored 16-region score - p 16 subset	0.3201653298	0.3201653298			rtol 1e-06	pass	
+16	S	rung4_base_heldout/seed1	correction_v3: stored 16-region score - p 16 subset	0.4753328166	0.4753328166			rtol 1e-06	pass	
+16	S	rung4_base_heldout/seed1	correction_only: stored 16-region score - p 16 subset	0.2536463134	0.2536463134			rtol 1e-06	pass	
+16	S	rung4_base_heldout/seed2	correction_v3: stored 16-region score - p 16 subset	0.4998612461	0.4998612461			rtol 1e-06	pass	
+16	S	rung4_base_heldout/seed2	correction_only: stored 16-region score - p 16 subset	0.3802304248	0.3802304248			rtol 1e-06	pass	
+16	S	final_rung4_mech_skip_dna/seed0	correction_v3: stored 16-region score - p 16 subset	0.700475671	0.700475671			rtol 1e-06	pass	
+16	S	final_rung4_mech_skip_dna/seed0	correction_only: stored 16-region score - p 16 subset	0.7086671429	0.7086671429			rtol 1e-06	pass	
+16	S	final_rung4_mech_skip_dna/seed1	correction_v3: stored 16-region score - p 16 subset	0.7630804682	0.7630804682			rtol 1e-06	pass	
+16	S	final_rung4_mech_skip_dna/seed1	correction_only: stored 16-region score - p 16 subset	0.6877857883	0.6877857883			rtol 1e-06	pass	
+16	S	final_rung4_mech_skip_dna/seed2	correction_v3: stored 16-region score - p 16 subset	0.7371273192	0.7371273192			rtol 1e-06	pass	
+16	S	final_rung4_mech_skip_dna/seed2	correction_only: stored 16-region score - p 16 subset	0.6718319239	0.6718319239			rtol 1e-06	pass	
+32	1	rung2_base_heldout/seed0	correction_v3	0.7318700187	0.7212066348	0.7009712802	0.7403200488	inside 95% interval	pass	
+32	1	rung2_base_heldout/seed0	correction_only	0.6624320598	0.6500041426	0.6303371299	0.6710637295	inside 95% interval	pass	
+32	1	rung2_base_heldout/seed0	h5	0.1721602839	0.179020091	0.1698770356	0.1875170495	inside 95% interval	pass	
+32	2	rung2_base_heldout/seed0/H3K36me3	correction_v3 per assay	0.77968119	0.7424771863	0.7280658719	0.7573075108	inside 95% interval	fail	
+32	2	rung2_base_heldout/seed0/H3K4me2	correction_v3 per assay	0.7023946322	0.6997273464	0.681137885	0.716970915	inside 95% interval	pass	
+32	2	rung2_base_heldout/seed0/H3K4me3	correction_v3 per assay	0.7289168527	0.7107609619	0.6829803362	0.7349810887	inside 95% interval	pass	
+32	2	rung2_base_heldout/seed0/H3K79me2	correction_v3 per assay	0.6282030763	0.6461121645	0.6061740927	0.6825594743	inside 95% interval	pass	
+32	2	rung2_base_heldout/seed0/H3K9ac	correction_v3 per assay	0.6817124254	0.6794593518	0.6275917762	0.7163247361	inside 95% interval	pass	
+32	2	rung2_base_heldout/seed0/H3K9me3	correction_v3 per assay	0.8703119356	0.8487027977	0.8291763177	0.8641548671	inside 95% interval	fail	
+32	5	rung2_base_heldout/seed0	metric 7 keys equal; no key outside B.4	3				equal	pass	
+32	1	rung2_base_heldout/seed1	correction_v3	0.7220003608	0.7141023105	0.6923081432	0.7339367554	inside 95% interval	pass	
+32	1	rung2_base_heldout/seed1	correction_only	0.6687223277	0.6518345027	0.6327778381	0.6722520723	inside 95% interval	pass	
+32	1	rung2_base_heldout/seed1	h5	0.1754396816	0.1846820262	0.178185301	0.19225447	inside 95% interval	fail	
+32	2	rung2_base_heldout/seed1/H3K36me3	correction_v3 per assay	0.7788210752	0.7444787718	0.7274778582	0.7612212094	inside 95% interval	fail	
+32	2	rung2_base_heldout/seed1/H3K4me2	correction_v3 per assay	0.6866628387	0.681921717	0.6576605143	0.7031512425	inside 95% interval	pass	
+32	2	rung2_base_heldout/seed1/H3K4me3	correction_v3 per assay	0.7318666967	0.7129673032	0.6897263887	0.7325748738	inside 95% interval	pass	
+32	2	rung2_base_heldout/seed1/H3K79me2	correction_v3 per assay	0.6029551647	0.6245705578	0.5818435158	0.6632992852	inside 95% interval	pass	
+32	2	rung2_base_heldout/seed1/H3K9ac	correction_v3 per assay	0.6585700944	0.6628696451	0.6050658261	0.703408004	inside 95% interval	pass	
+32	2	rung2_base_heldout/seed1/H3K9me3	correction_v3 per assay	0.8731262952	0.8578058681	0.8448001578	0.8683704227	inside 95% interval	fail	
+32	5	rung2_base_heldout/seed1	metric 7 keys equal; no key outside B.4	3				equal	pass	
+32	1	rung2_base_heldout/seed2	correction_v3	0.7165730519	0.7057528869	0.6840613082	0.7269076989	inside 95% interval	pass	
+32	1	rung2_base_heldout/seed2	correction_only	0.6690937934	0.6497577786	0.632230501	0.6683172516	inside 95% interval	fail	
+32	1	rung2_base_heldout/seed2	h5	0.1578827512	0.1596684352	0.1525595039	0.1704533942	inside 95% interval	pass	
+32	2	rung2_base_heldout/seed2/H3K36me3	correction_v3 per assay	0.709031462	0.6564992063	0.6258834023	0.6867222279	inside 95% interval	fail	
+32	2	rung2_base_heldout/seed2/H3K4me2	correction_v3 per assay	0.6887734973	0.6835010667	0.6579595449	0.7052319462	inside 95% interval	pass	
+32	2	rung2_base_heldout/seed2/H3K4me3	correction_v3 per assay	0.7337240495	0.7192654196	0.6992167778	0.7368290093	inside 95% interval	pass	
+32	2	rung2_base_heldout/seed2/H3K79me2	correction_v3 per assay	0.6407479324	0.6524481911	0.6155622828	0.687553861	inside 95% interval	pass	
+32	2	rung2_base_heldout/seed2/H3K9ac	correction_v3 per assay	0.6580856561	0.6667858277	0.6101600604	0.7076806062	inside 95% interval	pass	
+32	2	rung2_base_heldout/seed2/H3K9me3	correction_v3 per assay	0.8690757141	0.8560176102	0.8449117074	0.8649066936	inside 95% interval	fail	
+32	5	rung2_base_heldout/seed2	metric 7 keys equal; no key outside B.4	3				equal	pass	
+32	1	rung3_base_heldout/seed0	correction_v3	0.6824515821	0.6823941302	0.6621756687	0.7004606485	inside 95% interval	pass	
+32	1	rung3_base_heldout/seed0	correction_only	0.61093202	0.5949971716	0.5729335431	0.6180922388	inside 95% interval	pass	
+32	1	rung3_base_heldout/seed0	h5	0.1505894587	0.1454985825	0.1398114179	0.1514838144	inside 95% interval	pass	
+32	2	rung3_base_heldout/seed0/H3K36me3	correction_v3 per assay	0.7449839293	0.7169512084	0.7014267354	0.732855816	inside 95% interval	fail	
+32	2	rung3_base_heldout/seed0/H3K4me2	correction_v3 per assay	0.6907625151	0.6867313579	0.666027994	0.7062715278	inside 95% interval	pass	
+32	2	rung3_base_heldout/seed0/H3K4me3	correction_v3 per assay	0.5613678737	0.5546925976	0.5423997491	0.565083381	inside 95% interval	pass	
+32	2	rung3_base_heldout/seed0/H3K79me2	correction_v3 per assay	0.5995907051	0.6410265843	0.5878874802	0.6870940774	inside 95% interval	pass	
+32	2	rung3_base_heldout/seed0/H3K9ac	correction_v3 per assay	0.6637462794	0.6729572927	0.6205930106	0.7106995796	inside 95% interval	pass	
+32	2	rung3_base_heldout/seed0/H3K9me3	correction_v3 per assay	0.83425819	0.8220057402	0.8094872504	0.8323928049	inside 95% interval	fail	
+32	5	rung3_base_heldout/seed0	metric 7 keys equal; no key outside B.4	3				equal	pass	
+32	1	rung3_base_heldout/seed1	correction_v3	0.6735282349	0.6733135017	0.6498239763	0.6938948548	inside 95% interval	pass	
+32	1	rung3_base_heldout/seed1	correction_only	0.6597794555	0.6410160229	0.6214271527	0.6603146807	inside 95% interval	pass	
+32	1	rung3_base_heldout/seed1	h5	0.2086722837	0.2038486759	0.1983442818	0.2120895689	inside 95% interval	pass	
+32	2	rung3_base_heldout/seed1/H3K36me3	correction_v3 per assay	0.7289601013	0.698243875	0.6813938595	0.7158007705	inside 95% interval	fail	
+32	2	rung3_base_heldout/seed1/H3K4me2	correction_v3 per assay	0.7080696727	0.7045118663	0.6824087912	0.7232757616	inside 95% interval	pass	
+32	2	rung3_base_heldout/seed1/H3K4me3	correction_v3 per assay	0.6094898299	0.6007298493	0.5806974135	0.6176151249	inside 95% interval	pass	
+32	2	rung3_base_heldout/seed1/H3K79me2	correction_v3 per assay	0.5459717377	0.592821111	0.530960175	0.6485846486	inside 95% interval	pass	
+32	2	rung3_base_heldout/seed1/H3K9ac	correction_v3 per assay	0.6446075578	0.6505632188	0.5941967825	0.6898970027	inside 95% interval	pass	
+32	2	rung3_base_heldout/seed1/H3K9me3	correction_v3 per assay	0.8040705101	0.7930110895	0.7819103893	0.8022797817	inside 95% interval	fail	
+32	5	rung3_base_heldout/seed1	metric 7 keys equal; no key outside B.4	3				equal	pass	
+32	1	rung3_base_heldout/seed2	correction_v3	0.6970324341	0.6991352495	0.677109386	0.7186814431	inside 95% interval	pass	
+32	1	rung3_base_heldout/seed2	correction_only	0.6315223503	0.6124783187	0.5926837037	0.6337794616	inside 95% interval	pass	
+32	1	rung3_base_heldout/seed2	h5	0.1193053796	0.1178377621	0.1118727486	0.1271553028	inside 95% interval	pass	
+32	2	rung3_base_heldout/seed2/H3K36me3	correction_v3 per assay	0.7825888394	0.7657060821	0.7497242223	0.7821515483	inside 95% interval	fail	
+32	2	rung3_base_heldout/seed2/H3K4me2	correction_v3 per assay	0.7073836085	0.7017262889	0.6791096659	0.7206932516	inside 95% interval	pass	
+32	2	rung3_base_heldout/seed2/H3K4me3	correction_v3 per assay	0.6107641725	0.5993193588	0.5736735625	0.6220863635	inside 95% interval	pass	
+32	2	rung3_base_heldout/seed2/H3K79me2	correction_v3 per assay	0.6259468192	0.6711782355	0.6258769986	0.7113784883	inside 95% interval	pass	
+32	2	rung3_base_heldout/seed2/H3K9ac	correction_v3 per assay	0.6105712947	0.6240713443	0.5656271912	0.6667121778	inside 95% interval	pass	
+32	2	rung3_base_heldout/seed2/H3K9me3	correction_v3 per assay	0.8449398706	0.8328101871	0.8211713792	0.8420460341	inside 95% interval	fail	
+32	5	rung3_base_heldout/seed2	metric 7 keys equal; no key outside B.4	3				equal	pass	
+32	1	rung4_base_heldout/seed0	correction_v3	0.5430712596	0.5400925932	0.5338368655	0.5455645446	inside 95% interval	pass	
+32	1	rung4_base_heldout/seed0	correction_only	0.2874031971	0.2798863022	0.2383565005	0.3244646167	inside 95% interval	pass	
+32	1	rung4_base_heldout/seed0	h5	0.1264760351	0.1232406229	0.1198863377	0.1265094377	inside 95% interval	pass	
+32	2	rung4_base_heldout/seed0/H3K36me3	correction_v3 per assay	0.5347529956	0.5238105495	0.5180848241	0.5298029631	inside 95% interval	fail	
+32	2	rung4_base_heldout/seed0/H3K4me2	correction_v3 per assay	0.5193090063	0.5394210746	0.5153968806	0.5626243268	inside 95% interval	pass	
+32	2	rung4_base_heldout/seed0/H3K4me3	correction_v3 per assay	0.5249627108	0.514467605	0.5085922632	0.5199870946	inside 95% interval	fail	
+32	2	rung4_base_heldout/seed0/H3K79me2	correction_v3 per assay	0.4578078956	0.4523995138	0.4467851404	0.4580432768	inside 95% interval	pass	
+32	2	rung4_base_heldout/seed0/H3K9ac	correction_v3 per assay	0.6010358154	0.5934596355	0.5887410384	0.5977394022	inside 95% interval	fail	
+32	2	rung4_base_heldout/seed0/H3K9me3	correction_v3 per assay	0.6205591339	0.616997181	0.6133924762	0.6202798263	inside 95% interval	fail	
+32	5	rung4_base_heldout/seed0	metric 7 keys equal; no key outside B.4	3				equal	pass	
+32	1	rung4_base_heldout/seed1	correction_v3	0.473051714	0.474223602	0.4691890632	0.479147013	inside 95% interval	pass	
+32	1	rung4_base_heldout/seed1	correction_only	0.2261165198	0.2188797952	0.1766005346	0.2630070759	inside 95% interval	pass	
+32	1	rung4_base_heldout/seed1	h5	0.1350465004	0.1371049703	0.1340726563	0.1401013746	inside 95% interval	pass	
+32	2	rung4_base_heldout/seed1/H3K36me3	correction_v3 per assay	0.5320061359	0.5216687795	0.5158724836	0.5277464801	inside 95% interval	fail	
+32	2	rung4_base_heldout/seed1/H3K4me2	correction_v3 per assay	0.4554552295	0.4776833666	0.4522361081	0.5019794772	inside 95% interval	pass	
+32	2	rung4_base_heldout/seed1/H3K4me3	correction_v3 per assay	0.4633036186	0.4620768408	0.4574210097	0.466835464	inside 95% interval	pass	
+32	2	rung4_base_heldout/seed1/H3K79me2	correction_v3 per assay	0.3436765324	0.3477816387	0.3415280565	0.3536284397	inside 95% interval	pass	
+32	2	rung4_base_heldout/seed1/H3K9ac	correction_v3 per assay	0.5562578713	0.5504412691	0.5468037804	0.5539476291	inside 95% interval	fail	
+32	2	rung4_base_heldout/seed1/H3K9me3	correction_v3 per assay	0.4876108961	0.4856897173	0.4831148064	0.4880546254	inside 95% interval	pass	
+32	5	rung4_base_heldout/seed1	metric 7 keys equal; no key outside B.4	3				equal	pass	
+32	1	rung4_base_heldout/seed2	correction_v3	0.4977237891	0.496821504	0.4928803108	0.5006102758	inside 95% interval	pass	
+32	1	rung4_base_heldout/seed2	correction_only	0.3580632432	0.3477745302	0.309890239	0.3868779648	inside 95% interval	pass	
+32	1	rung4_base_heldout/seed2	h5	0.1135116706	0.1114104278	0.1077571751	0.1135942958	inside 95% interval	pass	
+32	2	rung4_base_heldout/seed2/H3K36me3	correction_v3 per assay	0.5073600853	0.5032903527	0.4995686042	0.5069849107	inside 95% interval	fail	
+32	2	rung4_base_heldout/seed2/H3K4me2	correction_v3 per assay	0.551447069	0.5634437798	0.5459938091	0.5804792348	inside 95% interval	pass	
+32	2	rung4_base_heldout/seed2/H3K4me3	correction_v3 per assay	0.520347357	0.519440295	0.5158132469	0.5230603844	inside 95% interval	pass	
+32	2	rung4_base_heldout/seed2/H3K79me2	correction_v3 per assay	0.3864368738	0.3824167259	0.3785970992	0.385894461	inside 95% interval	fail	
+32	2	rung4_base_heldout/seed2/H3K9ac	correction_v3 per assay	0.5664005681	0.5592987608	0.5520672712	0.5651435846	inside 95% interval	fail	
+32	2	rung4_base_heldout/seed2/H3K9me3	correction_v3 per assay	0.4543507814	0.4530391099	0.4505910106	0.4553345789	inside 95% interval	pass	
+32	5	rung4_base_heldout/seed2	metric 7 keys equal; no key outside B.4	3				equal	pass	
+32	1	final_rung4_mech_skip_dna/seed0	correction_v3	0.7033472764	0.6882129379	0.6620881079	0.7132468038	inside 95% interval	pass	
+32	1	final_rung4_mech_skip_dna/seed0	correction_only	0.7003335553	0.700065306	0.6824523079	0.7189703371	inside 95% interval	pass	
+32	1	final_rung4_mech_skip_dna/seed0	h5	0.1557623252	0.162685125	0.1552863011	0.1716809798	inside 95% interval	pass	
+32	2	final_rung4_mech_skip_dna/seed0/H3K36me3	correction_v3 per assay	0.5585747016	0.4807077142	0.4377708697	0.5235650789	inside 95% interval	fail	
+32	2	final_rung4_mech_skip_dna/seed0/H3K4me2	correction_v3 per assay	0.7159867519	0.7150617269	0.6967663026	0.7329193356	inside 95% interval	pass	
+32	2	final_rung4_mech_skip_dna/seed0/H3K4me3	correction_v3 per assay	0.7931176031	0.7720027528	0.7493399297	0.7915037271	inside 95% interval	fail	
+32	2	final_rung4_mech_skip_dna/seed0/H3K79me2	correction_v3 per assay	0.5908171479	0.6273639315	0.5697808449	0.6785324473	inside 95% interval	pass	
+32	2	final_rung4_mech_skip_dna/seed0/H3K9ac	correction_v3 per assay	0.7411223959	0.7489993581	0.6952417346	0.7876919387	inside 95% interval	pass	
+32	2	final_rung4_mech_skip_dna/seed0/H3K9me3	correction_v3 per assay	0.8204650581	0.7851421439	0.7525795353	0.8113576922	inside 95% interval	fail	
+32	5	final_rung4_mech_skip_dna/seed0	metric 7 keys equal; no key outside B.4	3				equal	pass	
+32	1	final_rung4_mech_skip_dna/seed1	correction_v3	0.7571281233	0.744247119	0.722279452	0.7659614437	inside 95% interval	pass	
+32	1	final_rung4_mech_skip_dna/seed1	correction_only	0.6908917528	0.6848452323	0.6666031013	0.7023828942	inside 95% interval	pass	
+32	1	final_rung4_mech_skip_dna/seed1	h5	0.1614744948	0.1584935617	0.1535145915	0.1683184148	inside 95% interval	pass	
+32	2	final_rung4_mech_skip_dna/seed1/H3K36me3	correction_v3 per assay	0.6284245037	0.5546006763	0.5097987417	0.5997329906	inside 95% interval	fail	
+32	2	final_rung4_mech_skip_dna/seed1/H3K4me2	correction_v3 per assay	0.7468858885	0.7492698613	0.734705221	0.7636503306	inside 95% interval	pass	
+32	2	final_rung4_mech_skip_dna/seed1/H3K4me3	correction_v3 per assay	0.7942844482	0.7775004801	0.754564304	0.7983274609	inside 95% interval	pass	
+32	2	final_rung4_mech_skip_dna/seed1/H3K79me2	correction_v3 per assay	0.7076746281	0.7290082589	0.6893371223	0.7654873871	inside 95% interval	pass	
+32	2	final_rung4_mech_skip_dna/seed1/H3K9ac	correction_v3 per assay	0.7586759407	0.7731937444	0.7216914572	0.8109958426	inside 95% interval	pass	
+32	2	final_rung4_mech_skip_dna/seed1/H3K9me3	correction_v3 per assay	0.9068233305	0.8819096928	0.8588721794	0.9000916144	inside 95% interval	fail	
+32	5	final_rung4_mech_skip_dna/seed1	metric 7 keys equal; no key outside B.4	3				equal	pass	
+32	1	final_rung4_mech_skip_dna/seed2	correction_v3	0.725675641	0.7127170007	0.6886221513	0.7365194757	inside 95% interval	pass	
+32	1	final_rung4_mech_skip_dna/seed2	correction_only	0.6629100916	0.6667328053	0.645146794	0.6904500136	inside 95% interval	pass	
+32	1	final_rung4_mech_skip_dna/seed2	h5	0.1870843381	0.1729051442	0.1633122852	0.1859174819	inside 95% interval	fail	
+32	2	final_rung4_mech_skip_dna/seed2/H3K36me3	correction_v3 per assay	0.5976484777	0.5147382379	0.4593384196	0.5715953844	inside 95% interval	fail	
+32	2	final_rung4_mech_skip_dna/seed2/H3K4me2	correction_v3 per assay	0.712450393	0.717137336	0.7017806847	0.7336600004	inside 95% interval	pass	
+32	2	final_rung4_mech_skip_dna/seed2/H3K4me3	correction_v3 per assay	0.7587262179	0.742756292	0.7168970895	0.7657863594	inside 95% interval	pass	
+32	2	final_rung4_mech_skip_dna/seed2/H3K79me2	correction_v3 per assay	0.6924982868	0.7080305787	0.6786232613	0.7355509628	inside 95% interval	pass	
+32	2	final_rung4_mech_skip_dna/seed2/H3K9ac	correction_v3 per assay	0.6947032829	0.7127963378	0.6522439329	0.7590268804	inside 95% interval	pass	
+32	2	final_rung4_mech_skip_dna/seed2/H3K9me3	correction_v3 per assay	0.8980271875	0.8808432216	0.8653726064	0.8932839904	inside 95% interval	fail	
+32	5	final_rung4_mech_skip_dna/seed2	metric 7 keys equal; no key outside B.4	3				equal	pass	
+32	3	rung2_base_heldout vs rung3_base_heldout	D13 verdict (composite v3)	TIE_ASK_PI	TIE_ASK_PI			equal	pass	subset: composite delta -0.002177 within 2 x spread 0.04755; neither arm is clearly simpler; all regions: composite delta 0.0004238 within 2 x spread 0.04759; neither arm is clearly simpler
+32	3	rung2_base_heldout vs rung4_base_heldout	D13 verdict (composite v3)	TIE_ASK_PI	TIE_ASK_PI			equal	pass	subset: composite delta -0.03519 within 2 x spread 0.04363; neither arm is clearly simpler; all regions: composite delta -0.03297 within 2 x spread 0.0429; neither arm is clearly simpler
+32	3	rung3_base_heldout vs rung4_base_heldout	D13 verdict (composite v3)	TIE_ASK_PI	TIE_ASK_PI			equal	pass	subset: composite delta -0.03302 within 2 x spread 0.04755; neither arm is clearly simpler; all regions: composite delta -0.0334 within 2 x spread 0.04759; neither arm is clearly simpler
+32	3	rung4_base_heldout vs final_rung4_mech_skip_dna	D13 verdict (composite v3)	TIE_ASK_PI	TIE_ASK_PI			equal	pass	subset: composite delta 0.03751 within 2 x spread 0.02636; neither arm is clearly simpler; all regions: composite delta 0.03432 within 2 x spread 0.02693; neither arm is clearly simpler
+32	4	rung2_base_heldout	seed spread of correction_v3	0.01529696681	0.01545374783		0.02318062175	<= 1.5 x all regions	pass	
+32	4	rung2_base_heldout	seed spread of correction_only	0.006661733589	0.002076724034		0.003115086051	<= 1.5 x all regions	fail	
+32	4	rung3_base_heldout	seed spread of correction_v3	0.02350419924	0.02582174781		0.03873262172	<= 1.5 x all regions	pass	
+32	4	rung3_base_heldout	seed spread of correction_only	0.04884743551	0.04601885128		0.06902827693	<= 1.5 x all regions	pass	
+32	4	rung4_base_heldout	seed spread of correction_v3	0.07001954562	0.06586899124		0.09880348685	<= 1.5 x all regions	pass	
+32	4	rung4_base_heldout	seed spread of correction_only	0.1319467234	0.1288947351		0.1933421026	<= 1.5 x all regions	pass	
+32	4	final_rung4_mech_skip_dna	seed spread of correction_v3	0.05378084686	0.05603418108		0.08405127162	<= 1.5 x all regions	pass	
+32	4	final_rung4_mech_skip_dna	seed spread of correction_only	0.03742346368	0.03333250076		0.04999875114	<= 1.5 x all regions	pass	
+32	6	rung2_base_heldout vs rung3_base_heldout	composite_v3 difference	-0.002177268349	0.0004237507656			|d| > 0.04759		a tie on all regions: not tested
+32	6	rung2_base_heldout vs rung4_base_heldout	composite_v3 difference	-0.03519474646	-0.03297203515			|d| > 0.0429		a tie on all regions: not tested
+32	6	rung2_base_heldout vs final_rung4_mech_skip_dna	composite_v3 difference	0.002313083005	0.001347051004			|d| > 0.0429		a tie on all regions: not tested
+32	6	rung3_base_heldout vs rung4_base_heldout	composite_v3 difference	-0.03301747811	-0.03339578591			|d| > 0.04759		a tie on all regions: not tested
+32	6	rung3_base_heldout vs final_rung4_mech_skip_dna	composite_v3 difference	0.004490351354	0.0009233002381			|d| > 0.04759		a tie on all regions: not tested
+32	6	rung4_base_heldout vs final_rung4_mech_skip_dna	composite_v3 difference	0.03750782946	0.03431908615			same sign	pass	seed-range bar 0.02693
+32	6	rung2_base_heldout vs rung3_base_heldout	correction_v3 difference	-0.03914372675	-0.02873965029			same sign	pass	seed-range bar 0.02582
+32	6	rung2_base_heldout vs rung4_base_heldout	correction_v3 difference	-0.2188655562	-0.209974711			same sign	pass	seed-range bar 0.06587
+32	6	rung2_base_heldout vs final_rung4_mech_skip_dna	correction_v3 difference	0.005235869772	0.001371741768			|d| > 0.05603		a tie on all regions: not tested
+32	6	rung3_base_heldout vs rung4_base_heldout	correction_v3 difference	-0.1797218295	-0.1812350607			same sign	pass	seed-range bar 0.06587
+32	6	rung3_base_heldout vs final_rung4_mech_skip_dna	correction_v3 difference	0.04437959652	0.03011139206			|d| > 0.05603		a tie on all regions: not tested
+32	6	rung4_base_heldout vs final_rung4_mech_skip_dna	correction_v3 difference	0.224101426	0.2113464528			same sign	pass	seed-range bar 0.06587
+32	6	rung2_base_heldout vs rung3_base_heldout	correction_only difference	-0.03267145171	-0.03436830359			|d| > 0.04602		a tie on all regions: not tested
+32	6	rung2_base_heldout vs rung4_base_heldout	correction_only difference	-0.3762217403	-0.3683519321			same sign	pass	seed-range bar 0.1289
+32	6	rung2_base_heldout vs final_rung4_mech_skip_dna	correction_only difference	0.01796240625	0.03334897322			same sign	pass	seed-range bar 0.03333
+32	6	rung3_base_heldout vs rung4_base_heldout	correction_only difference	-0.3435502885	-0.3339836285			same sign	pass	seed-range bar 0.1289
+32	6	rung3_base_heldout vs final_rung4_mech_skip_dna	correction_only difference	0.05063385796	0.0677172768			same sign	pass	seed-range bar 0.04602
+32	6	rung4_base_heldout vs final_rung4_mech_skip_dna	correction_only difference	0.3941841465	0.4017009053			same sign	pass	seed-range bar 0.1289
+32	1	ALL	33 of 36 pass					all	fail	
+32	2	ALL	share of cells inside	0.6111111111				>= 0.95	fail	72 cells
+32	3	ALL	4 of 4 pass					all	pass	
+32	4	ALL	7 of 8 pass					all	fail	
+32	5	ALL	12 of 12 pass					all	pass	
+32	6	ALL	10 of 10 pass					all	pass	
