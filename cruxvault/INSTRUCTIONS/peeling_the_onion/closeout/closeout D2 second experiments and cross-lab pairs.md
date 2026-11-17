@@ -134,3 +134,10 @@ Expectation (before any run): (a) more than half of the 13 validation pairs are 
 - baselines 5 x 16 = 80 expected (140 allocated at most); base recipes 9 x 16 = 144 (252); final candidates 9 x 16 = 144 (252).
 - Total without the final candidates: 12 + 50 + 80 + 144 = 286 CPU-h expected, 12 + 96 + 140 + 252 = 500 at most.
 - The 17 missing DNase-seq rows (not recommended, 9.2): up to 17 x 72 h x 16 CPU = 19,584 allocated; the measured single-end smoke row 2030 used 2.93 h x 16 = 47 CPU-h for 47 M reads, about 1 CPU-h per million reads, so 7,312 M catalog reads give about 7,300 CPU-h.
+
+### 9.8 Results of the prep step (2026-11-17, Nibi job 27601259; evidence `results/closeout_D2/D2_PREP.md`)
+
+- Add-on tables `/project/def-maxwl/mforooz/ONION/CO-D2/tables/eic_v1_2x`: 71 rows, 71 `other_experiment` pairs; `check_dataset.py --addon-of tables/eic_v1_2` PASS with every leak count 0 (`second-experiment rows: 71 (other lab 35, same lab 36)`). Lab, donor and antibody are filled on every appended row.
+- Add-on eval set `CO-D2/eval/eic_v1_2x/evalset.json`: 13 validation targets, 13 second experiments, 13 pair ids; base eval set rebuilt on Nibi with the same sha256 as Fir's frozen `eval/eic_v1_2/evalset.json` (`26f9e32f...`).
+- Pair smoke: 3 of 13 validation pairs are outside 1 +- 0.05 (expectation (a) was wrong); other-lab 16 of 35 and same-lab 4 of 36 over all pairs. Gate GX clause 3 does not trip; clause 1 trips (9.2).
+- These tables are the D2 add-on of `eic_v1_2`. When D3 builds a later version, the add-on is rebuilt on it with the same stage (`BASE=<version>`), and the runs to score must be trained on that version.
