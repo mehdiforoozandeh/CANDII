@@ -293,7 +293,8 @@ def drop_field_indices(cfg: dict) -> tuple | None:
     without the wrapper keys and two_step.TwoStep runs that inner model twice, so leg 1 (C' =
     the base covariates c_leg1) and leg 2 (C = c_leg1, C' = the target's) both pass through the
     rung's `model_covariates` and read the field's neutral value."""
-    names = (cfg or {}).get(DROP_FIELDS_KEY) or []
+    # the literal (== DROP_FIELDS_KEY) lets train.check_config_keys see the key (it scans for string keys)
+    names = (cfg or {}).get("covariate_drop_fields") or []
     if not names:
         return None
     if isinstance(names, str) or len(set(names)) != len(names):
