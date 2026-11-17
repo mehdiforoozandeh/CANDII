@@ -513,3 +513,53 @@ def test_round_trip_through_the_ag2_score_loader(dumped, tmp_path):
     assert tv["trained_on_roles"] == ["train", "val"] and G._roles(tv) == {"train", "val"}
     assert G._trained("run", G._roles(tv), "val", "unseen")
     assert not G._trained("run", G._roles(tv), "blind", "unseen")
+
+
+def test_run_dump_predicted_control_writes_ctl_pred(dumped, tmp_path):
+    """E2: a run under predicted_control dumps its control mean (`ctl_pred.npy`) for every ChIP
+    target that got a control prediction, and nothing else changes; auto never writes it."""
+    env = dumped["env"]
+    out, dump = tmp_path / "pc", tmp_path / "pc_dump"
+    _score(env, out, config=dict(CFG, predict_control=True), lambda_source="predicted_control",
+           dump_signal=dump)
+    rows = _rows(env)
+    seen = 0
+    for regime in ("leave_one_assay_out", "accessibility_only"):
+        d = dump / regime
+        for mid in _meta(d)["targets"]:
+            p = d / f"{mid}.ctl_pred.npy"
+            if rows[mid]["assay"] == "DNase-seq":
+                assert not p.is_file()
+                continue
+            a = np.load(p)
+            assert a.shape == (2 * RB,) and np.all(np.isfinite(a)) and np.all(a > 0)
+            seen += 1
+    assert seen >= 2
+    assert not list((dumped["dump"] / "val_model_auto").glob("*/*.ctl_pred.npy"))
+    assert not list((dumped["dump"] / "val_pa_pc").glob("*/*.ctl_pred.npy"))
+
+
+def test_nb_signal_checks_on_the_fixture(dumped, tmp_path):
+    """E2: `lambda` reads the ctl_pred dump; `formula` and `table` run on the fixture."""
+    from onion_eval import nb_signal_checks as NC
+    env = dumped["env"]
+    out, dump = tmp_path / "pc", tmp_path / "pc_dump"
+    _score(env, out, config=dict(CFG, predict_control=True), lambda_source="predicted_control",
+           dump_signal=dump)
+    o = tmp_path / "checks"
+    assert NC.main(["lambda", "--evalset", str(env["evalset"]), "--out", str(o),
+                    "--dump", f"m={dump / 'accessibility_only'}",
+                    "--dump", str(dump / "leave_one_assay_out")]) == 0
+    summ = json.loads((o / "lambda_check.json").read_text())
+    assert [s["dump"] for s in summ][0] == "m" and len(summ) == 2
+    assert NC.main(["formula", "--evalset", str(env["evalset"]), "--out", str(o)]) == 0
+    rows = _tsv(o / "formula_check.tsv")
+    assert rows and all(r["target"] for r in rows)
+    assert NC.main(["table", "--run", f"r={out / 'scores.json'}", "--out", str(o)]) == 0
+    macro = _tsv(o / "signal_space_macro.tsv")
+    assert {r["regime"] for r in macro} == {"leave_one_assay_out", "accessibility_only"}
+    assert {r["space"] for r in macro} >= {"counts_log1p", "signal_arcsinh",
+                                           "signal_arcsinh_predicted_control"}
+    lam = _tsv(o / "signal_space_lambda_sources.tsv")
+    assert {r["lambda_source.signal_arcsinh_predicted_control"] for r in lam
+            if r["assay"] == "H3K4me3"} == {"predicted_control"}
