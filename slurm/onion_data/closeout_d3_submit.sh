@@ -74,8 +74,10 @@ sb() {    # sbatch through the kit's check.sh: <name> <time> <cpus> <mem> <pytho
     --cpus-per-task="$c" --mem="$m" --gres=none --output="$D3/logs/%x_%j.out" \
     "$KIT/slurm/onion_kit/check.sh" "$KIT" "$@"
 }
-scratch_writable() { local f="/scratch/mforooz/onion/.d3_write_test_$$"
-  ( : > "$f" ) 2>/dev/null && rm -f "$f"; }
+scratch_writable() {   # read-only: /scratch use under the soft quota (`quota -w`, KB); no write probe
+  quota -w 2>/dev/null | awk '$1 ~ /scratch/ {u=$2; s=$3; gsub(/\*/, "", u);
+    printf "    /scratch: %d of %d GiB soft quota\n", u/1048576, s/1048576; ok = (u + 0 < s + 0)}
+    END {exit ok ? 0 : 1}'; }
 active_rows() {   # build-list rows of $B with a queued or running onion_* task
   squeue -u "$USER" -h -r -n onion_build,onion_signal,onion_stage -o '%K' 2>/dev/null \
     | grep -E '^[0-9]+$' | sort -un | paste -sd, -; }
@@ -162,9 +164,10 @@ case " $PARTS " in *" reruns "*)
   ACTIVE=$(active_rows)
   echo "--- reruns (kit KF4); queued or running onion_* tasks: ${ACTIVE:-none}"
   grep -q "git=0d578dc" "$KF4/.kit_stamp" || die "kit KF4 is not git 0d578dc"
-  scratch_writable || die "/scratch refuses writes (quota); the reruns stage FASTQs and write work folders there"
+  gate() { if [ "$DRY_RUN" = 0 ]; then die "$1"; else echo "    WOULD REFUSE (dry run goes on): $1"; fi; }
+  scratch_writable || gate "/scratch is over its soft quota; the reruns stage FASTQs and write work folders there"
   [ ! -e "$D3/reruns_submitted.tsv" ] || [ "$FORCE" = 1 ] \
-    || die "$D3/reruns_submitted.tsv exists: rule B.5 allows one 7-day rerun per row (stop rule)"
+    || gate "$D3/reruns_submitted.tsv exists: rule B.5 allows one 7-day rerun per row (stop rule)"
   for c in "${RERUNS[@]}"; do
     IFS='|' read -r PRI TIME MEM ROWS LABEL <<< "$c"
     echo "    row $ROWS (priority $PRI, $TIME, mem ${MEM:-64000M header}): $LABEL"
@@ -255,7 +258,7 @@ case " $PARTS " in *" baselines "*)
     IFS='|' read -r EVF SUB T <<< "$spec"
     [ -f "$VE/$EVF" ] || [ "$DRY_RUN" != 0 ] || die "no $VE/$EVF: run part 'version' first"
     for bl in marginal_nb position_average depth_only_scaling pseudoreplicate_floor; do
-      run sbatch --parsable --account=def-maxwl --job-name="onion_score_${VERSION}_${SUB#baselines}_$bl" \
+      run sbatch --parsable --account=def-maxwl --job-name="onion_score_${VERSION}${SUB#baselines}_$bl" \
         --time="$T" --cpus-per-task=16 --mem=64000M --gres=none --output="$O/logs/%x_%j.out" \
         "$KIT/slurm/onion_eval/score.sh" "$KIT" "$VE/$EVF" "$VE/$SUB/$bl/seed0" baseline "$bl"
     done
