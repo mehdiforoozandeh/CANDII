@@ -73,8 +73,9 @@ Status values: not started, spec, running, read, done, blocked (with the reason)
 | Final tuning round: matched-compute runs | [[closeout A9 matched-compute runs]] | none | running (12 trainings pending on Fir) |
 | Pointwise MLP under the corrected composite | [[closeout A10 pointwise MLP corrected score]] | GPU | not started |
 | DNA fusion: how the DNA features join the count features | [[closeout A11 DNA fusion]] | none | scored and read 2026-11-17 ([[ABLATIONS_READ]], `results/ablations_closeout/`); findings recorded |
-| Minimum useful covariate set: ranked list, exclusion curve, removable fields | [[closeout A12 minimum useful covariate set]] | D1, mix-and-match | not started (PI, 2026-11-17: last step of the session and a deliverable) |
-| Settle the miniCANDI design: one document, ready for scaling | [[closeout M1 settled miniCANDI design]] | A1 to A12, E1 | not started |
+| Mix-and-match combinations of the single choices that helped, per model | [[closeout A13 mix-and-match combinations]] | A1, A2, A3, A8, A11, D1, E1 | spec 2026-11-17: 24 arms + 3 references on eic_v1_2, 256 regions; fixed-depth arms also scored at native depth; dry-run script ready (about 6,100 CPU-hours) |
+| Minimum useful covariate set: ranked list, exclusion curve, removable fields | [[closeout A12 minimum useful covariate set]] | D1, A13 | not started (PI, 2026-11-17: last step of the session and a deliverable) |
+| Settle the miniCANDI design: one document, ready for scaling | [[closeout M1 settled miniCANDI design]] | A1 to A13, E1 | not started |
 
 ### Records and close-out
 
