@@ -172,7 +172,7 @@ CONFIGS = sorted((REPO / "tools" / "minicandi" / "configs" / "resolution").glob(
 
 def test_config_set_is_complete():
     names = {(p.parent.name, p.stem) for p in CONFIGS}
-    arms = {"res1", "res5", "res25", "res50", "res125", "res5_ctx"}
+    arms = {"res1", "res5", "res25", "res50", "res125", "res5_ctx", "res125_ctx"}
     want = {(f"rung{r}", a) for r in (2, 3, 4) for a in arms}
     want |= {(f"rung{r}", a) for r in (2, 4) for a in ("in5_out25", "in25_out5")}
     assert names == want
@@ -216,3 +216,95 @@ def _link_store(env, root: Path) -> None:
             (dst / f.name).symlink_to(f)
     if not (root / "regions.tsv").exists():
         (root / "regions.tsv").symlink_to(Path(env["tables"]) / "regions.tsv")
+
+
+# ----------------------------------------------------------------------------- held-out exclusion
+
+from minicandi.res_dataset import ResDataset  # noqa: E402
+from minicandi.dataset import OnionDataset  # noqa: E402
+
+
+def _res_ds(env, res=5, L=64):
+    return ResDataset(env["tables"], "train", {"res_bp": res, "context_bins": L,
+                                               "batch_size": 2}, seed=0)
+
+
+def test_draw_rejects_excluded_windows_all_but_one_chromosome(env):
+    ds = _res_ds(env)
+    r0 = ds.train_regions[0]
+    other = "chr2" if r0["chrom"] != "chr2" else "chr1"
+    fake = {"region": 99, "chrom": other, "start_bp": 0, "role": "train"}
+    ds.train_regions = [r0, fake]
+    # exclude every train region but the one on `other` (25 bp bins)
+    ds.exclude_windows([(r0["chrom"], r0["start_bp"] // 25, RC.REGION_BINS)])
+    rng = np.random.default_rng(0)
+    draws = [ds._draw_locus(rng) for _ in range(300)]
+    assert {c for c, _ in draws} == {other}
+    assert ds._exclude_rejections > 0
+    # all excluded: refuse rather than return an excluded window
+    ds2 = _res_ds(env)
+    ds2.exclude_windows([(r["chrom"], r["start_bp"] // 25, RC.REGION_BINS)
+                         for r in ds2.train_regions])
+    with pytest.raises(RuntimeError):
+        ds2._draw_locus(np.random.default_rng(1))
+
+
+@pytest.mark.parametrize("res", [5, 125])
+def test_heldout_windows_never_drawn_for_training(env, res):
+    """The train loop's path: the held-out windows' spans (window_span) are excluded, and no
+    later training draw overlaps any of them, at a token size below and above 25 bp."""
+    L = 64 if res == 5 else 32
+    held = _res_ds(env, res, L)
+    metas = [held.batch(2, np.random.default_rng([7, k]))["meta"] for k in range(3)]
+    spans = [held.window_span(m) for b in metas for m in b]
+    for (c, b0, n), m in zip(spans, [m for b in metas for m in b]):
+        assert b0 * 25 <= m["start_bp"] and (b0 + n) * 25 >= m["start_bp"] + L * res
+    ds = _res_ds(env, res, L)
+    ds.exclude_windows(spans)
+    rng = np.random.default_rng(3)
+    for _ in range(200):
+        c, s = ds._draw_locus(rng)
+        for c2, b0, n in spans:
+            assert not (c == c2 and s < (b0 + n) * 25 and s + L * res > b0 * 25)
+
+
+def test_onion_dataset_window_span_is_the_old_triple(env):
+    ds = OnionDataset(env["tables"], "train", {"context_bins": 64, "batch_size": 2}, seed=0)
+    assert ds.window_span({"chrom": "chr1", "start_bin": 17}) == ("chr1", 17, 64)
+
+
+# ----------------------------------------------------------------------------- point rule by hand
+
+
+def test_point_rule_hand_fixture(tmp_path):
+    """Five reads written by hand, both strands, shift 150 // 2 = 75; positions computed by hand:
+    + read [1000, 1036) -> 5' end 1000, + 75 -> 1075; - read [2000, 2036) -> 5' end 2035,
+    - 75 -> 1960; + [1000, 1050) again -> 1075; - [1100, 1120) -> 1119 - 75 = 1044;
+    + read on chr2 [10, 46) -> 85. Region 0 = chr1:0, region 1 = chr2:0 (409,600 bp each)."""
+    rows = [("chr1", 1000, 1036, "+"), ("chr1", 2000, 2036, "-"), ("chr1", 1000, 1050, "+"),
+            ("chr1", 1100, 1120, "-"), ("chr2", 10, 46, "+")]
+    ta = tmp_path / "a.tagAlign.gz"
+    with gzip.open(ta, "wt") as fh:
+        for c, s, e, st in rows:
+            fh.write(f"{c}\t{s}\t{e}\tN\t1000\t{st}\n")
+    regions = [{"region": 0, "chrom": "chr1", "start_bp": 0, "role": "eval"},
+               {"region": 1, "chrom": "chr2", "start_bp": 0, "role": "train"}]
+    out = RC.scan_tagaligns([str(ta)], RC.Layout(regions), 75)
+    pts = out["points"]
+    want = np.zeros(2 * RB, np.int64)
+    for p in (1075, 1960, 1075, 1044):
+        want[p] += 1
+    want[RB + 85] += 1
+    assert np.array_equal(pts.astype(np.int64), want)
+    # the 25 bp pool puts them in bins 43 (1075, 1075), 78 (1960), 41 (1044)
+    p25 = RC.pool(pts[:RB].astype(np.int64), 25)
+    assert p25[43] == 2 and p25[78] == 1 and p25[41] == 1 and p25.sum() == 4
+    # a wrong strand sign or shift would move them: the unshifted points differ
+    assert not np.array_equal(RC.scan_tagaligns([str(ta)], RC.Layout(regions), 0)["points"], pts)
+
+
+def test_resolution_configs_feed_no_fragment_length_covariate():
+    """A guessed fragment length (assay or control median) reaches the tables' frag_len column
+    only; it is a model input only under qc_on_input, which every shipped arm leaves off."""
+    for p in CONFIGS:
+        assert json.loads(p.read_text()).get("qc_on_input") is False, p

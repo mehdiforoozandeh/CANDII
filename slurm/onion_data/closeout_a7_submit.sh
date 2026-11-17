@@ -16,14 +16,18 @@
 #   recount   the array over the plan (recount.py run --verify-counts). It READS the half tagAligns
 #             under /scratch/mforooz/onion/work, so it MUST finish before that folder leaves scratch.
 #             It writes only $STORE (Nibi /project). Refused if $STORE holds a view already.
-#   tables    eic_res_v1 tables from the store, `verify --all --no-rescan` (store only), the eval
+#   tables    refused unless every plan view is in the store with a passed read-set check; then
+#             eic_res_v1 tables from the store, `verify --all --no-rescan` (store only), the eval
 #             set of the resolution study (64 eval + 16 fit regions drawn inside the 256 eval
 #             regions of the store, seed 0) and its check. 1 job, 8 CPUs.
-#   variance  scale_variance.py on the validation views (chains 1-5-25-125 and 1-5-25-50). 1 job.
+#   variance  scale_variance.py on the validation views (chains 1-5-25-125 and 1-5-25-50). 1 job;
+#             depends on the tables job when both parts are given, else needs $RT/build_info.json.
 #   arms      per (arm, rung, seed): train (res_dataset.py) -> predict (res_score.py, once) ->
 #             tables at every size the output bin divides (25, 50, 125, 250 bp), with dependencies.
-#             DESIGN=reduced (default): conv autoencoder, res 5, 25, 125, 3 seeds = 9 runs.
-#             DESIGN=full: 8 arms on conv AE and U-Net, 6 arms on conv + attention, 3 seeds = 66 runs.
+#             DESIGN=reduced (default): conv autoencoder, res5, res25, res125 and the two context
+#             controls res5_ctx (5,120 tokens = 25.6 kb) and res125_ctx (208 tokens = 26.0 kb),
+#             3 seeds = 15 runs.
+#             DESIGN=full: 9 arms on conv AE and U-Net, 7 on conv + attention, 3 seeds = 75 runs.
 #
 # Env: DRY_RUN (default 1: print, submit nothing), KIT_ID (default COA7), DESIGN (reduced|full),
 #      SEEDS (default "0 1 2"), TASK_GIB (default 6), MAX_PAR (array throttle, default 40).
@@ -172,6 +176,35 @@ for v in views:
                          "--out", f"{A7}/probe_store",
                          "--verify-counts", f"{M}/{mid}/counts.h5"]).returncode
     print(f"[probe] {mid} halves={halves} rc={rc} wall_s={time.time() - t0:.1f}", flush=True)
+# independent point-rule check (item A7, review fix 3): a second implementation (csv + gzip, no
+# recount code) counts the points of the first probe view on eval region 0 at 25 bp and compares
+# them with pool(point1bp, 25) of the store. It exercises the strand sign and the shift, which the
+# overlap-rule read-set check does not.
+import csv as _csv, gzip as _gz, glob as _glob
+import numpy as _np, h5py as _h5
+mid, halves, fl = views[0].split(":")
+exp, unit, layer, _ = mid.split(".")
+reg = next(r for r in _csv.DictReader(open(f"{A7}/regions.tsv"), delimiter="\t") if r["region"] == "0")
+c0, s0, sh = reg["chrom"], int(reg["start_bp"]), int(fl) // 2
+files = sorted(_glob.glob(f"{W}/{exp}/{unit}.{layer}/base/pr[12].tagAlign.gz")) or \
+        sorted(_glob.glob(f"{W}/{exp}/br*.{layer}/base/pr[12].tagAlign.gz"))
+ind = _np.zeros(409600 // 25, _np.int64)
+for fpath in files:
+    with _gz.open(fpath, "rt") as fh:
+        for line in fh:
+            f = line.split("\t")
+            if f[0] != c0:
+                continue
+            st, en, strand = int(f[1]), int(f[2]), f[5].strip()
+            pos = st + sh if strand == "+" else en - 1 - sh
+            if s0 <= pos < s0 + 409600:
+                ind[(pos - s0) // 25] += 1
+with _h5.File(f"{A7}/probe_store/{mid}/point1bp.h5", "r") as hf:
+    x = _np.asarray(hf["r0"][()], _np.int64)
+st25 = x.reshape(-1, 25).sum(1)
+print(f"[pointcheck] {mid} region 0 {c0}:{s0}: independent {int(ind.sum())} points, store "
+      f"{int(st25.sum())}, bins differing {int((ind != st25).sum())} -> "
+      f"{'PASS' if _np.array_equal(ind, st25) else 'FAIL'}", flush=True)
 sys.path.insert(0, "tools")
 import torch
 from minicandi.registry import build_model
@@ -232,8 +265,13 @@ for r in csv.DictReader(open(plan), delimiter="\t"):
     if r["task"] != task:
         continue
     d = os.path.join(store, r["measurement_id"])
-    if os.path.isfile(os.path.join(d, "provenance.json")):
-        print("[a7] skip", r["measurement_id"], "done", flush=True); continue
+    pj = os.path.join(d, "provenance.json")
+    if os.path.isfile(pj):
+        import json
+        chk = (json.load(open(pj)).get("readset_check") or {}).get("result")
+        if chk == "pass":
+            print("[a7] skip", r["measurement_id"], "done, check pass", flush=True); continue
+        print("[a7] redo", r["measurement_id"], "check", chk, flush=True)   # never skip a failure
     x = subprocess.run([sys.executable, "tools/onion_data/recount.py", "run", "--work", W,
                         "--experiment", r["experiment"], "--unit", r["unit"], "--layer", r["layer"],
                         "--regions", regions, "--frag-len", r["frag_len"], "--halves", r["halves"],
@@ -261,7 +299,15 @@ esac
 
 # ------------------------------------------------------------------ tables
 PY_TABLES="
-import json, subprocess, sys
+import csv, json, os, subprocess, sys
+bad = []
+for r in csv.DictReader(open('$PLAN'), delimiter='\t'):
+    pj = os.path.join('$STORE', r['measurement_id'], 'provenance.json')
+    res = (json.load(open(pj)).get('readset_check') or {}).get('result') if os.path.isfile(pj) else 'missing'
+    if res != 'pass':
+        bad.append((r['measurement_id'], str(res)[:80]))
+if bad:
+    print('REFUSED: views without a passed read-set check:', len(bad), bad[:10]); sys.exit(3)
 def run(*a):
     print('+', ' '.join(a), flush=True)
     r = subprocess.run([sys.executable, *a])
@@ -278,17 +324,24 @@ run('tools/onion_eval/evalset.py', 'build', '--tables', '$RT', '--strata', '$O/e
     '--regions-bed', '$RT/eval_regions.bed', '--n-regions', '64', '--n-fit-regions', '16',
     '--seed', '0', '--out', '$REV/evalset.json')
 run('tools/onion_eval/evalset.py', 'check', '--evalset', '$REV/evalset.json', '--tables', '$RT')
+ev = json.load(open('$REV/evalset.json'))
+both = set(map(tuple, ev['regions'])) & set(map(tuple, ev['fit_regions']))
+print('eval regions', len(ev['regions']), 'fit regions', len(ev['fit_regions']), 'shared', len(both))
+if both: sys.exit(4)
 "
 case " $PARTS " in *" tables "*)
   echo "--- tables -> $RT, $REV/evalset.json"
   [ -e "$RT" ] && die "$RT exists (frozen tables are never overwritten)"
-  sb tables 04:00:00 8 32000M - -c "$PY_TABLES" >/dev/null ;;
+  [ "$DRY_RUN" = 1 ] || [ -s "$PLAN" ] || die "no plan $PLAN"
+  JT=$(sb tables 04:00:00 8 32000M - -c "$PY_TABLES") ;;
 esac
 
 # ------------------------------------------------------------------ variance
 case " $PARTS " in *" variance "*)
   echo "--- variance -> $A7/scale_variance.tsv"
-  sb variance 12:00:00 8 32000M - tools/onion_eval/scale_variance.py run --store "$STORE" \
+  DEP="${JT:--}"
+  [ "$DEP" != - ] || [ "$DRY_RUN" = 1 ] || [ -s "$RT/build_info.json" ] || die "no tables $RT (run the part tables first)"
+  sb variance 12:00:00 8 32000M "$DEP" tools/onion_eval/scale_variance.py run --store "$STORE" \
     --tables "$RT" --chains 1,5,25,125 1,5,25,50 --out "$A7/scale_variance.tsv" >/dev/null ;;
 esac
 
@@ -296,7 +349,7 @@ esac
 case " $PARTS " in *" arms "*)
   C=$KIT/tools/minicandi/configs/resolution
   declare -A ARCH=([2]=convae [3]=convattn [4]=unet)
-  if [ "$DESIGN" = reduced ]; then LIST="2:res5 2:res25 2:res125"
+  if [ "$DESIGN" = reduced ]; then LIST="2:res5 2:res25 2:res125 2:res5_ctx 2:res125_ctx"
   else LIST=""; for r in 2 3 4; do for f in "$C/rung$r"/*.json; do LIST="$LIST $r:$(basename "$f" .json)"; done; done; fi
   [ -s "$REV/evalset.json" ] || [ "$DRY_RUN" = 1 ] || die "no $REV/evalset.json (run the part tables first)"
   n=0

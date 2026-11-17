@@ -812,6 +812,11 @@ class OnionDataset(IterableDataset):
         i = int(np.searchsorted(starts, start + self.L, side="left")) - 1
         return i >= 0 and int(end_max[i]) > start
 
+    def window_span(self, meta: dict) -> tuple:
+        """(chrom, start bin, n bins) of a window's `meta` in the unit of `exclude_windows` (25 bp
+        bins). `ResDataset` overrides it (item A7)."""
+        return meta["chrom"], meta["start_bin"], self.L
+
     def exclude_windows(self, intervals) -> None:
         """Reject every training start whose window overlaps one of `intervals` ((chrom, start
         bin, n bins) triples), through the `exclude_regions` draw above. Used by the train loop's
