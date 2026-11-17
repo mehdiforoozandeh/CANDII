@@ -124,7 +124,7 @@ Controls and traps: the regions of every eval set must equal `eval/regions_v1/re
 ### 9.5 Cost (CPU-hours)
 
 - Tonight (steps 1 to 3, Nibi, within the 20 CPU-hour allowance): preserve 1 CPU x at most 1 h; verify of one experiment 1 CPU x at most 3 h; candidate 16 CPUs x at most 1 h. Worst case 1 + 3 + 16 = 20.
-- Verify of the other 9 experiments: 9 x 1 CPU x at most 3 h = at most 27 (measured rate of the first one in `results/closeout_D3/`).
+- Verify of the other 9 experiments (jobs 27603294 to 27603302, 1 CPU, 45 min limit): all 9 COMPLETED, each 0 failing and "all checks pass": ENCSR521AIV 11 measurements (5 min 30 s), ENCSR731QLJ 7 (8 min 23 s), ENCSR237WJY 7 (6 min 45 s), ENCSR184LMY 7 (6 min 16 s), ENCSR620QNS 9 (9 min 2 s), ENCSR083STA 9 (9 min 2 s), ENCSR000FEK 9 (9 min 41 s), ENCSR000ENI 9 (11 min 44 s), ENCSR000EQB 9 (9 min 42 s). With ENCSR489NAM, all 10 experiments that verified after the freeze pass the chr21 verify. CPU-hours used tonight in all: about 8.2.
 - Reruns: 4 rows x 16 CPUs x at most 168 h = at most 10,752 allocated CPU-hours. Expected about 16 x 24 h x (3 + 3 + 4 + 3) days = 4,992 (rows 56, 132, 396 needed more than 1 to 2 days, row 280 more than 3 days).
 - Version: 16 CPUs x at most 4 h = at most 64 (Amendment 6 estimate about 32).
 - Baselines: 4 at 16 pair regions about 8 each (D1's jobs on Fir: 34, 32, 21 and 19 min at 16 CPUs) = about 28; 4 at 256 regions about 23 each (overnight brief) = about 92. Total about 120.
