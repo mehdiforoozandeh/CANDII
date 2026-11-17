@@ -27,7 +27,8 @@ difference, the least-squares slope of the pipeline on the formula, and the peak
 fragment length and the lambda source come from the scorer's own code (`Scorer._sig_row`,
 `Scorer._signal_files`, `signal_from_counts.signal_from_nb`), so the check runs the scorer's route.
 
-`--pileup` (E2 formula extension; default `inbin` = the scorer's route, unchanged): the read-span
+`--pileup` (E2 formula extension; default `box_d`, the scorer's route since PI ruling 2026-11-17;
+`inbin` the route before it; both run `signal_from_nb`): the read-span
 count of a bin is spread over neighbouring bins by a centred box before the MACS2 score, i.e.
 pileup = count * d / (rl + 24) convolved with a box of `kernel_width_bp`: `box_d` (width d),
 `box_ext` (width d - rl, the part of the fragment the read span does not cover; the strand is lost
@@ -70,14 +71,16 @@ from onion_eval.ag2_score import corr, spearman  # noqa: E402
 
 ZERO_COUNT = 1e-9
 WITHIN = 0.10
-#: pileup variants of `formula --pileup` (E2 formula extension); `inbin` is the scorer's route
-PILEUPS = ("inbin", "box_d", "box_ext", "box_ext_submean")
+#: pileup variants of `formula --pileup` (E2 formula extension). `box_d` (default, PI ruling
+#: 2026-11-17) and `inbin` run the scorer's own route (`signal_from_nb(pileup=...)`); `box_ext` and
+#: `box_ext_submean` are the two other variants of the comparison, computed here only
+PILEUPS = ("box_d", "inbin", "box_ext", "box_ext_submean")
 #: sub-positions per 25 bp bin of `box_ext_submean` (the pipeline track is a 25 bp MEAN of a
 #: base-pair -log10 p; the mean of the score is emulated on this many interpolated positions)
 SUBPOS = 5
 
 FORMULA_COLS = ["target", "cell", "assay", "assay_class", "route", "lambda_source", "fraglen_source",
-                "frag_len", "n_bins", "n_masked", "frac_zero_counts", "pearson_raw", "pearson_asinh", "spearman",
+                "frag_len", "n_bins", "n_masked", "n_edge_masked", "frac_zero_counts", "pearson_raw", "pearson_asinh", "spearman",
                 "median_abs_diff", "p99_abs_diff", "mean_diff", "slope", "bin_precision",
                 "bin_recall", "bin_f1", "bin_jaccard", "tile_precision", "tile_recall", "tile_f1",
                 "tile_jaccard", "reason"]
@@ -104,15 +107,22 @@ def _prf(called, truth) -> dict:
     return {"precision": p, "recall": r, "f1": f1, "jaccard": tp / nu if nu else float("nan")}
 
 
-def agreement(formula, pipeline, rb: int) -> dict:
-    """Agreement of a formula -log10 p track with the pipeline's, both [n_regions * rb]."""
+def agreement(formula, pipeline, rb: int, keep=None) -> dict:
+    """Agreement of a formula -log10 p track with the pipeline's, both [n_regions * rb]. `keep`
+    (bool per bin, E2 review): the bins a box spread leaves without outside neighbours are False;
+    they leave every statistic, and a tile with such a bin leaves the tile statistics
+    (`n_edge_masked` counts the bins)."""
     x, y = np.asarray(formula, np.float64), np.asarray(pipeline, np.float64)
     fin = np.isfinite(x) & np.isfinite(y)
     n_masked = int(x.size - fin.sum())
+    edge = np.ones(x.size, bool) if keep is None else np.asarray(keep, bool)
+    n_edge = int((~edge).sum())
+    fin = fin & edge
     if n_masked:      # a non-finite bin is masked (counted in `n_masked`), never propagated
         x, y = np.where(fin, x, 0.0), np.where(fin, y, 0.0)
     d = (x - y)[fin]
-    out = {"n_bins": int(x.size), "n_masked": n_masked, "pearson_raw": corr(x[fin], y[fin]),
+    out = {"n_bins": int(x.size), "n_masked": n_masked, "n_edge_masked": n_edge,
+           "pearson_raw": corr(x[fin], y[fin]),
            "pearson_asinh": corr(np.arcsinh(x[fin]), np.arcsinh(y[fin])),
            "spearman": spearman(x[fin], y[fin]),
            "median_abs_diff": float(np.median(np.abs(d))),
@@ -121,16 +131,20 @@ def agreement(formula, pipeline, rb: int) -> dict:
     out["slope"] = (float(np.cov(x[fin], y[fin], bias=True)[0, 1] / vx) if vx > 0
                     else float("nan"))
     bx, by = PK.derived_peaks(x), PK.derived_peaks(y)
-    out.update({f"bin_{k}": v for k, v in _prf(bx, by).items()})
+    out.update({f"bin_{k}": v for k, v in _prf(bx[edge], by[edge]).items()})
     tx, ty = PK.tile_any(bx, region_bins=rb), PK.tile_any(by, region_bins=rb)
-    out.update({f"tile_{k}": v for k, v in _prf(tx, ty).items()})
+    tk = ~PK.tile_any(~edge, region_bins=rb)
+    out.update({f"tile_{k}": v for k, v in _prf(tx[tk], ty[tk]).items()})
     return out
 
 
 def chip_lambda(ctl_counts, *, depth, frag_len, ctl_depth, ctl_read_length,
-                gsize: float = MACS2_GSIZE_HS) -> np.ndarray:
-    """The ChIP-seq lambda of `signal_track` for one stretch (treatment pileup units)."""
+                gsize: float = MACS2_GSIZE_HS, pileup: str = "inbin") -> np.ndarray:
+    """The ChIP-seq lambda of `signal_track` for one stretch (treatment pileup units); `pileup`
+    `box_d` spreads the control first, as `signal_track` does."""
     d = float(frag_len)
+    if pileup == "box_d":
+        ctl_counts = SG.box_spread(ctl_counts, d)
     return SG.macs2_lambda(lambda_bg=d * float(depth) / gsize,
                            control_pileup=SG.pileup_from_counts(ctl_counts, d, float(ctl_read_length)),
                            ratio_treat2control=float(depth) / float(ctl_depth))
@@ -148,16 +162,7 @@ def lambda_compare(lam_pred, lam_obs, lam_bg_pred, lam_bg_obs) -> dict:
             "within_10pct_median": int(abs(med - 1.0) <= WITHIN)}
 
 
-def box_weights(width_bp: float, bin_bp: int = SG.BIN) -> np.ndarray:
-    """Weights over bins of a centred box of `width_bp` (bin i covers [i - 0.5, i + 0.5] bins);
-    the weights sum to 1. A width of one bin or less is the identity."""
-    half = float(width_bp) / bin_bp / 2.0
-    if half <= 0.5:
-        return np.ones(1)
-    reach = int(np.ceil(half - 0.5))
-    k = np.arange(-reach, reach + 1, dtype=np.float64)
-    w = np.clip(np.minimum(k + 0.5, half) - np.maximum(k - 0.5, -half), 0.0, None)
-    return w / w.sum()
+box_weights = SG.box_weights      # one definition (signal_from_counts)
 
 
 def kernel_width_bp(variant: str, d: float, read_length: float) -> float:
@@ -265,16 +270,22 @@ def cmd_formula(a) -> int:
             truth = np.concatenate([np.asarray(f[c][s:s + rb], np.float64) for c, s in regions])
         mu = np.where(y > 0, y, ZERO_COUNT)
         try:
-            if a.pileup == "inbin":     # the scorer's own route, unchanged
+            if a.pileup in SG.PILEUP_FORMS:     # the scorer's own route (box_d or inbin)
                 sig, src = SG.signal_from_nb(np.ones_like(mu), mu, row, ds=sc.ds, regions=regions,
-                                             rb=rb, dnase_route=sc.dnase_route, mode="plug_in")
+                                             rb=rb, dnase_route=sc.dnase_route, mode="plug_in",
+                                             pileup=a.pileup)
             else:
                 sig, src = _variant_signal(sc, row, y, a.pileup)
         except (ValueError, KeyError) as e:
             rows.append(dict(rec, reason=f"no formula signal: {e}"))
             continue
         rec.update(lambda_source=src, frac_zero_counts=float(np.mean(y <= 0)), reason="")
-        rec.update(agreement(sig, truth, rb))
+        keep = None
+        if a.pileup != "inbin":      # every spread variant is zero-padded at the region ends
+            bd = SG.box_d_of(row)
+            width = bd if a.pileup == "box_d" else kernel_width_bp(a.pileup, bd, row["read_length"])
+            keep = SG.edge_keep(len(regions), rb, SG.box_reach(width))
+        rec.update(agreement(sig, truth, rb, keep=keep))
         rows.append(rec)
         print(f"formula {mid} {t['assay']}: pearson {rec['pearson_raw']:.4f} "
               f"tile_f1 {rec['tile_f1']:.4f}", flush=True)
@@ -282,7 +293,8 @@ def cmd_formula(a) -> int:
     out.mkdir(parents=True, exist_ok=True)
     _write_tsv(out / "formula_check.tsv", FORMULA_COLS, rows)
     ok = [r for r in rows if not r.get("reason")]
-    summ = {"evalset": str(sc.evalset_path), "fraglen_table": a.fraglen_table, "pileup": a.pileup,
+    summ = {"evalset": str(sc.evalset_path), "fraglen_table": a.fraglen_table,
+            "signal_pileup": a.pileup,
             "dnase_route": sc.dnase_route, "n_targets": len(rows), "n_checked": len(ok),
             "by_route": {}}
     for route in sorted({r["route"] for r in ok}):
@@ -341,6 +353,7 @@ def _lambda_one(sc, d: Path):
         raise SystemExit(f"{d}: dump split {meta.get('split')!r}; the lambda check reads "
                          "validation dumps only")
     regime = meta["regime"]
+    form = meta.get("signal_pileup") or "inbin"     # absent: a dump made before the key
     rows = []
     for mid in meta["targets"]:
         row, _, _ = sc._sig_row(sc._row(mid))
@@ -369,14 +382,16 @@ def _lambda_one(sc, d: Path):
             obs = sc.ds.read(ctl_id, c, s, rb).astype(np.float64)
             lo.append(chip_lambda(obs, depth=row["depth_reads"], frag_len=row["frag_len"],
                                   ctl_depth=crow["depth_reads"],
-                                  ctl_read_length=crow["read_length"]))
+                                  ctl_read_length=crow["read_length"], pileup=form))
             lp.append(chip_lambda(pred[sl], depth=row["depth_reads"], frag_len=row["frag_len"],
-                                  ctl_depth=row["depth_reads"], ctl_read_length=row["read_length"]))
+                                  ctl_depth=row["depth_reads"], ctl_read_length=row["read_length"],
+                                  pileup=form))
         bg = float(row["frag_len"]) * float(row["depth_reads"]) / MACS2_GSIZE_HS
         rec.update(lambda_compare(np.concatenate(lp), np.concatenate(lo), bg, bg), reason="")
         rows.append(rec)
     ok = [r for r in rows if not r.get("reason")]
     summ = {"path": str(d.resolve()), "method": meta.get("method"), "regime": regime,
+            "signal_pileup": form,
             "n_chip_targets": len(rows), "n_compared": len(ok),
             "n_cells_compared": len({r["cell"] for r in ok}),
             "n_within_10pct_median": int(sum(r["within_10pct_median"] for r in ok)),
@@ -470,8 +485,9 @@ def main(argv=None) -> int:
     f.add_argument("--fraglen-table", default=None)
     f.add_argument("--dnase-route", default=None, choices=SG.DNASE_ROUTES)
     f.add_argument("--targets", default=None, help="comma list of target ids (default: all)")
-    f.add_argument("--pileup", default="inbin", choices=PILEUPS,
-                   help="pileup variant (default inbin: the scorer's route, unchanged)")
+    f.add_argument("--pileup", default="box_d", choices=PILEUPS,
+                   help="pileup variant (default box_d, the scorer's route since the PI ruling of "
+                        "2026-11-17; inbin = the rule before it)")
     lm = sub.add_parser("lambda")
     lm.add_argument("--evalset", required=True)
     lm.add_argument("--dump", required=True, action="append",

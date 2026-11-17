@@ -40,9 +40,13 @@ RB = 256
 #: wall-clock keys of scores.json, and the eval set hash (it hashes the tmp tables path)
 VOLATILE = ("wall_seconds", "timing_seconds", "torch_threads", "evalset_sha256")
 #: digests of the normalized outputs of `recipes`, taken on the base commit b647359 (before AGd);
+#: darwin RE-PINNED 2026-11-17 (E2): the merge 5e2cb39 (chunk CO-E5) added scores.json keys
+#: (pit_deviation_per_stratum, predicted_over_replicate_variance_robust, selection.composite_status,
+#: per table); E2 checked that no value of the b647359 outputs changed (suffstats and the ledger are
+#: equal to the old pins). linux keeps the b647359 pins and needs a Nibi run to re-pin.
 #: darwin: the laptop (candii env); linux: Nibi (kit venv of b647359, check job 27085822)
 _DIGESTS = {
-    "darwin": {"blind_model": {"ledger": "b25b2d2fc5c4dccd4f04c1fe4712816029f1b8901efd4796f95961b2fd866c5e", "scores": "9acf015c53119163e2ab6765b2b9687112087b760922bd8f5018fa06278dcc1e", "suff": "83644d763ee69406fe4c926b65b2f5b013b94cdddd640722416abd1249dacda6"}, "val_model_auto": {"scores": "f2c4fa88de15c9cbaf8d9197b5e8f271010ab299ddccd9d9d05d896336645e33", "suff": "9ee72dcc3357e39e42ff641c15446074db09a22fce44d510db1634ad709633d1"}, "val_pa_pc": {"scores": "c5a0e7ff0a14f214f23278ece2bc03b1b8ca5d7c2414d4a19b0e84fd16613f12", "suff": "1a0858e4863ed754d54e6d8705dccc76bf7db00c9c789cd612f952c02e5811d1"}},
+    "darwin": {"blind_model": {"ledger": "b25b2d2fc5c4dccd4f04c1fe4712816029f1b8901efd4796f95961b2fd866c5e", "scores": "4c9b3ebaf33e1af43ce2e58eb7c7be2e392d7b2f74efcd504c08a2e1eafb6f1a", "suff": "83644d763ee69406fe4c926b65b2f5b013b94cdddd640722416abd1249dacda6"}, "val_model_auto": {"scores": "950672871e9cab8210de4e6601bcab8d8e775befda504c6d4490ea3882505fa4", "suff": "9ee72dcc3357e39e42ff641c15446074db09a22fce44d510db1634ad709633d1"}, "val_pa_pc": {"scores": "70151035b59b55856fe6fd7f94ea384e7b5c7f283e5a06fa60081ec4bc8863fa", "suff": "1a0858e4863ed754d54e6d8705dccc76bf7db00c9c789cd612f952c02e5811d1"}},
     "linux": {"blind_model": {"ledger": "b25b2d2fc5c4dccd4f04c1fe4712816029f1b8901efd4796f95961b2fd866c5e", "scores": "7909275118388962f4233f67585e79e1962a5fb045a72561c7425b103c17294f", "suff": "e9dd2f2d96997038732e312e72576d08aadf36620785b4cc194146edc6050ed0"}, "val_model_auto": {"scores": "88bfbed5a68249471e37e694aad141b852c071859a96a2ac48747346c3720dcf", "suff": "5f82184561440093995da633a6940b0fe957ef80cc9ca8b6b02a12fef303ebdd"}, "val_pa_pc": {"scores": "e9cc9a10d89c110f6e9e9297d69ca06cea74eb195ded6ff4fc97a74cbb94e80d", "suff": "4b2e21028af03d8f8b6acdd884f37f6bef88bc8755aa903d7d28748f62d7a08e"}},
 }
 BASE_DIGESTS = _DIGESTS.get(sys.platform, _DIGESTS["linux"])
@@ -125,6 +129,8 @@ def scores_digest(out: Path, root: Path) -> str:
         s.pop(k, None)
     s.pop("scorer_version", None)   # SF0 (Amendment 8): the one key added after the pinned base
     s.pop("scorer_settings", None)  # SP2b: written on the legacy model path since 2026-11-14
+    s.pop("signal_pileup", None)    # E2: the pileup form, added after the pinned base
+    s.pop("signal_box_dependence", None)   # E2 review: the box_d bin dependence (None for inbin)
     return hashlib.sha256(_normalize(json.dumps(s, indent=1, sort_keys=True, allow_nan=False),
                                      root).encode()).hexdigest()
 
@@ -164,11 +170,14 @@ def _score(env, out, *, blind=False, **kw):
 
 def recipes(env, out_root: Path, dump_root=None) -> dict:
     """The three runs whose outputs are pinned; with `dump_root`, each also dumps into
-    `dump_root/<recipe>` (same configs as without it)."""
+    `dump_root/<recipe>` (same configs as without it). E2: the pinned digests were taken before the
+    box_d pileup existed, so the recipes run `signal_pileup="inbin"`: equal digests prove that the
+    inbin form is the old route, bit for bit (`test_box_d_changes_signal_space_only` covers box_d)."""
     out_root = Path(out_root)
 
     def dump(name):
-        return {} if dump_root is None else {"dump_signal": Path(dump_root) / name}
+        return ({"signal_pileup": "inbin"} if dump_root is None
+                else {"dump_signal": Path(dump_root) / name, "signal_pileup": "inbin"})
     got = {}
     o = out_root / "val_model_auto"
     _score(env, o, **dump("val_model_auto"))
@@ -275,7 +284,8 @@ def test_run_dump_interface_f(dumped):
                        "frag_len": row["frag_len"], "control_depth_reads": crow["depth_reads"],
                        "control_read_length": crow["read_length"], "control_is_predicted": False}
                 fe = np.concatenate([AS.fold_change_track(y[i * RB:(i + 1) * RB],
-                                                          ctl[i * RB:(i + 1) * RB], cov)[0]
+                                                          ctl[i * RB:(i + 1) * RB], cov,
+                                                          pileup=m["signal_pileup"])[0]
                                      for i in range(2)])
                 np.testing.assert_allclose(arr["native_truth"], fe, rtol=1e-5)
                 assert m["lambda_source"][mid] == "observed_control"
@@ -358,6 +368,10 @@ def test_external_writes_signal_only(dumped, tmp_path):
     d = tmp_path / "d" / "leave_one_assay_out"
     m = _meta(d)
     assert (m["kind"], m["method"]) == ("external", "some_entry") and "trained_on_roles" not in m
+    # E2 review: an external entry's signal is its own; neither pileup key applies
+    assert m["signal_pileup"] is None and m["signal_box_dependence"] is None
+    sj = json.loads((tmp_path / "o" / "scores.json").read_text())
+    assert sj["signal_pileup"] is None and sj["signal_box_dependence"] is None
     assert m["targets"] and sorted(p.name for p in d.glob("*.npy")) == sorted(
         f"{t}.signal.npy" for t in m["targets"])
     for t in m["targets"]:
@@ -563,3 +577,74 @@ def test_nb_signal_checks_on_the_fixture(dumped, tmp_path):
     lam = _tsv(o / "signal_space_lambda_sources.tsv")
     assert {r["lambda_source.signal_arcsinh_predicted_control"] for r in lam
             if r["assay"] == "H3K4me3"} == {"predicted_control"}
+
+
+def _leaves(x, path=""):
+    if isinstance(x, dict):
+        for k, v in x.items():
+            yield from _leaves(v, f"{path}/{k}")
+    elif isinstance(x, list):
+        for i, v in enumerate(x):
+            yield from _leaves(v, f"{path}[{i}]")
+    else:
+        yield path, x
+
+
+def _is_signal(path: str) -> bool:
+    return any(t in path for t in ("signal_arcsinh", "sig_", "signal_pileup", "lambda_",
+                                   "fraglen_", "signal_box_dependence", "signal_edge"))
+
+
+def test_box_d_changes_signal_space_only(dumped, tmp_path):
+    """E2: the default box_d pileup and inbin give bit-identical count-space values (every
+    scores.json leaf outside the signal space, and every suffstats array outside it); the signal
+    space differs, and scores.json records `signal_pileup`."""
+    env = dumped["env"]
+    a, b = tmp_path / "inbin", tmp_path / "box"
+    _score(env, a, signal_pileup="inbin")
+    _score(env, b)
+    sa = json.loads((a / "scores.json").read_text())
+    sb = json.loads((b / "scores.json").read_text())
+    assert (sa["signal_pileup"], sb["signal_pileup"]) == ("inbin", "box_d")
+    for k in VOLATILE:
+        sa.pop(k, None)
+        sb.pop(k, None)
+    la = {p: v for p, v in _leaves(sa) if not _is_signal(p)}
+    lb = {p: v for p, v in _leaves(sb) if not _is_signal(p)}
+    assert la.keys() == lb.keys() and len(la) > 100
+    diff = [p for p in la if json.dumps(la[p]) != json.dumps(lb[p])]
+    assert not diff, diff[:10]
+    sig = [p for p, v in _leaves(sa) if "signal_arcsinh" in p and isinstance(v, float)]
+    assert any(json.dumps(dict(_leaves(sa))[p]) != json.dumps(dict(_leaves(sb))[p]) for p in sig)
+    with np.load(a / "suffstats.npz") as za, np.load(b / "suffstats.npz") as zb:
+        assert set(za.files) == set(zb.files)
+        cnt = [k for k in za.files if not _is_signal(k)]
+        assert cnt
+        for k in cnt:
+            np.testing.assert_array_equal(za[k], zb[k], err_msg=k)
+
+
+def test_box_d_dependence_forms_and_edge_bins(dumped, tmp_path):
+    """E2 review: comonotone (default) and independent are recorded and change only the
+    expectation-mode signal; the box reach bins are recorded per target and masked from r_spec."""
+    env = dumped["env"]
+    a, b = tmp_path / "co", tmp_path / "ind"
+    _score(env, a, dump_signal=tmp_path / "dco")
+    _score(env, b, signal_box_dependence="independent", dump_signal=tmp_path / "dind")
+    sa = json.loads((a / "scores.json").read_text())
+    sb = json.loads((b / "scores.json").read_text())
+    assert (sa["signal_box_dependence"], sb["signal_box_dependence"]) == ("comonotone", "independent")
+    pa = dict(_leaves(sa))
+    pb = dict(_leaves(sb))
+    plug = [p for p in pa if "signal_arcsinh_plug_in" in p and isinstance(pa[p], float)]
+    assert plug and all(json.dumps(pa[p]) == json.dumps(pb[p]) for p in plug)   # plug-in: no n
+    m = _meta(tmp_path / "dco" / "leave_one_assay_out")
+    assert m["signal_box_dependence"] == "comonotone" and m["signal_edge_bins"] >= 1
+    pt = sa["specific_variance_recovered_above_noise"]["signal_arcsinh"]["per_target"]
+    rec = next(v for v in pt.values() if v.get("signal_edge_bins"))
+    assert rec["signal_edge_bins_masked"] == 2 * 2 * rec["signal_edge_bins"]     # 2 regions
+    c = tmp_path / "inb"
+    _score(env, c, signal_pileup="inbin")
+    sc = json.loads((c / "scores.json").read_text())
+    assert sc["signal_pileup"] == "inbin" and sc["signal_box_dependence"] is None
+    assert "signal_edge_bins" not in json.dumps(sc)

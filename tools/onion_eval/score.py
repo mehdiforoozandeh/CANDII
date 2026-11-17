@@ -122,6 +122,19 @@ of the MACS2 score under the predicted NB (`signal_arcsinh`); the plug-in varian
 mean (PI ruling 20), is written beside it under the same keys with the suffix `_plug_in`
 (`signal_arcsinh_plug_in` in headline 1 and in r_spec). Without the module the signal space is NaN
 with the reason.
+`--signal-pileup box_d|inbin` (E2, PI ruling 2026-11-17 "Adopt the box spread"; default `box_d`):
+the pileup form of every signal route (signal, plug-in, predicted control, the dumps' native and
+peak-probability arrays): `box_d` spreads the predicted mean, size and control over a centred box
+of the fragment length (`signal_from_counts.box_spread`); `inbin` is the bin's own count, the rule
+before the ruling. Written as `signal_pileup` in scores.json and tracks.json; select_rule and
+ag2_score refuse a mix (absent reads `inbin`). Count-space values do not depend on it.
+`--signal-box-dependence comonotone|independent` (E2 review; default `comonotone`): the NB size of the
+spread pileup in the expectation mode (`signal_from_counts._spread`): comonotone bins (upper variance
+bound, larger expected scores) or independent bins (lower bound). Written as `signal_box_dependence`
+(None unless box_d; None for an external entry, whose `signal_pileup` is None too). The reach bins
+at both ends of every region (`box_reach(d)`) are masked from r_spec in the signal space
+(`signal_edge_bins_masked` per target; `signal_edge_bins` in tracks.json); headline 1 (Haar
+levels over whole regions) cannot drop bins and keeps them (at most 2 x 8 of 16,384 bins).
 
 Options of chunk SC (each off by default; a default scores.json is unchanged):
   --lambda-source auto|observed_control|predicted_control. `auto` is the route above.
@@ -1103,7 +1116,8 @@ class Scorer:
                  signal_override=None, addon=False, dump_signal=None, dump_targets=None,
                  dump_method=None, workers=1, stage_dir=None, pred_store=None, store_run=None,
                  refs_from=None, fraglen_table=None, same_view=False, foreign_covariates=None,
-                 foreign_seed=0, input_depth_at_scoring=None):
+                 foreign_seed=0, input_depth_at_scoring=None, signal_pileup=None,
+                 signal_box_dependence=None):
         from minicandi import contract as C
         from minicandi.dataset import OnionDataset, tables_sha256
         from onion_eval.evalset import tables_dir_of
@@ -1253,6 +1267,25 @@ class Scorer:
                 raise ValueError(f"dnase_route {self.dnase_route!r} not in {self.sig.DNASE_ROUTES}")
         else:
             self.dnase_route = dnase_route
+        #: E2 (PI ruling 2026-11-17): the pileup form of the signal routes (`box_d` default, `inbin`
+        #: the rule before the ruling); written to scores.json and tracks.json as `signal_pileup`
+        self.signal_pileup = signal_pileup or (self.sig.PILEUP_DEFAULT if self.sig is not None
+                                               else None)
+        if self.sig is not None and self.signal_pileup not in self.sig.PILEUP_FORMS:
+            raise ValueError(f"signal_pileup {self.signal_pileup!r} not in {self.sig.PILEUP_FORMS}")
+        #: E2 review: the bin dependence of the box_d expectation (`comonotone` default, or
+        #: `independent`); recorded as `signal_box_dependence` (None unless box_d)
+        self.signal_box_dependence = signal_box_dependence or (
+            self.sig.DEPENDENCE_DEFAULT if self.sig is not None else None)
+        if self.sig is not None and self.signal_box_dependence not in self.sig.DEPENDENCE_FORMS:
+            raise ValueError(f"signal_box_dependence {self.signal_box_dependence!r} not in "
+                             f"{self.sig.DEPENDENCE_FORMS}")
+        if self.external:      # an external entry's signal is its own: neither key applies
+            self.signal_pileup_record = self.signal_dependence_record = None
+        else:
+            self.signal_pileup_record = self.signal_pileup
+            self.signal_dependence_record = (self.signal_box_dependence
+                                             if self.signal_pileup == "box_d" else None)
         # FL: estimated fragment lengths for tracks whose frag_len is empty (None: today's path)
         self.fraglen_path = str(Path(fraglen_table).resolve()) if fraglen_table else None
         self.fraglen = None
@@ -1342,7 +1375,7 @@ class Scorer:
                                                 "signal_pc_left_out": {}, "native_left_out": {},
                                                 "peakprob_left_out": {},
                                                 "signal_pc_same_as_signal": [], "truth_only": [],
-                                                "fraglen_sources": {}})
+                                                "fraglen_sources": {}, "edge_bins": {}})
         if mid in self.flagged:
             m["left_out"][mid] = FLAGGED_REASON
             return
@@ -1372,7 +1405,7 @@ class Scorer:
         src = {"signal": rec.get("lambda_source")}
         if not self.external:
             arrays["truth"] = sig[f"{SIGNAL_PREFIX['expectation']}truth"]
-            kw = dict(ds=self.ds, regions=self.regions, rb=self.rb)
+            kw = dict(ds=self.ds, regions=self.regions, rb=self.rb, pileup=self.signal_pileup)
             if self.lambda_source == "predicted_control":
                 pc = sig.get(f"{PC_PREFIX}pred")
                 pc_src = rec.get("lambda_source" + PREDICTED_CONTROL)
@@ -1382,7 +1415,7 @@ class Scorer:
                         sp, _ = self.sig.signal_from_nb(
                             n, mu, dict(row, control_measurement_id=""), mode="expectation",
                             predicted_control=A["dump.avg_ctl_mu"], dnase_route=self.dnase_route,
-                            **kw)
+                            dependence=self.signal_box_dependence, **kw)
                         pc = Mx.to_space(np.asarray(sp, np.float64), "signal_arcsinh")
                         pc_src = TRAINING_AVERAGE_CONTROL
                     except (ValueError, KeyError) as e:
@@ -1412,7 +1445,8 @@ class Scorer:
                     m["native_left_out"][mid] = f"no native-space track: {e}"
                 try:
                     arrays["peakprob"] = AS.peak_probability_from_nb(
-                        n, mu, row, predicted_control=ctl, dnase_route=self.dnase_route, **kw)
+                        n, mu, row, predicted_control=ctl, dnase_route=self.dnase_route,
+                        dependence=self.signal_box_dependence, **kw)
                 except (ValueError, KeyError) as e:
                     m["peakprob_left_out"][mid] = f"no peak probability: {e}"
             else:
@@ -1427,6 +1461,8 @@ class Scorer:
             np.save(d / f"{mid}.{name}.npy", a)
         m["targets"].append(mid)
         m["lambda_sources"][mid] = src
+        if rec.get("signal_edge_bins") is not None:
+            m.setdefault("edge_bins", {})[mid] = rec["signal_edge_bins"]
 
     def _dump_finish(self) -> None:
         """tracks.json of each regime directory (interface F keys first)."""
@@ -1438,6 +1474,12 @@ class Scorer:
                     "region_bins": self.rb, "n_regions": len(self.regions),
                     "lambda_source_mode": self.lambda_source, "targets": m["targets"],
                     "space": "signal_arcsinh", "dnase_route": self.dnase_route,
+                    "signal_pileup": self.signal_pileup_record,
+                    "signal_box_dependence": self.signal_dependence_record,
+                    # E2 review: per target, the bins at each region end that the box spread
+                    # leaves without outside neighbours; ag2_score masks the largest of them
+                    "signal_edge_bins_per_target": dict(sorted(m.get("edge_bins", {}).items())),
+                    "signal_edge_bins": max(m.get("edge_bins", {}).values(), default=0),
                     "left_out": m["left_out"],
                     "dump_targets_given": self.dump_targets is not None,
                     "evalset": str(self.evalset_path),
@@ -2327,8 +2369,22 @@ class Scorer:
         h1 = Mx.to_space(files["pr1_signal"], "signal_arcsinh")
         h2 = Mx.to_space(files["pr2_signal"], "signal_arcsinh")
         N = Mx.noise_floor(h1, h2, ts, 2.0)
-        kw = dict(ds=self.ds, regions=self.regions, rb=self.rb, dnase_route=self.dnase_route)
+        kw = dict(ds=self.ds, regions=self.regions, rb=self.rb, dnase_route=self.dnase_route,
+                  pileup=self.signal_pileup, dependence=self.signal_box_dependence)
+        # E2 review: the box spread is zero-padded past each region end; the reach bins at both
+        # ends of every region are masked from the vector metrics (r_spec) of the signal space
+        reach = 0
+        if not self.external and self.signal_pileup == "box_d":
+            try:
+                bd = self.sig.box_d_of(row)
+            except ValueError:
+                bd = None
+            reach = self.sig.box_reach(bd) if bd else 0
+        edge_keep = (self.sig.edge_keep(len(self.regions), self.rb, reach) if reach else None)
         rec = {"lambda_source": None, "lambda_reason": ""}
+        if self.signal_pileup == "box_d" and not self.external:    # inbin records stay as before
+            rec.update(signal_edge_bins=reach,
+                       signal_edge_bins_masked=0 if edge_keep is None else int((~edge_keep).sum()))
         if fl_src is not None:
             rec.update(fraglen_source=fl_src, fraglen_reason=fl_why,
                        fraglen_bp=row.get("frag_len") or "",
@@ -2381,7 +2437,7 @@ class Scorer:
                         a_s, pa_reason = None, f"no signal from the position average: {e}"
                 a_by_mode[mode] = (a_s, pa_reason)
             if ps is not None and a_s is not None:
-                rs = Mx.r_spec(ts, ps, a_s)
+                rs = Mx.r_spec(ts, ps, a_s, mask=edge_keep)
             else:
                 rs = Mx.Undefined(lam_reason or (pa_reason if pa_ok else "position average undefined"))
             rec.update({f"{pre}N": N, f"{pre}r_spec": rs})
@@ -3179,7 +3235,9 @@ class Scorer:
                        "evalset": str(self.evalset_path), "evalset_sha256": sha256_file(self.evalset_path),
                        "tables": str(self.tables), "tables_sha256": self.tables_sha256,
                        "run_tables_sha256": self.run_tables_sha256,
-                       "dnase_route": self.dnase_route, "baseline_fit_on": self.fit_on,
+                       "dnase_route": self.dnase_route, "signal_pileup": self.signal_pileup_record,
+                       "signal_box_dependence": self.signal_dependence_record,
+                       "baseline_fit_on": self.fit_on,
                        "n_regions": len(self.regions), "region_bins": self.rb,
                        "context_bins": self.L, "wall_seconds": round(time.time() - t0, 1),
                        "infer_batch": self.tile_bs, "region_cache": self.region_cache,
@@ -3263,7 +3321,11 @@ class Scorer:
                                               if "lambda_source_training_average" in r else {}),
                                            **({k: r[k] for k in ("fraglen_source", "fraglen_bp",
                                                                  "fraglen_reason", "fraglen_kind")}
-                                              if "fraglen_source" in r else {})}
+                                              if "fraglen_source" in r else {}),
+                                           # E2 review: box_d only (inbin records unchanged)
+                                           **({k: r[k] for k in ("signal_edge_bins",
+                                                                 "signal_edge_bins_masked")}
+                                              if "signal_edge_bins" in r else {})}
                              for r in recs}
         if self.fraglen is not None:      # FL: only with --fraglen-table
             srcs = {r["target"]: r["fraglen_source"] for r in recs if "fraglen_source" in r}
@@ -3922,6 +3984,14 @@ def main(argv=None) -> int:
                          "floor, under a key the selection rule refuses")
     ap.add_argument("--dnase-route", default=None,
                     choices=("hotspot2_density", "macs2_no_control"))
+    ap.add_argument("--signal-pileup", default=None, choices=("box_d", "inbin"),
+                    help="pileup form of the signal routes (default box_d, PI ruling 2026-11-17; "
+                         "inbin = the bin's own count, the rule before the ruling); recorded as "
+                         "signal_pileup in scores.json and tracks.json")
+    ap.add_argument("--signal-box-dependence", default=None, choices=("comonotone", "independent"),
+                    help="box_d expectation: the dependence of the bins under one box (default "
+                         "comonotone, the upper variance bound; independent, the lower); recorded "
+                         "as signal_box_dependence")
     ap.add_argument("--lambda-source", default="auto", choices=LAMBDA_SOURCE_OPTIONS,
                     help="auto (default): the observed control where it exists, else the model's "
                          "predicted control; observed_control: never the predicted control; "
@@ -3994,6 +4064,9 @@ def main(argv=None) -> int:
                   **({} if a.phase else {"guardrail_windows": 256 if a.guardrail_windows is None
                                           else a.guardrail_windows}), no_halves=a.no_halves,
                   dnase_route=a.dnase_route, repeat_blind_reason=a.repeat_blind_reason,
+                  **({"signal_pileup": a.signal_pileup} if a.signal_pileup else {}),
+                  **({"signal_box_dependence": a.signal_box_dependence}
+                     if a.signal_box_dependence else {}),
                   infer_batch=a.infer_batch, region_cache=not a.no_region_cache,
                   lambda_source=a.lambda_source, **({"addon": True} if a.addon else {}),
                   **({"workers": a.workers} if a.workers > 1 else {}),

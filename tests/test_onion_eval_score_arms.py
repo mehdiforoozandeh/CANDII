@@ -108,11 +108,20 @@ def env(tmp_path_factory):
     return {"root": root, "tables": t, "evalset": out, "ev": ev, "targets": targets}
 
 
+def _inbin(mod) -> dict:
+    """E2 (PI ruling 2026-11-17): the base comparisons pin the scorer before the box_d pileup, so
+    the new scorer runs the in-bin form (`signal_pileup="inbin"`); an old module lacks the option."""
+    import inspect
+    return ({"signal_pileup": "inbin"}
+            if "signal_pileup" in inspect.signature(mod.Scorer.__init__).parameters else {})
+
+
 def _scorer(mod, env, evalset=None, model=True, **kw):
     if model:
         return mod.Scorer(evalset or env["evalset"], main="model", model=Reader(), config=CFG,
-                          run_tables_sha256=tables_sha256(env["tables"]), **dict(KW, **kw))
-    return mod.Scorer(evalset or env["evalset"], config=CFG, **dict(KW, **kw))
+                          run_tables_sha256=tables_sha256(env["tables"]),
+                          **dict(KW, **_inbin(mod), **kw))
+    return mod.Scorer(evalset or env["evalset"], config=CFG, **dict(KW, **_inbin(mod), **kw))
 
 
 def canon(scores: dict) -> str:
@@ -203,8 +212,10 @@ def test_before_after_bit_identical(env, default_model, tmp_path_factory):
     the listed F4 keys (training-average control on no-control ChIP targets)."""
     old = old_module("score_before_sc", "tools/onion_eval/score.py", tmp_path_factory.mktemp("old"))
     new_s, new_suff = default_model
+    from e2_inbin import inbin_defaults        # E2: the old copy keeps its in-bin signal
     o = _scorer(old, env)
-    old_s = o.run()
+    with inbin_defaults():
+        old_s = o.run()
     assert_same_but_f4(old_s, new_s, f4_keys(env))
     assert set(o.suff) == set(new_suff)
     for k in o.suff:
@@ -213,8 +224,10 @@ def test_before_after_bit_identical(env, default_model, tmp_path_factory):
     assert canon(_scorer(S, env, lambda_source="auto").run()) == canon(new_s)
     # a baseline too, and through score() / write_outputs (bytes of scores.json, minus timings)
     d = tmp_path_factory.mktemp("bl")
-    a = old.score(env["evalset"], d / "old", baseline="position_average", config=CFG, **KW)
-    b = S.score(env["evalset"], d / "new", baseline="position_average", config=CFG, **KW)
+    with inbin_defaults():
+        a = old.score(env["evalset"], d / "old", baseline="position_average", config=CFG, **KW)
+    b = S.score(env["evalset"], d / "new", baseline="position_average", config=CFG, **KW,
+                **_inbin(S))
     assert_same_but_f4(a, b, f4_keys(env, baseline=True))
     assert "lambda_source_option" not in b and "signal_source" not in b
     assert "correction_pairs_not_read_disjoint" not in b

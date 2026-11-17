@@ -146,6 +146,9 @@ NO_SET = "none"
 TRUTH_PEAKS = ("encode", "pipeline_derived")
 KINDS = ("run", "baseline", "external", "ag2", "oracle_baseline", "replicate_floor")
 NB_KINDS = ("run", "baseline")
+#: kinds whose signal comes from counts through `signal_from_counts` (E2: one pileup form per board)
+PILEUP_KINDS = ("run", "baseline", "oracle_baseline")
+PILEUP_ABSENT = "inbin"
 
 PEAK_METRICS = (["auprc", "auprc_posfrac"] + [f"auprc_f{k}" for k in range(1, 9)]
                 + ["auprc_peakprob", "peak_precision", "peak_recall", "peak_f1",
@@ -340,10 +343,27 @@ def _labels(method: str, kind: str, ctl: str, truth_peaks: str) -> dict:
 
 # ------------------------------------------------------------------------------- per target
 
-def signal_metrics(p, y, a, regions, rb: int) -> tuple[dict, np.ndarray | None]:
+def signal_metrics(p, y, a, regions, rb: int, keep=None) -> tuple[dict, np.ndarray | None]:
     """Signal-space metrics of one prediction `p` against truth `y` with training average `a`.
-    Returns (metrics, recalibrated prediction or None)."""
+    Returns (metrics, recalibrated prediction or None). `keep` (bool per bin, E2 review): the bins
+    that enter every metric and the recalibration fit; a 128 bp bin enters `rspec_cal_128bp` only
+    when all its 25 bp bins are kept. None keeps every bin (the behaviour before the key)."""
     p, y, a = (np.asarray(v, np.float64) for v in (p, y, a))
+    if keep is not None and not np.asarray(keep, bool).all():
+        k = np.asarray(keep, bool)
+        u = "undefined: non-finite values"
+        if not (np.isfinite(p[k]).all() and np.isfinite(y[k]).all() and np.isfinite(a[k]).all()):
+            return {m: u for m in ("rspec_cal", "pearson_cal", "spearman", "rspec", "pearson",
+                                   "rspec_cal_128bp")}, None
+        cal = SP.isotonic_recalibrate(p, y, n_bins=NCAL, valid=k)
+        out = {"rspec_cal": float(Mx.r_spec(y[k], cal[k], a[k])), "pearson_cal": corr(cal[k], y[k]),
+               "spearman": spearman(p[k], y[k]), "rspec": float(Mx.r_spec(y[k], p[k], a[k])),
+               "pearson": corr(p[k], y[k])}
+        k128 = to_128(k.astype(np.float64), regions, rb) >= 1.0 - 1e-12
+        out["rspec_cal_128bp"] = float(Mx.r_spec(to_128(y, regions, rb)[k128],
+                                                 to_128(cal, regions, rb)[k128],
+                                                 to_128(a, regions, rb)[k128]))
+        return out, cal
     if not (np.isfinite(p).all() and np.isfinite(y).all() and np.isfinite(a).all()):
         u = "undefined: non-finite values"
         return {k: u for k in ("rspec_cal", "pearson_cal", "spearman", "rspec", "pearson",
@@ -466,6 +486,30 @@ def score(evalset, audit, tables, truth_from, methods, ag2, peaks, out, *, split
         kinds = {m["kind"] for _, m in ds}
         if len(kinds) > 1:
             raise Refused(f"{name}: its seed directories differ in kind {sorted(kinds)}")
+    # E2 (PI ruling 2026-11-17): every method whose signal is derived from counts carries one pileup
+    # form; a board never mixes `box_d` and `inbin` (absent = `inbin`, the form before the key)
+    # (E2 review: the truth-from directory too, because its native_truth.npy depends on the form;
+    # and the box_d expectation's bin dependence, `signal_box_dependence`)
+    # the dependence form matters for the expectation-mode signal of the NB kinds only (the
+    # training-track methods of ag2_baselines are plug-in signals and carry no dependence)
+    forms, deps = {}, {}
+    for name, ds in list(dirs.items()) + [("truth-from", [(tdir, tmeta)])]:
+        for d, m in ds:
+            if m["kind"] in PILEUP_KINDS:
+                forms.setdefault(m.get("signal_pileup") or PILEUP_ABSENT, []).append(f"{name} ({d})")
+            if m["kind"] in NB_KINDS:
+                deps.setdefault(m.get("signal_box_dependence"), []).append(f"{name} ({d})")
+    for key, got in (("signal_pileup", forms), ("signal_box_dependence", deps)):
+        if len(got) > 1:
+            raise Refused(f"methods differ in {key}: " + "; ".join(
+                f"{k}: {', '.join(v[:3])}" for k, v in sorted(got.items(), key=str)))
+    pileup_form = next(iter(forms), None)
+    dependence_form = next(iter(deps), None)
+    # E2 review: the box spread leaves the reach bins at each region end without outside
+    # neighbours; one mask (the largest reach of any method) drops them from every signal metric
+    # and every peak tile of every method and the truth
+    edge = max([int(m.get("signal_edge_bins") or 0) for ds in dirs.values() for _, m in ds]
+               + [int(tmeta.get("signal_edge_bins") or 0)])
 
     # --- targets, audit, track sets
     rows = E.read_tsv(tables / "measurements.tsv")
@@ -545,7 +589,12 @@ def score(evalset, audit, tables, truth_from, methods, ag2, peaks, out, *, split
                     raise Refused(f"{name} ({d}): truth of {mid} differs from {tdir}")
 
     # --- tile sets per assay and truth source
-    tiles = _tile_sets(rows, tables, peaks, split, scored, info, truth, regions, rb, log)
+    keep = np.ones(len(regions) * rb, bool)
+    if edge:
+        keep.reshape(len(regions), rb)[:, :edge] = False
+        keep.reshape(len(regions), rb)[:, -edge:] = False
+    tiles = _tile_sets(rows, tables, peaks, split, scored, info, truth, regions, rb, log,
+                       bin_keep=keep)
 
     # --- per target
     channels = {}
@@ -564,7 +613,8 @@ def score(evalset, audit, tables, truth_from, methods, ag2, peaks, out, *, split
             trained = _trained(kind, roles, t["role"], t["status"])
             tset = t["set"] if (kind == "ag2" or not trained) else NO_SET
             seed_vals = [_score_one(name, kind, d, mid, y, a, nat_truth, regions, rb, table,
-                                    {tp: tiles[(t["assay"], tp)] for tp in TRUTH_PEAKS})
+                                    {tp: tiles[(t["assay"], tp)] for tp in TRUTH_PEAKS},
+                                    keep=keep)
                          for d, _ in ds]
             api = t["api_label"]
             if kind == "ag2" and mid in channels:
@@ -598,7 +648,9 @@ def score(evalset, audit, tables, truth_from, methods, ag2, peaks, out, *, split
                "methods": {n: [{"dir": str(d.resolve()), "kind": m["kind"],
                                 "evalset_sha256": m.get("evalset_sha256", "")} for d, m in ds]
                            for n, ds in dirs.items()},
-               "truth_from": str(tdir.resolve()), "evalset_sha256": esha, "time": _utc()}
+               "truth_from": str(tdir.resolve()), "evalset_sha256": esha, "time": _utc(),
+               "signal_pileup": pileup_form, "signal_box_dependence": dependence_form,
+               "signal_edge_bins": edge, "n_edge_bins_masked": int((~keep).sum())}
     (out / "SCORED").write_text(json.dumps(summary, indent=1, sort_keys=True) + "\n",
                                 encoding="utf-8")
     log(f"{split} {table}: {len(scored)} of {len(universe)} targets scored; statuses "
@@ -609,8 +661,10 @@ def score(evalset, audit, tables, truth_from, methods, ag2, peaks, out, *, split
     return summary
 
 
-def _tile_sets(rows, tables, peaks, split, scored, info, truth, regions, rb, log) -> dict:
-    """(assay, truth source) -> {"cons": bool tiles, "freq": float tiles, <mid>: target tiles}."""
+def _tile_sets(rows, tables, peaks, split, scored, info, truth, regions, rb, log, bin_keep=None) -> dict:
+    """(assay, truth source) -> {"cons": bool tiles, "freq": float tiles, <mid>: target tiles}.
+    `bin_keep` (bool per bin; E2 review): a tile with a masked bin leaves the universe, the consensus
+    and the frequencies (`n_tiles_dropped` counts it)."""
     roles = ("train", "val", "blind") if split == "blind" else ("train", "val")
     second = E.second_experiment_ids(tables)
     keep = [r for r in rows if r["measurement_id"] not in second]
@@ -638,6 +692,10 @@ def _tile_sets(rows, tables, peaks, split, scored, info, truth, regions, rb, log
         cons, freq = PK.consensus(by_cell) if by_cell else (None, None)
         n_tiles = len(regions) * (rb // PK.TILE_BINS)
         universe = np.ones(n_tiles, bool)    # every tile is whole: no bin mask on the eval regions
+        if bin_keep is not None and not bin_keep.all():
+            universe = ~PK.tile_any(~bin_keep, region_bins=rb)
+        if cons is not None:
+            cons, freq = cons & universe, np.where(universe, freq, 0.0)
         enc = {"cons": cons, "freq": freq, "universe": universe}
         for m in scored:
             if info[m]["assay"] == assay:
@@ -654,6 +712,7 @@ def _tile_sets(rows, tables, peaks, split, scored, info, truth, regions, rb, log
             c = info[m]["cell"]
             der_cells[c] = tl if c not in der_cells else (der_cells[c] | tl)
         der["cons"], der["freq"] = PK.consensus(der_cells)
+        der["cons"], der["freq"] = der["cons"] & universe, np.where(universe, der["freq"], 0.0)
         der["universe"] = universe
         out[(assay, "pipeline_derived")] = der
         log(f"{assay}: encode tile set {len(by_cell)} cells, "
@@ -662,7 +721,7 @@ def _tile_sets(rows, tables, peaks, split, scored, info, truth, regions, rb, log
     return out
 
 
-def _score_one(name, kind, d, mid, y, a, nat_truth, regions, rb, table, ts_by_source):
+def _score_one(name, kind, d, mid, y, a, nat_truth, regions, rb, table, ts_by_source, keep=None):
     """Metrics of one method directory on one target: {truth source: metrics}. `ts_by_source`
     maps a truth source to its tile set ({"cons", "freq", <mid>: target tiles or None})."""
     if kind == "ag2":
@@ -679,7 +738,7 @@ def _score_one(name, kind, d, mid, y, a, nat_truth, regions, rb, table, ts_by_so
     yy = y
     if kind == "replicate_floor":                  # half against half
         yy = np.load(d / f"{mid}.truth.npy").astype(np.float64)
-    rec, cal = signal_metrics(p, yy, a, regions, rb)
+    rec, cal = signal_metrics(p, yy, a, regions, rb, keep=keep)
     if name == MEAN_METHOD and cal is not None:    # a function of `a` scores 0 (score_f1.py l.282-283)
         rec.update(rspec=0.0, rspec_cal=0.0, rspec_cal_128bp=0.0)
     # fold change / insertion space (secondary A or B)
@@ -691,8 +750,9 @@ def _score_one(name, kind, d, mid, y, a, nat_truth, regions, rb, table, ts_by_so
         nf = f if kind == "ag2" else d / f"{mid}.native.npy"
         if nf.is_file():
             nat = np.load(nf).astype(np.float64)
-            rec["fe_pearson_25bp"] = corr(nat, nat_truth)
-            rec["fe_spearman_25bp"] = spearman(nat, nat_truth)
+            k = slice(None) if keep is None else keep
+            rec["fe_pearson_25bp"] = corr(nat[k], nat_truth[k])
+            rec["fe_spearman_25bp"] = spearman(nat[k], nat_truth[k])
         else:
             rec["fe_pearson_25bp"] = rec["fe_spearman_25bp"] = NA_AVAIL
     # peaks

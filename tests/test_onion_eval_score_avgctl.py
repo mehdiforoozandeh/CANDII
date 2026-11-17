@@ -113,9 +113,17 @@ def env(tmp_path_factory):
     return {"root": root, "tables": t, "evalset": out, "targets": targets}
 
 
+def _inbin(mod) -> dict:
+    """E2 (PI ruling 2026-11-17): the base comparisons pin the scorer before the box_d pileup, so
+    the new scorer runs the in-bin form (`signal_pileup="inbin"`); an old module lacks the option."""
+    import inspect
+    return ({"signal_pileup": "inbin"}
+            if "signal_pileup" in inspect.signature(mod.Scorer.__init__).parameters else {})
+
+
 def _model(mod, env, model=None, **kw):
     return mod.Scorer(env["evalset"], main="model", model=model or Reader(), config=CFG,
-                      run_tables_sha256=tables_sha256(env["tables"]), **dict(KW, **kw))
+                      run_tables_sha256=tables_sha256(env["tables"]), **dict(KW, **_inbin(mod), **kw))
 
 
 def _rspec_records(mod, env, **kw):
@@ -140,7 +148,10 @@ def _rspec_records(mod, env, **kw):
 @pytest.fixture(scope="module")
 def runs(env, tmp_path_factory):
     old = old_module("score_before_f4", "tools/onion_eval/score.py", tmp_path_factory.mktemp("old"))
-    return {"old": _rspec_records(old, env), "new": _rspec_records(S, env), "mod_old": old}
+    from e2_inbin import inbin_defaults        # E2: the old copy keeps its in-bin signal
+    with inbin_defaults():
+        old_recs = _rspec_records(old, env)
+    return {"old": old_recs, "new": _rspec_records(S, env), "mod_old": old}
 
 
 def test_training_controls_exist_and_are_train_only(env):
@@ -256,8 +267,12 @@ def test_position_average_baseline_labelled(env, runs, tmp_path):
     every per-target key except its signal-space `level`, which needs every target of the assay
     (before F4 it was undefined because s1 and s2 had no signal)."""
     old = runs["mod_old"]
-    a = old.score(env["evalset"], tmp_path / "old", baseline="position_average", config=CFG, **KW)
-    b = S.score(env["evalset"], tmp_path / "new", baseline="position_average", config=CFG, **KW)
+    from e2_inbin import inbin_defaults
+    with inbin_defaults():
+        a = old.score(env["evalset"], tmp_path / "old", baseline="position_average", config=CFG,
+                      **KW)
+    b = S.score(env["evalset"], tmp_path / "new", baseline="position_average", config=CFG, **KW,
+                **_inbin(S))
     for space in (SIG, SIG + "_plug_in"):
         po, pn = a[H1][space]["per_target"], b[H1][space]["per_target"]
         for cell in ("s1", "s2"):

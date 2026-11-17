@@ -69,3 +69,25 @@ def test_arm_report_sees_the_key(capsys):
     assert KEY in str(e.value)
     AR.check_arm_keys(arms, allow=(KEY,))
     assert "signal-space values differ" in capsys.readouterr().err
+
+
+def test_signal_pileup_is_a_comparability_key(capsys):
+    """E2: `signal_pileup` (absent = inbin) is refused as a mix unless --allow-mix names it."""
+    PK = "signal_pileup"
+    assert SR.scorer_keys(_s("old"))[PK] == "inbin"
+    SR.check_scorer_keys(_items(_s("old"), _s("new", signal_pileup="inbin")))
+    with pytest.raises(SR.Refused, match="signal_pileup.*count-space values do not depend"):
+        SR.check_scorer_keys(_items(_s("old"), _s("new", signal_pileup="box_d")))
+    SR.check_scorer_keys(_items(_s("old"), _s("new", signal_pileup="box_d")), allow=(PK,))
+    assert "signal_pileup" in capsys.readouterr().err
+
+
+def test_signal_box_dependence_is_a_comparability_key():
+    """E2 review: comonotone and independent box_d scores never compare silently."""
+    DK = "signal_box_dependence"
+    assert SR.scorer_keys(_s("old"))[DK] is None
+    a = _s("a", signal_pileup="box_d", signal_box_dependence="comonotone")
+    b = _s("b", signal_pileup="box_d", signal_box_dependence="independent")
+    with pytest.raises(SR.Refused, match="signal_box_dependence"):
+        SR.check_scorer_keys(_items(a, b))
+    SR.check_scorer_keys(_items(a, b), allow=(DK,))

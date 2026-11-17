@@ -17,7 +17,8 @@ def test_chip_lambda_is_the_lambda_of_signal_track():
     ctl = rng.poisson(1.5, 3000).astype(float)
     cov = dict(depth_reads=2.0e7, read_length=36, frag_len=180, control_depth_reads=3.1e7,
                control_read_length=50)
-    sig, src = SG.signal_track(mu, np.ones_like(mu), "narrow_histone", ctl, cov, mode="plug_in")
+    sig, src = SG.signal_track(mu, np.ones_like(mu), "narrow_histone", ctl, cov, mode="plug_in",
+                               pileup="inbin")
     lam = NC.chip_lambda(ctl, depth=2.0e7, frag_len=180, ctl_depth=3.1e7, ctl_read_length=50)
     want = log10_upper_tail(np.floor(mu * 180 / (36 + 24)).astype(np.int64), lam)
     assert src == "observed_control"
@@ -131,12 +132,13 @@ def test_inbin_variant_is_the_scorer_route():
     want, _ = SG.signal_track(mu, np.ones_like(mu), "narrow_histone", ctl,
                               dict(depth_reads=2.0e7, read_length=36, frag_len=180,
                                    control_depth_reads=3.0e7, control_read_length=50),
-                              mode="plug_in")
+                              mode="plug_in", pileup="inbin")
     np.testing.assert_array_equal(got.astype(np.float32), want)
     row = _row(assay_class="accessibility_dnase", assay="DNase-seq", read_length=76)
     got = NC.variant_signal_region(c, row, None, None, "inbin")
     want, _ = SG.signal_track(mu, np.ones_like(mu), "accessibility_dnase", None,
-                              dict(depth_reads=2.0e7, read_length=76), mode="plug_in")
+                              dict(depth_reads=2.0e7, read_length=76), mode="plug_in",
+                              pileup="inbin")
     # the scorer route reads its llocal lambda off mu, where a zero count is 1e-9: 1e-7 relative
     np.testing.assert_allclose(got.astype(np.float32), want, rtol=1e-6, atol=0)
 
@@ -172,3 +174,17 @@ def test_submean_of_a_flat_track_is_the_plain_score():
     pile[25] = 30.0                               # a peak: the mean of the scores is below the
     got = NC._score_submean(pile, lam)            # score of the bin's mean pileup at its centre
     assert got[25] < log10_upper_tail(np.array([30]), np.array([2.0]))[0]
+
+
+def test_agreement_masks_the_edge_bins():
+    """E2 review: bins outside `keep` leave every statistic and their tiles leave the tile counts."""
+    rng = np.random.default_rng(12)
+    x = rng.exponential(1.0, 800)
+    y = x.copy()
+    y[:3] = 50.0                    # a disagreement confined to the masked edge of region 0
+    x[:3] = 0.0
+    keep = SG.edge_keep(2, 400, 3)
+    got = NC.agreement(x, y, rb=400, keep=keep)
+    assert got["n_edge_masked"] == 12 and abs(got["pearson_raw"] - 1.0) < 1e-12
+    assert got["tile_f1"] == 1.0 or np.isnan(got["tile_f1"])
+    assert NC.agreement(x, y, rb=400)["pearson_raw"] < 0.99

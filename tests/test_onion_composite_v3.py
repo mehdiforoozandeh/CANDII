@@ -63,7 +63,9 @@ def env(tmp_path_factory):
     out.write_text(json.dumps(ev))
     bdir = root / "eval" / "synth" / "baselines"
     for n in ("marginal_nb", "position_average", "depth_only_scaling", "pseudoreplicate_floor"):
-        S.score(out, bdir / n / "seed0", baseline=n, config=CFG, **KW)
+        S.score(out, bdir / n / "seed0", baseline=n, config=CFG, **KW,
+                **({"signal_pileup": "inbin"} if "signal_pileup" in
+                   __import__("inspect").signature(S.Scorer.__init__).parameters else {}))
     OF.compute(out, bdir / "oracle_floor" / "seed0", log=lambda *a: None)
     return {"root": root, "evalset": out, "bdir": bdir}
 
@@ -327,6 +329,9 @@ from pathlib import Path
 from onion_eval import score as S
 ev, out, run = sys.argv[1], sys.argv[2], sys.argv[3]
 kw = dict(n_boot=20, guardrail_windows=4, log=lambda *a: None)
+import inspect                      # E2: the base comparison pins the in-bin signal pileup
+if "signal_pileup" in inspect.signature(S.Scorer.__init__).parameters:
+    kw["signal_pileup"] = "inbin"
 if run == "-":
     S.score(ev, Path(out), baseline="position_average", config={"context_bins": 128,
             "batch_size": 4}, **kw)
@@ -378,6 +383,8 @@ def test_outputs_bit_identical_to_the_base_tree_with_an_oracle_reference(env, tm
                 s.pop(k, None)
         from onion_eval import score as S
         sa = S.drop_e5_keys(sa)          # E5: only its additive keys are new (score.py docstring)
+        assert sa.pop("signal_pileup") == "inbin"          # E2: additive keys of the pileup form
+        assert sa.pop("signal_box_dependence") is None
         assert sa == sb
         for f in ("suffstats.npz", "pairs_per_region.npz"):
             with np.load(a / f) as za, np.load(b / f) as zb:
