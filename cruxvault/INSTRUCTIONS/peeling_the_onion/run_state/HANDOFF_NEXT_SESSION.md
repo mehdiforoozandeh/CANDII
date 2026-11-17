@@ -59,3 +59,7 @@ Every job id below is in the Log. A job in this list is never submitted again on
 ## Open PI decisions
 
 The list is in `closeout/closeout todo.md`, section "Open PI decisions" (11 items), and in `closeout/ready queue for scaling.md`, section 4.
+
+## Added 2026-11-17: the Fir copies of the 256-region rescoring
+
+The PI confirmed the nine decisions of `closeout/PI decisions 2026-11-17.md` and agreed to cancel the Fir copies of the rescoring (jobs 4535347 to 4535923) after the Nibi scores are on disk. Cancelling is the PI's action; an agent must not run it. When all 62 `p256_sv/SCORED` files exist on Nibi under `/project/def-maxwl/mforooz/ONION/runs_fir`, tell the PI, and give this command for a Fir login node: `scancel $(seq -s, 4535347 4535923)`. First check with `squeue -u $USER -j <ids>` that the range holds only rescoring jobs; the Log line of 2026-11-17 that lists the range is the source.
