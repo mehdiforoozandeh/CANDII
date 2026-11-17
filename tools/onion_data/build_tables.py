@@ -77,7 +77,10 @@ testbed), `knobs_differing` = the `$OXL` pair class then its `tech_diff` (a fall
 knobs are read from the two rows), split `val` (or `blind`). Everything else goes to
 `missing.tsv`, e.g. a second experiment whose EIC partner is not in the base. `build_info.json`
 holds `addon_of`, `addon_of_tables_sha256`, `other_experiments(_sha256)` and the base's own
-`build_info.json` under `base_build_info`.
+`build_info.json` under `base_build_info`. `--catalog <catalog/encode dir>` (close-out D2) fills
+lab, antibody, donor and platform of each appended row by the D1 rule
+(`fill_covariates.join_rows`); a second experiment's `meta.json` leaves lab, antibody and donor
+empty, while the base rows of a filled version (eic_v1_2) hold them. Without it nothing changes.
 """
 from __future__ import annotations
 
@@ -841,6 +844,7 @@ def collect_addon(a) -> dict:
         else:
             cand[mid] = (r, prods, row, entry)
 
+    fill, fill_notes = covariate_filler(getattr(a, "catalog", "") or "")
     tasks = [(str(M), mid.split(".", 1)[0], [mid], a.recount_chrom) for mid in sorted(cand)]
     probs = {}
     for t in tasks:
@@ -865,6 +869,8 @@ def collect_addon(a) -> dict:
                     "eic_track": partner["eic_track"], "cell": partner["cell"],
                     "assay": partner["assay"], "assay_class": partner["assay_class"],
                     "control_measurement_id": "", "frip": ""})
+        if fill is not None:           # close-out D2: the D1 covariate rule on the second experiment
+            fill(row)
         lack = [p for p in prods if p != "counts" and not (M / mid / f"{p}.h5").is_file()]
         if lack:
             miss(r, mid, "kept; expected products missing", "+".join(lack))
@@ -879,7 +885,35 @@ def collect_addon(a) -> dict:
     missing.sort(key=lambda m: m["measurement_id"])
     return {"rows": rows, "pairs": pairs, "missing": missing, "eval_only": eval_only,
             "oxl": oxl, "oxl_sha256": sha256_bytes(oxl_bytes), "n_expected": len(expected),
-            "wall_s": time.time() - t0}
+            "wall_s": time.time() - t0, "fill_notes": fill_notes}
+
+
+def covariate_filler(catalog: str):
+    """Close-out D2: (fill, notes). With a catalog directory (`encode_catalog.py`: experiments.tsv,
+    libraries.tsv, files.tsv), `fill(row)` writes lab, antibody, donor and platform of one appended
+    second-experiment row by the rule of `fill_covariates.join_rows` (close-out D1), so the row
+    holds the covariates that the base rows of a filled tables version hold, and records the row's
+    cause note in `notes` ({measurement id: note}). Without a catalog, (None, {}): no row changes.
+    The base `covariates.json` is copied unchanged, so a value no training row holds encodes to 0."""
+    if not catalog:
+        return None, {}
+    from onion_data import fill_covariates as FC
+    K = Path(catalog)
+    by_exp = []                        # one {experiment: [rows]} per catalog table
+    for n in ("experiments.tsv", "libraries.tsv", "files.tsv"):
+        d = defaultdict(list)
+        for r in FC._tsv(K / n):
+            d[r["experiment"]].append(r)
+        by_exp.append(d)
+    notes = {}
+
+    def fill(row: dict) -> None:
+        x = row["experiment"]
+        side = FC.join_rows([row], *(d.get(x, []) for d in by_exp))[0]
+        for col in FC.FILLED:
+            row[col] = side[col]
+        notes[row["measurement_id"]] = side["note"]
+    return fill, notes
 
 
 def _tsv_rows_of(b: bytes) -> list:
@@ -925,6 +959,10 @@ def cmd_addon(a) -> int:
             "files_sha256": {p.name: sha256_bytes(p.read_bytes())
                              for p in sorted(out.iterdir()) if p.is_file()},
             "slurm_job_id": os.environ.get("SLURM_JOB_ID", "")}
+    if getattr(a, "catalog", ""):      # close-out D2: keys only with the switch
+        info["covariates_filled_from"] = str(Path(a.catalog).resolve())
+        info["covariates_filled_columns"] = ["lab", "antibody", "donor", "platform"]
+        info["covariates_fill_notes"] = {m: n for m, n in sorted(res["fill_notes"].items()) if n}
     write_text(out / BUILD_INFO, json.dumps(info, indent=1) + "\n")
     reasons = Counter(m["reason"].split(":")[1].strip() if m["reason"].startswith("second")
                       else m["reason"] for m in res["missing"])
@@ -969,6 +1007,9 @@ def main(argv=None) -> int:
     x.add_argument("--out", required=True)
     x.add_argument("--recount-chrom", default="none",
                    help="chromosome recounted from the half tagAligns in verify (none = off)")
+    x.add_argument("--catalog", default="",
+                   help="close-out D2: ENCODE catalog dir; fill lab, antibody, donor, platform of "
+                        "the appended rows by the D1 rule (fill_covariates.join_rows); off = unchanged")
     x.set_defaults(func=cmd_addon)
     a = ap.parse_args(argv)
     return a.func(a)
