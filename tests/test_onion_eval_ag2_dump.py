@@ -558,3 +558,8 @@ def test_nb_signal_checks_on_the_fixture(dumped, tmp_path):
     assert NC.main(["table", "--run", f"r={out / 'scores.json'}", "--out", str(o)]) == 0
     macro = _tsv(o / "signal_space_macro.tsv")
     assert {r["regime"] for r in macro} == {"leave_one_assay_out", "accessibility_only"}
+    assert {r["space"] for r in macro} >= {"counts_log1p", "signal_arcsinh",
+                                           "signal_arcsinh_predicted_control"}
+    lam = _tsv(o / "signal_space_lambda_sources.tsv")
+    assert {r["lambda_source.signal_arcsinh_predicted_control"] for r in lam
+            if r["assay"] == "H3K4me3"} == {"predicted_control"}

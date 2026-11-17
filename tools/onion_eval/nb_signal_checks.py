@@ -9,7 +9,7 @@
     -> <out>/lambda_check.tsv (one row per dump and ChIP-seq target) and lambda_check.json
 
     python tools/onion_eval/nb_signal_checks.py table --run <name>=<scores.json> [--run ...] --out <dir>
-    -> <out>/signal_space_macro.tsv, signal_space_per_target.tsv, signal_space_reasons.json
+    -> <out>/signal_space_macro.tsv, signal_space_per_assay.tsv, signal_space_lambda_sources.tsv
 
 `formula`: the formula of `signal_from_counts` applied to the OBSERVED counts of each target, against
 the pipeline's own p-value track (`signal.h5`, the truth of the signal space). Observed counts in,
@@ -37,7 +37,7 @@ no control (the control is hidden); in `leave_one_assay_out` the control is one 
 
 `table`: headline 1 (specific variance recovered above noise) and r_spec per run, in count space
 (`counts_log1p`) beside the signal space (`signal_arcsinh`, its plug-in, and the predicted-control
-variant), macro per regime, and per target with the lambda source of each signal variant.
+variant), per assay and as a macro per regime, and per target the lambda source of each signal variant.
 """
 from __future__ import annotations
 
@@ -270,54 +270,54 @@ TABLE_KEYS = [(blk, sp) for blk in ("specific_variance_recovered_above_noise", "
                          "signal_arcsinh_predicted_control")]
 
 
-def _macro(scores: dict, regime: str, blk: str, sp: str):
-    src = scores if regime == "leave_one_assay_out" else scores.get(regime, {})
-    v = src.get(blk, {}).get(sp)
-    if not isinstance(v, dict):
-        return None, "absent"
-    return v.get("macro"), (v.get("reason") or "")
-
-
 def cmd_table(a) -> int:
-    """Signal-space metric 1 beside count space, per run (`--run name=<scores.json>`, repeated):
-    the macro of headline 1 and r_spec in each space and regime; and one row per (run, target) with
-    the headline-1 `recovered` value per space and the target's lambda source."""
-    runs, per = [], []
+    """Signal-space metric 1 beside count space, per run (`--run name=<scores.json>`, repeated).
+    Headline 1 is defined per assay (shared and specific parts of one assay's targets), so the
+    table gives, per run, regime, block (headline 1, r_spec) and space: the scorer's macro (None
+    when one scorable assay is undefined), the per-assay values of the scorable assays, and
+    `macro_defined`, the mean over the scorable assays that are defined, with their count. A second
+    file gives the lambda source of each signal variant per target."""
+    rows, per_assay, lam = [], [], []
     for spec in a.run:
         name, path = spec.split("=", 1)
         s = json.loads(Path(path).read_text(encoding="utf-8"))
         for regime in ("leave_one_assay_out", "accessibility_only"):
-            row = {"run": name, "regime": regime, "scores": path}
-            for blk, sp in TABLE_KEYS:
-                m, why = _macro(s, regime, blk, sp)
-                row[f"{blk}.{sp}"] = m
-                if m is None:
-                    row[f"{blk}.{sp}.reason"] = why[:200]
-            runs.append(row)
             src = s if regime == "leave_one_assay_out" else s.get(regime, {})
+            for blk, sp in TABLE_KEYS:
+                v = src.get(blk, {}).get(sp)
+                if not isinstance(v, dict):
+                    continue
+                pa = v.get("per_assay") or {}
+                vals = [x for x in pa.values() if isinstance(x, (int, float))]
+                rows.append({"run": name, "regime": regime, "block": blk, "space": sp,
+                             "macro": v.get("macro"),
+                             "macro_defined": float(np.mean(vals)) if vals else None,
+                             "n_assays_defined": len(vals), "n_assays": len(pa),
+                             "reason": (v.get("reason") or "")[:200]})
+                for assay, x in sorted(pa.items()):
+                    per_assay.append({"run": name, "regime": regime, "block": blk, "space": sp,
+                                      "assay": assay, "value": x})
             h = src.get("specific_variance_recovered_above_noise", {})
-            for mid, rec in (h.get("counts_log1p", {}).get("per_target") or {}).items():
+            for mid, rec in (h.get("signal_arcsinh", {}).get("per_target") or {}).items():
                 r = {"run": name, "regime": regime, "target": mid, "assay": rec.get("assay"),
-                     "cell": rec.get("cell"), "counts_log1p": rec.get("recovered")}
+                     "cell": rec.get("cell"), "fraglen_source": rec.get("fraglen_source")}
                 for sp in ("signal_arcsinh", "signal_arcsinh_plug_in",
                            "signal_arcsinh_predicted_control"):
                     t = (h.get(sp, {}).get("per_target") or {}).get(mid, {})
-                    r[sp] = t.get("recovered")
                     r[f"lambda_source.{sp}"] = t.get("lambda_source")
-                per.append(r)
+                lam.append(r)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    cols = ["run", "regime"] + [f"{b}.{s}" for b, s in TABLE_KEYS] + ["scores"]
-    _write_tsv(out / "signal_space_macro.tsv", cols, runs)
-    pcols = ["run", "regime", "target", "assay", "cell", "counts_log1p", "signal_arcsinh",
-             "signal_arcsinh_plug_in", "signal_arcsinh_predicted_control",
-             "lambda_source.signal_arcsinh", "lambda_source.signal_arcsinh_plug_in",
-             "lambda_source.signal_arcsinh_predicted_control"]
-    _write_tsv(out / "signal_space_per_target.tsv", pcols, per)
-    (out / "signal_space_reasons.json").write_text(json.dumps(
-        [{k: v for k, v in r.items() if k.endswith(".reason") or k in ("run", "regime")} for r in runs],
-        indent=1) + "\n")
-    print(f"{len(runs)} macro rows, {len(per)} per-target rows -> {out}")
+    _write_tsv(out / "signal_space_macro.tsv", ["run", "regime", "block", "space", "macro",
+                                                 "macro_defined", "n_assays_defined", "n_assays",
+                                                 "reason"], rows)
+    _write_tsv(out / "signal_space_per_assay.tsv", ["run", "regime", "block", "space", "assay",
+                                                     "value"], per_assay)
+    _write_tsv(out / "signal_space_lambda_sources.tsv",
+               ["run", "regime", "target", "assay", "cell", "fraglen_source",
+                "lambda_source.signal_arcsinh", "lambda_source.signal_arcsinh_plug_in",
+                "lambda_source.signal_arcsinh_predicted_control"], lam)
+    print(f"{len(rows)} macro rows, {len(per_assay)} per-assay rows, {len(lam)} lambda rows -> {out}")
     return 0
 
 
