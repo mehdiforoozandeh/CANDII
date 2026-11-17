@@ -1,0 +1,7 @@
+model	run	term	n_seeds	value_all_regions	seed_range	boot_lo	boot_hi	boot_width	n_boot_undefined
+conv autoencoder	rung2_base_heldout	gap_closed_crop_oracle	3	0.717713	0.012023	0.655598	0.788002	0.132404	0
+conv autoencoder	rung2_base_heldout	correction_only	3	0.69038	0.0189317	0.648431	0.755567	0.107136	0
+conv + attention	rung3_base_heldout	gap_closed_crop_oracle	3	0.672927	0.0312928	0.596613	0.756743	0.16013	0
+conv + attention	rung3_base_heldout	correction_only	3	0.659467	0.043491	0.617331	0.724678	0.107347	0
+U-Net	rung4_base_heldout	gap_closed_crop_oracle	3	0.507235	0.0711785	0.484643	0.523542	0.0388983	0
+U-Net	rung4_base_heldout	correction_only	3	0.318014	0.126584	0.203233	0.516541	0.313308	0
