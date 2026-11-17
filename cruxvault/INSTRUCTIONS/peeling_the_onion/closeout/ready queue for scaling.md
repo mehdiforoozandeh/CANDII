@@ -10,6 +10,10 @@ sources: run Log (`.orchestrate/plan.md`, `## Log`, to the line of 2026-11-17T20
 
 This file lists every run that is built and not sent, in the order in which a new session must send it. Each entry gives: what it answers; the prerequisite; the exact command, copied from the usage block of the submit script; the job count and the CPU-hours with the arithmetic; and the decision rule or the PI decision that it waits for. All CPU-hours are allocated CPU-hours (cores x wall time). Nothing in this file has been submitted by the agent that wrote it.
 
+## PI decisions that apply to this queue (2026-11-17)
+
+The PI decided the open points of entries 3, 4, 5, 9, 10, 11 and 14; see `PI decisions 2026-11-17.md`. Where an entry below still lists one of these as "PI decision open", the decision record wins: rescoring on Nibi now; second-experiment layers and baselines submitted; lab reported with donor; the 17 DNase-seq second-experiment rows dropped; two-sided ladder; resolution `DESIGN=full`; QC-on-input arm accepted; mix-and-match gate, then round; covariate set on one model with the curve.
+
 ## 0. Facts that every entry depends on
 
 - **Fir.** Planned outage from 2026-11-17 07:00 UTC to about 2026-11-20 (Log 09:45Z). Login works, but on 2026-11-17 20:15 UTC an `ls` of `/project/def-maxwl/mforooz/ONION/runs_fir` and of `onion_kit` gave "Permission denied". So no Fir file could be read for this document. 570 Fir jobs wait in the queue: the 256-region rescoring (jobs 4535347 to 4535923) and the 12 matched-compute trainings (jobs 4345024 to 4345035). They start when Fir returns. Never resubmit them.
