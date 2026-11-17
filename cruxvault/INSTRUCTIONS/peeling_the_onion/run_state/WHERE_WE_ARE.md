@@ -68,6 +68,8 @@ Nothing is removed from scratch yet. Conditions for removal: (a) 23 of 23 tars O
 5. Drop the 17 unbuilt DNase-seq second-experiment rows (recommended).
 6. Table version for the final model: the current one, or the candidate with DNase-seq (the 9 base runs then train again).
 7. The corrected cost of the queued rescoring (2,225 CPU-hours).
+8. Remove stale code snapshots on Nibi `/project`: the group is at 464K of 500K files, and 13 snapshots pushed on 2026-11-17 hold about 31,500 files. No more snapshots are pushed to Nibi until this is settled.
+9. The 1 bp recount for the resolution item (about 18 CPU-hours, 1,408 files to Nibi `/project`) must run before `onion/work` leaves scratch; the PI submits it (the permission check refused the agent's probe job).
 
 ### Shared prerequisites when a cluster frees
 
