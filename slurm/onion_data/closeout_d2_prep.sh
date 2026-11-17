@@ -73,7 +73,8 @@ step "5 layer pair file (all pairs, train and val)"
 [ -f "$D/eval/${BASE}x/evalset_layers.json" ] || python tools/onion_eval/evalset.py build \
   --tables "$TX" --strata $O/eval/strata/masks.h5 --n-regions 256 --n-fit-regions 16 --seed 0 \
   --pair-splits train,val --out "$D/eval/${BASE}x/evalset_layers.json"
-echo "layer pair file exit=$?"
+rc=$?; echo "layer pair file exit=$rc"
+[ "$rc" = 0 ] || { echo "[co-d2] exit=1"; exit 1; }
 
 step "6 pair smoke on every other_experiment pair"
 PAIRS="$(awk -F'\t' -v m="$M" 'NR>1 && $4=="other_experiment"{printf "%s%s/%s:%s/%s", s, m, $2, m, $3; s=","}' "$TX/pairs.tsv")"

@@ -47,11 +47,18 @@ def test_block_on_hand_records():
     assert set(pp) == {"p1", "p2", "p3", "p4"}
     assert pp["p1"]["pair_class"] == "experiment;lab" and np.isclose(pp["p1"]["gap_closed"], 0.5)
     assert pp["p4"]["gap_closed"] is None
+    assert all(v["flag"] == "few pairs" for v in pc.values())     # under 5 pairs from 3 cells
+    many = [_rec(f"q{i}", "experiment;lab", 0.6, 1.0, 0.2, cell=f"C{i % 3}") for i in range(5)]
+    ok = S.other_experiment_pair_class_block(many)["per_pair_class"]["experiment;lab"]
+    assert (ok["n_pairs"], ok["n_cells"], ok["flag"]) == (5, 3, "ok")
+    four = S.other_experiment_pair_class_block(many[:4])["per_pair_class"]["experiment;lab"]
+    assert four["flag"] == "few pairs"
 
 
 def test_empty_block():
     b = S.other_experiment_pair_class_block([])
     assert b["pooled"]["value"] is None and b["per_pair_class"] == {} and b["per_pair"] == []
+    assert b["pooled"]["flag"] == "few pairs"
 
 
 def test_addon_score_has_the_block_and_frozen_score_does_not(frozen, addon):  # noqa: F811

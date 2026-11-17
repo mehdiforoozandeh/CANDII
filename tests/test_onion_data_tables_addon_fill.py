@@ -97,3 +97,54 @@ def test_filled_rows_and_untouched_base(built):
     assert "not in the catalog" in notes[f"{SXE}.pooled.native.base"]
     for name in ("pairs.tsv", "evaluation_only.tsv", "missing.tsv", "covariates.json"):
         assert (on / name).read_bytes() == (off / name).read_bytes(), name
+
+
+# --------------------------------------------- a filled base: fill table and CHANGES.md cover the add-on
+
+def _merge_tsv(dst: Path, src: Path) -> None:
+    """Append the data lines of src (same header) to dst."""
+    import csv
+    with open(src, newline="") as fh:
+        rows = list(csv.DictReader(fh, delimiter="\t"))
+    with open(dst, newline="") as fh:
+        old = list(csv.DictReader(fh, delimiter="\t"))
+    cols = list(old[0])
+    _write(dst, old + [{c: r.get(c, "") for c in cols} for r in rows])
+
+
+@pytest.fixture(scope="module")
+def filled_base(tmp_path_factory):
+    from onion_data import fill_covariates as FC
+    from tests.test_onion_data_fill_covariates import _catalog as base_catalog
+    t = make_addon_tree(tmp_path_factory.mktemp("treef"))
+    root = t["root"]
+    rows = read_tsv(t["base"] / BT.MEASUREMENTS, MEASUREMENT_COLUMNS)
+    cat = base_catalog(root / "catalog_all", sorted({r["experiment"] for r in rows}))
+    sx = _catalog(root / "catalog_sx")
+    for n in ("experiments.tsv", "libraries.tsv", "files.tsv"):
+        _merge_tsv(cat / n, sx / n)
+    side = root / "side.tsv"
+    assert FC.main(["join", "--tables", str(t["base"]), "--catalog", str(cat), "--out", str(side)]) == 0
+    fbase = root / "tables" / "v1_2"
+    assert FC.main(["apply", "--base", str(t["base"]), "--side", str(side), "--out", str(fbase)]) == 0
+    t["base"] = fbase
+    on, off = root / "tables" / "v1_2x_on", root / "tables" / "v1_2x_off"
+    assert BT.main(addon_argv(t, on) + ["--catalog", str(cat)]) == 0
+    assert BT.main(addon_argv(t, off)) == 0
+    return fbase, on, off
+
+
+def test_fill_table_and_changes_cover_the_addon_rows(filled_base):
+    from onion_data import fill_covariates as FC
+    fbase, on, off = filled_base
+    for name in (FC.SIDE_NAME, FC.CHANGES):
+        old, new = (fbase / name).read_bytes(), (on / name).read_bytes()
+        assert new.startswith(old) and len(new) > len(old), name
+        assert (off / name).read_bytes() == old, name           # switch off: plain copy
+    side = {r["measurement_id"]: r for r in read_tsv(on / FC.SIDE_NAME, FC.SIDE_COLUMNS)}
+    added = {m: r for m, r in _rows(on).items() if r["in_eic"] == "evalonly"}
+    assert len(added) == 3 and set(added) <= set(side)
+    for m, r in added.items():
+        for c in ("lab", "antibody", "donor", "platform"):
+            assert side[m][c] == r[c], (m, c)
+    assert "## Add-on: second experiments (close-out D2)" in (on / FC.CHANGES).read_text()

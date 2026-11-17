@@ -930,7 +930,7 @@ def other_experiment_pair_class_block(rep_recs) -> dict:
     `replicate_pair_gap_closed_vs_depth_only` restricted to a class: (depth-only - model) /
     (depth-only - floor) on mean CRPS, floor = the second experiment's pr1 -> pr2. The class
     `experiment;lab` is the cross-lab correction at the same donor; no aggregate reads this block."""
-    from onion_eval.layers import pair_class_of
+    from onion_eval.layers import FLAG_FEW, FLAG_OK, MIN_CELLS, MIN_PAIRS, pair_class_of
     recs = [r for r in rep_recs if r.get("rung") == "other_experiment"]
     by_class, per_pair = defaultdict(list), []
     for r in recs:
@@ -946,15 +946,18 @@ def other_experiment_pair_class_block(rep_recs) -> dict:
                                       "log2_depth_ratio")},
                          "gap_closed": None if isinstance(one, Mx.Undefined) else _j(one)})
 
-    def blk(rs):
+    def blk(rs):                       # flag: the minimum of layers.py (MIN_PAIRS from MIN_CELLS)
         g = _gap_fn(rs)
+        n_cells = len({r["cell"] for r in rs})
         return {"value": None if isinstance(g, Mx.Undefined) else _j(g),
                 "reason": g.reason if isinstance(g, Mx.Undefined) else "", "n_pairs": len(rs),
-                "n_cells": len({r["cell"] for r in rs}),
+                "n_cells": n_cells,
+                "flag": FLAG_OK if len(rs) >= MIN_PAIRS and n_cells >= MIN_CELLS else FLAG_FEW,
                 "assays": sorted({r["assay"] for r in rs})}
     return {"definition": other_experiment_pair_class_block.__doc__.split("\n\n")[0],
             "pooled": blk(recs) if recs else {"value": None, "reason": "no pair job",
-                                              "n_pairs": 0, "n_cells": 0, "assays": []},
+                                              "n_pairs": 0, "n_cells": 0, "flag": FLAG_FEW,
+                                              "assays": []},
             "per_pair_class": {c: blk(rs) for c, rs in sorted(by_class.items())},
             "per_pair": sorted(per_pair, key=lambda x: str(x["pair_id"]))}
 

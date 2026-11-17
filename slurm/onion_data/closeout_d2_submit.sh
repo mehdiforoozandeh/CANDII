@@ -16,7 +16,9 @@
 #              retrieval baseline (baseline_retrieval.py --addon) -> $D/eval/<BASE>x/baselines/<name>/seed0
 #   models     9 jobs (3 architectures x 3 seeds; RUNS overrides), 2 CPU x 14 h = 28 CPU-h each at
 #              most, 252 in all: score.sh <EVX> <seed dir>/ox run <seed dir> --addon. A run must be
-#              trained on <BASE> (the scorer refuses another tables_sha256). A seed dir that is
+#              trained on <BASE> (the scorer refuses another tables_sha256). It WRITES INSIDE EXISTING
+#              RUN FOLDERS: <RUNS_ROOT>/<run>/seed<k>/ox/ (a new sub-directory; nothing there is
+#              overwritten; score.py refuses an ox/scores.json of another eval set). A seed dir that is
 #              absent on the cluster is listed and skipped (eic_v1_2 runs live on Fir only today).
 #   build      the second-experiment rows not built yet (ROWS; default the 17 DNase-seq rows), with
 #              kit KX4 and ONION_TIME=3-00:00:00. Writes /scratch/mforooz/onion/{fastq,work,

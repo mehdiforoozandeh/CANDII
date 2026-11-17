@@ -844,7 +844,7 @@ def collect_addon(a) -> dict:
         else:
             cand[mid] = (r, prods, row, entry)
 
-    fill, fill_notes = covariate_filler(getattr(a, "catalog", "") or "")
+    fill, fill_sides = covariate_filler(getattr(a, "catalog", "") or "")
     tasks = [(str(M), mid.split(".", 1)[0], [mid], a.recount_chrom) for mid in sorted(cand)]
     probs = {}
     for t in tasks:
@@ -885,15 +885,16 @@ def collect_addon(a) -> dict:
     missing.sort(key=lambda m: m["measurement_id"])
     return {"rows": rows, "pairs": pairs, "missing": missing, "eval_only": eval_only,
             "oxl": oxl, "oxl_sha256": sha256_bytes(oxl_bytes), "n_expected": len(expected),
-            "wall_s": time.time() - t0, "fill_notes": fill_notes}
+            "wall_s": time.time() - t0, "fill_sides": fill_sides}
 
 
 def covariate_filler(catalog: str):
-    """Close-out D2: (fill, notes). With a catalog directory (`encode_catalog.py`: experiments.tsv,
+    """Close-out D2: (fill, sides). With a catalog directory (`encode_catalog.py`: experiments.tsv,
     libraries.tsv, files.tsv), `fill(row)` writes lab, antibody, donor and platform of one appended
     second-experiment row by the rule of `fill_covariates.join_rows` (close-out D1), so the row
     holds the covariates that the base rows of a filled tables version hold, and records the row's
-    cause note in `notes` ({measurement id: note}). Without a catalog, (None, {}): no row changes.
+    side-table row (`fill_covariates.SIDE_COLUMNS`, with its cause note) in `sides` ({measurement
+    id: row}). Without a catalog, (None, {}): no row changes.
     The base `covariates.json` is copied unchanged, so a value no training row holds encodes to 0."""
     if not catalog:
         return None, {}
@@ -905,15 +906,44 @@ def covariate_filler(catalog: str):
         for r in FC._tsv(K / n):
             d[r["experiment"]].append(r)
         by_exp.append(d)
-    notes = {}
+    sides = {}
 
     def fill(row: dict) -> None:
         x = row["experiment"]
         side = FC.join_rows([row], *(d.get(x, []) for d in by_exp))[0]
         for col in FC.FILLED:
             row[col] = side[col]
-        notes[row["measurement_id"]] = side["note"]
-    return fill, notes
+        sides[row["measurement_id"]] = side
+    return fill, sides
+
+
+def append_fill_side(base: Path, out: Path, sides: list) -> None:
+    """Close-out D2 (with `--catalog` only): when the base is a filled version (it holds
+    `covariates_fill.tsv`), append one side-table row per appended second experiment to the copied
+    `covariates_fill.tsv` (the base file stays a byte prefix) and one section to `CHANGES.md`.
+    Neither file is hashed by `tables_sha256`. A base without the fill table is left as it is."""
+    from onion_data import fill_covariates as FC
+    side_p = out / FC.SIDE_NAME
+    if not side_p.is_file():
+        return
+    old = side_p.read_text(encoding="utf-8")
+    if old and not old.endswith("\n"):
+        old += "\n"
+    write_text(side_p, old + tsv_text(FC.SIDE_COLUMNS, sides).split("\n", 1)[1])
+    ch = out / FC.CHANGES
+    txt = ch.read_text(encoding="utf-8") if ch.is_file() else ""
+    if txt and not txt.endswith("\n"):
+        txt += "\n"
+    noted = Counter(n.split(":")[0] for s in sides for n in s["note"].split(" | ") if n)
+    lines = ["", "## Add-on: second experiments (close-out D2)", "",
+             f"{len(sides)} second-experiment rows (`in_eic = evalonly`) appended to "
+             f"`measurements.tsv`, with lab, antibody, donor and platform filled by the same rule; "
+             f"their side-table rows are appended to `{FC.SIDE_NAME}`. `covariates.json` is the "
+             "base file: a value no training row holds encodes to id 0.", "",
+             "- rows with an empty lab: " + str(sum(1 for s in sides if not s["lab"])),
+             "- rows with a cause note, by column: "
+             + (", ".join(f"{k} {v}" for k, v in sorted(noted.items())) or "none")]
+    write_text(ch, txt + "\n".join(lines) + "\n")
 
 
 def _tsv_rows_of(b: bytes) -> list:
@@ -938,6 +968,8 @@ def cmd_addon(a) -> int:
             tmp = out / (p.name + ".part")
             tmp.write_bytes(p.read_bytes())
             os.replace(tmp, out / p.name)
+    if getattr(a, "catalog", ""):      # close-out D2: the fill table and notes cover the new rows
+        append_fill_side(base, out, [res["fill_sides"][r["measurement_id"]] for r in res["rows"]])
     for name in ADDON_APPENDED:
         old = (base / name).read_text(encoding="utf-8") if (base / name).is_file() else \
             tsv_text(ADDON_COLUMNS[name], [])
@@ -962,7 +994,8 @@ def cmd_addon(a) -> int:
     if getattr(a, "catalog", ""):      # close-out D2: keys only with the switch
         info["covariates_filled_from"] = str(Path(a.catalog).resolve())
         info["covariates_filled_columns"] = ["lab", "antibody", "donor", "platform"]
-        info["covariates_fill_notes"] = {m: n for m, n in sorted(res["fill_notes"].items()) if n}
+        info["covariates_fill_notes"] = {m: s["note"] for m, s in sorted(res["fill_sides"].items())
+                                         if s["note"]}
     write_text(out / BUILD_INFO, json.dumps(info, indent=1) + "\n")
     reasons = Counter(m["reason"].split(":")[1].strip() if m["reason"].startswith("second")
                       else m["reason"] for m in res["missing"])
