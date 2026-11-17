@@ -57,7 +57,8 @@ UNET_VIEWS = _ROOT / "tools/minicandi/configs/views/rung4"
 #: arms outside 10% of 1.0e6 by design, with their exact count: the DNA-fusion arms keep the base
 #: trunk width (item A11), and U-Net `fusion_early` drops the DNA tower (base 993,599, -24.5%)
 OUT_OF_BAND = {("dna_fusion", 4, "fusion_early"): 750_149}
-ON_DISK = sorted(ABL.glob("*/rung*/*.json"))
+#: the mix-and-match arms (item A13) combine several switches; tests/test_minicandi_mix_arms.py
+ON_DISK = sorted(p for p in ABL.glob("*/rung*/*.json") if p.parts[-3] != "mix")
 
 
 def _key(p: Path) -> tuple[str, int, str]:
