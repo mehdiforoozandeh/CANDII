@@ -459,3 +459,33 @@ if __name__ == "__main__" and "--print" in sys.argv:
         o = tt["root"] / "tables" / "v1"
         assert BT.main(build_argv(tt, o)) == 0
         print(platform_key(), build_digest(o, tt["root"]))
+
+
+def test_addon_reads_qc_from_the_work_snapshot(tmp_path, capsys):
+    """Close-out D3 review: `addon --work-snapshot` gives the add-on the QC cells after the
+    work folder leaves the disk; without it the cells come out empty and the count is printed."""
+    t = make_addon_tree(tmp_path / "tree")
+    run = t["work"] / SXA / "base"
+    run.mkdir(parents=True, exist_ok=True)
+    (run / "qc.json").write_text(json.dumps({"align_enrich": {"xcor_score": {"rep1": {
+        "NSC": 1.7, "RSC": 1.1, "estimated_fragment_len": 190}}}}))
+    a1 = tmp_path / "a1"
+    assert BT.main(addon_argv(t, a1)) == 0
+    assert _rows(a1)[f"{SXA}.pooled.uniform.base"]["nsc"] == "1.7"
+    snap = tmp_path / "work.json.gz"
+    assert BT.main(["snapshot-work", "--work", str(t["work"]), "--out", str(snap)]) == 0
+    t["work"].rename(tmp_path / "work_archived")
+    a2 = tmp_path / "a2"
+    assert BT.main(addon_argv(t, a2) + ["--work-snapshot", str(snap)]) == 0
+    for n in ("measurements.tsv", "pairs.tsv", "missing.tsv", "evaluation_only.tsv"):
+        assert (a1 / n).read_bytes() == (a2 / n).read_bytes(), n
+    assert json.loads((a2 / "build_info.json").read_text())["work_snapshot_sha256"] == \
+        BT.sha256_bytes(snap.read_bytes())
+    capsys.readouterr()
+    a3 = tmp_path / "a3"
+    assert BT.main(addon_argv(t, a3)) == 0
+    out = capsys.readouterr().out
+    assert _rows(a3)[f"{SXA}.pooled.uniform.base"]["nsc"] == ""
+    n = int(out.split("appended rows whose QC is read but no QC file was found "
+                      "(disk or snapshot): ")[1].split()[0])
+    assert n >= 1

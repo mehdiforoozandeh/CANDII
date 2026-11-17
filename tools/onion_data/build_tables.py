@@ -347,16 +347,32 @@ def _fmt(v) -> str:
     return str(int(f)) if f.is_integer() and abs(f) < 1e12 else repr(f)
 
 
-def qc_values(work, experiment: str, unit: str, arm: str, prov: dict) -> dict:
-    """QC columns of one measurement from `<work>/<experiment>/<arm>/` (see the module doc)."""
+def _qc_rep(unit: str, arm: str, prov: dict):
+    """The replicate whose run-directory QC a measurement takes, or None (no QC is read)."""
     if arm not in QC_RUN_ARMS:
-        return {}
+        return None
     m = re.fullmatch(r"br(\d+)", unit)
     if m:
-        rep = int(m.group(1))
-    elif unit == "pooled" and not prov.get("pooled_from"):
-        rep = 1
-    else:
+        return int(m.group(1))
+    if unit == "pooled" and not prov.get("pooled_from"):
+        return 1
+    return None
+
+
+def qc_source_missing(work, experiment: str, unit: str, arm: str, prov: dict) -> bool:
+    """True when the build reads QC for this measurement but finds neither `qc.json` nor
+    `rep<i>.xcor.qc`, on the disk or in the loaded snapshot."""
+    rep = _qc_rep(unit, arm, prov)
+    if rep is None:
+        return False
+    run = Path(work) / experiment / arm
+    return work_text(run / "qc.json") is None and work_text(run / f"rep{rep}.xcor.qc") is None
+
+
+def qc_values(work, experiment: str, unit: str, arm: str, prov: dict) -> dict:
+    """QC columns of one measurement from `<work>/<experiment>/<arm>/` (see the module doc)."""
+    rep = _qc_rep(unit, arm, prov)
+    if rep is None:
         return {}
     run = Path(work) / experiment / arm
     out = {}
@@ -624,7 +640,7 @@ def collect(a) -> dict:
         for t in tasks:
             probs.update(verify_experiment(t))
 
-    rows, n_qc = [], Counter()
+    rows, n_qc, no_qc = [], Counter(), []
     for mid in sorted(metas):
         r, prods, _ = expected[mid]
         if probs.get(mid):
@@ -636,6 +652,8 @@ def collect(a) -> dict:
             if row[col] == "":
                 row[col] = v
                 n_qc[col] += 1
+        if qc_source_missing(W, row["experiment"], row["unit"], arm_of(mid), prov):
+            no_qc.append(mid)
         row["frip"] = ""
         lack = [p for p in prods if p not in ("counts",) and not (M / mid / f"{p}.h5").is_file()]
         if lack:
@@ -675,6 +693,8 @@ def collect(a) -> dict:
     sig = SplitSignature()
     pairs, shared, stats = make_pairs(rows, L["replication"], withheld, sig)
 
+    unknown_sig = [r["measurement_id"] for r in rows if r["layer"] != "testbed"
+                   and not SplitSignature.known(sig.of_row(r))]
     older = None
     if a.superset_of:
         older = json.loads((Path(a.superset_of) / COVARIATES).read_text())
@@ -697,6 +717,10 @@ def collect(a) -> dict:
     return {"rows": rows, "pairs": pairs, "shared": shared, "missing": missing, "stats": stats,
             "texts": texts, "wh_bytes": wh_bytes, "n_read": n_read, "n_tb_read": n_tb_read,
             "n_expected": len(expected), "n_qc": n_qc, "superset_bad": superset_bad,
+            "no_qc": no_qc, "unknown_sig": unknown_sig,
+            "old_ids": ({r["measurement_id"] for r in read_tsv(Path(a.superset_of) / MEASUREMENTS,
+                                                                MEASUREMENT_COLUMNS)}
+                        if a.superset_of else set()),
             "n_eval_only": len(eval_only), "n_dirs_other": n_dirs_other,
             "n_verify_failed": sum(1 for m in metas if probs.get(m)), "wall_s": time.time() - t0,
             "ledger_sha256": sha256_bytes(Path(a.ledger).read_bytes())}
@@ -750,6 +774,14 @@ def print_summary(res: dict, a) -> None:
           + (", ".join(f"{k} {v}" for k, v in sorted(res["n_qc"].items())) or "none"))
     print(f"directories under --measurements not in the selected priorities (testbed excluded): "
           f"{res['n_dirs_other']}")
+    for what, ids in (("rows whose QC is read but no QC file was found (disk or snapshot)",
+                       res["no_qc"]),
+                      ("rows with an unknown split signature (no READSET.json; testbed excluded)",
+                       res["unknown_sig"])):
+        new = sorted(set(ids) - res["old_ids"])
+        print(f"{what}: {len(ids)}" + (f"; of them new since --superset-of: {len(new)}"
+                                       + (f"  e.g. {', '.join(new[:5])}" if new else "")
+                                       if a.superset_of else ""))
     if a.superset_of:
         print(f"rows of the older tables changed or missing: "
               f"{sum(1 for x in res['superset_bad'] if 'rows of the older' in x)} problem(s)")
@@ -892,7 +924,7 @@ def collect_addon(a) -> dict:
     for r in BL.read_tsv(a.other_build_list):
         for mid, prods in BL.parse_tokens(r.get("expected_measurements", "")):
             expected.setdefault(mid, (r, prods))
-    missing, cand = [], {}
+    missing, cand, no_qc = [], {}, []
 
     def miss(r, mid, reason, products=""):
         missing.append({"row": r.get("row", ""), "priority": r.get("priority", ""),
@@ -954,6 +986,8 @@ def collect_addon(a) -> dict:
         for col, v in qc_values(W, row["experiment"], row["unit"], arm_of(mid), prov).items():
             if row[col] == "":
                 row[col] = v
+        if qc_source_missing(W, row["experiment"], row["unit"], arm_of(mid), prov):
+            no_qc.append(mid)
         row.update({"in_eic": "blind" if partner["in_eic"] == "blind" else "evalonly",
                     "eic_track": partner["eic_track"], "cell": partner["cell"],
                     "assay": partner["assay"], "assay_class": partner["assay_class"],
@@ -972,6 +1006,7 @@ def collect_addon(a) -> dict:
     missing.sort(key=lambda m: m["measurement_id"])
     return {"rows": rows, "pairs": pairs, "missing": missing, "eval_only": eval_only,
             "oxl": oxl, "oxl_sha256": sha256_bytes(oxl_bytes), "n_expected": len(expected),
+            "no_qc": no_qc,
             "wall_s": time.time() - t0}
 
 
@@ -988,7 +1023,14 @@ def cmd_addon(a) -> int:
     if out.exists() and (not out.is_dir() or any(out.iterdir())):
         print(f"refused: {out} exists and is not empty: frozen tables are never overwritten")
         return 2
-    res = collect_addon(a)
+    if getattr(a, "work_snapshot", ""):
+        snap = load_work_snapshot(a.work_snapshot, a.work)
+        print(f"work snapshot {a.work_snapshot}: {len(snap['files'])} files of {snap['work']} "
+              f"({snap['created_utc']}); a file on the disk wins")
+    try:
+        res = collect_addon(a)
+    finally:
+        clear_work_snapshot()
     new = {MEASUREMENTS: res["rows"], PAIRS: res["pairs"], MISSING: res["missing"],
            EVAL_ONLY: res["eval_only"]}
     out.mkdir(parents=True, exist_ok=True)
@@ -1018,7 +1060,12 @@ def cmd_addon(a) -> int:
             "files_sha256": {p.name: sha256_bytes(p.read_bytes())
                              for p in sorted(out.iterdir()) if p.is_file()},
             "slurm_job_id": os.environ.get("SLURM_JOB_ID", "")}
+    if getattr(a, "work_snapshot", ""):
+        info["work_snapshot"] = str(Path(a.work_snapshot).resolve())
+        info["work_snapshot_sha256"] = sha256_bytes(Path(a.work_snapshot).read_bytes())
     write_text(out / BUILD_INFO, json.dumps(info, indent=1) + "\n")
+    print(f"appended rows whose QC is read but no QC file was found (disk or snapshot): "
+          f"{len(res['no_qc'])}" + (f"  e.g. {', '.join(res['no_qc'][:5])}" if res["no_qc"] else ""))
     reasons = Counter(m["reason"].split(":")[1].strip() if m["reason"].startswith("second")
                       else m["reason"] for m in res["missing"])
     print(f"second-experiment measurements in the build list: {res['n_expected']}")
@@ -1132,6 +1179,8 @@ def main(argv=None) -> int:
     x.add_argument("--out", required=True)
     x.add_argument("--recount-chrom", default="none",
                    help="chromosome recounted from the half tagAligns in verify (none = off)")
+    x.add_argument("--work-snapshot", default="",
+                   help="snapshot-work file read when a work-folder file is not on the disk")
     x.set_defaults(func=cmd_addon)
     a = ap.parse_args(argv)
     return a.func(a)

@@ -141,3 +141,19 @@ Controls and traps: the regions of every eval set must equal `eval/regions_v1/re
 - DNase-seq is correction-scorable on the candidate (4 never-trained non-subset pairs; 12 correction-scorable assays against 11 on `eic_v1`). It is not imputation-scorable (2 validation tracks). Imputation-scorable: the same 9 assays as `eic_v1`. Expectation met.
 - Validation targets with no accessibility-only item, measured by the same code on both eval sets: `eic_v1` 23 of 43, candidate 20 of 44. The notepad's "22 of 42" does not match the `eic_v1` eval set: the code counts C25 H3K9ac too. The expectation (19 of 43) was off by this same one target; the change (C27's 4 targets covered by row 337, C34 DNase-seq added) is as expected.
 - Verify of ENCSR489NAM (row 57, job 27601590, 14 min, 1 CPU): 9 measurements, 0 failing.
+
+### 9.8 What the snapshot does not serve (review of 2026-11-17)
+
+Small files outside the table build:
+- `build_list.py pending` (kit KF4, used by the `reruns` part and by D4's script) reads `NOT_APPLICABLE` through `row_state`. The snapshot does not serve it, because the reruns run kit KF4, whose code is fixed. This is harmless for D3's reruns: the 6 markers belong to rows 102, 418, 419, 425, 428 and 431 (`results/t183/TAIL.md`; 6 markers in the snapshot), and none of them is row 56, 132, 280 or 396. A `pending` call over those 6 rows after the removal would list them as "submit". So a submit of the whole of priorities 1 to 3 must run before the folder leaves, or must leave these 6 rows out.
+
+Large files that no snapshot serves (the half tagAlign files under `onion/work/<exp>/<unit>.<layer>/<arm>/pr{1,2}.tagAlign.gz`, and the BAMs in the same folders):
+- `align_views.py verify`: the chr21 recount of each half (`verify_measurement`) and the name-token check across halves (`experiment_checks`). Without the files the recount fails and the name-token check is skipped.
+- `qc_fill.py run`: reads the kept read sets (the halves listed in `provenance.json`) for the QC side table.
+- `recount.py run` and `recount.py verify`: recount the halves at 1 bp into the region store.
+- The derived arms of an experiment that is built again (`fastq_uniform.py`, `fastq_dnase.py`) read their own run folder; a rerun starts from the FASTQs.
+
+What must therefore finish before `/scratch/mforooz/onion/work` is removed: (1) the chr21 verify of the 10 experiments that verified after the freeze (jobs 27601590 and 27603294 to 27603302; results in 9.7); (2) any `qc_fill.py` or `recount.py` pass that the QC table (item A4) or the 1 bp store (item A7) still needs on rows built so far; (3) any `build_list.py pending` over rows 102, 418, 419, 425, 428 or 431. The table build itself (`version`) no longer needs the folder: it uses the snapshot.
+
+`build` and `addon` now print, for every run, the count of rows whose QC is read but no QC file is found (disk or snapshot) and the count of rows with an unknown split signature; with `--superset-of` they also print how many of these are new rows. An older row that loses a value still makes the superset check refuse the build.
+- Verify of the other 9 experiments (jobs 27603294 to 27603302, 1 CPU, 45 min limit), read at handback: ENCSR521AIV (11 measurements), ENCSR237WJY (7) and ENCSR184LMY (7) "all checks pass"; the other 6 (ENCSR731QLJ, ENCSR620QNS, ENCSR083STA, ENCSR000FEK, ENCSR000ENI, ENCSR000EQB) were still running at about 7 min.

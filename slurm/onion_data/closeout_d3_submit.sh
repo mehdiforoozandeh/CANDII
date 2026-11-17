@@ -28,9 +28,11 @@
 #
 # Env: DRY_RUN (default 1: print what would run, submit nothing), KIT_ID (default COD3),
 #      VERSION (default eic_v1_3), EXPS (verify: comma list, default the 10 experiments below),
-#      FORCE=1 (version: build although tail rows are queued or running).
+#      FORCE=1 (version only: build although tail rows are queued or running),
+#      RERUN_AGAIN=1 (reruns only: submit although reruns_submitted.tsv exists; rule B.5 allows one
+#      7-day rerun per row, so use it only for a row whose rerun never started).
 set -uo pipefail
-DRY_RUN="${DRY_RUN:-1}"; KIT_ID="${KIT_ID:-COD3}"; VERSION="${VERSION:-eic_v1_3}"; FORCE="${FORCE:-0}"
+DRY_RUN="${DRY_RUN:-1}"; KIT_ID="${KIT_ID:-COD3}"; VERSION="${VERSION:-eic_v1_3}"; FORCE="${FORCE:-0}"; RERUN_AGAIN="${RERUN_AGAIN:-0}"
 PARTS="${*:-}"
 [ -n "$PARTS" ] || { echo "usage: closeout_d3_submit.sh preserve|verify|candidate|reruns|version|baselines ..."; exit 2; }
 for p in $PARTS; do case "$p" in preserve|verify|candidate|reruns|version|baselines) ;;
@@ -65,8 +67,8 @@ echo "=== closeout D3 $(date -u +%FT%TZ) parts: $PARTS  DRY_RUN=$DRY_RUN  kit: $
 
 run() {   # print a command; run it unless dry
   echo "    \$ $*"
-  [ "$DRY_RUN" = 0 ] && "$@"
-  return 0
+  [ "$DRY_RUN" = 0 ] || return 0
+  "$@" || { local rc=$?; echo "    FAILED (exit $rc): $1"; return $rc; }
 }
 sb() {    # sbatch through the kit's check.sh: <name> <time> <cpus> <mem> <python args...>
   local name="$1" t="$2" c="$3" m="$4"; shift 4
@@ -155,7 +157,7 @@ case " $PARTS " in *" candidate "*)
   [ -d "$W" ] || [ -e "$SNAP" ] || die "neither the work folder nor the snapshot"
   [ -d "$W" ] || die "the candidate reads the work folder itself; use part 'version' with the snapshot"
   # evalset.genome_dir(tables) = tables/../../genome: a link in $D3 points it at $O/genome
-  [ -e "$D3/genome" ] || run ln -s "$O/genome" "$D3/genome"
+  [ -e "$D3/genome" ] || run ln -s "$O/genome" "$D3/genome" || die "cannot link $D3/genome"
   sb candidate 01:00:00 16 64000M -c "$PY_CANDIDATE" ;;
 esac
 
@@ -166,7 +168,7 @@ case " $PARTS " in *" reruns "*)
   grep -q "git=0d578dc" "$KF4/.kit_stamp" || die "kit KF4 is not git 0d578dc"
   gate() { if [ "$DRY_RUN" = 0 ]; then die "$1"; else echo "    WOULD REFUSE (dry run goes on): $1"; fi; }
   scratch_writable || gate "/scratch is over its soft quota; the reruns stage FASTQs and write work folders there"
-  [ ! -e "$D3/reruns_submitted.tsv" ] || [ "$FORCE" = 1 ] \
+  [ ! -e "$D3/reruns_submitted.tsv" ] || [ "$RERUN_AGAIN" = 1 ] \
     || gate "$D3/reruns_submitted.tsv exists: rule B.5 allows one 7-day rerun per row (stop rule)"
   for c in "${RERUNS[@]}"; do
     IFS='|' read -r PRI TIME MEM ROWS LABEL <<< "$c"
@@ -180,7 +182,11 @@ case " $PARTS " in *" reruns "*)
     else
       out=$(env ONION_TIME="$TIME" ${MEM:+ONION_MEM=$MEM} \
               bash "$KF4/slurm/onion_data/build_row.sh" submit "$KF4" "$B" "$PRI" 50 2 "$ROWS" 2>&1)
+      rc=$?
       echo "$out" | sed 's/^/      /'
+      if [ "$rc" != 0 ] || ! echo "$out" | grep -q 'build array [0-9]'; then
+        echo "      FAILED: row $ROWS not submitted (exit $rc); not recorded"; continue
+      fi
       printf '%s\t%s\t%s\t%s\t%s\n' "$ROWS" "$(date -u +%FT%TZ)" "$TIME" "${MEM:-}" \
         "$(echo "$out" | grep -o 'array [0-9]*' | paste -sd' ' -)" >> "$D3/reruns_submitted.tsv"
     fi

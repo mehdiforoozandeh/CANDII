@@ -429,3 +429,22 @@ def test_work_text_disk_wins_over_the_snapshot(tmp_path):
     finally:
         BT.clear_work_snapshot()
     assert BT.work_text(w / "E" / "base" / "qc.json") is None
+
+
+def test_build_reports_rows_with_no_qc_file_or_split_signature(tmp_path, capsys):
+    """Close-out D3 review: a file missing on the disk and in the snapshot is reported, for the
+    new rows of a --superset-of build separately."""
+    t = _tree_with_na(tmp_path / "tree")
+    v1 = tmp_path / "v1"
+    assert BT.main(build_argv(t, v1, "1,2")) == 0
+    out = capsys.readouterr().out
+    n_qc = int(out.split("no QC file was found (disk or snapshot): ")[1].split()[0])
+    n_sig = int(out.split("unknown split signature (no READSET.json; testbed excluded): ")[1].split()[0])
+    t["work"].rename(tmp_path / "work_archived")
+    v2 = tmp_path / "v2"
+    assert BT.main(build_argv(t, v2, "1,2,3", "--superset-of", str(v1))) == 1   # old rows lose QC
+    out = capsys.readouterr().out
+    m_qc = out.split("no QC file was found (disk or snapshot): ")[1].split("\n")[0]
+    m_sig = out.split("unknown split signature (no READSET.json; testbed excluded): ")[1].split("\n")[0]
+    assert int(m_qc.split(";")[0]) > n_qc and int(m_sig.split(";")[0]) > n_sig
+    assert "of them new since --superset-of: " in m_qc and f"{TRN}.pooled.uniform.se" in m_sig
