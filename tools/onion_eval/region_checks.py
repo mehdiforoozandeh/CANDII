@@ -105,20 +105,26 @@ def _track_block_stats(args):
     for i, (c, s) in enumerate(blocks):
         by[c].append((i, s))
     vals = np.empty((len(blocks), rb), np.float32)
+    nvalid = np.full(len(blocks), rb, np.int64)     # bins that exist in the track (no zero fill)
     with h5py.File(path, "r") as f:
         for c, lst in by.items():
             a = f[c][:]
             for i, s in lst:
                 seg = a[s:s + rb]
                 vals[i, :len(seg)] = seg
-                vals[i, len(seg):] = 0
+                vals[i, len(seg):] = np.nan
+                nvalid[i] = len(seg)
             del a
     flat = vals.reshape(-1)
+    flat = flat[np.isfinite(flat)] if (nvalid < rb).any() else flat
     thr = float(np.partition(flat, int(0.9 * flat.size))[int(0.9 * flat.size)])
-    high = vals > thr
+    high = vals > thr                                # NaN bins compare False
     gm = float(flat.mean(dtype=np.float64))
-    gh = float(high.mean())
-    return (mid, vals.mean(axis=1, dtype=np.float64), high.mean(axis=1), gm, gh, thr)
+    gh = float(high.sum() / flat.size)
+    bm = np.nansum(vals, axis=1, dtype=np.float64) / np.maximum(nvalid, 1)
+    bh = high.sum(axis=1) / np.maximum(nvalid, 1)
+    bm[nvalid == 0] = bh[nvalid == 0] = np.nan
+    return (mid, bm, bh, gm, gh, thr, int((nvalid < rb).sum()))
 
 
 def _quart(x):
@@ -188,13 +194,13 @@ def signal(evalset, out, workers=4, log=print) -> None:
     tracks = []
     ce = np.empty((len(res), N))
     he = np.empty((len(res), N))
-    for k, (mid, bm, bh, gm, gh, thr) in enumerate(res):
+    for k, (mid, bm, bh, gm, gh, thr, nshort) in enumerate(res):
         ce[k] = bm / gm if gm > 0 else np.nan
         he[k] = bh / gh if gh > 0 else np.nan
         r = meas[mid]
         tracks.append({"measurement_id": mid, "assay": r["assay"], "assay_class": r["assay_class"],
                        "cell": r["cell"], "candidate_mean_count": gm, "high_bin_threshold": thr,
-                       "candidate_high_bin_share": gh,
+                       "candidate_high_bin_share": gh, "n_blocks_past_track_end": nshort,
                        "pair16_count_enrichment_mean": float(np.mean(ce[k][[eval_idx[j] for j in sorted(pair_set)]])),
                        "eval256_count_enrichment_mean": float(np.mean(ce[k][eval_idx]))})
     write_tsv(Path(out) / "signal_tracks.tsv", tracks)
@@ -288,6 +294,7 @@ class Seed:
             if (self.dir / "same_view_per_region.npz").is_file() else None
         head = [i for i in range(len(z["pair_ids"])) if str(z["rung"][i]) == ""
                 and int(z["never_trained"][i]) == 1 and int(z["subset_pair"][i]) == 0]
+        self.sv_missing = sv is None             # reported in reproduction.tsv, never a silent NaN
         self.b_ok = sv is not None
         if self.b_ok:
             tpos = {str(t): k for k, t in enumerate(sv["target"])}
@@ -368,6 +375,12 @@ def _draws(R: int, n_boot: int, seed: int) -> np.ndarray:
     return np.stack([np.bincount(r, minlength=R) for r in idx]).astype(np.float64)
 
 
+def _range(xs) -> float:
+    """max - min over seeds; NaN (undefined) when any seed is undefined."""
+    a = np.asarray(xs, float)
+    return float(np.max(a) - np.min(a)) if a.size and np.isfinite(a).all() else float("nan")
+
+
 def _mean_over_seeds(seeds, W, term):
     return np.mean([s.terms(W)[term] for s in seeds], axis=0)
 
@@ -380,22 +393,43 @@ def bootstrap(runs, out, n_boot=5000, log=print) -> None:
     R = len(base["convae"][0].region_indices)
     regions = base["convae"][0].region_indices
     ones = np.ones((1, R))
-    # reproduction
+    arms = {}
+    for e in EFFECTS:
+        for m in MODELS:
+            arm = arm_run(e, m)
+            arms[arm] = load_run(runs, arm, cache)
+            if not arms[arm]:
+                log(f"missing arm {arm}")
+    # reproduction: every seed used (base and arms); undefined matches undefined
     rep = []
-    worst = 0.0
-    for m, seeds in base.items():
-        for s in seeds:
-            st = stored_terms(s)
-            mine = s.terms(ones)
-            for t in TERMS:
-                a, b = st[t], float(mine[t][0])
-                diff = abs(a - b) if a is not None and math.isfinite(b) else float("nan")
-                worst = max(worst, diff) if math.isfinite(diff) else float("inf")
-                rep.append({"run": MODELS[m], "seed": s.dir.parent.name, "term": t, "stored": a,
-                            "recomputed": b, "abs_diff": diff})
-    write_tsv(out / "reproduction.tsv", rep)
-    log(f"reproduction: worst abs diff {worst:.3g}")
-    if not worst <= 1e-6:
+    worst, n_mismatch, n_checked = 0.0, 0, 0
+    used = [(MODELS[m], s) for m, seeds in base.items() for s in seeds] + \
+           [(a, s) for a, seeds in arms.items() for s in seeds]
+    for name, s in used:
+        st = stored_terms(s)
+        mine = s.terms(ones)
+        for t in TERMS:
+            a, b = st[t], float(mine[t][0])
+            a_def, b_def = a is not None and math.isfinite(float(a)), math.isfinite(b)
+            diff = abs(float(a) - b) if a_def and b_def else (0.0 if a_def == b_def else float("inf"))
+            n_checked += 1
+            if not diff <= 1e-6:
+                n_mismatch += 1
+            if math.isfinite(diff):
+                worst = max(worst, diff)
+            note = ""
+            if t == "correction_only" and s.sv_missing:
+                note = "same_view_per_region.npz missing"
+            elif not b_def:
+                note = "undefined in both" if not a_def else "undefined in the recomputation only"
+            rep.append({"run": name, "seed": s.dir.parent.name, "term": t, "stored": a,
+                        "recomputed": b, "abs_diff": diff, "note": note})
+            if t == "correction_only" and s.sv_missing:
+                log(f"{name} {s.dir.parent.name}: same_view_per_region.npz missing")
+    write_tsv(out / "reproduction.tsv", rep, ["run", "seed", "term", "stored", "recomputed", "abs_diff", "note"])
+    log(f"reproduction: {n_checked} values over {len(used)} seeds; worst abs diff {worst:.3g}; "
+        f"{n_mismatch} mismatches")
+    if n_mismatch:
         raise SystemExit("stored terms not reproduced to 1e-6; stopping (reproduction.tsv)")
     W = _draws(R, n_boot, SEED)
     L = np.ones((R, R)) - np.eye(R)          # leave-one-region-out rows
@@ -407,7 +441,7 @@ def bootstrap(runs, out, n_boot=5000, log=print) -> None:
             bt = _mean_over_seeds(seeds, W, t)
             per = [float(s.terms(ones)[t][0]) for s in seeds]
             floor.append({"model": MODEL_NAMES[m], "run": MODELS[m], "term": t, "n_seeds": len(seeds),
-                          "value_all_regions": full, "seed_range": max(per) - min(per),
+                          "value_all_regions": full, "seed_range": _range(per),
                           "boot_lo": float(np.nanpercentile(bt, 2.5)), "boot_hi": float(np.nanpercentile(bt, 97.5)),
                           "boot_width": float(np.nanpercentile(bt, 97.5) - np.nanpercentile(bt, 2.5)),
                           "n_boot_undefined": int(np.isnan(bt).sum())})
@@ -417,9 +451,8 @@ def bootstrap(runs, out, n_boot=5000, log=print) -> None:
     for e in EFFECTS:
         for m in MODELS:
             arm = arm_run(e, m)
-            aseeds = load_run(runs, arm, cache)
+            aseeds = arms[arm]
             if not aseeds:
-                log(f"missing arm {arm}")
                 continue
             if any(s.region_indices != regions for s in aseeds):
                 raise SystemExit(f"{arm}: other pair regions")
@@ -435,7 +468,7 @@ def bootstrap(runs, out, n_boot=5000, log=print) -> None:
                 row = {"effect": e, "description": EFFECTS[e][0], "model": MODEL_NAMES[m], "term": t,
                        "arm": arm, "n_seeds_arm": len(aseeds), "n_seeds_base": len(base[m]),
                        "arm_value": float(a_full), "base_value": float(b_full), "effect_all_regions": obs,
-                       "seed_range_arm": max(aper) - min(aper), "seed_range_base": max(bper) - min(bper),
+                       "seed_range_arm": _range(aper), "seed_range_base": _range(bper),
                        "boot_lo": float(np.percentile(d[ok], 2.5)) if ok.any() else float("nan"),
                        "boot_hi": float(np.percentile(d[ok], 97.5)) if ok.any() else float("nan"),
                        "sign_flip_share": (float(np.mean(np.sign(d[ok]) != np.sign(obs))) if ok.any()
@@ -443,8 +476,8 @@ def bootstrap(runs, out, n_boot=5000, log=print) -> None:
                        "n_boot_undefined": int((~ok).sum()),
                        "loro_min": float(np.nanmin(dl)) if np.isfinite(dl).any() else float("nan"),
                        "loro_max": float(np.nanmax(dl)) if np.isfinite(dl).any() else float("nan")}
-                sr = max(row["seed_range_arm"], row["seed_range_base"])
-                row["beyond_seed_range"] = int(math.isfinite(obs) and abs(obs) > sr)
+                sr = float(np.max([row["seed_range_arm"], row["seed_range_base"]]))   # NaN if a seed is undefined
+                row["beyond_seed_range"] = int(math.isfinite(obs) and math.isfinite(sr) and abs(obs) > sr)
                 row["region_robust"] = int(ok.any() and math.isfinite(obs) and (row["boot_lo"] > 0 or row["boot_hi"] < 0)
                                            and row["sign_flip_share"] <= 0.05)
                 if np.isfinite(dl).any() and math.isfinite(obs):
