@@ -133,3 +133,11 @@ Controls and traps: the regions of every eval set must equal `eval/regions_v1/re
 
 - Which version the final model and the 3 base recipes train on. The base recipes were retrained on `eic_v1_2` (9 runs, scored). The ruling "retrain once" holds only if `eic_v1_3` waits for the reruns and then becomes the last version; the base recipes would then be retrained a second time (9 runs) for the final comparison.
 - Row 396's rerun memory: the script asks 384000M (Nibi CPU nodes have 766 GB), above the 192000M of rule B.5, because the last run died at 192000M.
+
+### 9.7 Results of the small runs (2026-11-17, Nibi)
+
+- Preserve (job 27601589, 2 min 46 s, 1 CPU): snapshot `ONION/CO-D3/work_snapshot_2026-11-17.json.gz`, 4,888 files (qc.json 439, rep<i>.xcor.qc 641, READSET.json 3,802, NOT_APPLICABLE 6), 669,681 bytes, sha256 `af7bfa59...`. Check: QC cells of 2,884 measurement directories, split signatures of 2,884, NOT_APPLICABLE of 1,217 build-list rows: 0 differ. PASS.
+- Candidate (job 27601591, 24 min, 16 CPUs): 2,812 rows (train 2,386, val 348, blind 78; `eic_v1` has 2,740), 0 verify failures, "rows of the older tables changed or missing: 0", 76 tokens not built. Eval set: 256 regions equal to `regions_v1`, 68 imputation items, 1,588 correction pairs, `evalset.py check` 0 problems.
+- DNase-seq is correction-scorable on the candidate (4 never-trained non-subset pairs; 12 correction-scorable assays against 11 on `eic_v1`). It is not imputation-scorable (2 validation tracks). Imputation-scorable: the same 9 assays as `eic_v1`. Expectation met.
+- Validation targets with no accessibility-only item, measured by the same code on both eval sets: `eic_v1` 23 of 43, candidate 20 of 44. The notepad's "22 of 42" does not match the `eic_v1` eval set: the code counts C25 H3K9ac too. The expectation (19 of 43) was off by this same one target; the change (C27's 4 targets covered by row 337, C34 DNase-seq added) is as expected.
+- Verify of ENCSR489NAM (row 57, job 27601590, 14 min, 1 CPU): 9 measurements, 0 failing.

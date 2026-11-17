@@ -106,7 +106,7 @@ case " $PARTS " in *" verify "*)
   [ -d "$W" ] || die "$W is gone: the half tagAligns are on nearline only"
   IFS=, read -r -a XS <<< "$EXPS"
   for x in "${XS[@]}"; do
-    sb "verify_$x" 03:00:00 1 8000M tools/onion_data/align_views.py verify --measurements "$M" \
+    sb "verify_$x" 00:45:00 1 8000M tools/onion_data/align_views.py verify --measurements "$M" \
       --recount-chrom chr21 --experiment "$x"
   done ;;
 esac
