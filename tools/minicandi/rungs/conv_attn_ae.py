@@ -42,7 +42,9 @@ Component arm keys (pinned interface E, chunk A3) reach every component through
 `component_kwargs(cfg)`: `covariate_injection = adaln_zero`, `covariate_dropout` (passed to
 `model_covariates`), `covariate_embedding`, `dna = precomputed` (the DnaTower reads
 `batch["x_dna_emb"]`; needs `dna_embedding_dim`), `offset_eps`, `count_transform = soft_clip` and
-`head = nb_shared_size`. With every key at its default the model is today's, parameter for
+`head = nb_shared_size`. `res_bp` (item A7; 1, 5, 25, 50, 125) reaches the DnaTower and the
+count transform through `component_kwargs` as on rungs 2 and 4; `res_in_sub` / `res_out_sub` raise
+NotApplicable. With every key at its default the model is today's, parameter for
 parameter and output for output (tests/test_minicandi_rung_arms.py).
 
 DNA fusion (item A11, `tools/minicandi/dna_fusion.py`): `dna_fusion = film` (the DNA features
@@ -109,6 +111,8 @@ def check_rung(cfg: dict) -> None:
         raise ValueError(f"{NAME} is rung {RUNG}; config has rung {r!r}")
     if cfg.get("two_step"):
         raise NotApplicable(TWO_STEP_MESSAGE)
+    if max(M.res_subs_of(cfg)) > 1:               # item A7: the decoupled arms are rungs 2 and 4
+        raise NotApplicable("res_in_sub / res_out_sub are built in rungs 2 and 4 only")
 
 
 def resolve_config(config: dict | None) -> dict:

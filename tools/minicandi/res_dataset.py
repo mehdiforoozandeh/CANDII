@@ -108,12 +108,14 @@ class ResDataset(OnionDataset):
         if not reg.is_file():
             raise FileNotFoundError(f"{self.tables_dir}/regions.tsv: missing (the region store's "
                                     f"regions)")
-        self.regions = read_regions(reg)
+        # `store_regions`, not `regions`: `OnionDataset.regions` is the train_regions table of
+        # the parent (None here), and the parent's window draw reads it (item A7 fix)
+        self.store_regions = read_regions(reg)
         self.region_bp = REGION_BP
         self._by_chrom: dict = {}
-        for r in self.regions:
+        for r in self.store_regions:
             self._by_chrom.setdefault(r["chrom"], []).append(r)
-        self.train_regions = [r for r in self.regions if r["role"] == "train"]
+        self.train_regions = [r for r in self.store_regions if r["role"] == "train"]
         self.window_bp = self.L * self.res
         if self.window_bp > self.region_bp:
             raise ValueError(f"a window of {self.L} tokens of {self.res} bp ({self.window_bp} bp) "
