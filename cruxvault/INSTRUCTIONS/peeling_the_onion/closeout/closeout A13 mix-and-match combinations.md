@@ -45,6 +45,20 @@ Rule (foreman brief): a choice qualifies on a model when it is better than the b
 
 Not in the pool, with the reason: asinh and soft clip on the U-Net (composite +0.015 and +0.016 beyond, but no single term beyond: they fail the rule); only one count transform can be on at a time, so Pearson stands for the transforms. Two-step with a fixed reference depth fails the rule on calibration and doubles the FLOPs per window; its per-class reference depth is another agent's work (branch chunk/onion-AB2). The conv autoencoder with fixed input depth has 2 seeds and no qualifying term. The brief's lead "conv + attention imputation 0.387 to 0.426" for loss weight 4 matches the TSV (0.3868 to 0.4261).
 
+**Qualification gate (added 2026-11-17 after review).** The table above uses 16-region scores. On 16 regions a correction difference below about 0.05 is not reliable (foreman's check), and three conv + attention switches qualify on gap closed alone at that limit: concatenation +0.050, fixed input depth +0.049, NB CRPS +0.053. So the pool is provisional. Before any submission, the rule is applied again to 256-region scores of the single-ablation runs: `python tools/minicandi/mix_arms.py qualify --summary <arm-summary tsv, --sub p256_sv>`. It exits 0 (PASS: the pool stands), 1 (FAIL: a switch no longer qualifies; rewrite `POOL` and the configs, then recount the cost), or 3 (WAIT: a switch has no 3-seed 256-region score). `submit_mix.sh STAGE=runs` refuses unless `QUALIFY_SUMMARY` passes the gate. The gate can only remove switches. U-Net fixed input depth stays in by the PI ruling.
+
+| switch, model | 256-region score of the single run |
+|---|---|
+| fixed input depth, conv + attention and U-Net | queued on Fir (runs_fir/score_p256_decisive.sh, check 4) |
+| imputation loss weight 4, conv + attention | queued on Fir (check 4) |
+| average input, U-Net | queued on Fir (check 4) |
+| same-view only, conv autoencoder and conv + attention | none: needs `STAGE=gate` |
+| concatenation, conv + attention | none: needs `STAGE=gate` |
+| NB CRPS, conv + attention | none: needs `STAGE=gate` |
+| Pearson, U-Net | none: needs `STAGE=gate` |
+
+The references `rung{2,3,4}_base_heldout` have `p256_sv` scores (check E1). `STAGE=gate` scores the 5 missing runs, 3 seeds each, on Fir (the checkpoints are there), score only: 3 x 30.0 + 3 x 3 x 25.4 + 3 x 51.85 = 90.0 + 228.6 + 155.5 = 474.1 CPU-hours.
+
 ### 4.2 Arms (configs `tools/minicandi/configs/ablations/mix/rung{2,3,4}/`, generator `tools/minicandi/mix_arms.py`)
 
 Each switch is the exact key set of its single-ablation config; no two switches share a key. Each arm is the base recipe plus the union of its switches.
@@ -55,7 +69,7 @@ Each switch is the exact key set of its single-ablation config; no two switches 
 | conv + attention | concatenation, fixed depth, loss weight 4, NB CRPS, same-view only | half fraction 2^(5-1), defining relation I = +ABCDE: every arm with 1, 3 or 5 switches on | 16 |
 | U-Net | average input, Pearson, fixed depth | full factorial | 7 |
 
-Why not the full factorial on conv + attention: it costs 31 arms, about 6,945 CPU-hours for that model alone, against 3,554 for the half fraction (section 4.8); the whole design would rise from about 6,095 to 9,486 CPU-hours. The half fraction is resolution V: the intercept, the 5 main effects and the 10 two-switch interactions are orthogonal (the test checks D'D = 16 I), so every main effect and every pairwise interaction is estimable, aliased only with three- and four-switch interactions. This half (odd switch counts) holds every single switch and the all-on arm; the reference (no switch) lies outside it and is run beside it. Arms with 2 or 4 switches are not run.
+Why not the full factorial on conv + attention: it costs 31 arms, about 4,915 CPU-hours for that model alone, against 2,517 for the half fraction (section 4.8); the whole design would rise from about 5,390 to 7,788 CPU-hours. The half fraction is resolution V: the intercept, the 5 main effects and the 10 two-switch interactions are orthogonal (the test checks D'D = 16 I), so every main effect and every pairwise interaction is estimable, aliased only with three- and four-switch interactions. This half (odd switch counts) holds every single switch and the all-on arm; the reference (no switch) lies outside it and is run beside it. Arms with 2 or 4 switches are not run.
 
 The reference arm, per model: the base recipe `configs/rung<r>/base_heldout.json` on `eic_v1_2` under the run name `eic_v1_2_rung<r>_base_heldout`. On Fir it exists (DONE), so only its 256-region scoring is new; on Nibi it is trained in the same submission. Every arm: 3 seeds (0, 1, 2), 80,000 windows, tables `eic_v1_2`, all 256 regions with the same-view pass, scorer sub-directory `p256_sv`, reference terms `eval/eic_v1_2/baselines`.
 
@@ -82,9 +96,9 @@ Every arm with fixed input depth is scored twice: (1) `p256_sv`, the inputs thin
 
 1. Score every arm and the reference: imputation, gap closed, calibration, composite (version 3), and the correction-only term, each a mean over 3 seeds with its seed range. For an arm with fixed depth, use the native-depth score.
 2. An arm is eligible when none of imputation, gap closed and calibration is lower than the reference beyond the seed range.
-3. Among the eligible arms, take the highest composite. Any eligible arm with fewer switches whose composite is within the seed range of it wins instead (the simpler arm, D13).
+3. Among the eligible arms, take the arm with the highest composite (call it the leader). An arm with fewer switches is "in range" when the leader's composite minus its composite is not larger than the larger of the two composite seed ranges (the leader's and that arm's). The reference counts as an arm with 0 switches. If one or more arms with fewer switches are in range, the winner is the in-range arm with the fewest switches; a tie on the switch count goes to the higher composite. So the reference wins whenever it is in range of the leader (the simpler arm, D13).
 4. The recipe is the reference when no eligible arm has a composite or one of the three terms higher than the reference beyond the seed range.
-5. Conv + attention: fit the main effects and two-switch interactions on the 16 arms. If the fitted value of an untested arm (2 or 4 switches) exceeds the chosen arm's composite by more than its seed range, name it as a confirmation run; do not adopt it untested.
+5. Conv + attention: fit the main effects and two-switch interactions on the 16 arms, using the native-depth score for every arm with fixed depth (the score of step 1); fit the thinned score as a second, reported model. If the fitted value of an untested arm (2 or 4 switches) exceeds the chosen arm's composite by more than its seed range, name it as a confirmation run; do not adopt it untested.
 6. Flag (do not reject) an arm whose correction-only term is lower than the reference by more than twice the seed range; the PI decides.
 
 ### 4.7 Outcome -> conclusion
@@ -110,21 +124,24 @@ Controls and traps:
 
 Cost, in allocated CPU-hours (cores x wall time):
 - Training per seed, mean of 3 seeds, Fir sacct of the existing runs (job ids from `runs_fir/<run>/seed<s>/train_*.out`): conv autoencoder base 14.84 (used for its arm), conv + attention `eic_v1_2` base 14.34 (the largest single-switch mean was 14.14), U-Net average input 30.56, U-Net fixed depth 17.94 (used for the U-Net arms without the average input), `eic_v1_2` bases 5.98 / 14.34 / 7.06.
-- One 256-region same-view scoring of one run-seed: 39.8, measured on Fir (12 runs of check E1: 108 jobs, 477.5 CPU-h; 8 predict jobs 30.6 + 1 metrics job 9.2). The brief's figure of 23 CPU-hours is below this measurement.
-- One arm = 3 seeds x training + 3 x 39.8: conv autoencoder 3 x 14.84 + 119.4 = 163.9; conv + attention 3 x 14.34 + 119.4 = 162.4; U-Net 3 x 17.94 + 119.4 = 173.2; U-Net with average input 3 x 30.56 + 119.4 = 211.1.
+- One 256-region same-view scoring of one run-seed, per model, measured on Fir (check E1: 8 predict jobs + 1 metrics job per run-seed, 3 seeds per run; `results/closeout_MIX/sacct_p256.txt`): conv autoencoder 90.1 / 3 = 30.0; conv + attention 76.3 / 3 = 25.4; U-Net 51.85, the mean of 53.4 (base, 160.3 / 3) and 50.3 (DNA-only skips, 150.9 / 3). The brief's figure of 23 is below all three.
+- One arm = 3 seeds x training + 3 x scoring: conv autoencoder 3 x 14.84 + 3 x 30.0 = 134.5; conv + attention 3 x 14.34 + 3 x 25.4 = 119.2; U-Net 3 x 17.94 + 3 x 51.85 = 209.4; U-Net with average input 3 x 30.56 + 3 x 51.85 = 247.2.
 - Training: references 3 x (5.98 + 14.34 + 7.06) = 82.1 (Nibi only); conv autoencoder 1 x 3 x 14.84 = 44.5; conv + attention 16 x 3 x 14.34 = 688.3; U-Net 4 x 3 x 30.56 + 3 x 3 x 17.94 = 528.2; total 1,343.2 on Nibi, 1,261.0 on Fir.
-- Scoring: 27 arms (24 + 3 references) x 3 x 39.8 = 3,223.8; native-depth scoring: 12 arms (8 conv + attention, 4 U-Net) x 3 x 39.8 = 1,432.8.
+- Scoring: references 3 x (30.0 + 25.4 + 51.85) = 321.8; conv autoencoder 1 x 3 x 30.0 = 90.0; conv + attention 16 x 3 x 25.4 = 1,219.2; U-Net 7 x 3 x 51.85 = 1,088.8; total 2,719.8.
+- Native-depth scoring: conv + attention 8 x 3 x 25.4 = 609.6; U-Net 4 x 3 x 51.85 = 622.2; total 1,231.8.
+- Conv + attention, half against full factorial: half = 688.3 + 1,219.2 + 609.6 = 2,517.1; full = 31 x 3 x 14.34 + 31 x 3 x 25.4 + 16 x 3 x 25.4 = 1,333.6 + 2,362.2 + 1,219.2 = 4,915.0.
 - 256-region reference terms of `eic_v1_2`: 4 baselines, 16 CPUs x (5,062 + 6,322 + 5,395 + 4,568) s of the `eic_v1` 256-region wall times = 94.9, plus the oracle reference (0.2): 95.1.
-- Total: about 6,095 CPU-hours on Nibi (6,013 on Fir). With 23 CPU-hours per scoring it would be about 4,129.
+- Total: 1,343.2 + 2,719.8 + 1,231.8 + 95.1 = 5,389.9 CPU-hours on Nibi; 1,261.0 + 2,719.8 + 1,231.8 + 95.1 = 5,307.7 on Fir (Fir speeds; Nibi speed not measured). The full factorial would give 5,389.9 - 2,517.1 + 4,915.0 = 7,787.8. The gate stage adds 474.1 before it.
 - Jobs (Nibi dry run): 81 training + 936 predict + 117 metrics = 1,134 jobs, plus 5 reference-term jobs.
 
 ## 5. Work steps
 
 1. Specification (this section): done 2026-11-17.
 2. Code and configs: `tools/minicandi/mix_arms.py`, 24 configs, the native-depth scoring switch, tests `tests/test_minicandi_mix_arms.py`: done 2026-11-17.
-3. Prerequisites (foreman): `eval/eic_v1_2/evalset.json` on the scoring cluster; a prediction-store root with room for the concurrent stores (about 55 GB and 1,700 files per run-seed).
-4. Submit: `STAGE=baselines`, then `STAGE=runs`, of `tools/minicandi/configs/ablations/mix/submit_mix.sh` (dry run by default).
-5. Read: `select_rule.py arm-summary --sub p256_sv` and `--sub p256_sv_native_depth`; apply section 4.6; fit the conv + attention effects; write `results/closeout_MIX/MIX_READ.md`; record findings.
+3. Qualification gate: `STAGE=gate` on Fir (5 runs x 3 seeds, score only), wait for check 4, then `select_rule.py arm-summary --sub p256_sv` and `mix_arms.py qualify --summary`. If it fails, rewrite the pool and recount.
+4. Prerequisites (foreman): `eval/eic_v1_2/evalset.json` on the scoring cluster; a prediction-store root with room for the concurrent stores (about 55 GB and 1,700 files per run-seed).
+5. Submit: `STAGE=baselines`, then `QUALIFY_SUMMARY=<tsv> STAGE=runs`, of `tools/minicandi/configs/ablations/mix/submit_mix.sh` (dry run by default).
+6. Read: `select_rule.py arm-summary --sub p256_sv` and `--sub p256_sv_native_depth` (a comparison of a native-depth arm with a normal reference needs `--allow-mix input_depth_at_scoring`); apply section 4.6; fit the conv + attention effects; write `results/closeout_MIX/MIX_READ.md`; record findings.
 
 ## 6. Done when
 

@@ -1143,7 +1143,8 @@ class Scorer:
         self._OnionDataset = OnionDataset
         self.ds = OnionDataset(self.tables, split, cfg, seed=0)
         if (self.foreign is not None and self.foreign["depth"] == "swap_depth"
-                and "in" in self.foreign["sides"] and self.ds.config.get("input_depth") == "fixed"):
+                and "in" in self.foreign["sides"] and (config or {}).get("input_depth") == "fixed"):
+            # the run's own config: a native-depth scoring (mix-and-match) changes self.ds.config
             raise ValueError("foreign covariates: swap_depth on side C is not defined for a run with "
                              "input_depth = fixed (its inputs are thinned by the true depth)")
         self.predict_control = bool(self.ds.config.get("predict_control")) and has_model
@@ -3584,6 +3585,9 @@ def _guard_input_depth_out(out: Path, kw) -> None:
         if old:
             raise ScoreRefused(f"{prev} holds a score with input depth at scoring {old!r}; a "
                                f"normal score never goes over it")
+        if INPUT_DEPTH_DIR_TAG in out.name:
+            raise ScoreRefused(f"--out {out}: a directory whose name holds '{INPUT_DEPTH_DIR_TAG}' "
+                               f"takes only native-depth scores ({INPUT_DEPTH_ENV}=native)")
         return
     if INPUT_DEPTH_DIR_TAG not in out.name:
         raise ScoreRefused(f"--out {out}: a native-depth score goes to a directory whose name holds "

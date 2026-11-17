@@ -5,6 +5,20 @@ qualified per architecture (cruxvault/INSTRUCTIONS/peeling_the_onion/closeout/
     python tools/minicandi/mix_arms.py write   # writes configs/ablations/mix/rung{2,3,4}/*.json
                                                # and arms.tsv (overwrites only those files)
     python tools/minicandi/mix_arms.py check   # exit 1 when the files on disk differ
+    python tools/minicandi/mix_arms.py qualify --summary <arm-summary tsv of 256-region scores>
+        # the qualification gate: re-applies the rule to every switch of POOL; exit 0 only when
+        # every switch has a 3-seed 256-region score and still qualifies (or is in by PI ruling)
+
+Qualification gate (foreman, 2026-11-17). The pool was derived from 16-region scores, where a
+correction difference under about 0.05 is not reliable; three conv + attention switches
+(concatenation, fixed input depth, NB CRPS) qualified on gap closed alone at +0.049 to +0.053.
+Before any submission the pool is re-derived from 256-region scores (`select_rule.py arm-summary
+--sub p256_sv`, the table format of results/ablations_closeout/arm_summary_p16_sv_2026-11-17.tsv).
+Rule: better than the reference `rung<r>_base_heldout` beyond the seed range (difference of means
+larger than the larger of the two ranges) on at least one of imputation (`imputation_raw`), gap
+closed (`correction_v3_raw`), calibration (`uncertainty_raw`), and worse beyond the range on none.
+U-Net fixed input depth is in by the PI ruling of 2026-11-17 whatever the rule says. The gate can
+only remove switches; the configs stay the provisional design until it passes.
 
 A switch is the exact key set of its single-ablation config (configs/ablations/<ablation>/
 rung<r>/<arm>.json minus the base recipe configs/final/rung<r>/reference_equal.json); the test
@@ -52,8 +66,13 @@ SWITCHES = {
 POOL = {2: ("same_view_only",),
         3: ("concat", "fixed_depth", "impute_x4", "nb_crps", "same_view_only"),
         4: ("average_input", "pearson", "fixed_depth")}
-#: rungs that run the half fraction (+ all-on) instead of the full factorial
+#: rungs that run the half fraction instead of the full factorial
 HALF = {3}
+#: qualification gate: the switches in the pool by PI ruling, whatever the rule says
+PI_RULED = {(4, "fixed_depth")}
+#: the three terms of the rule, as select_rule.py arm-summary names them
+TERMS = (("imputation", "imputation_raw"), ("gap closed", "correction_v3_raw"),
+         ("calibration", "uncertainty_raw"))
 
 
 def design(r: int) -> list[tuple[str, ...]]:
@@ -114,10 +133,69 @@ def _files(r: int) -> dict:
     return files
 
 
+def source_run(r: int, switch: str) -> str:
+    """The run name of the single ablation of `switch` on rung r (runs_fir/<name>)."""
+    ab, arm = SWITCHES[switch][1].split("/")
+    return f"abl_{ab}_{arm}_{ARCH[r]}"
+
+
+def qualify(summary: dict, r: int) -> list[dict]:
+    """Per switch of POOL[r]: {"switch", "run", "status", "detail"}; status is qualifies, fails,
+    in_by_pi_ruling or no_score (the switch's or the reference's row is absent, has fewer than 3
+    seeds, or lacks a term)."""
+    ref = summary.get(f"rung{r}_base_heldout")
+    out = []
+    for sw in POOL[r]:
+        run = source_run(r, sw)
+        row = summary.get(run)
+        rec = {"switch": sw, "run": run, "status": "no_score", "detail": ""}
+        try:
+            if row is None or ref is None or int(row["n_seeds"]) < 3 or int(ref["n_seeds"]) < 3:
+                raise KeyError("row")
+            calls = []
+            for name, k in TERMS:
+                d = float(row[f"{k}.mean"]) - float(ref[f"{k}.mean"])
+                bar = max(float(row[f"{k}.range"]), float(ref[f"{k}.range"]))
+                c = "up" if d > bar else "down" if d < -bar else "within"
+                calls.append(c)
+                rec["detail"] += f"{name} {d:+.3f} (bar {bar:.3f}, {c}); "
+        except (KeyError, ValueError):
+            rec["detail"] = ("no 3-seed score for " + (run if row is None or ref is not None
+                                                        else f"rung{r}_base_heldout"))
+            out.append(rec)
+            continue
+        ok = "up" in calls and "down" not in calls
+        rec["status"] = ("in_by_pi_ruling" if (r, sw) in PI_RULED else
+                         "qualifies" if ok else "fails")
+        out.append(rec)
+    return out
+
+
+def read_summary(path) -> dict:
+    """{arm: row} of an arm-summary TSV (select_rule.py arm-summary)."""
+    import csv
+    with open(path, newline="", encoding="utf-8") as fh:
+        return {row["arm"]: row for row in csv.DictReader(fh, delimiter="\t")}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("cmd", choices=("write", "check"))
+    ap.add_argument("cmd", choices=("write", "check", "qualify"))
+    ap.add_argument("--summary", help="qualify: arm-summary TSV of 256-region scores")
     a = ap.parse_args(argv)
+    if a.cmd == "qualify":
+        if not a.summary:
+            ap.error("qualify needs --summary")
+        summ = read_summary(a.summary)
+        worst = 0
+        for r in POOL:
+            for rec in qualify(summ, r):
+                print(f"rung{r}\t{rec['switch']}\t{rec['status']}\t{rec['run']}\t{rec['detail']}")
+                worst = max(worst, {"qualifies": 0, "in_by_pi_ruling": 0, "fails": 1,
+                                    "no_score": 3}[rec["status"]])
+        print({0: "gate: PASS (the pool stands)", 1: "gate: FAIL (rewrite POOL, then write)",
+               3: "gate: WAIT (a switch has no 256-region score)"}[worst])
+        return worst
     bad = 0
     for r in POOL:
         want = _files(r)

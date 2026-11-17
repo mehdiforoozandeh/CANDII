@@ -23,8 +23,17 @@
 #   pseudoreplicate_floor (score.sh baseline, 16 CPUs, 128000M, 04:00:00; their eic_v1 256-region
 #   wall times were 4,568 to 6,322 s) and the oracle reference (oracle_floor.py compute, 2 CPUs).
 #   A baseline whose SCORED exists is skipped. Needs eval/eic_v1_2/evalset.json on the cluster.
-# STAGE=runs: refuses (exit 3, also in a dry run it prints REFUSED) until the 4 baselines are SCORED
-#   and the oracle reference exists. Then, per rung and seed 0 1 2:
+# STAGE=gate (Fir; the checkpoints are there): the 256-region scoring (p256_sv, eic_v1 eval set and
+#   reference terms, as runs_fir/score_p256_decisive.sh) of the single-ablation runs of the pool
+#   that have no 256-region score and are not queued for one: same-view only (conv autoencoder,
+#   conv + attention), concatenation and NB CRPS (conv + attention), Pearson (U-Net). Score only;
+#   5 runs x 3 seeds. Then `select_rule.py arm-summary --sub p256_sv` over the pool's runs and the
+#   references rung{2,3,4}_base_heldout gives the table that QUALIFY_SUMMARY names.
+# STAGE=runs: refuses (exit 4) unless QUALIFY_SUMMARY=<arm-summary tsv of 256-region scores> passes
+#   `mix_arms.py qualify` (every switch of the pool still qualifies on 256 regions; when one fails,
+#   rewrite POOL in mix_arms.py and the configs first). Refuses (exit 3) until the 4 baselines are
+#   SCORED and the oracle reference exists. A dry run prints REFUSED and goes on. Then, per rung and
+#   seed 0 1 2:
 #   (1) the reference arm, the base recipe configs/rung<r>/base_heldout.json under the run name
 #       eic_v1_2_rung<r>_base_heldout. On Fir that run exists (DONE, Fir 2026-11-17), so only its
 #       scoring is submitted; on Nibi it is trained too.
@@ -51,17 +60,32 @@ EV=$O/eval/$V/evalset.json
 B=$O/eval/$V/baselines
 MIX=$K/tools/minicandi/configs/ablations/mix
 export DRY_RUN="${DRY_RUN:-1}"
-STAGE="${STAGE:?set STAGE=baselines or STAGE=runs}"
+STAGE="${STAGE:?set STAGE=gate, STAGE=baselines or STAGE=runs}"
 RUNGS="${RUNGS:-2 3 4}"
 NATIVE="${NATIVE:-1}"
 declare -A ARCH=([2]=convae [3]=convattn [4]=unet)
 [ -d "$MIX/rung2" ] || { echo "kit $K has no mix configs" >&2; exit 2; }
-for p in "$T/measurements.tsv" "$EV"; do
+[ "$STAGE" = gate ] || for p in "$T/measurements.tsv" "$EV"; do
   [ -e "$p" ] || { echo "missing $p (on $CL)" >&2; exit 2; }
 done
 BASELINES="marginal_nb position_average depth_only_scaling pseudoreplicate_floor"
 
 case $STAGE in
+gate)
+  export ONION_STAGE=1 CLUSTER=$CL NICE="${NICE:-100}" SEEDS="0 1 2" SCORE_ONLY=1
+  export SCORE_SAME_VIEW=1 SCORE_PHASES=1 SCORE_SUBDIR=p256_sv SCORE_SHARDS=8 SCORE_PRED_DEVICE=cpu \
+    SCORE_PRED_CPUS=8 SCORE_PRED_MEM=32000 SCORE_INFER_BATCH=8 SCORE_PRED_TIME=06:00:00 SCORE_CPUS=16 \
+    SCORE_MEM=64000 SCORE_TIME=06:00:00 REFS_FROM=$O/eval/eic_v1/baselines KEEP_PRED_STORE=0
+  [ -n "${PRED_STORE_ROOT:-}" ] || { echo "set PRED_STORE_ROOT explicitly" >&2; exit 2; }
+  for spec in 2:abl_views_all_same_view_only_convae 3:abl_views_all_same_view_only_convattn \
+              3:abl_cov_injection_form_inject_concat_convattn 3:abl_losses_loss_nb_crps_convattn \
+              4:abl_count_transforms_tf_pearson_unet; do
+    r=${spec%%:*}; d=${spec#*:}
+    [ -f "$O/runs_fir/$d/seed0/run.json" ] || { echo "MISSING $O/runs_fir/$d/seed0/run.json"; continue; }
+    bash $K/slurm/minicandi/submit_arms.sh $K $O/tables/eic_v1 $O/eval/eic_v1/evalset.json $O/runs_fir $r \
+      "$d=$O/runs_fir/$d/seed0/run.json" 2>&1 | grep -v "^$"
+  done
+  echo "gate scorings: 5 runs x 3 seeds; DRY_RUN=$DRY_RUN" ;;
 baselines)
   n=0
   for name in $BASELINES; do
@@ -89,6 +113,11 @@ python $K/tools/onion_eval/oracle_floor.py compute --evalset $EV --out $OF --tab
   echo "baseline jobs submitted (or printed): $n; DRY_RUN=$DRY_RUN" ;;
 runs)
   PS="${PRED_STORE_ROOT:?set PRED_STORE_ROOT explicitly: this script picks no store location}"
+  QS="${QUALIFY_SUMMARY:-}"
+  if [ -z "$QS" ] || ! python3 $K/tools/minicandi/mix_arms.py qualify --summary "$QS"; then
+    echo "REFUSED: the qualification gate has not passed on 256-region scores (QUALIFY_SUMMARY=${QS:-unset})" >&2
+    [ "$DRY_RUN" = 1 ] || exit 4
+  fi
   miss=""
   for name in $BASELINES; do [ -e "$B/$name/seed0/SCORED" ] || miss="$miss $name"; done
   [ -e "$B/oracle_floor/seed0/oracle_floor.json" ] || miss="$miss oracle_floor"

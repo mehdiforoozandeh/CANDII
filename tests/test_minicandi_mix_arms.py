@@ -94,6 +94,57 @@ def test_design():
     assert np.allclose(D.T @ D, 16 * np.eye(16))
 
 
+HEAD = ["arm", "n_seeds"] + [f"{k}.{x}" for _, k in M.TERMS for x in ("mean", "range")]
+
+
+def _summary(tmp_path, rows):
+    p = tmp_path / "summary.tsv"
+    lines = ["\t".join(HEAD)] + ["\t".join(str(v) for v in r) for r in rows]
+    p.write_text("\n".join(lines) + "\n")
+    return p
+
+
+def _row(arm, imp, cor, cal, rng=0.01, n=3):
+    return [arm, n, imp, rng, cor, rng, cal, rng]
+
+
+def test_qualification_gate(tmp_path, capsys):
+    """The gate re-applies the rule per switch: up beyond on one term and down beyond on none;
+    a switch without a 3-seed row waits; U-Net fixed depth is in by PI ruling."""
+    rows = [_row(f"rung{r}_base_heldout", 0.40, 0.60, 0.60) for r in (2, 3, 4)]
+    rows += [_row(M.source_run(2, "same_view_only"), 0.45, 0.60, 0.60),          # qualifies
+             _row(M.source_run(3, "concat"), 0.40, 0.605, 0.60),                 # within: fails
+             _row(M.source_run(3, "fixed_depth"), 0.45, 0.50, 0.60),             # up and down
+             _row(M.source_run(3, "impute_x4"), 0.45, 0.60, 0.60, n=2),          # 2 seeds
+             _row(M.source_run(4, "fixed_depth"), 0.30, 0.80, 0.60)]             # PI ruling
+    st = {(r, x["switch"]): x["status"] for r in M.POOL
+          for x in M.qualify(M.read_summary(_summary(tmp_path, rows)), r)}
+    assert st[(2, "same_view_only")] == "qualifies"
+    assert st[(3, "concat")] == "fails" and st[(3, "fixed_depth")] == "fails"
+    assert st[(3, "impute_x4")] == "no_score" and st[(3, "nb_crps")] == "no_score"
+    assert st[(4, "fixed_depth")] == "in_by_pi_ruling" and st[(4, "pearson")] == "no_score"
+    assert M.main(["qualify", "--summary", str(_summary(tmp_path, rows))]) == 3   # WAIT
+    full = rows[:4] + [_row(M.source_run(r, s), 0.45, 0.60, 0.60)
+                       for r in M.POOL for s in M.POOL[r] if (r, s) != (2, "same_view_only")]
+    assert M.main(["qualify", "--summary", str(_summary(tmp_path, full))]) == 0    # PASS
+    bad = full + [_row(M.source_run(3, "concat"), 0.40, 0.60, 0.60)]              # last row wins
+    assert M.main(["qualify", "--summary", str(_summary(tmp_path, bad))]) == 1     # FAIL
+    capsys.readouterr()
+
+
+def test_gate_reproduces_the_16_region_pool():
+    """On the 16-region table of the ablation read, every switch of the pool qualifies (the
+    provisional design); the table is in the foreman's worktree, so skip when absent."""
+    p = Path("/Users/mforooz/Desktop/research/libbrechteam@sfu/CANDII/.claude/worktrees/onion/"
+             "cruxvault/results/ablations_closeout/arm_summary_p16_sv_2026-11-17.tsv")
+    if not p.is_file():
+        pytest.skip("16-region summary not on this machine")
+    summ = M.read_summary(p)
+    st = {(r, x["switch"]): x["status"] for r in M.POOL for x in M.qualify(summ, r)}
+    assert set(st.values()) == {"qualifies", "in_by_pi_ruling"}
+    assert st[(4, "fixed_depth")] == "in_by_pi_ruling"
+
+
 # ------------------------------------------------------------------------------- (b) build, train
 
 @pytest.mark.parametrize("r,sw", ARMS, ids=IDS)
@@ -228,6 +279,17 @@ def test_native_depth_is_refused_where_it_means_nothing(ev_env):
                  run_tables_sha256=ev_env["sha"], input_depth_at_scoring="deep", **KW)
 
 
+def test_foreign_swap_depth_guard_reads_the_runs_own_config(ev_env):
+    """The guard against swap_depth on side C of a fixed-depth run tests the run's config, which a
+    native-depth scoring does not change (it changes only the scorer's dataset config)."""
+    from onion_eval import score as S
+    m, cfg = _fixed_model()
+    for kw in ({}, {"input_depth_at_scoring": "native"}):
+        with pytest.raises(ValueError, match="swap_depth"):
+            S.Scorer(ev_env["evalset"], main="model", model=m, config=cfg,
+                     run_tables_sha256=ev_env["sha"], foreign_covariates="in_swap_depth", **kw, **KW)
+
+
 def test_env_parse(monkeypatch):
     from onion_eval import score as S
     monkeypatch.delenv(S.INPUT_DEPTH_ENV, raising=False)
@@ -254,13 +316,19 @@ def test_end_to_end_legacy_and_store(ev_env, low_cap):
     assert nd[S.INPUT_DEPTH_KEY] == "native"
     assert nd["scorer_settings"][S.INPUT_DEPTH_KEY] == "native"
     assert nd["count_crps"] != fx["count_crps"]                # the inputs differ
-    # comparable with normal scores on purpose: the native-depth score is the deployment case
-    assert SR.scorer_keys(nd) == SR.scorer_keys(fx)
-    # the output-directory guard
+    # a comparability key: never merged silently; the deployment comparison needs --allow-mix
+    a, k = SR.scorer_keys(fx), SR.scorer_keys(nd)
+    assert "input_depth_at_scoring" not in a and k["input_depth_at_scoring"] == "native"
+    with pytest.raises(SR.Refused, match="input_depth_at_scoring"):
+        SR.check_scorer_keys([("fx", a), ("nd", k)])
+    SR.check_scorer_keys([("fx", a), ("nd", k)], allow=("input_depth_at_scoring",))
+    # the output-directory guard, both ways
     with pytest.raises(S.ScoreRefused, match="native_depth"):
         _score(ev_env, root / "e2e" / "p256_other", m, cfg, input_depth_at_scoring="native")
     with pytest.raises(S.ScoreRefused, match="normal score"):
         _score(ev_env, root / "e2e" / "p256_sv_native_depth", m, cfg)
+    with pytest.raises(S.ScoreRefused, match="takes only native-depth"):
+        _score(ev_env, root / "e2e" / "p256_sv_native_depth_fresh", m, cfg)
     # the store path equals the legacy path and guards the switch both ways
     sc = S.Scorer(ev_env["evalset"], main="model", model=m, config=cfg,
                   run_tables_sha256=ev_env["sha"], input_depth_at_scoring="native", **KW)
