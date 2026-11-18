@@ -11,16 +11,19 @@
 # Every job is submitted on hold (HOLD=1). Release run-seeds in batches (scontrol release <ids>),
 # so that the live prediction stores (about 55 GB each) fit on /scratch.
 # Env: KIT_ID (default CO8), ARMS (default: all 7 groups), DRY_RUN (default 1).
+# Rescue of a run-seed whose predict shard hit the time limit (the store resumes; a stuck metrics job
+# of the same name must be cancelled first, by the PI): ONLY="<arm dir> ..." SEEDS="<seeds>"
+# SCORE_PRED_TIME=12:00:00 HOLD=0 DRY_RUN=0.
 set -uo pipefail
 O=/project/def-maxwl/mforooz/ONION; K=/project/def-maxwl/mforooz/onion_kit/${KIT_ID:-CO8}
 ARMS="${ARMS:-scrambled views_base two_step_native two_step_fixed fixed_depth average_input impute_x4}"
 [ -f "$K/.kit_stamp" ] || { echo "REFUSED: no kit $K"; exit 3; }
 module load python/3.10.13 >/dev/null 2>&1; unset EBPYTHONPREFIXES ONION_EXCLUDE
-export ONION_STAGE=1 CLUSTER=nibi NICE=300 SEEDS="0 1 2" SCORE_ONLY=1 DRY_RUN="${DRY_RUN:-1}" \
+export ONION_STAGE=1 CLUSTER=nibi NICE=300 SEEDS="${SEEDS:-0 1 2}" SCORE_ONLY=1 DRY_RUN="${DRY_RUN:-1}" \
   SCORE_SAME_VIEW=1 SCORE_PHASES=1 SCORE_SUBDIR=p256_sv SCORE_SHARDS=8 SCORE_PRED_DEVICE=cpu \
-  SCORE_PRED_CPUS=8 SCORE_PRED_MEM=32000 SCORE_INFER_BATCH=8 SCORE_PRED_TIME=06:00:00 \
+  SCORE_PRED_CPUS=8 SCORE_PRED_MEM=32000 SCORE_INFER_BATCH=8 SCORE_PRED_TIME="${SCORE_PRED_TIME:-06:00:00}" \
   SCORE_CPUS=16 SCORE_MEM=64000 SCORE_TIME=06:00:00 REFS_FROM=$O/eval/eic_v1/baselines \
-  KEEP_PRED_STORE=0 PRED_STORE_ROOT=/scratch/mforooz/onion/pred_store HOLD=1
+  KEEP_PRED_STORE=0 PRED_STORE_ROOT=/scratch/mforooz/onion/pred_store HOLD="${HOLD:-1}"
 group() { case "$1" in
   scrambled)       echo "2:abl_scrambled_covariates_scrambled_covariates_convae 3:abl_scrambled_covariates_scrambled_covariates_convattn 4:abl_scrambled_covariates_scrambled_covariates_unet";;
   views_base)      echo "2:abl_views_base_only_convae 3:abl_views_base_only_convattn 4:rung4_views_base_only";;
@@ -33,6 +36,7 @@ group() { case "$1" in
 for g in $ARMS; do
   for spec in $(group "$g"); do
     r=${spec%%:*}; d=${spec#*:}
+    [ -z "${ONLY:-}" ] || case " $ONLY " in *" $d "*) ;; *) continue;; esac
     [ -f "$O/runs_fir/$d/seed0/run.json" ] || { echo "MISSING $O/runs_fir/$d/seed0/run.json"; continue; }
     echo "=== $g: rung $r $d"
     bash $K/slurm/minicandi/submit_arms.sh $K $O/tables/eic_v1 $O/eval/eic_v1/evalset.json $O/runs_fir $r "$d=$O/runs_fir/$d/seed0/run.json"
