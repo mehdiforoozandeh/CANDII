@@ -122,7 +122,10 @@ def test_cli_writes_scores_with_the_baseline_keys(tmp_path):
     ref = S.score(ev_path, tmp_path / "pa", baseline="position_average", config=cfg, **kw)
     out = tmp_path / "eval" / "synth" / "baselines" / "retrieval" / "seed0"
     s = BR.run(t, ev_path, out, config=cfg, **kw)
-    assert set(s) == set(ref)
+    # SP2b (ed661c1c): the legacy model path writes `scorer_settings`; retrieval scores through
+    # `model=`, the position-average baseline builds no model, so that one key differs
+    assert set(s) == set(ref) | {"scorer_settings"}
+    assert s["scorer_settings"]["phase"] == "legacy"
     assert set(s["selection"]) == set(ref["selection"])
     assert s["predictor"] == "retrieval" and s["copy_leak"]["copy_leak_pass"] is None
     assert s["n_targets"] == ref["n_targets"] > 0
