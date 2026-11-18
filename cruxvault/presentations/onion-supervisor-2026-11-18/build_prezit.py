@@ -3,7 +3,7 @@ a = shell.find('<section'); b = shell.rfind('</section>') + len('</section>')
 S = []
 def slide(sec, sub, h2, pts, notes, fig=None, table=None):
     cls = 'slide active' if not S else 'slide'
-    f = f'<img class="figimg" data-fig="{fig}" alt="{sub}">' if fig else ''
+    f = (f'<img class="figimg" src="{fig}" alt="{sub}">' if str(fig).startswith('data:') else f'<img class="figimg" data-fig="{fig}" alt="{sub}">') if fig else ''
     t = table or ''
     li = ''.join(f'<li>{p}</li>' for p in pts)
     S.append(f'<section class="{cls}"><div class="wrap"><div class="kicker"><span class="sec">{sec}</span>{sub}</div><h2>{h2}</h2>{f}{t}<ul class="pts">{li}</ul><aside class="notes"><p>{notes}</p></aside></div></section>')
@@ -49,13 +49,15 @@ slide('3 · eval', '(a) the metric set',
  'The composite is 0.5 imputation, 0.25 correction, 0.25 calibration. A second correction score, the correction-only term, measures how much of the covariate cost the model closes against its own same-view score. The baselines are the position average, a marginal Negative Binomial, depth-only scaling and the read-half floor.',
  fig='check')
 
-slide('3 · eval', '(b) the variance decomposition',
- 'Peeling the layers: read sampling dominates; the replicate and cell-type layers are small',
- ['<b>Did:</b> a ladder of pair values: two read halves, two biological replicates, two cell types; each rung is the extra variance over the rung below.',
-  '<b>Know now:</b> broad marks: sampling rung 0.0463; replicate rung +0.0005; cell-type rung 0.00273 [0.0015, 0.0040]. Narrow marks: cell-type rung 0.00355 [0.0020, 0.0051].',
-  '<b>Know now:</b> a second experiment from another lab and donor adds no variance that these pairs can resolve beyond a biological replicate.'],
- 'An earlier pass at 25 bp gave the same picture: read sampling was 76 to 97 percent of the variance per assay, the replicate layer 0.1 to 6 percent. Pairs are assay-matched, intervals are bootstrap intervals over cell types. Limit: DNase-seq rows are not interpretable yet, because one track with 15,201 reads sets the common depth.',
- fig='ladder')
+import base64
+ONION = 'data:image/png;base64,' + base64.b64encode(open('onion-supervisor-2026-11-18/onion_layers.png','rb').read()).decode()
+slide('3 · eval', '(b) peeling the onion: the variance of each layer',
+ 'The onion, measured: read sampling is the thick outer layer; cell type is the core',
+ ['<b>At 25 bp:</b> of the variance between two cell types, read sampling is 93% (broad marks) and 86% (narrow marks); the biological-replicate layer is 1.2% and 1.8%; the cell-type layer is 6% and 12%.',
+  '<b>The core grows with the scale:</b> the cell-type layer is 3 to 4% at fine scale and 77% (broad) and 84% (narrow) at the broad scale.',
+  '<b>Know now:</b> most of what a 25 bp count shows is sampling noise; the biology that we want lives at larger scales. A second experiment from another lab and donor adds nothing that these pairs can resolve beyond a replicate.'],
+ 'How it is measured: a ladder of pairs. Two read halves of one track differ by read sampling only. Two biological replicates add the replicate layer. Two cell types add the cell-type layer. Each layer is the extra variance over the layer below, with both sides of a pair corrected. Shares are normalized to add to 100 percent. The cell-type layer is 0.00273, interval 0.0015 to 0.0040, for broad marks and 0.00355, interval 0.0020 to 0.0051, for narrow marks. Limits: the library and lane layers are not built yet; DNase-seq is not interpretable yet because one track with 15,201 reads sets the common depth; at the peak scale the broad-mark value is about zero.',
+ fig=ONION)
 
 slide('3 · eval', '(c) the resolution question',
  'Almost all variance below the 25 bp bin is read-sampling noise',
