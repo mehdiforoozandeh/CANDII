@@ -35,7 +35,8 @@ Decides the DNA tower, the embedding source and the fusion point of the settled 
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+**1 children** · open 1, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
 
+- `q74` _(Q)_ [[q74_does_the_flashzoi_dna_embedding_help_min|Does the Flashzoi DNA embedding help miniCANDI when it is judged only on Borzoi test fold 3, where Flashzoi saw no sequence in training?]] — *open*
 - `f94` finding (weak) [[f94_null_on_two_models_one_model_beyond_the_|Null on two models, one model beyond the range, two confounded arms, one arm…]]
 <!-- crux:ledger:end -->

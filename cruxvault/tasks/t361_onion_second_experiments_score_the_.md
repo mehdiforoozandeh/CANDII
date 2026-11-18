@@ -39,3 +39,7 @@ _(none yet)_
 _(experiments only: what this run showed, in prose. The structured fact is
 `hypothesis_refs` in the frontmatter; this is the narrative beside it, and the
 engine never parses it.)_
+
+## Scores on Nibi that are not in the vault (2026-11-18)
+
+The 5 baseline scorings of the second-experiment add-on are done (Nibi jobs 27664415, 27664417, 27664418, 27664419, 27664422; folder ONION/CO-D2). Copy the score tables into results/closeout_D2 and record the cross-lab baseline values on the lab-and-donor question.

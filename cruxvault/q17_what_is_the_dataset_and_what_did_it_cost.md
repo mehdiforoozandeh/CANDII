@@ -35,7 +35,7 @@ Defines the data on which every miniCANDI result of the onion run is measured, a
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**0 children** · open 0, leaning 0, settled 0, parked 0 · 6 finding(s) on this question
+**0 children** · open 0, leaning 0, settled 0, parked 0 · 8 finding(s) on this question
 
 - `f48` finding (moderate) [[f48_the_frozen_dataset_eic_v1_as_of_2026_11_|The frozen dataset eic_v1 (as-of 2026-11-13 14:32:03 UTC; tables_sha256…]]
 - `f49` finding (moderate) [[f49_building_from_fastq_with_the_standard_en|Building from FASTQ with the standard ENCODE pipelines hit four…]]
@@ -43,4 +43,6 @@ _(optional: the pre-registered rules — endpoints, thresholds, scope — locked
 - `f74` finding (moderate) [[f74_counted_with_two_loaders_the_builder_s_s|Counted with two loaders (the builder's script and the scorer's own) and…]]
 - `f121` finding (moderate) [[f121_read_from_the_build_report_and_the_check|Read from the build report and the check logs of the version; no model has…]]
 - `f122` finding (moderate) [[f122_coverage_is_read_from_the_collect_output|Coverage is read from the collect output and the store state from the…]]
+- `f129` finding (moderate) [[f129_read_from_the_sacct_tally_in_the_notepad|Read from the sacct tally in the notepad with its arithmetic; the last 30…]]
+- `f130` finding (moderate) [[f130_the_number_is_from_the_run_log_of_2026_1|The number is from the run log of 2026-11-17; the comparison files are on…]]
 <!-- crux:ledger:end -->

@@ -98,6 +98,7 @@ Root: [[candii]]
     - ◐ `q51` [Q] [[q51_does_two_step_correction_through_a_base_|**Does two-step correction through a base covariate set help miniCANDI, with native or fixed base depth?**]] — *leaning* · moderate
       - ○ `h42` [H] [[h42_on_all_256_regions_neither_two_step_arm_|On all 256 regions, neither two-step arm (native or fixed base depth) raises the composite of any of the three models by twice the seed range while keeping every goal term within twice the range]] — *open*
     - ◐ `q52` [Q] [[q52_do_the_dna_source_and_the_way_dna_featur|**Do the DNA source and the way DNA features join the count features matter for miniCANDI?**]] — *leaning* · weak
+      - ○ `q74` [Q] [[q74_does_the_flashzoi_dna_embedding_help_min|**Does the Flashzoi DNA embedding help miniCANDI when it is judged only on Borzoi test fold 3, where Flashzoi saw no sequence in training?**]] — *open*
     - ◐ `q53` [Q] [[q53_does_the_form_of_the_covariate_embedding|**Does the form of the covariate embedding (numeric only, per-value numeric, dropout) matter for miniCANDI?**]] — *leaning* · weak
     - ◐ `q54` [Q] [[q54_does_another_loss_poisson_mean_nb_crps_e|**Does another loss (Poisson mean, NB CRPS, equal bin weight, imputation weight 4) help one of the three goals of miniCANDI?**]] — *leaning* · moderate
     - ◐ `q55` [Q] [[q55_does_a_count_transform_on_the_input_beat|**Does a count transform on the input beat the depth offset in miniCANDI?**]] — *leaning* · moderate
@@ -117,14 +118,14 @@ Root: [[candii]]
   - ○ `q43` [Q] [[q43_does_the_gain_of_scrambled_covariates_in|**Does the gain of scrambled covariates in gap closed at rung 4 come from the 84 headline pairs with a duplicate-keeping side, where source and target can share DNA fragments?**]] — *open*
   - ● `q44` [Q] [[q44_does_training_the_u_net_on_the_counterfa|**Does training the U-Net on the counterfactual processing views of EIC (depth thinning, single-end, read crop, no duplicate removal, no MAPQ filter) raise the three goal terms over training on the base view alone, and for which view type and which evaluation pairs?**]] — *settled* · strong
     - ○ `q45` [Q] [[q45_why_does_adding_the_no_duplicate_removal|**Why does adding the no-duplicate-removal and no-MAPQ-filter views to training lower gap closed on the never-trained pair that combines both (0.08 against 1.77 for base only, half-read floor scale)?**]] — *open*
-- ◐ `q27` [Q] [[q27_are_the_onion_run_s_estimators_scorers_a|**Are the onion run's estimators, scorers and training pipeline correct, fast and reproducible on the clusters?**]] — *leaning* · moderate
+- ● `q27` [Q] [[q27_are_the_onion_run_s_estimators_scorers_a|**Are the onion run's estimators, scorers and training pipeline correct, fast and reproducible on the clusters?**]] — *settled* · strong
 - ● `q28` [Q] [[q28_did_flashzoi_train_on_eic_blind_tracks_o|**Did Flashzoi train on EIC blind tracks or on the genomic loci of the blind scoring?**]] — *settled* · strong
 - ○ `q72` [Q] [[q72_which_architecture_and_which_data_versio|**Which architecture and which data version should the scaled miniCANDI use, given that the conv autoencoder, conv + attention and the U-Net tie on the composite?**]] — *open*
 - ○ `q73` [Q] [[q73_how_does_the_final_minicandi_score_on_th|**How does the final miniCANDI score on the 51 EIC blind tracks, against the published EIC board and the baselines, once the blind rows are built?**]] — *open*
 
 ## Dashboard
 
-- **Questions** (73): open 24 · leaning 40 · settled 9 · parked 0
+- **Questions** (74): open 25 · leaning 39 · settled 10 · parked 0
 - **Hypotheses** (42): open 12 · leaning 18 · settled 6 · parked 6
-- **Confidence**: weak 23 · moderate 35 · strong 15
-- **Findings**: 125
+- **Confidence**: weak 23 · moderate 34 · strong 16
+- **Findings**: 128
