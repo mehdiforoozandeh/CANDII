@@ -99,6 +99,8 @@ def scores_digest(path, root) -> str:
         s.pop(k, None)
     s.pop("scorer_version", None)   # SF0 (Amendment 8): the one key added after the pinned base
     s.pop("scorer_settings", None)  # SP2b: written on the legacy model path since 2026-11-14
+    s.pop("signal_pileup", None)    # E2 (merge d770f063): the pileup form, added after the pin
+    s.pop("signal_box_dependence", None)   # E2 review: the box_d bin dependence (None for inbin)
     from onion_eval import score as S
     s = S.drop_e5_keys(s)            # E5: additive keys (pit per stratum, robust ratio, label)
     text = json.dumps(s, indent=1, sort_keys=True, allow_nan=False)
