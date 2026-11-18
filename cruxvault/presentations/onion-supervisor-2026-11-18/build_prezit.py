@@ -41,6 +41,15 @@ slide('2 · objectives', 'one objective, three scores',
  'Correction means: given covariates C of the input and C-prime of the wanted output, predict the same track as if it was measured under C-prime. Uncertainty is aleatoric: the model predicts a distribution per bin, not a point value.',
  fig='objective')
 
+slide('2 · objectives', 'the three metrics',
+ 'One metric per goal, each from 0 (a simple reference) to 1 (the best that the data allows)',
+ ['<b>Composite</b> = 0.5 imputation + 0.25 correction + 0.25 calibration, each clipped to 0 to 1. Position average: 0.20. Our base models: 0.49 to 0.53.'],
+ 'Read each row as: what is zero, what is one. Imputation: E is the error on the cell-type-specific part of a hidden track, V is the variance of that part, N is the noise floor from two read halves. Zero means the prediction explains none of the cell-type-specific signal; one means it is as close to the truth as a second half of the same reads. Correction: c is the continuous ranked probability score, an error of a whole predicted distribution. Zero means no better than scaling the input by the depth ratio; one means the error of the true sampling distribution. It is scored on 18 pairs of views never seen in training. Calibration: PIT is the probability integral transform; for a calibrated model it is uniform. Zero means no better than one fixed Negative Binomial per assay; one means perfectly calibrated. A value can go below zero; it is clipped only inside the composite.',
+ table=tbl(['Metric', 'Formula', '0 means', '1 means', 'Position average', 'Our base models'], [
+  ['<b>Imputation</b><br>variance recovered', '1 &minus; (E &minus; N) / (V &minus; N)', 'explains none of the cell-type-specific signal (E = V)', 'as good as a second read half of the same track (E = N)', '0.12', '0.38 to 0.43'],
+  ['<b>Correction</b><br>gap closed', '(c<sub>depth</sub> &minus; c<sub>model</sub>) / (c<sub>depth</sub> &minus; c<sub>oracle</sub>)', 'no better than scaling the input by the depth ratio', 'the error of the true sampling distribution of the target', '0.38', '0.50 to 0.71'],
+  ['<b>Calibration</b><br>of the predicted distribution', '1 &minus; PIT gap<sub>model</sub> / PIT gap<sub>marginal</sub>', 'no better than one fixed Negative Binomial per assay', 'the predicted probabilities are exactly uniform', '0.17', '0.61 to 0.65']]))
+
 slide('3 · eval', '(a) the metric set',
  'A metric set with baselines and a selection rule fixed before any run',
  ['<b>Did:</b> one lead term per goal on a scale from a simple reference (0) to an ideal (1), a composite, training-free baselines, and a rule: adopt an arm only beyond twice the seed range.',
