@@ -134,3 +134,30 @@ def test_arm_list_matches_the_submit_script():
     have = {A.arm_of(g, m) for g in A.GROUPS for m in A.MODELS}
     assert have == want and len(have) == 21
     assert sum(A.planned(g, m) for g in A.GROUPS for m in A.MODELS) == 62
+
+
+def test_decided_with_one_arm_incomplete():
+    t = full({A.arm_of("views_base", m): {"correction_only": (0.4, 0.02)} for m in ("convae", "convattn")})
+    del t["rung4_views_base_only"]
+    r = A.apply_rules(t, q_all())[0]["2.2"]
+    assert r["decided"] and r["code"] == "all_views_strong"
+    assert "U-Net (0 of 3 seeds)" in r["verdict"] and "cannot change this verdict" in r["verdict"]
+    assert r["rows"][23]["status"] == "settled (rule 2.2, 256 regions)"
+
+
+def test_verdict_fixed_confidence_open():
+    t = full({"abl_scrambled_covariates_scrambled_covariates_convae": {"correction_only": (0.4, 0.02)},
+              "abl_scrambled_covariates_scrambled_covariates_convattn": {"correction_only": (0.47, 0.02)}})
+    t["abl_scrambled_covariates_scrambled_covariates_unet"]["n_seeds"] = "2"
+    r = A.apply_rules(t, q_all())[0]["2.1"]
+    assert r["decided"] and r["branch"] == "uses"
+    assert r["confidence"] == "at least moderate, final level waits for the U-Net"
+    assert "settled, at least moderate" in r["rows"][8]["status"]
+
+
+def test_open_arm_can_still_flip_the_branch():
+    t = full({A.arm_of("views_base", "convae"): {"correction_only": (0.4, 0.02)}})   # conv + attention within
+    del t["rung4_views_base_only"]
+    r = A.apply_rules(t, q_all())[0]["2.2"]
+    assert not r["decided"] and "U-Net (0 of 3 seeds)" in r["verdict"]
+    assert all("status" not in v for v in r["rows"].values())

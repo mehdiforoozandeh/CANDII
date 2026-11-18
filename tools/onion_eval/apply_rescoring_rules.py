@@ -212,15 +212,119 @@ def count_word(n):
 
 
 # ------------------------------------------------------------------------------------------- rules
+# Each rule is evaluated as a function of a few variables (a class level of a cell, or a qualify
+# status). A variable whose arm is complete is fixed; an open one takes every value of its domain.
+# The rule is decided when every assignment gives the same branch; the confidence clause may stay
+# open ("at least <level>, final level waits for <model>"). Otherwise it is not decided.
+import itertools
+
+LEVELS = ("d2", "d1", "w", "u1", "u2")          # down 2x, down beyond, within, up beyond, up 2x
+QSTAT = ("qualifies", "fails")
+CONF_ORDER = ("moderate", "strong")
+
+
+def lvl(c):
+    if not c["complete"]:
+        return None
+    if c["cls"] == "within":
+        return "w"
+    return ("d" if c["d"] < 0 else "u") + ("2" if c["cls"] == "2x" else "1")
+
+
+def _is_down(v):
+    return v in ("d1", "d2")
+
+
+def _vars(rid, C, Q, qr):
+    """{name: (value or None, domain, model, group)} of the variables of a rule."""
+    V = {}
+    def cellvar(name, g, m, k, dom=LEVELS):
+        V[name] = (lvl(C[(g, m, k)]), dom, m, g)
+    def qvar(name, rung, switch, g, m):
+        ln = Q.get((rung, switch))
+        val = ln["status"] if ln and ln["status"] in QSTAT else None
+        V[name] = (val, QSTAT, m, g)
+    if rid == "2.1":
+        for m in MODELS:
+            cellvar(m, "scrambled", m, "correction_only")
+    elif rid == "2.2":
+        for m in MODELS:
+            cellvar("co_" + m, "views_base", m, "correction_only")
+            cellvar("comp_" + m, "views_base", m, "composite_v3")
+    elif rid == "2.3":
+        for g in ("two_step_native", "two_step_fixed"):
+            for m in MODELS:
+                cs = [C[(g, m, k)] for k in ("composite_v3", "imputation_raw", "correction_v3_raw", "uncertainty_raw")]
+                val = None
+                if all(c["complete"] for c in cs):
+                    val = up(cs[0], "2x") and not any(down(c, "2x") for c in cs[1:])
+                V[f"{g}_{m}"] = (val, (True, False), m, g)
+    elif rid == "2.4":
+        cellvar("ucor", "fixed_depth", "unet", "correction_v3_raw")
+        cellvar("uimp", "fixed_depth", "unet", "imputation_raw")
+        qvar("qca", "rung3", "fixed_depth", "fixed_depth", "convattn")
+    elif rid == "2.5":
+        qvar("qun", "rung4", "average_input", "average_input", "unet")
+    elif rid == "2.6":
+        qvar("qca", "rung3", "impute_x4", "impute_x4", "convattn")
+    return V
+
+
+def _outcome(rid, a):
+    """(branch, confidence or None) of a full assignment."""
+    if rid == "2.1":
+        dn = sum(_is_down(a[m]) for m in MODELS)
+        dn2 = sum(a[m] == "d2" for m in MODELS)
+        return ("uses", "strong" if dn2 >= 2 else "moderate") if dn >= 2 else ("weak", None)
+    if rid == "2.2":
+        dn = sum(_is_down(a["co_" + m]) for m in MODELS)
+        dn2 = sum(a["co_" + m] == "d2" for m in MODELS)
+        wi = sum(a["co_" + m] == "w" for m in MODELS)
+        if dn >= 2:
+            return ("all_views", "strong" if dn2 >= 2 else "moderate")
+        if wi >= 2 and not any(_is_down(a["comp_" + m]) for m in MODELS):
+            return ("no_benefit", None)
+        return ("provisional", None)
+    if rid == "2.3":
+        return ("enters" if any(v for k, v in a.items()) else "off", None)
+    if rid == "2.4":
+        u = ("tradeoff" if a["ucor"] in ("u1", "u2") and _is_down(a["uimp"]) else
+             "not_held" if a["ucor"] == "w" else "other")
+        return ((u, a["qca"]), None)
+    if rid == "2.5":
+        return (a["qun"], None)
+    if rid == "2.6":
+        return (a["qca"], None)
+
+
+def evaluate(rid, V):
+    """(decided, branch, confidence text, open models of the confidence clause)."""
+    names_ = list(V)
+    doms = [[V[n][0]] if V[n][0] is not None else list(V[n][1]) for n in names_]
+    outs = {_outcome(rid, dict(zip(names_, vals))) for vals in itertools.product(*doms)}
+    branches = {o[0] for o in outs}
+    if len(branches) != 1:
+        return False, None, None, []
+    confs = {o[1] for o in outs}
+    if len(confs) == 1:
+        return True, branches.pop(), confs.pop(), []
+    low = min(confs, key=CONF_ORDER.index)
+    open_models = sorted({V[n][2] for n in names_ if V[n][0] is None}, key=MODELS.index)
+    return True, branches.pop(), f"at least {low}, final level waits for {names(open_models)}", open_models
+
+
+def _conf_word(conf):
+    return conf.split(",")[0] if conf else conf
+
+
 def apply_rules(table, qualify_lines, p16=None, qualify_ran=True):
-    """{rule: result}. A result: title, groups, decided, waiting (list of text), verdict, code,
-    lines (sentences), rows ({row: {status, confidence, evidence, short_status, short_conf}}),
-    cells (all arm-model-key cells of its groups), figure_key."""
+    """{rule: result}. A result: title, groups, decided, waiting (list of text), pending (arms still
+    running that cannot change a decided verdict), verdict, code, lines, rows, cells, figure_key."""
     C = {(g, m, k): cell(table, g, m, k, p16) for g in GROUPS for m in MODELS for k in KEYS}
     Q = {(ln["rung"], ln["switch"]): ln for ln in qualify_lines}
     out = {}
     for rid, (title, groups, rows, fkey) in RULES.items():
-        waiting = []
+        incomplete = []
         for g in groups:
             miss = []
             for m in MODELS:
@@ -230,36 +334,44 @@ def apply_rules(table, qualify_lines, p16=None, qualify_ran=True):
                 elif not all(c["complete"] for c in cs):
                     miss.append((m, "no value for " + ", ".join(METRIC[c["key"]] for c in cs if not c["complete"])))
             if len(miss) == len(MODELS) and len({x for _, x in miss}) == 1:
-                waiting.append(f"{GROUPS[g][0]} on all three models ({miss[0][1]} each)")
+                incomplete.append(f"{GROUPS[g][0]} on all three models ({miss[0][1]} each)")
             elif miss:
                 parts = [f"the {MODEL[m]} ({x})" for m, x in miss]
-                waiting.append(f"{GROUPS[g][0]} on " + (parts[0] if len(parts) == 1 else
-                                                        ", ".join(parts[:-1]) + " and " + parts[-1]))
+                incomplete.append(f"{GROUPS[g][0]} on " + (parts[0] if len(parts) == 1 else
+                                                           ", ".join(parts[:-1]) + " and " + parts[-1]))
+        V = _vars(rid, C, Q, qualify_ran)
+        decided, branch, conf, conf_open = evaluate(rid, V)
         res = dict(rule=rid, title=title, groups=list(groups), design_rows=list(rows), figure_key=fkey,
-                   decided=not waiting, waiting=waiting, code="not_decided", verdict="", lines=[], rows={},
-                   qualify={})
-        res["cells"] = [C[(g, m, k)] for g in groups for m in MODELS for k in KEYS]
+                   decided=decided, waiting=[], pending=[], code="not_decided", verdict="", lines=[], rows={},
+                   qualify={}, branch=branch, confidence=conf,
+                   cells=[C[(g, m, k)] for g in groups for m in MODELS for k in KEYS])
+        for name, (val, dom, m, g) in V.items():
+            if dom is QSTAT:
+                rung = "rung3" if m == "convattn" else "rung4"
+                sw = {"fixed_depth": "fixed_depth", "average_input": "average_input", "impute_x4": "impute_x4"}[g]
+                ln = Q.get((rung, sw))
+                res["qualify"][f"{rung} {sw}"] = ln["status"] if ln else ("not run" if not qualify_ran else "absent")
+        if decided:
+            res["pending"] = incomplete
+        else:
+            res["waiting"] = list(incomplete)
+            for k, v in res["qualify"].items():
+                if v in ("not run", "absent"):
+                    res["waiting"].append(f"the `{k}` line of mix_arms.py qualify "
+                                          f"({'qualify did not run' if v == 'not run' else 'line absent'})")
+                elif v == "no_score" and not incomplete:
+                    res["waiting"].append(f"the `{k}` line of mix_arms.py qualify (no 3-seed score)")
         globals()["_rule_" + rid.replace(".", "")](res, C, Q, qualify_ran)
-        if res["waiting"]:
-            res["decided"] = False
+        if not decided:
             res["code"] = "not_decided"
             res["verdict"] = "Not decided: it waits for " + "; ".join(res["waiting"]) + "."
+        elif res["pending"]:
+            res["pending_text"] = ("Still running: " + "; ".join(res["pending"]) + ". "
+                                   + ("It cannot" if len(res["pending"]) == 1 else "They cannot")
+                                   + " change this verdict.")
+            res["verdict"] += " " + res["pending_text"]
         out[rid] = res
     return out, C
-
-
-def _qline(res, Q, rung, switch, qualify_ran):
-    ln = Q.get((rung, switch))
-    res["qualify"][f"{rung} {switch}"] = ln["status"] if ln else ("not run" if not qualify_ran else "absent")
-    if ln is None:
-        res["waiting"].append(f"the `{rung} {switch}` line of mix_arms.py qualify "
-                              f"({'qualify did not run' if not qualify_ran else 'line absent'})")
-        return None
-    if ln["status"] == "no_score":
-        if not res["waiting"]:
-            res["waiting"].append(f"the `{rung} {switch}` line of mix_arms.py qualify (no 3-seed score)")
-        return None
-    return ln["status"]
 
 
 def _row_evidence(res, C, keys):
@@ -272,6 +384,10 @@ def _row_evidence(res, C, keys):
     return ". ".join(parts)
 
 
+def _known(cs, test):
+    return [c["model"] for c in cs if c["complete"] and test(c)]
+
+
 def _rule_21(res, C, Q, qr):
     cs = [C[("scrambled", m, "correction_only")] for m in MODELS]
     cr = [C[("scrambled", m, "correction_v3_raw")] for m in MODELS]
@@ -281,25 +397,27 @@ def _rule_21(res, C, Q, qr):
     ev = _row_evidence(res, C, ("correction_only", "correction_v3_raw"))
     base_status = ('value settled by PI ruling; the field set is provisional (run 2.8); '
                    '"the models use covariates to correct" is ')
-    if res["waiting"]:
+    if not res["decided"]:
         res["rows"][8] = dict(evidence=ev, wait=True)
         return
-    dn = [c["model"] for c in cs if down(c)]
-    dn2 = [c["model"] for c in cs if down(c, "2x")]
-    crd = [c["model"] for c in cr if down(c)]
+    dn, dn2 = _known(cs, down), _known(cs, lambda c: down(c, "2x"))
+    crd = _known(cr, down)
     crd16 = [c["model"] for c in cr if c.get("cls16") in ("beyond", "2x") and (c["d16"] or 0) < 0]
+    cr_open = [c["model"] for c in cr if not c["complete"]]
     rec = (f" Recorded separately: the correction on crop pairs is lower beyond the seed range on {names(crd)}"
-           f" (on the 16 regions: {names(crd16)}).")
-    if len(dn) >= 2:
-        conf = "strong" if len(dn2) >= 2 else "moderate"
-        res["code"] = "uses_covariates_" + conf
+           + (f" of the finished models ({names(cr_open)} not finished)" if cr_open else "")
+           + f" (on the 16 regions: {names(crd16)}).")
+    conf = res["confidence"]
+    if res["branch"] == "uses":
+        cw = _conf_word(conf)
+        res["code"] = "uses_covariates_" + (conf if " " not in conf else "at_least_" + cw.split()[-1])
         res["verdict"] = (f"The models use covariates for same-view correction (settled, {conf}). Scrambled "
-                          f"covariates lower the correction-only term beyond the seed range on {of_three(len(dn))}, "
-                          f"and beyond twice the range on {count_word(len(dn2))}." + rec)
+                          f"covariates lower the correction-only term beyond the seed range on {names(dn)}, "
+                          f"and beyond twice the range on {names(dn2)}." + rec)
         res["rows"][8] = dict(evidence=ev, status=base_status + f"settled, {conf} (rule 2.1, 256 regions)",
                               confidence=f"{conf} (use of covariates for correction, 256 regions); weak (field set)",
                               short_status="value by PI ruling; use for correction settled",
-                              short_conf=f"{conf} (use, 256 regions); weak (field set)")
+                              short_conf=f"{cw} (use, 256 regions); weak (field set)")
     else:
         res["code"] = "weak"
         res["verdict"] = (f"The claim that the models use covariates for correction becomes weak: the "
@@ -318,33 +436,32 @@ def _rule_22(res, C, Q, qr):
                         "; ".join(ctext(c) for c in cs) + ".")
     res["lines"].append("Composite: " + "; ".join(ctext(c) for c in cc) + ".")
     ev = _row_evidence(res, C, ("correction_only", "composite_v3"))
-    if res["waiting"]:
+    if not res["decided"]:
         res["rows"][23] = dict(evidence=ev, wait=True)
         return
-    dn = [c["model"] for c in cs if down(c)]
-    dn2 = [c["model"] for c in cs if down(c, "2x")]
-    wi = [c["model"] for c in cs if c["cls"] == "within"]
-    cdn = [c["model"] for c in cc if down(c)]
-    if len(dn) >= 2:
-        conf = "strong" if len(dn2) >= 2 else "moderate"
-        res["code"] = "all_views_" + conf
-        res["verdict"] = (f"All counterfactual views stay in training (settled, {conf}). Base view only lowers the correction-only term "
-                          f"beyond the seed range on {of_three(len(dn))} and beyond twice the "
-                          f"range on {count_word(len(dn2))}.")
+    dn, dn2 = _known(cs, down), _known(cs, lambda c: down(c, "2x"))
+    wi = _known(cs, lambda c: c["cls"] == "within")
+    conf = res["confidence"]
+    if res["branch"] == "all_views":
+        cw = _conf_word(conf)
+        res["code"] = "all_views_" + (conf if " " not in conf else "at_least_" + cw.split()[-1])
+        res["verdict"] = (f"All counterfactual views stay in training (settled, {conf}). Base view only lowers "
+                          f"the correction-only term beyond the seed range on {names(dn)} and beyond twice the "
+                          f"range on {names(dn2)}.")
         res["rows"][23] = dict(evidence=ev, status="settled (rule 2.2, 256 regions)",
                                confidence=f"{conf} (correction-only term on 256 regions)",
-                               short_status="settled (256 regions)", short_conf=f"{conf} (256 regions)")
-    elif len(wi) >= 2 and not cdn:
+                               short_status="settled (256 regions)", short_conf=f"{cw} (256 regions)")
+    elif res["branch"] == "no_benefit":
         res["code"] = "no_benefit_pi_decides"
         res["verdict"] = ("The views show no benefit on 256 regions: the correction-only term is within the "
-                          f"seed range on {count_word(len(wi))} models and no composite is lower beyond the range. "
+                          f"seed range on {names(wi)} and no composite is lower beyond the range. "
                           "Base view only is the simpler arm; the PI decides.")
         res["rows"][23] = dict(evidence=ev, status="provisional: no benefit on 256 regions; the PI decides (rule 2.2)",
                                confidence="moderate (null, 256 regions)", short_status="the PI decides",
                                short_conf="moderate (null)")
     else:
         res["code"] = "all_views_provisional"
-        res["verdict"] = ("All views stay, provisional, weak: the outcome meets neither case of the rule.")
+        res["verdict"] = "All views stay, provisional, weak: the outcome meets neither case of the rule."
         res["rows"][23] = dict(evidence=ev, status="provisional (rule 2.2: all views stay)", confidence="weak",
                                short_status="provisional", short_conf="weak")
 
@@ -358,20 +475,22 @@ def _rule_23(res, C, Q, qr):
                         "; calibration " + ctext(uf[1], False) + ".")
     ev = _row_evidence(res, C, ("composite_v3",)) + ". U-Net fixed base depth: correction on crop pairs " + \
         ctext(uf[0], False) + "; calibration " + ctext(uf[1], False)
-    if res["waiting"]:
+    if not res["decided"]:
         res["rows"][24] = dict(evidence=ev, wait=True)
         return
     enters = []
     for g in res["groups"]:
         for m in MODELS:
-            comp = C[(g, m, "composite_v3")]
-            worse = [k for k in ("imputation_raw", "correction_v3_raw", "uncertainty_raw") if down(C[(g, m, k)], "2x")]
-            if up(comp, "2x") and not worse:
+            cs = [C[(g, m, k)] for k in ("composite_v3", "imputation_raw", "correction_v3_raw", "uncertainty_raw")]
+            if all(c["complete"] for c in cs) and up(cs[0], "2x") and not any(down(c, "2x") for c in cs[1:]):
                 enters.append((g, m))
-    trade = up(uf[0])
-    tr = (" The U-Net trade-off is recorded: with a fixed base depth, correction on crop pairs is up beyond the "
-          f"seed range ({num(uf[0]['d'])}) and calibration moves {num(uf[1]['d'])}; off stays.") if trade else ""
-    if not enters:
+    tr = ""
+    if up(uf[0]):
+        tr = (" The U-Net trade-off is recorded: with a fixed base depth, correction on crop pairs is up beyond the "
+              f"seed range ({num(uf[0]['d'])}) and calibration moves {num(uf[1]['d'])}; off stays.")
+    elif not uf[0]["complete"]:
+        tr = " The U-Net trade-off check (fixed base depth) waits for its arm."
+    if res["branch"] == "off":
         res["code"] = "off_settled"
         res["verdict"] = ("Two-step routing stays off (settled). No arm raises the composite by more than twice "
                           "the seed range with no goal lower by twice its range." + tr)
@@ -380,9 +499,11 @@ def _rule_23(res, C, Q, qr):
     else:
         who = "; ".join(f"{GROUPS[g][0]} on the {MODEL[m]}" for g, m in enters)
         res["code"] = "enters_pool_pi_decides"
-        res["verdict"] = (f"Two-step routing qualifies for the mix-and-match pool ({who}): the composite rises by "
-                          f"more than twice the seed range with no goal lower by twice its range. The PI decides "
-                          f"(a new arm, about 120 to 250 CPU-hours per model and 3 seeds)." + tr)
+        res["verdict"] = (f"Two-step routing qualifies for the mix-and-match pool ({who}"
+                          + ("; arms still running can add models" if res["pending"] else "")
+                          + "): the composite rises by more than twice the seed range with no goal lower by twice "
+                          "its range. The PI decides (a new arm, about 120 to 250 CPU-hours per model and 3 seeds)."
+                          + tr)
         res["rows"][24] = dict(evidence=ev, status="provisional: two-step qualifies for the pool; the PI decides (rule 2.3)",
                                confidence="moderate", short_status="the PI decides (pool)", short_conf="moderate")
 
@@ -393,31 +514,29 @@ def _rule_24(res, C, Q, qr):
                             + ctext(C[('fixed_depth', m, 'correction_v3_raw')], False) + "; imputation "
                             + ctext(C[('fixed_depth', m, 'imputation_raw')], False) + ".")
     ev = _row_evidence(res, C, ("correction_v3_raw", "imputation_raw"))
-    st = _qline(res, Q, "rung3", "fixed_depth", qr)
-    if res["waiting"]:
+    if not res["decided"]:
         res["rows"][25] = dict(evidence=ev, wait=True)
         return
+    u_code, st = res["branch"]
     ucor, uimp = C[("fixed_depth", "unet", "correction_v3_raw")], C[("fixed_depth", "unet", "imputation_raw")]
-    if up(ucor) and down(uimp):
+    if u_code == "tradeoff":
         u = ("U-Net: the trade-off holds (correction on crop pairs up, imputation down, both beyond the seed "
              "range); the switch stays in the U-Net pool by PI ruling, and the native-depth score of run 2.7 "
              "decides whether it can be deployed.")
-        code = "unet_tradeoff_holds"
-    elif ucor["cls"] == "within":
+    elif u_code == "not_held":
         u = ("U-Net: correction on crop pairs is within the seed range, so the 16-region gain did not hold; "
              "tell the PI, who put the switch in the pool.")
-        code = "unet_gain_not_held"
     else:
         u = ("U-Net: the outcome is outside the two cases of the rule (correction on crop pairs "
              f"{CLS_WORD[ucor['cls']]}, {'up' if ucor['d'] > 0 else 'down'}; imputation {CLS_WORD[uimp['cls']]}); "
              "the PI reads it.")
-        code = "unet_other"
-    ca = ("conv + attention: the qualify line keeps the switch in the conv + attention pool."
+    ca = ("Conv + attention: the qualify line keeps the switch in the conv + attention pool."
           if st == "qualifies" else
-          "conv + attention: the qualify line removes the switch from the conv + attention pool (remove it from "
+          "Conv + attention: the qualify line removes the switch from the conv + attention pool (remove it from "
           "POOL in tools/minicandi/mix_arms.py before the mix-and-match round).")
-    res["code"] = code + ("+convattn_keeps" if st == "qualifies" else "+convattn_removed")
-    res["verdict"] = (u + " " + ca[0].upper() + ca[1:] + " The conv autoencoder (2 seeds) is reported only. "
+    res["code"] = {"tradeoff": "unet_tradeoff_holds", "not_held": "unet_gain_not_held", "other": "unet_other"}[u_code] \
+        + ("+convattn_keeps" if st == "qualifies" else "+convattn_removed")
+    res["verdict"] = (u + " " + ca + " The conv autoencoder (2 seeds) is reported only. "
                       "No fixed-depth value enters the recipe from these scores alone.")
     res["rows"][25] = dict(evidence=ev, status="provisional (rule 2.4 applied; run 2.7)",
                            confidence="weak", short_status="provisional (mix round)", short_conf="weak")
@@ -428,15 +547,16 @@ def _rule_25(res, C, Q, qr):
         res["lines"].append(f"{METRIC[k].capitalize()}: " +
                             "; ".join(ctext(C[('average_input', m, k)]) for m in MODELS) + ".")
     ev = _row_evidence(res, C, ("correction_only", "correction_v3_raw"))
-    st = _qline(res, Q, "rung4", "average_input", qr)
-    if res["waiting"]:
+    if not res["decided"]:
         res["rows"][13] = dict(evidence=ev, wait=True)
         return
     ae = C[("average_input", "convae", "correction_only")]
     rec = (" The conv autoencoder correction-only term is up beyond the seed range again (" + num(ae["d"]) +
            "); it is recorded, and the value stays off on the conv models." if up(ae) else
+           " The conv autoencoder check of the correction-only term waits for its arm; the value stays off on the "
+           "conv models." if not ae["complete"] else
            " On the conv models the value stays off (no qualifying term).")
-    if st == "qualifies":
+    if res["branch"] == "qualifies":
         res["code"] = "unet_pool_keeps"
         res["verdict"] = "The average baseline input stays in the U-Net pool (qualify line)." + rec
         res["rows"][13] = dict(evidence=ev, status="provisional (run 2.7; in the U-Net pool by rule 2.5)",
@@ -454,15 +574,15 @@ def _rule_26(res, C, Q, qr):
         res["lines"].append(f"{METRIC[k].capitalize()}: " +
                             "; ".join(ctext(C[('impute_x4', m, k)]) for m in MODELS) + ".")
     ev = _row_evidence(res, C, ("correction_v3_raw", "imputation_raw"))
-    st = _qline(res, Q, "rung3", "impute_x4", qr)
-    if res["waiting"]:
+    if not res["decided"]:
         res["rows"][20] = dict(evidence=ev, wait=True)
         return
     ae = C[("impute_x4", "convae", "correction_v3_raw")]
     rec = (" The cost on the conv autoencoder is confirmed: correction on crop pairs " + num(ae["d"]) +
            " (seed range " + rng(ae["bar"]) + "); weight 4 is not in its pool." if down(ae) else
+           " The conv autoencoder check of the correction on crop pairs waits for its arm." if not ae["complete"] else
            " The conv autoencoder correction on crop pairs is not lower beyond the seed range on 256 regions.")
-    if st == "qualifies":
+    if res["branch"] == "qualifies":
         res["code"] = "convattn_pool_keeps"
         res["verdict"] = ("Imputation weight 4 stays in the conv + attention pool (qualify line). The weights stay "
                           "1 / 1 / 1 unless run 2.7 picks weight 4." + rec)

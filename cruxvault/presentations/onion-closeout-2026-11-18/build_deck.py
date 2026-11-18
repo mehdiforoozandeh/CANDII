@@ -1299,7 +1299,7 @@ for rid in RULE_IDS:
     r = V["rules"][rid]
     put(f"rs.r{rid}.head", dk(VT_[f"rule{rid}.head"]))
     none = all(not c["seeds_ok"] for c in r["cells"])
-    put(f"rs.r{rid}", dk(r["verdict"].split(". ")[0].rstrip(".") + "." if r["decided"] else
+    put(f"rs.r{rid}", dk(r["verdict"].split(". ")[0].rstrip(".") + "." + (" " + r["pending_text"] if r.get("pending_text") else "") if r["decided"] else
                          "Not decided: no arm has finished." if none else
                          "Not decided: it waits for " + "; ".join(r["waiting"]) + "."))
 put("vw.p256", dk(VT_["views"]))
