@@ -16,6 +16,11 @@ build from, or pass that vault as VAULT.
 
 Stdlib only. UTF-8 and "\\n" everywhere, so the build is byte-stable.
 
+VERSION 2 (2026-11-18) also reads results/closeout_E4/ladder_2026-11-18/ (ladder.tsv, ladder.md),
+results/closeout_D2/layers_2026-11-18/layers.tsv, results/closeout_A4/qc_tables_2026-11-18/coverage.txt,
+INSTRUCTIONS/peeling_the_onion/run_state/plan.md (the run-log snapshot; rebuild after each foreman
+snapshot commit) and closeout/PI decisions 2026-11-17.md.
+
 RESCORING HOOK. When the 256-region rescoring of the 7 decisive arms lands, copy the
 arm-summary table (select_rule.py arm-summary --runs <runs_fir> --sub p256_sv) to
 RESCORE_REL below and rebuild. The build then fills the 256-region columns of the
@@ -617,6 +622,135 @@ macros["TabQueue"] = "\n".join(f"{o} & {tex_text(e)} & {tex_text(c)} & {tex_text
                                for o, e, c, h in qrows)
 macros["mixCost"] = num(fnum(grab(rq, r"\| 474 \+ ([\d,]+) \(Nibi\)")), 0)
 macros["mixGate"] = grab(rq, r"\| (\d+) \+ [\d,]+ \(Nibi\)")
+
+# ---- results that landed after version 1 (2026-11-18) ------------------------------------------
+def tsv_rows(rel):
+    lines = load(rel).strip("\n").split("\n")
+    head = lines[0].split("\t")
+    return [dict(zip(head, ln.split("\t"))) for ln in lines[1:]]
+
+
+def gnum(v):
+    """A small pair value in LaTeX: four decimals, or three significant digits times a power of ten."""
+    v = float(v)
+    if abs(v) >= 1e-3:
+        return num(v, 4)
+    m, e = f"{v:.2e}".split("e")
+    m = float(m)
+    s = f"{abs(m):.2f}\\times10^{{{int(e)}}}"
+    return "\\ensuremath{" + ("-" if m < 0 else "") + s + "}"
+
+
+def pct(v, d=1):
+    return num(100 * float(v), d) + "\\%"
+
+
+# replicate ladder: two-sided, assay-matched (results/closeout_E4/ladder_2026-11-18)
+LADR = R + "closeout_E4/ladder_2026-11-18/"
+lad = {(r["assay_class"], r["rung"], r["pair_class"]): r for r in tsv_rows(LADR + "ladder.tsv")
+       if r["stratum"] == "all" and r["band"] == "all"}
+ladmd = load(LADR + "ladder.md")
+macros["ladChainOk"] = grab(ladmd, r"\n.*?: (\d+) of \d+ \(class, stratum, band\) groups telescope exactly")
+macros["ladChainN"] = grab(ladmd, r"\n.*?: \d+ of (\d+) \(class, stratum, band\) groups telescope exactly")
+CLASSES = [("accessibility_dnase", "DNase-seq"), ("broad_histone", "broad marks"), ("narrow_histone", "narrow marks")]
+LAYERS = [("pseudoreplicate", "", "read sampling"), ("isogenic", "", "biological replicate"),
+          ("other_experiment", "experiment;lab;donor", "lab with donor"),
+          ("other_experiment", "experiment;donor", "repeat with donor"),
+          ("other_cell_type", "", "cell type")]
+lrows = []
+for c, cl in CLASSES:
+    for rg, pc, nm in LAYERS:
+        r = lad[(c, rg, pc)]
+        if r["layer_increment"] in ("", "nan"):
+            continue
+        lrows.append(f"{cl} & {nm} & {r['n_pairs']} ({r['n_cells']}) & {gnum(r['layer_increment'])} "
+                     f"[{gnum(r['ci_low'])}, {gnum(r['ci_high'])}] & {pct(r['share'])} ({r['share_units']}) \\\\")
+macros["TabLadder"] = "\n".join(lrows)
+for c, t in (("accessibility_dnase", "Dn"), ("broad_histone", "Br"), ("narrow_histone", "Nr")):
+    for rg, pc, k in (("pseudoreplicate", "", "Samp"), ("isogenic", "", "Rep"), ("other_cell_type", "", "Ct")):
+        macros[f"lad{t}{k}"] = pct(lad[(c, rg, pc)]["share"])
+macros["ladBrLd"] = gnum(lad[("broad_histone", "other_experiment", "experiment;lab;donor")]["layer_increment"])
+macros["ladBrLdSh"] = pct(lad[("broad_histone", "other_experiment", "experiment;lab;donor")]["share"])
+macros["ladDnRepInc"] = gnum(lad[("accessibility_dnase", "isogenic", "")]["layer_increment"])
+macros["ladAtacN"] = lad[("accessibility_atac", "pseudoreplicate", "")]["n_pairs_all"]
+macros["ladAtacC"] = lad[("accessibility_atac", "pseudoreplicate", "")]["n_cells_all"]
+macros["ladBrLabN"] = lad[("broad_histone", "other_experiment", "experiment;lab")]["n_pairs"]
+macros["ladBrLabC"] = lad[("broad_histone", "other_experiment", "experiment;lab")]["n_cells"]
+
+# second-experiment layers, rows pooled by assay class (results/closeout_D2/layers_2026-11-18)
+dl = {(r["assay_or_class"], r["pair_class"]): r for r in tsv_rows(R + "closeout_D2/layers_2026-11-18/layers.tsv")
+      if r["stratum"] == "all" and r["band"] == "all" and r["pooled_by_class"] == "1"
+      and r["rung"] == "other_experiment"}
+for c, t in (("broad_histone", "Br"), ("narrow_histone", "Nr")):
+    for pc, k in (("", "All"), ("experiment;lab;donor", "Ld")):
+        r = dl[(c, pc)]
+        macros[f"dTwo{t}{k}"] = num(float(r["layer_increment"]), 4, sign=True)
+        macros[f"dTwo{t}{k}Lo"] = num(float(r["ci_low"]), 4)
+        macros[f"dTwo{t}{k}Hi"] = num(float(r["ci_high"]), 4)
+        macros[f"dTwo{t}{k}N"] = r["n_pairs"]
+        macros[f"dTwo{t}{k}C"] = r["n_cells"]
+        macros[f"dTwo{t}{k}Tech"] = r["tech_diff_pairs"]
+macros["dTwoSmall"] = str(max(int(r["n_pairs"]) for (c, _), r in dl.items() if c.startswith("accessibility")))
+pid = load(INS + "closeout/PI decisions 2026-11-17.md")
+macros["dTwoDropped"] = grab(pid, r"\| 4 \| The (\d+) unbuilt DNase-seq second-experiment rows")
+macros["dTwoKept"] = grab(pid, r"The add-on stays at (\d+) experiments")
+
+# QC side tables, the 1 bp store, the archive and the scratch (coverage.txt; the run-log snapshot)
+cov = {}
+for ln in load(R + "closeout_A4/qc_tables_2026-11-18/coverage.txt").splitlines():
+    c = ln.split("\t")
+    if len(c) == 3 and "/" in c[2]:
+        cov[c[0]] = [int(x) for x in c[2].split("/")]
+macros["qcRows"] = num(cov["nsc"][1], 0)
+for k, t in (("nsc", "Nsc"), ("frag_len", "Frag"), ("nrf", "Nrf"), ("frip", "Frip")):
+    macros[f"qc{t}"] = num(cov[k][0], 0)
+    macros[f"qc{t}Pct"] = num(100 * cov[k][0] / cov[k][1], 1)
+assert cov["rsc"] == cov["nsc"] and cov["pbc1"] == cov["nrf"] == cov["pbc2"]
+pl = load(INS + "run_state/plan.md")
+q = re.search(r"records whole ([\d,]+) \(= rows\), pr1 ([\d,]+) \(= rows\); row states in the whole pass: "
+              r"([\d,]+) ok, ([\d,]+) no read set, ([\d,]+) refused", pl).groups()
+macros["qcWhole"], macros["qcPrOne"], macros["qcOk"], macros["qcNoRead"], macros["qcRefused"] = \
+    (num(fnum(x), 0) for x in q)
+macros["bpViews"] = grab(pl, r"RECOUNT DONE: \d+ of \d+ tasks COMPLETED \([^)]*\), (\d+) views in CO-A7/res_store")
+macros["bpPts"] = num(fnum(grab(pl, r"independent (\d+) points, store \d+, bins differing 0 -> PASS")), 0)
+macros["bpPtsStore"] = num(fnum(grab(pl, r"independent \d+ points, store (\d+), bins differing 0 -> PASS")), 0)
+macros["bpMeas"] = grab(pl, r"tables were built \(CO-A7/tables/eic_res_v1: (\d+) measurements")
+macros["bpPairs"] = grab(pl, r"tables were built \(CO-A7/tables/eic_res_v1: \d+ measurements, (\d+) pairs")
+grab(pl, r"(1 bp verify \d+ and variance \d+ running)")
+a = re.search(r"(\d+) of (\d+) tars OK \(tar -d, 0 non-empty diff files\), 0 failed, ([\d,]+) GiB, ([\d,]+) entries",
+              pl).groups()
+macros["arcTars"], macros["arcGib"], macros["arcEntries"] = a[0], num(fnum(a[2]), 0), num(fnum(a[3]), 0)
+s1 = re.search(r"Scratch ([\d,]+) -> ([\d,]+) GiB \(soft quota ([\d,]+): still read-only\)", pl).groups()
+s2 = re.search(r"Scratch ([\d,]+) -> ([\d,]+) GiB of ([\d,]+); a write test passed", pl).groups()
+macros["scBefore"], macros["scMid"], macros["scAfter"] = (num(fnum(x), 0) for x in (s1[0], s1[1], s2[1]))
+# rescoring status (run log)
+rsub = re.search(r"- (2026-11-17)T([\d:]+)Z RESCORING SUBMITTED on Nibi.*?: (\d+) run-seeds", pl).groups()
+macros["rsDay"], macros["rsStart"], macros["rsN"] = rsub
+macros["rsHours"] = grab(pl, r"so about ([\d.]+) h for the predict stage")
+macros["rsCap"] = grab(pl, r"raise the cap to (\d+) active run-seeds")
+macros["rsNow"] = grab(pl, r"Rescoring ([\d:]+)Z: \d+ active, \d+ scored")
+macros["rsScored"] = grab(pl, r"Rescoring [\d:]+Z: \d+ active, (\d+) scored")
+macros["rsNowDay"] = grab(pl, r"- (2026-11-1\d)T[\d:]+Z REPLICATE LADDER REPORT")
+rounds = -(-int(macros["rsN"]) // int(macros["rsCap"]))
+macros["rsRounds"] = str(rounds)
+macros["rsTotal"] = num(rounds * float(macros["rsHours"]), 0)
+
+# PI decisions of 2026-11-17: the nine taken, and the two moved to the next session
+drows = []
+body = grab(pid, r"\| # \| Decision \| PI choice \| Consequence \|\n\|[-|]+\|\n(.*?)\n\n")
+for ln in body.splitlines():
+    c = [x.strip() for x in ln.strip().strip("|").split("|")]
+    if len(c) != 4 or not c[0].isdigit():
+        continue
+    k = re.sub(r"\s*\(jobs? [\d to]+\)", "", c[3])
+    k = re.sub(r"Submitted 2026-11-17: layers \d+; baselines [\d, ]+", "Submitted on Nibi; the layers are done", k)
+    k = re.sub(r"\s*\(ready queue entry (\d+), `DESIGN=full`\)", r" (ready queue entry \1)", k)
+    drows.append(f"{c[0]} & {tex_text(c[1])} & {tex_text(c[2])} & {tex_text(k)} \\\\")
+assert len(drows) == 9, len(drows)
+macros["TabDecisions"] = "\n".join(drows)
+macros["nDecisions"] = str(len(drows))
+mv = re.search(r'PI ruling of 2026-11-17: "(scaling is next session[^"]*)"\. On the data version: "([^"]*)"', sd)
+macros["piQuoteScale"], macros["piQuoteData"] = (tex_text(x) for x in mv.groups())
 # =======================================================================================
 
 for name in (*macros, *tables):

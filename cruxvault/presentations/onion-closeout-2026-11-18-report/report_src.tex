@@ -11,7 +11,10 @@
 %%           1.5 (seed-range ratio), 5 Mb (shift control), 4 (loss weight), 1/1/1 weights,
 %%           10% (lambda tolerance), 500 bp tiles, -log10 p >= 2, seed 0, 21 arm folders,
 %%           24 hours, AlphaGenome 2, condition numbers 1 to 6, criterion numbers 1 to 4,
-%%           H3K36me3, eic_v1, eic_v1_2, dates 2026-11-10 to 2026-11-20.
+%%           H3K36me3, eic_v1, eic_v1_2, dates 2026-11-10 to 2026-11-20, 1 bp,
+%%           the estimability rule (5 pairs from 3 cells), decision numbers 1 to 9.
+%% VERSION 2 (2026-11-18): the replicate ladder, the second-experiment layers, the side
+%%           deliverables, the rescoring status and the PI decisions of 2026-11-17.
 %%
 %% RESCORING. One paragraph (between the RESCORING-PARAGRAPH marks) and one table (between
 %% the RESCORING-TABLE marks) wait for the 256-region rescoring of the 7 decisive arms.
@@ -84,9 +87,9 @@
 \toprule
 criterion & state & evidence and gap \\
 \midrule
-\lit{1}. Augmented EIC data with counterfactual views & partial & Built: the rebuilt tables with designed views and read halves, the covariate fill (lab, antibody, donor), and the add-on of second experiments. Not built: the blind tracks (\blindRows{} rows), and the table version with DNase-seq in the correction term. \\
+\lit{1}. Augmented EIC data with counterfactual views & partial & Built: the rebuilt tables with designed views and read halves, the covariate fill (lab, antibody, donor), the add-on of second experiments, the QC side tables and the \lit{1}~bp region store. Not built: the blind tracks (\blindRows{} rows), and the table version with DNase-seq in the correction term. \\
 \lit{2}. Training objective & delivered & One document gives every loss term, weight, mask and default with its code line. Open choices are marked; each names the run that closes it. \\
-\lit{3}. Evaluation, defined and tested & partial & Metrics, selection rule and scorers are defined and pass their tests. The \lit{16}-region screening tier failed its check, so correction terms need \lit{256} regions; that rescoring has not run. \\
+\lit{3}. Evaluation, defined and tested & partial & Metrics, selection rule and scorers are defined and pass their tests, and the replicate ladder ran on the real data. The \lit{16}-region screening tier failed its check, so correction terms need \lit{256} regions; that rescoring runs and has not landed. \\
 \lit{4}. Settled miniCANDI design & partial & A design table with \nDesignRows{} rows gives a value, the evidence and a status for each choice. Many rows are provisional; the choice of architecture is the PI's. \\
 \botrule
 \end{tabular}
@@ -288,7 +291,7 @@ regions & (\lit{1}) interval & (\lit{2}) per assay & (\lit{3}) rule result & (\l
 \centering
 \begin{tikzpicture}
 \begin{groupplot}[group style={group size=2 by 1, horizontal sep=0.6cm, yticklabels at=edge left},
-    width=0.47\linewidth, height=6.4cm, ytick=data, y dir=reverse,
+    width=0.47\linewidth, height=5.6cm, ytick=data, y dir=reverse,
     yticklabels from table={\tblRegion}{label}, yticklabel style={font=\tiny},
     xticklabel style={font=\scriptsize}, xlabel style={font=\footnotesize},
     title style={font=\footnotesize}, enlarge y limits=0.04]
@@ -308,7 +311,7 @@ regions & (\lit{1}) interval & (\lit{2}) per assay & (\lit{3}) rule result & (\l
 \subsection{The \lit{256}-region rescoring of the decisive arms}\label{sec:rescore}
 
 %% RESCORING-PARAGRAPH START (replace this paragraph when the 256-region scores land)
-\cl{\textbf{[Waits for the rescoring.]} Seven decisive arms (\lit{21} arm folders, \rescoreSeeds{} run-seeds) must be scored on all \lit{256} regions before any correction effect of the ablations can settle: the scrambled covariates, base view only, two-step at native and at fixed base depth, fixed input depth, the average-signal input, and imputation weight \lit{4}. The cost is \rescoreCost{} allocated CPU-hours (\nRunsAE{} conv autoencoder run-seeds at \costAE{}, \nRunsAT{} conv + attention at \costAT{}, \nRunsUN{} U-Net at about \costUN{} each). The jobs wait in the Fir queue, which does not run before about \lit{2026-11-20}. Table~\ref{tab:rescore} gives the \lit{16}-region effects and leaves the \lit{256}-region columns empty. The settled-design document states, before any result, the rule that each arm's \lit{256}-region effect will apply.}
+\cl{\textbf{[Waits for the rescoring.]} Seven decisive arms (\lit{21} arm folders, \rescoreSeeds{} run-seeds) must be scored on all \lit{256} regions before any correction effect of the ablations can settle: the scrambled covariates, base view only, two-step at native and at fixed base depth, fixed input depth, the average-signal input, and imputation weight \lit{4}. The cost is \rescoreCost{} allocated CPU-hours (\nRunsAE{} conv autoencoder run-seeds at \costAE{}, \nRunsAT{} conv + attention at \costAT{}, \nRunsUN{} U-Net at about \costUN{} each). \textit{Status:} by PI decision the scoring runs on Nibi, since \rsDay{}, \rsStart{} UTC (run log): \rsN{} run-seeds, \rsCap{} at one time, about \rsHours{}~h per scoring, and \rsScored{} of \rsN{} scored at \rsNow{} UTC on \rsNowDay{}. At this rate the predict stage needs \rsRounds{} rounds, about \rsTotal{}~h, so most scores land after the run ends. Table~\ref{tab:rescore} gives the \lit{16}-region effects and leaves the \lit{256}-region columns empty. The settled-design document states, before any result, the rule that each arm's \lit{256}-region effect will apply.}
 %% RESCORING-PARAGRAPH END
 
 %% RESCORING-TABLE START (the 256-region columns fill themselves from the build hook)
@@ -346,17 +349,34 @@ measure & in-bin pileup (superseded) & box spread (adopted) \\
 
 \subsection{Second experiments, lab and donor}
 
-\cl{A second experiment is another ENCODE experiment of the same cell and assay. The add-on tables append \nSecond{} such rows (\nSecondOther{} from another lab, \nSecondSame{} from the same lab), with \nSecondVal{} validation targets; the leak checks passed with every count at zero. A smoke test compared regional totals after depth matching: \smokeOut{} of \nSecond{} pairs differed by more than five percent, \smokeOtherOut{} of \smokeOtherN{} other-lab pairs against \smokeSameOut{} of \smokeSameN{} same-lab pairs. A different lab therefore often changes the level of a track. The pure lab effect is not estimable: a pair with another lab and the same donor has fewer than \minPairs{} pairs per assay class. Lab and donor changed together are estimable in broad histone marks (\labDonorBroad{} pairs, \labDonorBroadCells{} cells) and narrow marks (\labDonorNarrow{} pairs). The recommendation that waits for the PI is to report lab together with donor. The layers and the model scores of these pairs have not run.}
+\cl{A second experiment is another ENCODE experiment of the same cell and assay. The add-on tables append \nSecond{} such rows (\nSecondOther{} from another lab, \nSecondSame{} from the same lab), with \nSecondVal{} validation targets; the leak checks passed with every count at zero. The PI decided two points on \lit{2026-11-17}. First, lab is reported together with donor as one effect, because a pair with another lab and the same donor comes from only two cells in every assay class. Second, the \dTwoDropped{} unbuilt DNase-seq second-experiment rows are dropped, so the add-on stays at \dTwoKept{} experiments.}
+
+\cl{The variance layers of these pairs ran on the real data (pair value as in the ladder; rows pooled by assay class; \lit{95}\% cluster-bootstrap intervals). Over the biological replicate, all second-experiment pairs of broad histone marks gave \dTwoBrAll{} [\dTwoBrAllLo{}, \dTwoBrAllHi{}] (\dTwoBrAllN{} pairs, \dTwoBrAllC{} cells), and lab with donor gave \dTwoBrLd{} [\dTwoBrLdLo{}, \dTwoBrLdHi{}] (\dTwoBrLdN{} pairs, \dTwoBrLdC{} cells). For narrow histone marks the values were \dTwoNrAll{} [\dTwoNrAllLo{}, \dTwoNrAllHi{}] (\dTwoNrAllN{} pairs, \dTwoNrAllC{} cells) and \dTwoNrLd{} [\dTwoNrLdLo{}, \dTwoNrLdHi{}] (\dTwoNrLdN{} pairs, \dTwoNrLdC{} cells). Every interval includes zero, so these pairs resolve no variance of lab with donor beyond a biological replicate. In \dTwoBrLdTech{} of the \dTwoBrLdN{} broad lab-with-donor pairs the two sides also differ in run type, read length or platform. The accessibility classes have at most \dTwoSmall{} pairs. These pooled rows use other cells than the rung below, so the assay-matched ladder below is the primary value. No model ran on these pairs.}
 
 \subsection{The replicate ladder}
 
-\cl{The replicate ladder extends the variance layers with second experiments. Only a smoke run on one assay (\lit{H3K36me3}, \ladPairs{} pairs) ran. It reproduced the earlier sampling layer (\ladSamp{} against \ladSampT{}). Two defects appeared. The subtraction of the lower rung is one-sided: it subtracts the sampling of one side of a cell-type pair only, and the two-sided form lowered the cell-type rung by \ladOneSided{}\%. The add-up check passed in \ladTele{} of \ladTeleN{} groups, because each rung holds other cells than the rung below. The mixed-model stage needs a noise level per library before it runs. The ladder is therefore not complete.}
+\cl{The replicate ladder splits the pair value $\lit{0.5}\,E[(Y-Y')^{\lit{2}}]$ of two tracks, i.e. the expected squared difference of their log counts at a common depth, into nested layers. Each rung adds one difference to the rung below it: read sampling (two read halves of one library), a biological replicate, a second experiment, and another cell type. The increment of a rung is assay-matched: on each cell and assay with pairs of both rungs, the pair value of the rung minus that of the rung below, then a mean over assays and cells. A rung is estimable with at least \minPairs{} matched pairs from \lit{3} cells. By PI decision of \lit{2026-11-17} the ladder subtracts two-sided, with the check on common cell types, so earlier ladder numbers (the one-sided smoke run on \lit{H3K36me3}) are not comparable. On the units that hold the sampling, replicate and cell-type rungs, the three increments add up exactly to the cell-type pair value in \ladChainOk{} of \ladChainN{} groups.}
+
+\cl{Table~\ref{tab:ladder} gives every estimable rung. Read sampling holds most of the cell-type pair value: \ladBrSamp{} in broad marks, \ladNrSamp{} in narrow marks, and \ladDnSamp{} in DNase-seq, where the cell-type pair value is at the level of read sampling. The biological replicate adds \ladBrRep{} and \ladNrRep{}, and in DNase-seq its increment is negative (\ladDnRepInc{}, share \ladDnRep{}); its interval includes zero. The cell type adds \ladBrCt{}, \ladNrCt{} and \ladDnCt{}. Above the replicate only two rows are estimable: lab with donor in broad marks, which is negative (\ladBrLd{}, \ladBrLdSh{}), and an experiment repeat with another donor in narrow marks; both intervals include zero. Negative increments are kept, not clipped. ATAC-seq has no estimable rung (\ladAtacN{} read-half pairs from \ladAtacC{} cells). Three kinds of rung are not estimable. First, the sequencing and library rungs are empty, because the per-library and per-lane units were never built. Second, no pair in the challenge data holds two donors inside one experiment. Third, the other second-experiment rows have too few matched pairs or cells, for example lab alone in broad marks (\ladBrLabN{} pairs from \ladBrLabC{} cells). The crossed mixed model did not run: it needs a noise level per library first.}
+
+\begin{table}[!htbp]
+\caption{\cl{The replicate ladder, two-sided and assay-matched, all regions and signal bands. Increment over the rung below (pair value of log counts) with its \lit{95}\% cluster-bootstrap interval; share of the cell-type pair value on the same cells and assays (number of those units).}}\label{tab:ladder}
+\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{llccc}
+\toprule
+assay class & rung & pairs (cells) & increment [\lit{95}\% interval] & share (units) \\
+\midrule
+\TabLadder
+\botrule
+\end{tabular}
+\end{table}
 
 \subsection{The settled design}
 
 \cl{Table~\ref{tab:design} condenses the settled-design document. ``Settled'' means that no planned run can change the value or that the PI fixed it; ``provisional'' means that a named run can change it. The design tests gave \testsPassed{} passed, \testsSkipped{} skipped and \testsFailed{} failed. The failure was a configuration-key guard that would stop every run of the covariate-set search; a later commit on the run branch fixed it.}
 
-\cl{The PI ruled that the choice of architecture for scaling and the table version of the final model are decisions of the next session. The settled-design document gives a recommendation for each, as the agent's intent: carry the conv autoencoder and the U-Net into the first scaling step and choose after the mix-and-match round; and build the table version that makes DNase-seq scorable for correction before the final model trains. Every model beats the position average by more than twice its seed range on imputation and calibration. On the \lit{16}-region correction term both convolutional models do too, and the U-Net does not: its margin is \dTwoMarginUN{} against twice its seed range, \dTwoBarUN{}.}
+\cl{Every model beats the position average by more than twice its seed range on imputation and calibration. On the \lit{16}-region correction term both convolutional models do too, and the U-Net does not: its margin is \dTwoMarginUN{} against twice its seed range, \dTwoBarUN{}.}
 
 \begin{table}[!htbp]
 \caption{\cl{The settled miniCANDI design, condensed. Confidence and status are the agent's reading of the evidence, written before the rescoring.}}\label{tab:design}
@@ -392,14 +412,18 @@ QC on input, cell embedding & off, none & not tested & provisional \\
 
 \cl{Several numbers told to the PI during the run were later corrected. The cost of one \lit{256}-region scoring was first quoted as \oldScoreCost{} CPU-hours; the measured cost is \costAE{} to about \costUN{}. The cost of the rescoring rose from \oldCheckCost{} to \rescoreCost{} CPU-hours, the blind build from \blindOldCost{} CPU-hours used to about \blindNewCost{} allocated, and the mix-and-match round fell from \mixOldCost{} to \mixCost{}. The composite changed definition twice; every composite in this report is version~\lit{3}.}
 
+\subsection{Data deliverables of the last night}
+
+\cl{The QC side tables hold read-derived quality metrics per row. The fill wrote \qcWhole{} records for the base pass and \qcPrOne{} for the read halves (\qcOk{} ok, \qcNoRead{} without a read set, \qcRefused{} refused). Over the \qcRows{} training and validation rows, NSC and RSC are filled for \qcNsc{} (\qcNscPct{}\%), the fragment length for \qcFrag{} (\qcFragPct{}\%), and NRF, \lit{PBC1} and \lit{PBC2} for \qcNrf{} (\qcNrfPct{}\%), because they exist only for the base and no-duplicate-removal views. FRiP is filled for \qcFrip{} rows, because this pass calls no peaks. The \lit{1}~bp region store holds \bpViews{} recounted views; an independent count matched \bpPts{} of \bpPtsStore{} points, and the table build, which refuses a view without a passed read-set check, wrote \bpMeas{} measurements and \bpPairs{} pairs. Its verification and the variance by bin size still run. Before any removal, four scratch folders went to tape as \arcTars{} tar files (\arcGib{} GiB), each compared with scratch. The removals took Nibi scratch from \scBefore{} to \scMid{} and then to \scAfter{} GiB, under the soft quota, and writes resumed.}
+
 \subsection{What did not run, and why}
 
-\cl{Three limits stopped work in the last two days. First, Fir entered a planned outage on \lit{2026-11-17} that lasts to about \lit{2026-11-20}; \firQueued{} jobs wait in its queue, among them the rescoring and the twelve matched-compute trainings. Second, Nibi scratch refused every write: use was \nibiUsed{} GiB against a soft quota of \nibiQuota{} GiB, and the work folder of \nibiWork{} GiB can leave only after two jobs that read it end. Third, the PI gave the run \lit{24} hours to close, so no new training round started. The run used \tallyTotal{} allocated CPU-hours from \lit{2026-11-10} to \lit{2026-11-17} (Fir \tallyFir{}, Nibi \tallyNibi{}). Not run: the rescoring, the mix-and-match round, the minimum covariate set, the learned cell-type embedding, QC metrics on the input, RNA-seq input, the resolution arms, the pointwise model under the corrected composite, the blind build and the final model.}
+\cl{Three limits stopped work in the last two days. First, Fir entered a planned outage on \lit{2026-11-17} that lasts to about \lit{2026-11-20}; \firQueued{} jobs wait in its queue, among them the twelve matched-compute trainings and the Fir copies of the rescoring. Second, Nibi scratch refused every write until the last night: use was \nibiUsed{} GiB against a soft quota of \nibiQuota{} GiB, and the work folder of \nibiWork{} GiB could leave only after the QC fill and the recount that read it. Third, the PI gave the run \lit{24} hours to close, so no new training round started. The run used \tallyTotal{} allocated CPU-hours from \lit{2026-11-10} to \lit{2026-11-17} (Fir \tallyFir{}, Nibi \tallyNibi{}). Not run: the mix-and-match round, the minimum covariate set, the learned cell-type embedding, QC metrics on the input, RNA-seq input, the resolution arms, the pointwise model under the corrected composite, the blind build and the final model.}
 
 \begin{table}[!htbp]
 \caption{\cl{The ready queue for the next session, from the ready-queue document. Cost in allocated CPU-hours.}}\label{tab:queue}
-\scriptsize
-\begin{tabular}{rp{5.6cm}p{2.4cm}p{3.0cm}}
+\tiny
+\begin{tabular}{rp{6.2cm}p{2.6cm}p{3.6cm}}
 \toprule
 order & entry & cluster & CPU-hours \\
 \midrule
@@ -408,13 +432,30 @@ order & entry & cluster & CPU-hours \\
 \end{tabular}
 \end{table}
 
+\subsection{Decisions taken and decisions moved}
+
+\cl{On \lit{2026-11-17} the PI took \nDecisions{} decisions, one at a time (Table~\ref{tab:decisions}). Decisions \lit{1} to \lit{5} act in this window; decisions \lit{6} to \lit{9} fix the scope and budget of runs in the next session. The PI moved two decisions to the next session: the architecture that goes to scaling, and the data version of the final model. The PI's words: ``\piQuoteScale{}''; on the data version, ``\piQuoteData{}''. The settled-design document informs both and recommends, as the agent's intent, carrying the conv autoencoder and the U-Net into the first scaling step, with the choice after the mix-and-match round, and building the table version that makes DNase-seq scorable for correction before the final model trains.}
+
+\begin{table}[!htbp]
+\caption{\cl{The PI decisions of \lit{2026-11-17}, from the decision record. Costs are allocated CPU-hours.}}\label{tab:decisions}
+\tiny
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{rp{3.6cm}p{4.4cm}p{5.6cm}}
+\toprule
+ & decision & PI choice & consequence \\
+\midrule
+\TabDecisions
+\botrule
+\end{tabular}
+\end{table}
+
 \section{Conclusion}\label{sec:conclusion}
 
-\cl{The data criterion is partial: the tables, views, halves, covariates and second experiments exist, and the blind build does not. The objective criterion is delivered. The evaluation criterion is partial: the metrics and the scorer are defined and tested, but the screening tier failed its check, so the correction terms need \lit{256} regions and that rescoring has not run. The design criterion is partial: three architectures tie with a trade-off between imputation and correction, the count input with a depth offset is settled, and the rows on views, two-step routing, input depth and loss weights stay provisional.}
+\cl{The data criterion is partial: the tables, views, halves, covariates and second experiments exist, and the blind build does not. The objective criterion is delivered. The evaluation criterion is partial: the metrics and the scorer are defined and tested, and the replicate ladder shows that read sampling holds most of the cell-type pair value; but the screening tier failed its check, so the correction terms need \lit{256} regions, and that rescoring has not landed. The design criterion is partial: three architectures tie with a trade-off between imputation and correction, the count input with a depth offset is settled, and the rows on views, two-step routing, input depth and loss weights stay provisional.}
 
-\cl{The main limitations are the \lit{16}-region correction terms, \lit{3} seeds per arm, models that had not converged at \lit{80,000} windows, and ablations that ran on the first table version. The answer on the views rests on the correction-only term, which is \lit{1} for a model that ignores its input; it must be read with the crop-pair correction term.}
+\cl{The main limitations are the \lit{16}-region correction terms, \lit{3} seeds per arm, models that had not converged at \lit{80,000} windows, and ablations on the first table version.}
 
-\cl{The next session starts from the ready queue (Table~\ref{tab:queue}). Each entry gives its cost; the order is the order in which the entries can be sent, not a ranking. The rescoring settles or overturns every correction effect of the ablations. The references of the corrected tables enable any comparison on them. The mix-and-match round tests whether single gains combine (\mixCost{} CPU-hours plus a qualifying stage of \mixGate{}). The minimum covariate set tells which fields the model needs. The blind build and the final model give the EIC board row, i.e. the test of the whole design on the held-out tracks.}
+\cl{The next session starts from the ready queue (Table~\ref{tab:queue}): the rescoring settles every correction effect, the mix-and-match round (\mixCost{} CPU-hours plus a gate of \mixGate{}) tests whether gains combine, and the final model gives the EIC board row.}
 
 
 \end{document}

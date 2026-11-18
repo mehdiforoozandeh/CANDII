@@ -11,7 +11,10 @@
 %%           1.5 (seed-range ratio), 5 Mb (shift control), 4 (loss weight), 1/1/1 weights,
 %%           10% (lambda tolerance), 500 bp tiles, -log10 p >= 2, seed 0, 21 arm folders,
 %%           24 hours, AlphaGenome 2, condition numbers 1 to 6, criterion numbers 1 to 4,
-%%           H3K36me3, eic_v1, eic_v1_2, dates 2026-11-10 to 2026-11-20.
+%%           H3K36me3, eic_v1, eic_v1_2, dates 2026-11-10 to 2026-11-20, 1 bp,
+%%           the estimability rule (5 pairs from 3 cells), decision numbers 1 to 9.
+%% VERSION 2 (2026-11-18): the replicate ladder, the second-experiment layers, the side
+%%           deliverables, the rescoring status and the PI decisions of 2026-11-17.
 %%
 %% RESCORING. One paragraph (between the RESCORING-PARAGRAPH marks) and one table (between
 %% the RESCORING-TABLE marks) wait for the 256-region rescoring of the 7 decisive arms.
@@ -19,7 +22,7 @@
 %% table fills itself), then rewrite the paragraph with build macros.
 \documentclass[pdflatex,sn-mathphys-num]{sn-jnl}
 
-% crux-sources: {"INSTRUCTIONS/peeling_the_onion/closeout/closeout D2 second experiments and cross-lab pairs.md": "1b19e8c643110cd040275c06811619c405e383d75c109c3b1a76262b298f0cb1", "INSTRUCTIONS/peeling_the_onion/closeout/final 24 hours plan.md": "6d9c595297f429b5cb0736c37b08ee0beff9bea8290342c6c82457034c646139", "INSTRUCTIONS/peeling_the_onion/closeout/ready queue for scaling.md": "23b192609e9a5d9308efe38357c22da0b3589c2b7ad21cb63e1e565f55d3215e", "INSTRUCTIONS/peeling_the_onion/closeout/settled miniCANDI design.md": "68e9bf29b3442563791a08d86414d1aeedc340d9a35201161a3311ca2d0bf72e", "INSTRUCTIONS/peeling_the_onion/long-horizon notepad.md": "f147195102f902bc154978f53de17028d2804c29cc46e4e6c09c1a94e70908d9", "presentations/onion-closeout-2026-11-18-report/build_story.py": "fb2e4b025f9c2679e87bc3a62a05b027da4f3003d94b5ddb4fe002399868805f", "presentations/onion-closeout-2026-11-18-report/report_src.tex": "2d86a2f13a9c8a93411ec7c0ac61b0e1411b63a39d30418668697f2bacc2d15f", "results/ablations_closeout/arm_summary_p16_sv_2026-11-17.tsv": "c113180fa3dfb061e6660cd170100da2e99121059abc5fbba9ebdc55453f0b1a", "results/closeout_A3/WHERE_VIEWS.md": "8c1744bf1b3a8c1bc4b28a1c2dcd947f0577afdb512ddfbb0d79956a53856453", "results/closeout_D1/D1_RESULT.md": "7327b1cdc3d64c96e0cf1e1e1274b6f5200096f03bb9ba35550bc65ca202343a", "results/closeout_D2/D2_PREP.md": "7136a86eb110bf5888426e8ea142316586235cdb2b28352e9b26c01c2a53b979", "results/closeout_D4/summary.txt": "b6ba65fba30054987fb03c81e4551706980bfd114e3dcb37d7680f61d3f4228f", "results/closeout_E2/E2_RESULTS.md": "30338d1b1b000a63ceba2edffd08394447d4fce553475a8d7e0c2e0afba04ec1", "results/closeout_E2/FORMULA_EXTENSION.md": "c7b7a9d6cb9af8ab90a549782982c43eebe6f4280e88c3524e871be20efbae67", "results/closeout_E4/E4_MIXED_DIAG.md": "90ec0e4c16477aeec82bc2873c44041ae682efea650ab9cdf6741767e86fcd17", "results/closeout_E4/E4_SMOKE.md": "9a2bc37380b0044a9686253aef914fc0304579914eb6d15d0743e54c7b5d275d", "results/final_round/FINAL_ROUND_EQUAL.md": "43d88b2f2751719d8e0daa39166d997bd42ac4838bd93f0b8ead2f0130db36f7", "results/oracle_floor/ORACLE_FLOOR.md": "c8ff4fa84db1a8e1cb145babc5dd5f3a0566fe3cda9ce2dc2f798b6a16961172", "results/region_sampling_checks/PAIR_REGIONS_V3.md": "7e9fb1ca3f27764b8f845d426da94096bb067891fe6af945e991a97b528cb4a0", "results/region_sampling_checks/REGION_CHECKS.md": "a7a45cfb5938df3a8b30e3edf5dd56fa2095461b4422c92ffb44d3ff36e4e019", "results/region_sampling_checks/check_v3.tsv": "5f269bb5081104b03735fecf5f86f1b2420d46291bd47f2ee0efee7894669947", "results/t170/withheld_design.md": "238d90b01e92f0805b46e0508430792b7d57d6004c41e2ff6d359ceace970aee", "results/t183/DATASET_EIC_V1.md": "4ae2e52ec6f949ebc523c27a271f712e75c49794b0b83f312b91a3eea8dec464", "results/t185/SUBMITTED.md": "ab413ac44825a8276d15155c11a58d738d6923b49325b9d79980843008aa4b4c", "results/t305/LAYERS_REAL.md": "e6bdc2363538da2c986d8e03fac9deb4f0b9f8d8175275ebe2cf68033921d69e", "results/t308/AG2_VS_BASELINES.md": "ebb77d04fdc59270506c2197460e505e197bb8da08c3c8b7397e0e8b9b1e5cf1"}
+% crux-sources: {"INSTRUCTIONS/peeling_the_onion/closeout/PI decisions 2026-11-17.md": "741889fc857bcffa9eb27eca5e1a07dce02abc2fe36fb2a3e7f0f6cf147f9c80", "INSTRUCTIONS/peeling_the_onion/closeout/closeout D2 second experiments and cross-lab pairs.md": "1b19e8c643110cd040275c06811619c405e383d75c109c3b1a76262b298f0cb1", "INSTRUCTIONS/peeling_the_onion/closeout/final 24 hours plan.md": "6d9c595297f429b5cb0736c37b08ee0beff9bea8290342c6c82457034c646139", "INSTRUCTIONS/peeling_the_onion/closeout/ready queue for scaling.md": "36667bbe4592e711eb618651ef2b58a87ed0026a0f749d03a557ef46546c5e6f", "INSTRUCTIONS/peeling_the_onion/closeout/settled miniCANDI design.md": "68e9bf29b3442563791a08d86414d1aeedc340d9a35201161a3311ca2d0bf72e", "INSTRUCTIONS/peeling_the_onion/long-horizon notepad.md": "f147195102f902bc154978f53de17028d2804c29cc46e4e6c09c1a94e70908d9", "INSTRUCTIONS/peeling_the_onion/run_state/plan.md": "038de9be64640085e9e903c0af7014d9785f2918ef28c900bf8ee2b1dec5ca0e", "presentations/onion-closeout-2026-11-18-report/build_story.py": "9d5e0b6042993244b699586304cca2e742b6e20eb337d2c2af10c40afe2b6738", "presentations/onion-closeout-2026-11-18-report/report_src.tex": "876173ce2394e60ad169938ecc40afdd6beac538156ff8139f37dc8cabd78906", "results/ablations_closeout/arm_summary_p16_sv_2026-11-17.tsv": "c113180fa3dfb061e6660cd170100da2e99121059abc5fbba9ebdc55453f0b1a", "results/closeout_A3/WHERE_VIEWS.md": "8c1744bf1b3a8c1bc4b28a1c2dcd947f0577afdb512ddfbb0d79956a53856453", "results/closeout_A4/qc_tables_2026-11-18/coverage.txt": "a3a1830805ecdd132c253293eea2595259a106051582e63facf5bc8a8d953ee9", "results/closeout_D1/D1_RESULT.md": "7327b1cdc3d64c96e0cf1e1e1274b6f5200096f03bb9ba35550bc65ca202343a", "results/closeout_D2/D2_PREP.md": "7136a86eb110bf5888426e8ea142316586235cdb2b28352e9b26c01c2a53b979", "results/closeout_D2/layers_2026-11-18/layers.tsv": "b1cef169b17583f2289d57e3d47b8ef64b9c36c9f02a1e58724721bb61975085", "results/closeout_D4/summary.txt": "b6ba65fba30054987fb03c81e4551706980bfd114e3dcb37d7680f61d3f4228f", "results/closeout_E2/E2_RESULTS.md": "30338d1b1b000a63ceba2edffd08394447d4fce553475a8d7e0c2e0afba04ec1", "results/closeout_E2/FORMULA_EXTENSION.md": "c7b7a9d6cb9af8ab90a549782982c43eebe6f4280e88c3524e871be20efbae67", "results/closeout_E4/E4_MIXED_DIAG.md": "90ec0e4c16477aeec82bc2873c44041ae682efea650ab9cdf6741767e86fcd17", "results/closeout_E4/E4_SMOKE.md": "9a2bc37380b0044a9686253aef914fc0304579914eb6d15d0743e54c7b5d275d", "results/closeout_E4/ladder_2026-11-18/ladder.md": "d81e65bc5b9c22dbd4891b3b0fe914aa2a716be5354a7185dacb0d170fdcb4c6", "results/closeout_E4/ladder_2026-11-18/ladder.tsv": "a39e9b99d321a341b04c0d104a4ee66f143e0f47a27142fb6ccae7f08c94f3c1", "results/final_round/FINAL_ROUND_EQUAL.md": "43d88b2f2751719d8e0daa39166d997bd42ac4838bd93f0b8ead2f0130db36f7", "results/oracle_floor/ORACLE_FLOOR.md": "c8ff4fa84db1a8e1cb145babc5dd5f3a0566fe3cda9ce2dc2f798b6a16961172", "results/region_sampling_checks/PAIR_REGIONS_V3.md": "7e9fb1ca3f27764b8f845d426da94096bb067891fe6af945e991a97b528cb4a0", "results/region_sampling_checks/REGION_CHECKS.md": "a7a45cfb5938df3a8b30e3edf5dd56fa2095461b4422c92ffb44d3ff36e4e019", "results/region_sampling_checks/check_v3.tsv": "5f269bb5081104b03735fecf5f86f1b2420d46291bd47f2ee0efee7894669947", "results/t170/withheld_design.md": "238d90b01e92f0805b46e0508430792b7d57d6004c41e2ff6d359ceace970aee", "results/t183/DATASET_EIC_V1.md": "4ae2e52ec6f949ebc523c27a271f712e75c49794b0b83f312b91a3eea8dec464", "results/t185/SUBMITTED.md": "ab413ac44825a8276d15155c11a58d738d6923b49325b9d79980843008aa4b4c", "results/t305/LAYERS_REAL.md": "e6bdc2363538da2c986d8e03fac9deb4f0b9f8d8175275ebe2cf68033921d69e", "results/t308/AG2_VS_BASELINES.md": "ebb77d04fdc59270506c2197460e505e197bb8da08c3c8b7397e0e8b9b1e5cf1"}
 
 \usepackage{graphicx}
 \usepackage{amsmath}
@@ -141,6 +144,15 @@ offset, pseudocount 0.01 & \ensuremath{-}0.015 & \ensuremath{+}0.001 & \ensurema
 \newcommand{\TabCheck}{8 & fail & fail & pass & fail & pass & fail & fail \\
 16 & fail & fail & pass & fail & pass & fail & fail \\
 32 & fail & fail & pass & fail & pass & pass & fail \\}
+\newcommand{\TabDecisions}{1 & Where the 256-region rescoring of the 7 decisive arms runs & Nibi, in the close-out window & Starts when Nibi scratch is writable; about 6 scorings at one time; the Fir copies stay queued, and cancelling them is the PI's \\
+2 & Second-experiment layers and baselines & Run now on Nibi & Submitted on Nibi; the layers are done \\
+3 & Lab effect in the cross-lab analysis & Report lab together with donor, as one effect & The pure lab effect is not reported as a headline \\
+4 & The 17 unbuilt DNase-seq second-experiment rows & Drop them & The add-on stays at 71 experiments; DNase-seq has no second-experiment pairs \\
+5 & Replicate ladder definition & Two-sided subtraction, with the check on common cell types & Earlier ladder numbers are not comparable; reports state the change \\
+6 & Resolution study design & Full design, next session & 75 runs, about 2,340 CPU-hours (ready queue entry 9) \\
+7 & QC-on-input arm & Accept the design as built (presence flags, leak guards) & 3 models, 3 seeds, about 404 CPU-hours, next session \\
+8 & Mix-and-match round & Gate first (about 474), then the round for the switches that pass (at most about 5,390) & Next session \\
+9 & Minimum covariate set & One model (the one that mix-and-match selects), leave-one-field-out, groups and the removal curve & 3,008 (conv autoencoder), 3,298 (conv + attention) or 5,060 (U-Net) CPU-hours, next session \\}
 \newcommand{\TabFormula}{ChIP-seq Pearson, all targets & 0.831 & 0.921 \\
 ChIP-seq Pearson, table fragment length & 0.887 & 0.944 \\
 ChIP-seq Pearson, estimated fragment length & 0.830 & 0.918 \\
@@ -150,6 +162,17 @@ ChIP-seq peak-tile precision & 0.421 & 0.853 \\
 ChIP-seq peak-tile F1 & 0.573 & 0.782 \\
 DNase-seq Pearson & 0.943 & 0.994 \\
 DNase-seq peak-tile F1 & 0.379 & 0.857 \\}
+\newcommand{\TabLadder}{DNase-seq & read sampling & 33 (17) & \ensuremath{1.56\times10^{-4}} [\ensuremath{1.53\times10^{-4}}, \ensuremath{1.59\times10^{-4}}] & 100.3\% (16) \\
+DNase-seq & biological replicate & 8 (8) & \ensuremath{-1.72\times10^{-6}} [\ensuremath{-4.25\times10^{-6}}, \ensuremath{8.18\times10^{-7}}] & \ensuremath{-}1.2\% (7) \\
+DNase-seq & cell type & 79 (7) & \ensuremath{2.42\times10^{-6}} [\ensuremath{-1.25\times10^{-6}}, \ensuremath{6.10\times10^{-6}}] & 1.6\% (7) \\
+broad marks & read sampling & 262 (27) & 0.0463 [0.0413, 0.0512] & 95.1\% (100) \\
+broad marks & biological replicate & 76 (17) & \ensuremath{5.32\times10^{-4}} [\ensuremath{2.49\times10^{-4}}, \ensuremath{8.15\times10^{-4}}] & 1.3\% (65) \\
+broad marks & lab with donor & 10 (4) & \ensuremath{-}0.0033 [\ensuremath{-}0.0118, 0.0053] & \ensuremath{-}6.9\% (10) \\
+broad marks & cell type & 522 (17) & 0.0036 [\ensuremath{6.76\times10^{-4}}, 0.0065] & 7.9\% (65) \\
+narrow marks & read sampling & 391 (37) & 0.0262 [0.0228, 0.0296] & 87.5\% (137) \\
+narrow marks & biological replicate & 119 (24) & \ensuremath{5.82\times10^{-4}} [\ensuremath{2.94\times10^{-4}}, \ensuremath{8.69\times10^{-4}}] & 1.8\% (91) \\
+narrow marks & repeat with donor & 5 (3) & \ensuremath{2.62\times10^{-4}} [\ensuremath{-}0.0016, 0.0021] & \ensuremath{-}1.1\% (4) \\
+narrow marks & cell type & 670 (23) & 0.0041 [0.0012, 0.0071] & 13.6\% (91) \\}
 \newcommand{\TabQueue}{1 & QC-on-input collect & Nibi & 0.5 \\
 2 & 1 bp recount & Nibi & about 18 (cap 336) \\
 3 & Replicate ladder: layers and report & Nibi & about 6 (13 at most) + 0.5 \\
@@ -203,12 +226,20 @@ U-Net, DNA-only skips & 0.715 (0.056) & 0.684 (0.033) \\}
 \newcommand{\agPosAvg}{0.222}
 \newcommand{\anscCor}{\ensuremath{-}1.067}
 \newcommand{\anscImp}{0.000}
+\newcommand{\arcEntries}{76{,}017}
+\newcommand{\arcGib}{3{,}990}
+\newcommand{\arcTars}{23}
 \newcommand{\blindAbRows}{72}
 \newcommand{\blindAlloc}{83{,}370}
 \newcommand{\blindNewAb}{48}
 \newcommand{\blindNewCost}{94{,}300}
 \newcommand{\blindOldCost}{14{,}920}
 \newcommand{\blindRows}{721}
+\newcommand{\bpMeas}{412}
+\newcommand{\bpPairs}{73}
+\newcommand{\bpPts}{13{,}222}
+\newcommand{\bpPtsStore}{13{,}222}
+\newcommand{\bpViews}{412}
 \newcommand{\compAeUnAll}{0.033}
 \newcommand{\compAeUnBar}{0.043}
 \newcommand{\compAxial}{0.498}
@@ -235,7 +266,34 @@ U-Net, DNA-only skips & 0.715 (0.056) & 0.684 (0.033) \\}
 \newcommand{\costAT}{25.4}
 \newcommand{\costUN}{52}
 \newcommand{\dTwoBarUN}{0.142}
+\newcommand{\dTwoBrAll}{\ensuremath{-}0.0004}
+\newcommand{\dTwoBrAllC}{10}
+\newcommand{\dTwoBrAllHi}{0.0058}
+\newcommand{\dTwoBrAllLo}{\ensuremath{-}0.0066}
+\newcommand{\dTwoBrAllN}{30}
+\newcommand{\dTwoBrAllTech}{21}
+\newcommand{\dTwoBrLd}{\ensuremath{-}0.0002}
+\newcommand{\dTwoBrLdC}{4}
+\newcommand{\dTwoBrLdHi}{0.0111}
+\newcommand{\dTwoBrLdLo}{\ensuremath{-}0.0116}
+\newcommand{\dTwoBrLdN}{13}
+\newcommand{\dTwoBrLdTech}{11}
+\newcommand{\dTwoDropped}{17}
+\newcommand{\dTwoKept}{71}
 \newcommand{\dTwoMarginUN}{0.124}
+\newcommand{\dTwoNrAll}{\ensuremath{-}0.0098}
+\newcommand{\dTwoNrAllC}{15}
+\newcommand{\dTwoNrAllHi}{0.0012}
+\newcommand{\dTwoNrAllLo}{\ensuremath{-}0.0208}
+\newcommand{\dTwoNrAllN}{31}
+\newcommand{\dTwoNrAllTech}{13}
+\newcommand{\dTwoNrLd}{\ensuremath{-}0.0188}
+\newcommand{\dTwoNrLdC}{4}
+\newcommand{\dTwoNrLdHi}{0.0054}
+\newcommand{\dTwoNrLdLo}{\ensuremath{-}0.0430}
+\newcommand{\dTwoNrLdN}{6}
+\newcommand{\dTwoNrLdTech}{6}
+\newcommand{\dTwoSmall}{4}
 \newcommand{\dUnAeCorTwoFS}{\ensuremath{-}0.210}
 \newcommand{\eAvgImpUN}{\ensuremath{+}0.034}
 \newcommand{\eAvgImpUNBar}{0.023}
@@ -412,7 +470,25 @@ U-Net, DNA-only skips & 0.715 (0.056) & 0.684 (0.033) \\}
 \newcommand{\labDonorBroad}{13}
 \newcommand{\labDonorBroadCells}{4}
 \newcommand{\labDonorNarrow}{6}
+\newcommand{\ladAtacC}{4}
+\newcommand{\ladAtacN}{4}
+\newcommand{\ladBrCt}{7.9\%}
+\newcommand{\ladBrLabC}{2}
+\newcommand{\ladBrLabN}{8}
+\newcommand{\ladBrLd}{\ensuremath{-}0.0033}
+\newcommand{\ladBrLdSh}{\ensuremath{-}6.9\%}
+\newcommand{\ladBrRep}{1.3\%}
+\newcommand{\ladBrSamp}{95.1\%}
+\newcommand{\ladChainN}{195}
+\newcommand{\ladChainOk}{195}
+\newcommand{\ladDnCt}{1.6\%}
+\newcommand{\ladDnRep}{\ensuremath{-}1.2\%}
+\newcommand{\ladDnRepInc}{\ensuremath{-1.72\times10^{-6}}}
+\newcommand{\ladDnSamp}{100.3\%}
 \newcommand{\ladLabDonor}{\ensuremath{-}0.0027}
+\newcommand{\ladNrCt}{13.6\%}
+\newcommand{\ladNrRep}{1.8\%}
+\newcommand{\ladNrSamp}{87.5\%}
 \newcommand{\ladOneSided}{23}
 \newcommand{\ladPairs}{383}
 \newcommand{\ladSamp}{0.04092}
@@ -460,6 +536,7 @@ U-Net, DNA-only skips & 0.715 (0.056) & 0.684 (0.033) \\}
 \newcommand{\nCorUpTwo}{1}
 \newcommand{\nCorrPairs}{1{,}480}
 \newcommand{\nCtPairs}{2{,}911}
+\newcommand{\nDecisions}{9}
 \newcommand{\nDesignRows}{31}
 \newcommand{\nDupPairs}{84}
 \newcommand{\nFormChip}{41}
@@ -503,7 +580,23 @@ U-Net, DNA-only skips & 0.715 (0.056) & 0.684 (0.033) \\}
 \newcommand{\paImp}{0.119}
 \newcommand{\pairLowPct}{18}
 \newcommand{\pairPct}{58}
+\newcommand{\piQuoteData}{you recommend + provide info. we'll work on it next session}
+\newcommand{\piQuoteScale}{scaling is next session's task. the task for this session is to provide the necessary information and prototype minicandi for a more informed and confident scaling in the next session}
 \newcommand{\pureLabPooled}{16}
+\newcommand{\qcFrag}{2{,}337}
+\newcommand{\qcFragPct}{87.8}
+\newcommand{\qcFrip}{0}
+\newcommand{\qcFripPct}{0.0}
+\newcommand{\qcNoRead}{190}
+\newcommand{\qcNrf}{1{,}006}
+\newcommand{\qcNrfPct}{37.8}
+\newcommand{\qcNsc}{2{,}370}
+\newcommand{\qcNscPct}{89.0}
+\newcommand{\qcOk}{1{,}093}
+\newcommand{\qcPrOne}{275}
+\newcommand{\qcRefused}{4}
+\newcommand{\qcRows}{2{,}662}
+\newcommand{\qcWhole}{1{,}287}
 \newcommand{\refAECal}{0.631}
 \newcommand{\refAECalR}{0.178}
 \newcommand{\refAEComp}{0.528}
@@ -540,8 +633,21 @@ U-Net, DNA-only skips & 0.715 (0.056) & 0.684 (0.033) \\}
 \newcommand{\repLo}{0.1}
 \newcommand{\rescoreCost}{2{,}225}
 \newcommand{\rescoreSeeds}{62}
+\newcommand{\rsCap}{12}
+\newcommand{\rsDay}{2026-11-17}
+\newcommand{\rsHours}{4.5}
+\newcommand{\rsN}{62}
+\newcommand{\rsNow}{01:33}
+\newcommand{\rsNowDay}{2026-11-18}
+\newcommand{\rsRounds}{6}
+\newcommand{\rsScored}{0}
+\newcommand{\rsStart}{23:30}
+\newcommand{\rsTotal}{27}
 \newcommand{\sampHi}{97}
 \newcommand{\sampLo}{76}
+\newcommand{\scAfter}{635}
+\newcommand{\scBefore}{4{,}324}
+\newcommand{\scMid}{1{,}740}
 \newcommand{\skipCor}{0.715}
 \newcommand{\skipCorR}{0.056}
 \newcommand{\skipImp}{0.380}
@@ -630,9 +736,9 @@ y label dAE bAE dAT bAT dUN bUN
 \toprule
 criterion & state & evidence and gap \\
 \midrule
-\lit{1}. Augmented EIC data with counterfactual views & partial & Built: the rebuilt tables with designed views and read halves, the covariate fill (lab, antibody, donor), and the add-on of second experiments. Not built: the blind tracks (\blindRows{} rows), and the table version with DNase-seq in the correction term. \\
+\lit{1}. Augmented EIC data with counterfactual views & partial & Built: the rebuilt tables with designed views and read halves, the covariate fill (lab, antibody, donor), the add-on of second experiments, the QC side tables and the \lit{1}~bp region store. Not built: the blind tracks (\blindRows{} rows), and the table version with DNase-seq in the correction term. \\
 \lit{2}. Training objective & delivered & One document gives every loss term, weight, mask and default with its code line. Open choices are marked; each names the run that closes it. \\
-\lit{3}. Evaluation, defined and tested & partial & Metrics, selection rule and scorers are defined and pass their tests. The \lit{16}-region screening tier failed its check, so correction terms need \lit{256} regions; that rescoring has not run. \\
+\lit{3}. Evaluation, defined and tested & partial & Metrics, selection rule and scorers are defined and pass their tests, and the replicate ladder ran on the real data. The \lit{16}-region screening tier failed its check, so correction terms need \lit{256} regions; that rescoring runs and has not landed. \\
 \lit{4}. Settled miniCANDI design & partial & A design table with \nDesignRows{} rows gives a value, the evidence and a status for each choice. Many rows are provisional; the choice of architecture is the PI's. \\
 \botrule
 \end{tabular}
@@ -834,7 +940,7 @@ regions & (\lit{1}) interval & (\lit{2}) per assay & (\lit{3}) rule result & (\l
 \centering
 \begin{tikzpicture}
 \begin{groupplot}[group style={group size=2 by 1, horizontal sep=0.6cm, yticklabels at=edge left},
-    width=0.47\linewidth, height=6.4cm, ytick=data, y dir=reverse,
+    width=0.47\linewidth, height=5.6cm, ytick=data, y dir=reverse,
     yticklabels from table={\tblRegion}{label}, yticklabel style={font=\tiny},
     xticklabel style={font=\scriptsize}, xlabel style={font=\footnotesize},
     title style={font=\footnotesize}, enlarge y limits=0.04]
@@ -854,7 +960,7 @@ regions & (\lit{1}) interval & (\lit{2}) per assay & (\lit{3}) rule result & (\l
 \subsection{The \lit{256}-region rescoring of the decisive arms}\label{sec:rescore}
 
 %% RESCORING-PARAGRAPH START (replace this paragraph when the 256-region scores land)
-\cl{\textbf{[Waits for the rescoring.]} Seven decisive arms (\lit{21} arm folders, \rescoreSeeds{} run-seeds) must be scored on all \lit{256} regions before any correction effect of the ablations can settle: the scrambled covariates, base view only, two-step at native and at fixed base depth, fixed input depth, the average-signal input, and imputation weight \lit{4}. The cost is \rescoreCost{} allocated CPU-hours (\nRunsAE{} conv autoencoder run-seeds at \costAE{}, \nRunsAT{} conv + attention at \costAT{}, \nRunsUN{} U-Net at about \costUN{} each). The jobs wait in the Fir queue, which does not run before about \lit{2026-11-20}. Table~\ref{tab:rescore} gives the \lit{16}-region effects and leaves the \lit{256}-region columns empty. The settled-design document states, before any result, the rule that each arm's \lit{256}-region effect will apply.}
+\cl{\textbf{[Waits for the rescoring.]} Seven decisive arms (\lit{21} arm folders, \rescoreSeeds{} run-seeds) must be scored on all \lit{256} regions before any correction effect of the ablations can settle: the scrambled covariates, base view only, two-step at native and at fixed base depth, fixed input depth, the average-signal input, and imputation weight \lit{4}. The cost is \rescoreCost{} allocated CPU-hours (\nRunsAE{} conv autoencoder run-seeds at \costAE{}, \nRunsAT{} conv + attention at \costAT{}, \nRunsUN{} U-Net at about \costUN{} each). \textit{Status:} by PI decision the scoring runs on Nibi, since \rsDay{}, \rsStart{} UTC (run log): \rsN{} run-seeds, \rsCap{} at one time, about \rsHours{}~h per scoring, and \rsScored{} of \rsN{} scored at \rsNow{} UTC on \rsNowDay{}. At this rate the predict stage needs \rsRounds{} rounds, about \rsTotal{}~h, so most scores land after the run ends. Table~\ref{tab:rescore} gives the \lit{16}-region effects and leaves the \lit{256}-region columns empty. The settled-design document states, before any result, the rule that each arm's \lit{256}-region effect will apply.}
 %% RESCORING-PARAGRAPH END
 
 %% RESCORING-TABLE START (the 256-region columns fill themselves from the build hook)
@@ -892,17 +998,34 @@ measure & in-bin pileup (superseded) & box spread (adopted) \\
 
 \subsection{Second experiments, lab and donor}
 
-\cl{A second experiment is another ENCODE experiment of the same cell and assay. The add-on tables append \nSecond{} such rows (\nSecondOther{} from another lab, \nSecondSame{} from the same lab), with \nSecondVal{} validation targets; the leak checks passed with every count at zero. A smoke test compared regional totals after depth matching: \smokeOut{} of \nSecond{} pairs differed by more than five percent, \smokeOtherOut{} of \smokeOtherN{} other-lab pairs against \smokeSameOut{} of \smokeSameN{} same-lab pairs. A different lab therefore often changes the level of a track. The pure lab effect is not estimable: a pair with another lab and the same donor has fewer than \minPairs{} pairs per assay class. Lab and donor changed together are estimable in broad histone marks (\labDonorBroad{} pairs, \labDonorBroadCells{} cells) and narrow marks (\labDonorNarrow{} pairs). The recommendation that waits for the PI is to report lab together with donor. The layers and the model scores of these pairs have not run.}
+\cl{A second experiment is another ENCODE experiment of the same cell and assay. The add-on tables append \nSecond{} such rows (\nSecondOther{} from another lab, \nSecondSame{} from the same lab), with \nSecondVal{} validation targets; the leak checks passed with every count at zero. The PI decided two points on \lit{2026-11-17}. First, lab is reported together with donor as one effect, because a pair with another lab and the same donor comes from only two cells in every assay class. Second, the \dTwoDropped{} unbuilt DNase-seq second-experiment rows are dropped, so the add-on stays at \dTwoKept{} experiments.}
+
+\cl{The variance layers of these pairs ran on the real data (pair value as in the ladder; rows pooled by assay class; \lit{95}\% cluster-bootstrap intervals). Over the biological replicate, all second-experiment pairs of broad histone marks gave \dTwoBrAll{} [\dTwoBrAllLo{}, \dTwoBrAllHi{}] (\dTwoBrAllN{} pairs, \dTwoBrAllC{} cells), and lab with donor gave \dTwoBrLd{} [\dTwoBrLdLo{}, \dTwoBrLdHi{}] (\dTwoBrLdN{} pairs, \dTwoBrLdC{} cells). For narrow histone marks the values were \dTwoNrAll{} [\dTwoNrAllLo{}, \dTwoNrAllHi{}] (\dTwoNrAllN{} pairs, \dTwoNrAllC{} cells) and \dTwoNrLd{} [\dTwoNrLdLo{}, \dTwoNrLdHi{}] (\dTwoNrLdN{} pairs, \dTwoNrLdC{} cells). Every interval includes zero, so these pairs resolve no variance of lab with donor beyond a biological replicate. In \dTwoBrLdTech{} of the \dTwoBrLdN{} broad lab-with-donor pairs the two sides also differ in run type, read length or platform. The accessibility classes have at most \dTwoSmall{} pairs. These pooled rows use other cells than the rung below, so the assay-matched ladder below is the primary value. No model ran on these pairs.}
 
 \subsection{The replicate ladder}
 
-\cl{The replicate ladder extends the variance layers with second experiments. Only a smoke run on one assay (\lit{H3K36me3}, \ladPairs{} pairs) ran. It reproduced the earlier sampling layer (\ladSamp{} against \ladSampT{}). Two defects appeared. The subtraction of the lower rung is one-sided: it subtracts the sampling of one side of a cell-type pair only, and the two-sided form lowered the cell-type rung by \ladOneSided{}\%. The add-up check passed in \ladTele{} of \ladTeleN{} groups, because each rung holds other cells than the rung below. The mixed-model stage needs a noise level per library before it runs. The ladder is therefore not complete.}
+\cl{The replicate ladder splits the pair value $\lit{0.5}\,E[(Y-Y')^{\lit{2}}]$ of two tracks, i.e. the expected squared difference of their log counts at a common depth, into nested layers. Each rung adds one difference to the rung below it: read sampling (two read halves of one library), a biological replicate, a second experiment, and another cell type. The increment of a rung is assay-matched: on each cell and assay with pairs of both rungs, the pair value of the rung minus that of the rung below, then a mean over assays and cells. A rung is estimable with at least \minPairs{} matched pairs from \lit{3} cells. By PI decision of \lit{2026-11-17} the ladder subtracts two-sided, with the check on common cell types, so earlier ladder numbers (the one-sided smoke run on \lit{H3K36me3}) are not comparable. On the units that hold the sampling, replicate and cell-type rungs, the three increments add up exactly to the cell-type pair value in \ladChainOk{} of \ladChainN{} groups.}
+
+\cl{Table~\ref{tab:ladder} gives every estimable rung. Read sampling holds most of the cell-type pair value: \ladBrSamp{} in broad marks, \ladNrSamp{} in narrow marks, and \ladDnSamp{} in DNase-seq, where the cell-type pair value is at the level of read sampling. The biological replicate adds \ladBrRep{} and \ladNrRep{}, and in DNase-seq its increment is negative (\ladDnRepInc{}, share \ladDnRep{}); its interval includes zero. The cell type adds \ladBrCt{}, \ladNrCt{} and \ladDnCt{}. Above the replicate only two rows are estimable: lab with donor in broad marks, which is negative (\ladBrLd{}, \ladBrLdSh{}), and an experiment repeat with another donor in narrow marks; both intervals include zero. Negative increments are kept, not clipped. ATAC-seq has no estimable rung (\ladAtacN{} read-half pairs from \ladAtacC{} cells). Three kinds of rung are not estimable. First, the sequencing and library rungs are empty, because the per-library and per-lane units were never built. Second, no pair in the challenge data holds two donors inside one experiment. Third, the other second-experiment rows have too few matched pairs or cells, for example lab alone in broad marks (\ladBrLabN{} pairs from \ladBrLabC{} cells). The crossed mixed model did not run: it needs a noise level per library first.}
+
+\begin{table}[!htbp]
+\caption{\cl{The replicate ladder, two-sided and assay-matched, all regions and signal bands. Increment over the rung below (pair value of log counts) with its \lit{95}\% cluster-bootstrap interval; share of the cell-type pair value on the same cells and assays (number of those units).}}\label{tab:ladder}
+\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{llccc}
+\toprule
+assay class & rung & pairs (cells) & increment [\lit{95}\% interval] & share (units) \\
+\midrule
+\TabLadder
+\botrule
+\end{tabular}
+\end{table}
 
 \subsection{The settled design}
 
 \cl{Table~\ref{tab:design} condenses the settled-design document. ``Settled'' means that no planned run can change the value or that the PI fixed it; ``provisional'' means that a named run can change it. The design tests gave \testsPassed{} passed, \testsSkipped{} skipped and \testsFailed{} failed. The failure was a configuration-key guard that would stop every run of the covariate-set search; a later commit on the run branch fixed it.}
 
-\cl{The PI ruled that the choice of architecture for scaling and the table version of the final model are decisions of the next session. The settled-design document gives a recommendation for each, as the agent's intent: carry the conv autoencoder and the U-Net into the first scaling step and choose after the mix-and-match round; and build the table version that makes DNase-seq scorable for correction before the final model trains. Every model beats the position average by more than twice its seed range on imputation and calibration. On the \lit{16}-region correction term both convolutional models do too, and the U-Net does not: its margin is \dTwoMarginUN{} against twice its seed range, \dTwoBarUN{}.}
+\cl{Every model beats the position average by more than twice its seed range on imputation and calibration. On the \lit{16}-region correction term both convolutional models do too, and the U-Net does not: its margin is \dTwoMarginUN{} against twice its seed range, \dTwoBarUN{}.}
 
 \begin{table}[!htbp]
 \caption{\cl{The settled miniCANDI design, condensed. Confidence and status are the agent's reading of the evidence, written before the rescoring.}}\label{tab:design}
@@ -938,14 +1061,18 @@ QC on input, cell embedding & off, none & not tested & provisional \\
 
 \cl{Several numbers told to the PI during the run were later corrected. The cost of one \lit{256}-region scoring was first quoted as \oldScoreCost{} CPU-hours; the measured cost is \costAE{} to about \costUN{}. The cost of the rescoring rose from \oldCheckCost{} to \rescoreCost{} CPU-hours, the blind build from \blindOldCost{} CPU-hours used to about \blindNewCost{} allocated, and the mix-and-match round fell from \mixOldCost{} to \mixCost{}. The composite changed definition twice; every composite in this report is version~\lit{3}.}
 
+\subsection{Data deliverables of the last night}
+
+\cl{The QC side tables hold read-derived quality metrics per row. The fill wrote \qcWhole{} records for the base pass and \qcPrOne{} for the read halves (\qcOk{} ok, \qcNoRead{} without a read set, \qcRefused{} refused). Over the \qcRows{} training and validation rows, NSC and RSC are filled for \qcNsc{} (\qcNscPct{}\%), the fragment length for \qcFrag{} (\qcFragPct{}\%), and NRF, \lit{PBC1} and \lit{PBC2} for \qcNrf{} (\qcNrfPct{}\%), because they exist only for the base and no-duplicate-removal views. FRiP is filled for \qcFrip{} rows, because this pass calls no peaks. The \lit{1}~bp region store holds \bpViews{} recounted views; an independent count matched \bpPts{} of \bpPtsStore{} points, and the table build, which refuses a view without a passed read-set check, wrote \bpMeas{} measurements and \bpPairs{} pairs. Its verification and the variance by bin size still run. Before any removal, four scratch folders went to tape as \arcTars{} tar files (\arcGib{} GiB), each compared with scratch. The removals took Nibi scratch from \scBefore{} to \scMid{} and then to \scAfter{} GiB, under the soft quota, and writes resumed.}
+
 \subsection{What did not run, and why}
 
-\cl{Three limits stopped work in the last two days. First, Fir entered a planned outage on \lit{2026-11-17} that lasts to about \lit{2026-11-20}; \firQueued{} jobs wait in its queue, among them the rescoring and the twelve matched-compute trainings. Second, Nibi scratch refused every write: use was \nibiUsed{} GiB against a soft quota of \nibiQuota{} GiB, and the work folder of \nibiWork{} GiB can leave only after two jobs that read it end. Third, the PI gave the run \lit{24} hours to close, so no new training round started. The run used \tallyTotal{} allocated CPU-hours from \lit{2026-11-10} to \lit{2026-11-17} (Fir \tallyFir{}, Nibi \tallyNibi{}). Not run: the rescoring, the mix-and-match round, the minimum covariate set, the learned cell-type embedding, QC metrics on the input, RNA-seq input, the resolution arms, the pointwise model under the corrected composite, the blind build and the final model.}
+\cl{Three limits stopped work in the last two days. First, Fir entered a planned outage on \lit{2026-11-17} that lasts to about \lit{2026-11-20}; \firQueued{} jobs wait in its queue, among them the twelve matched-compute trainings and the Fir copies of the rescoring. Second, Nibi scratch refused every write until the last night: use was \nibiUsed{} GiB against a soft quota of \nibiQuota{} GiB, and the work folder of \nibiWork{} GiB could leave only after the QC fill and the recount that read it. Third, the PI gave the run \lit{24} hours to close, so no new training round started. The run used \tallyTotal{} allocated CPU-hours from \lit{2026-11-10} to \lit{2026-11-17} (Fir \tallyFir{}, Nibi \tallyNibi{}). Not run: the mix-and-match round, the minimum covariate set, the learned cell-type embedding, QC metrics on the input, RNA-seq input, the resolution arms, the pointwise model under the corrected composite, the blind build and the final model.}
 
 \begin{table}[!htbp]
 \caption{\cl{The ready queue for the next session, from the ready-queue document. Cost in allocated CPU-hours.}}\label{tab:queue}
-\scriptsize
-\begin{tabular}{rp{5.6cm}p{2.4cm}p{3.0cm}}
+\tiny
+\begin{tabular}{rp{6.2cm}p{2.6cm}p{3.6cm}}
 \toprule
 order & entry & cluster & CPU-hours \\
 \midrule
@@ -954,13 +1081,30 @@ order & entry & cluster & CPU-hours \\
 \end{tabular}
 \end{table}
 
+\subsection{Decisions taken and decisions moved}
+
+\cl{On \lit{2026-11-17} the PI took \nDecisions{} decisions, one at a time (Table~\ref{tab:decisions}). Decisions \lit{1} to \lit{5} act in this window; decisions \lit{6} to \lit{9} fix the scope and budget of runs in the next session. The PI moved two decisions to the next session: the architecture that goes to scaling, and the data version of the final model. The PI's words: ``\piQuoteScale{}''; on the data version, ``\piQuoteData{}''. The settled-design document informs both and recommends, as the agent's intent, carrying the conv autoencoder and the U-Net into the first scaling step, with the choice after the mix-and-match round, and building the table version that makes DNase-seq scorable for correction before the final model trains.}
+
+\begin{table}[!htbp]
+\caption{\cl{The PI decisions of \lit{2026-11-17}, from the decision record. Costs are allocated CPU-hours.}}\label{tab:decisions}
+\tiny
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{rp{3.6cm}p{4.4cm}p{5.6cm}}
+\toprule
+ & decision & PI choice & consequence \\
+\midrule
+\TabDecisions
+\botrule
+\end{tabular}
+\end{table}
+
 \section{Conclusion}\label{sec:conclusion}
 
-\cl{The data criterion is partial: the tables, views, halves, covariates and second experiments exist, and the blind build does not. The objective criterion is delivered. The evaluation criterion is partial: the metrics and the scorer are defined and tested, but the screening tier failed its check, so the correction terms need \lit{256} regions and that rescoring has not run. The design criterion is partial: three architectures tie with a trade-off between imputation and correction, the count input with a depth offset is settled, and the rows on views, two-step routing, input depth and loss weights stay provisional.}
+\cl{The data criterion is partial: the tables, views, halves, covariates and second experiments exist, and the blind build does not. The objective criterion is delivered. The evaluation criterion is partial: the metrics and the scorer are defined and tested, and the replicate ladder shows that read sampling holds most of the cell-type pair value; but the screening tier failed its check, so the correction terms need \lit{256} regions, and that rescoring has not landed. The design criterion is partial: three architectures tie with a trade-off between imputation and correction, the count input with a depth offset is settled, and the rows on views, two-step routing, input depth and loss weights stay provisional.}
 
-\cl{The main limitations are the \lit{16}-region correction terms, \lit{3} seeds per arm, models that had not converged at \lit{80,000} windows, and ablations that ran on the first table version. The answer on the views rests on the correction-only term, which is \lit{1} for a model that ignores its input; it must be read with the crop-pair correction term.}
+\cl{The main limitations are the \lit{16}-region correction terms, \lit{3} seeds per arm, models that had not converged at \lit{80,000} windows, and ablations on the first table version.}
 
-\cl{The next session starts from the ready queue (Table~\ref{tab:queue}). Each entry gives its cost; the order is the order in which the entries can be sent, not a ranking. The rescoring settles or overturns every correction effect of the ablations. The references of the corrected tables enable any comparison on them. The mix-and-match round tests whether single gains combine (\mixCost{} CPU-hours plus a qualifying stage of \mixGate{}). The minimum covariate set tells which fields the model needs. The blind build and the final model give the EIC board row, i.e. the test of the whole design on the held-out tracks.}
+\cl{The next session starts from the ready queue (Table~\ref{tab:queue}): the rescoring settles every correction effect, the mix-and-match round (\mixCost{} CPU-hours plus a gate of \mixGate{}) tests whether gains combine, and the final model gives the EIC board row.}
 
 
 \end{document}

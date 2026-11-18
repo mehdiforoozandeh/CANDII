@@ -21,7 +21,9 @@
            Prose numbers are empty spans with a data-k attribute, filled from DATA.n; figures are matplotlib PNGs
            (DATA.fig) built from the same files. Typed design constants: none; panel letters only.
   depends  slides marked "depends on the 256-region rescoring" in their contract header change when the
-           rescoring of the 7 decisive arms lands: 5, 8, 12, 13, 14, 16, 20.
+           rescoring of the 7 decisive arms lands: 6, 9, 15, 16, 17, 19, 24.
+  update   version 2 (2026-11-18): the replicate ladder (slide 12), the second-experiment layers (13), the
+           side deliverables (5), the status of the rescoring (19), and the PI decisions of 2026-11-17 (22, 23).
   notes    every slide carries speaker notes (press n). All prose is drafted by the agent for the PI's review.
 -->
 <script type="application/json" id="deck-sources">__SOURCES__</script>
@@ -158,7 +160,7 @@
       <div class="cards four" style="margin-top:26px">
         <div class="card" style="--c:var(--wait)"><div class="rl"><span data-src="literal">(1)</span> Data + counterfactual views</div><div class="big">partial</div><p>Tables with views and filled covariates are delivered. Blind build, DNase-seq update and final model are not.</p></div>
         <div class="card" style="--c:var(--ok)"><div class="rl"><span data-src="literal">(2)</span> Training objective</div><div class="big">delivered</div><p>One document, traced to the code. Its open choices are marked.</p></div>
-        <div class="card" style="--c:var(--wait)"><div class="rl"><span data-src="literal">(3)</span> Evaluation</div><div class="big">partial</div><p>Defined and tested. The decisive correction scores on all regions have not run.</p></div>
+        <div class="card" style="--c:var(--wait)"><div class="rl"><span data-src="literal">(3)</span> Evaluation</div><div class="big">partial</div><p>Defined and tested; the replicate ladder ran. The decisive correction scores on all regions are running.</p></div>
         <div class="card" style="--c:var(--wait)"><div class="rl"><span data-src="literal">(4)</span> miniCANDI design</div><div class="big">partial</div><p>A design table with config files exists. Many rows are provisional, and the three models tie.</p></div>
       </div>
       <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd> &nbsp;·&nbsp; <kbd>n</kbd> shows the speaker notes and the source files of each slide</p>
@@ -220,13 +222,32 @@
       <img class="figimg" data-fig="data_state" alt="State of each data deliverable">
       <ul class="pts">
         <li>The blind build (<span data-k="data.blind"></span> blind rows, <span data-k="data.blindctl"></span> controls, <span data-k="data.blindre"></span> reruns) costs about <span data-k="data.blindcost"></span> CPU-hours and needs writable Nibi scratch. The PI runs its submit command.</li>
-        <li>The DNase-seq update needs four row rebuilds, about <span data-k="data.d3cost"></span> CPU-hours. Which table version trains the final model is a PI decision.</li>
+        <li>The DNase-seq update needs four row rebuilds, about <span data-k="data.d3cost"></span> CPU-hours. The PI moved the choice of the table version of the final model to the next session.</li>
       </ul>
       <aside class="notes"><p>Green is delivered and in use. Amber is built and checked but not scored or not complete. Red is not submitted or not built. The second-experiment add-on gives each such track a second experiment of the same cell, with half from another lab, which the replicate ladder and the cross-lab pairs need.</p><p class="srcs" data-s="data2"></p></aside>
     </div>
   </section>
 
-  <!-- 5 · DATA (c): where the counterfactual views help, part one
+  <!-- 5 · DATA (c): side deliverables of the last night
+       job      the QC side tables with their fill rates, the 1 bp region store, the archive and the freed scratch
+       source   results/closeout_A4/qc_tables_2026-11-18/coverage.txt; run_state/plan.md (Log of 2026-11-17 and 18)
+       numbers  DATA.n qcf.*, qc.*, bp.*, arc.*, sc.*
+       cut      the job ids and the removal lists (in the run log) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec"><span data-src="literal">(1)</span> Data</span>(c) side deliverables of the last night</div>
+      <h2>The QC side tables and the <span data-src="literal">1</span> bp region store are built, and Nibi scratch takes writes again</h2>
+      <img class="figimg" data-fig="side" alt="QC fill rates and Nibi scratch use">
+      <ul class="pts">
+        <li><b>QC fill</b>: <span data-k="qc.whole"></span> + <span data-k="qc.pr1"></span> records (<span data-k="qc.ok"></span> ok, <span data-k="qc.noread"></span> without a read set, <span data-k="qc.refused"></span> refused). FRiP is empty, because this pass calls no peaks; NRF and PBC exist only for base and no-duplicate-removal views.</li>
+        <li><b><span data-src="literal">1</span> bp store</b>: <span data-k="bp.views"></span> views recounted; the independent point check matched <span data-k="bp.pts"></span> of <span data-k="bp.ptstore"></span> points. Tables: <span data-k="bp.meas"></span> measurements, <span data-k="bp.pairs"></span> pairs; their verification and the variance by bin size are still running.</li>
+        <li><b>Archive</b>: <span data-k="arc.tars"></span> tar files (<span data-k="arc.gib"></span> GiB, <span data-k="arc.entries"></span> entries) on tape, each compared with scratch before any removal.</li>
+      </ul>
+      <aside class="notes"><p>The QC side tables are what the QC-on-input arm reads; that arm runs in the next session. The table build refuses a view without a passed read-set check, and it built all views. The removal freed scratch for the rescoring on all regions.</p><p class="srcs" data-s="side"></p></aside>
+    </div>
+  </section>
+
+  <!-- 6 · DATA (d): where the counterfactual views help, part one
        job      the PI's question, whether and where the views help: the correction-only term without views
        source   results/ablations_closeout/arm_summary_p16_sv_2026-11-17.tsv; ABLATIONS_READ.md section 2.14
        numbers  DATA.n vw.*
@@ -234,7 +255,7 @@
        cut      the same-view-only arm (it breaks the correction term; heatmap slide) -->
   <section class="slide">
     <div class="wrap">
-      <div class="kicker"><span class="sec"><span data-src="literal">(1)</span> Data</span>(c) where the counterfactual views help: the correction-only term</div>
+      <div class="kicker"><span class="sec"><span data-src="literal">(1)</span> Data</span>(d) where the counterfactual views help: the correction-only term</div>
       <h2>Without counterfactual views, the correction-only term falls on all three models; the composite does not move</h2>
       <img class="figimg" data-fig="views_conly" alt="Correction-only term by training views">
       <ul class="pts">
@@ -245,14 +266,14 @@
     </div>
   </section>
 
-  <!-- 6 · DATA (d): where the counterfactual views help, part two
+  <!-- 7 · DATA (e): where the counterfactual views help, part two
        job      per pair type on the U-Net: depth views help on depth pairs; alignment-level views hurt on their pairs
        source   results/closeout_A3/where_vs_allviews.tsv, WHERE_VIEWS.md
        numbers  DATA.n wv.*
        cut      per-assay rows (in WHERE_VIEWS.md) -->
   <section class="slide">
     <div class="wrap">
-      <div class="kicker"><span class="sec"><span data-src="literal">(1)</span> Data</span>(d) where the counterfactual views help: by pair type, U-Net</div>
+      <div class="kicker"><span class="sec"><span data-src="literal">(1)</span> Data</span>(e) where the counterfactual views help: by pair type, U-Net</div>
       <h2>Depth-thinning views make the U-Net reliable on depth pairs; alignment-level views alone break it on their own pairs</h2>
       <img class="figimg" data-fig="views_pairs" alt="U-Net gap closed by pair type">
       <ul class="pts">
@@ -263,7 +284,7 @@
     </div>
   </section>
 
-  <!-- 7 · OBJECTIVE (a): the training objective in one figure
+  <!-- 8 · OBJECTIVE (a): the training objective in one figure
        job      O1 document in one figure: window, three target kinds, NB head, NB negative log-likelihood
        source   INSTRUCTIONS/peeling_the_onion/onion training objective.md sections 1 to 4, 6
        numbers  DATA.n obj.*
@@ -281,7 +302,7 @@
     </div>
   </section>
 
-  <!-- 8 · OBJECTIVE (b): the loss ablations
+  <!-- 9 · OBJECTIVE (b): the loss ablations
        job      no other loss beats the NB negative log-likelihood on two or more models
        source   arm summary; ABLATIONS_READ.md section 2.9
        numbers  DATA.n loss.*
@@ -300,7 +321,7 @@
     </div>
   </section>
 
-  <!-- 9 · EVALUATION (a): the 16-versus-256 check
+  <!-- 10 · EVALUATION (a): the 16-versus-256 check
        job      the pre-written check of the pair regions failed, so correction terms need all regions
        source   results/region_sampling_checks/check_v3.tsv, PAIR_REGIONS_V3.md
        numbers  DATA.n chk.*
@@ -318,7 +339,7 @@
     </div>
   </section>
 
-  <!-- 10 · EVALUATION (b): what is tested and what is not scored
+  <!-- 11 · EVALUATION (b): what is tested and what is not scored
        job      the evaluation is defined and its code is tested; three evaluation items are not finished
        source   settled miniCANDI design.md section 3; closeout todo.md (Evaluation rows); onion paper.md
        numbers  DATA.n test.*, ev.*
@@ -326,17 +347,50 @@
   <section class="slide">
     <div class="wrap">
       <div class="kicker"><span class="sec"><span data-src="literal">(3)</span> Evaluation</span>(b) defined, tested, and not yet complete</div>
-      <h2>The scorer and the selection rule are tested; the signal-space scores, the replicate ladder and the blind board are not finished</h2>
+      <h2>The scorer, the selection rule and the replicate ladder are done; the signal-space scores and the blind board are not finished</h2>
       <div class="cards">
         <div class="card" style="--c:var(--ok)"><div class="rl">Defined and tested</div><div class="big"><span data-k="test.pass"></span> passed</div><p>Scorer, pair-region subset, selection rule, sampler, loss and models, on synthetic data (<span data-k="test.skip"></span> skipped, <span data-k="test.fail"></span> failed: a config-key guard, fixed afterwards). The evaluation set holds <span data-k="ev.items"></span> imputation items and <span data-k="ev.pairs"></span> correction pairs.</p></div>
-        <div class="card" style="--c:var(--wait)"><div class="rl">Built, not complete</div><p><b>Signal p-value and peaks</b> from the predicted NB: one run scored, the corrected formula not yet run. <b>Replicate ladder</b>: the layers stage is ready to run; the mixed-model stage must not run yet. <b>Foreign covariates at scoring</b>: scored, read on screening scores.</p></div>
-        <div class="card" style="--c:var(--bad)"><div class="rl">Not run</div><p>Settled scores (all regions) of the decisive ablation arms. The blind pass and the EIC board row, which need the final model.</p></div>
+        <div class="card" style="--c:var(--wait)"><div class="rl">Built, not complete</div><p><b>Signal p-value and peaks</b> from the predicted NB: one run scored, the corrected formula not yet run. <b>Mixed model</b> of the ladder: must not run before it has a noise level per library. <b>Foreign covariates at scoring</b>: scored, read on screening scores.</p></div>
+        <div class="card" style="--c:var(--bad)"><div class="rl">Not landed</div><p>Settled scores (all regions) of the decisive ablation arms: running, none landed yet. The blind pass and the EIC board row, which need the final model: not run.</p></div>
       </div>
       <aside class="notes"><p>The tests use synthetic tables; the checks on real data are cluster runs. No test proves that a transform's output link trains from a zero-initialized head; the Anscombe defect passed its synthetic check.</p><p class="srcs" data-s="evaltest"></p></aside>
     </div>
   </section>
 
-  <!-- 11 · DESIGN (a): architectures on all regions
+  <!-- 12 · EVALUATION (c): the replicate ladder on the real data
+       job      which rungs are estimable per assay class, their share of the cell-type pair value, and why the others are not
+       source   results/closeout_E4/ladder_2026-11-18/ladder.tsv, chain_check.tsv; PI decisions 2026-11-17.md row 5
+       numbers  DATA.n lad.*
+       cut      strata and signal bands (in ladder.tsv); the mixed model (not run, by rule) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec"><span data-src="literal">(3)</span> Evaluation</span>(c) the replicate ladder on the real data</div>
+      <h2>Read sampling holds most of the cell-type pair value; the replicate and cell-type rungs are small, and most rungs above them are not estimable</h2>
+      <img class="figimg xtall" data-fig="ladder" alt="The replicate ladder per assay class">
+      <p class="note">Panel (a) uses the units that hold all three rungs; panels (b) to (d) use all matched pairs of each rung. Above the replicate, two rungs are estimable: lab with donor in broad marks, <span data-k="lad.br.ld.v"></span> (interval <span data-k="lad.br.ld.lo"></span> to <span data-k="lad.br.ld.hi"></span>; share <span data-k="lad.br.ld.sh"></span>), and repeat with donor in narrow marks, <span data-k="lad.nr.rd.v"></span> (<span data-k="lad.nr.rd.lo"></span> to <span data-k="lad.nr.rd.hi"></span>). Both intervals include zero. ATAC-seq has no rung (<span data-k="lad.atac.n"></span> read-half pairs from <span data-k="lad.atac.c"></span> cells). The ladder now subtracts two-sided (PI decision), so earlier ladder numbers are not comparable.</p>
+      <aside class="notes"><p>Each increment is assay-matched: on each cell and assay with pairs of both rungs, the pair value of the rung minus that of the rung below, then a mean over assays and cells. The interval is a <span data-src="literal">95%</span> bootstrap over cells. A rung needs five matched pairs from three cells. The sequencing and library rungs are empty because the per-library and per-lane units were never built. No pair in the challenge data holds two donors inside one experiment. Negative increments are kept, not clipped; every interval above the replicate rung that is negative includes zero. The PI decided the two-sided definition and the check on common cell types; panel (a) is that check, and it adds up exactly in every group.</p><p class="srcs" data-s="ladder"></p></aside>
+    </div>
+  </section>
+
+  <!-- 13 · EVALUATION (d): the second experiments, lab with donor
+       job      the variance layer of a second experiment from another lab and donor, reported as one effect (PI decision 3)
+       source   results/closeout_D2/layers_2026-11-18/layers.tsv (rows pooled by assay class); PI decisions 2026-11-17.md rows 3, 4
+       numbers  DATA.n d2.*
+       cut      the pure lab layer (too few cells; not reported by PI decision); per-assay rows -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec"><span data-src="literal">(3)</span> Evaluation</span>(d) second experiments: lab with donor</div>
+      <h2>A second experiment from another lab and donor adds no variance beyond a biological replicate that these pairs can resolve</h2>
+      <img class="figimg short" data-fig="second" alt="Second-experiment layers">
+      <ul class="pts">
+        <li>Broad marks: all pairs <span data-k="d2.br.all.v"></span> (<span data-k="d2.br.all.lo"></span> to <span data-k="d2.br.all.hi"></span>; <span data-k="d2.br.all.n"></span> pairs, <span data-k="d2.br.all.c"></span> cells); lab with donor <span data-k="d2.br.ld.v"></span> (<span data-k="d2.br.ld.lo"></span> to <span data-k="d2.br.ld.hi"></span>; <span data-k="d2.br.ld.n"></span> pairs, <span data-k="d2.br.ld.c"></span> cells). Narrow marks: <span data-k="d2.nr.all.v"></span> (<span data-k="d2.nr.all.n"></span> pairs, <span data-k="d2.nr.all.c"></span> cells) and <span data-k="d2.nr.ld.v"></span> (<span data-k="d2.nr.ld.n"></span> pairs, <span data-k="d2.nr.ld.c"></span> cells). Every interval includes zero.</li>
+        <li>By PI decision, lab is reported together with donor, never alone. The <span data-k="d2.dropped"></span> unbuilt DNase-seq rows are dropped; the add-on keeps <span data-k="d2.kept"></span> experiments. Accessibility classes have at most <span data-k="d2.small"></span> pairs.</li>
+      </ul>
+      <aside class="notes"><p>These rows pool the pairs of an assay class, and their cells differ from the rung below, so the ladder's assay-matched value on the previous slide is the primary one; both say the same. Most lab-with-donor pairs also differ in run type, read length or platform. The models on these pairs have not run.</p><p class="srcs" data-s="second"></p></aside>
+    </div>
+  </section>
+
+  <!-- 14 · DESIGN (a): architectures on all regions
        job      the three models tie on the composite; the U-Net leads imputation, the conv models lead correction
        source   results/region_sampling_checks/check_v3.tsv (all-region values, condition 3 notes); arm summary (imputation)
        numbers  DATA.n a256.*, tie.*, ref.*
@@ -354,7 +408,7 @@
     </div>
   </section>
 
-  <!-- 12 · DESIGN (b): ablation overview, inputs, DNA and covariates
+  <!-- 15 · DESIGN (b): ablation overview, inputs, DNA and covariates
        job      every single-switch ablation on inputs, DNA and covariates, three models, three terms
        source   arm summary; ABLATIONS_READ.md sections 2.1 to 2.13, 2.16
        numbers  DATA.n ai.*, fd.*, ts.*, sc.*
@@ -370,7 +424,7 @@
     </div>
   </section>
 
-  <!-- 13 · DESIGN (c): ablation overview, loss, views and count transforms
+  <!-- 16 · DESIGN (c): ablation overview, loss, views and count transforms
        job      the other single-switch ablations; local ratio and quantile transforms are worse on all three
        source   arm summary; ABLATIONS_READ.md sections 2.9, 2.14, 2.15
        numbers  DATA.n tf.*
@@ -386,7 +440,7 @@
     </div>
   </section>
 
-  <!-- 14 · DESIGN (d): the settled design table
+  <!-- 17 · DESIGN (d): the settled design table
        job      the state of each of the design rows: settled, by ruling, mixed, provisional
        source   closeout/settled miniCANDI design.md section 1
        numbers  DATA.n des.*
@@ -402,7 +456,7 @@
     </div>
   </section>
 
-  <!-- 15 · DESIGN (e): ready for scaling
+  <!-- 18 · DESIGN (e): ready for scaling
        job      what a scaling session starts from, and the known risks
        source   closeout/settled miniCANDI design.md section 4
        numbers  DATA.n des.windows
@@ -422,7 +476,7 @@
     </div>
   </section>
 
-  <!-- 16 · 256-REGION RESCORING: PENDING (marked slide; the foreman updates it when the scores land)
+  <!-- 19 · 256-REGION RESCORING: PENDING (marked slide; the foreman updates it when the scores land)
        job      the place for the rescoring result; until then, what it decides and which slides it changes
        source   closeout/settled miniCANDI design.md section 2.0; ready queue for scaling.md entry 5
        numbers  DATA.n rs.*
@@ -433,21 +487,22 @@
       <div class="kicker"><span class="sec">Pending</span>the rescoring on all regions</div>
       <div class="banner"><span data-k="ev.regions"></span>-region rescoring: pending</div>
       <h2>The <span data-k="rs.arms"></span> decisive arms (<span data-k="rs.seeds"></span> run-seeds, about <span data-k="rs.cost"></span> CPU-hours) are not scored on all regions yet</h2>
+      <p class="note"><b>Status.</b> Running on Nibi since <span data-k="rs.day"></span>, <span data-k="rs.start"></span> UTC (run log): <span data-k="rs.n"></span> run-seeds, <span data-k="rs.cap"></span> scorings at one time, about <span data-k="rs.hours"></span> h per scoring; <span data-k="rs.scored"></span> of <span data-k="rs.n"></span> scored at <span data-k="rs.now"></span> UTC on <span data-k="rs.nowday"></span>. At this rate the predict stage needs <span data-k="rs.rounds"></span> rounds, about <span data-k="rs.total"></span> h, so most scores land after the run ends.</p>
       <div class="pending">
         <table class="grid">
           <tr><th>arms</th><th>pre-written rule decides</th><th>slides it changes</th></tr>
           <tr><td>scrambled covariates</td><td>do the models use covariates for correction?</td><td>design (b), summary</td></tr>
-          <tr><td>base view only</td><td>do the counterfactual views help correction?</td><td>data (c), design (c) and (d), summary</td></tr>
+          <tr><td>base view only</td><td>do the counterfactual views help correction?</td><td>data (d), design (c) and (d), summary</td></tr>
           <tr><td>two-step, native and fixed base depth</td><td>does routing through the base view enter the pool?</td><td>design (b) and (d)</td></tr>
           <tr><td>fixed input depth</td><td>does the U-Net trade-off hold?</td><td>design (b) and (d)</td></tr>
           <tr><td>average baseline input; imputation weight four</td><td>do these stay in the mix-and-match pool?</td><td>objective (b), design (b) to (d)</td></tr>
         </table>
       </div>
-      <aside class="notes"><p>The jobs wait in the Fir queue during the outage. The PI decides whether they run there or on Nibi once its scratch is writable. Until they land, every effect on a correction term in this deck is a screening result. Foreman: replace this slide with the arm summary on all regions and the verdict of each rule.</p><p class="srcs" data-s="pending"></p></aside>
+      <aside class="notes"><p>The PI chose Nibi in the close-out window. The Fir copies of these jobs stay queued; cancelling them is the PI's action. Until the scores land, every effect on a correction term in this deck is a screening result. Foreman: replace this slide with the arm summary on all regions and the verdict of each rule.</p><p class="srcs" data-s="pending"></p></aside>
     </div>
   </section>
 
-  <!-- 17 · WHAT DID NOT RUN, AND WHY
+  <!-- 20 · WHAT DID NOT RUN, AND WHY
        job      the three limits: Fir outage, Nibi scratch quota, the 24-hour window
        source   closeout/ready queue for scaling.md section 0; final 24 hours plan.md
        numbers  DATA.n nr.*
@@ -455,18 +510,18 @@
   <section class="slide">
     <div class="wrap">
       <div class="kicker"><span class="sec">Limits</span>what did not run, and why</div>
-      <h2>Fir was down, Nibi scratch refused writes, and the close-out window held no training round</h2>
+      <h2>Fir was down, Nibi scratch refused writes until the last night, and the close-out window held no training round</h2>
       <img class="figimg short" data-fig="notrun" alt="Nibi scratch and Fir outage">
       <ul class="pts">
         <li><b>Fir</b>: planned outage to <span data-k="nr.firend"></span>; <span data-k="nr.firjobs"></span> jobs wait in its queue, among them the rescoring and the matched-compute trainings. Never resubmit them.</li>
-        <li><b>Nibi</b>: <span data-k="nr.used"></span> GiB used against a soft quota of <span data-k="nr.quota"></span> GiB. Writes resume when the pipeline work folder (<span data-k="nr.work"></span> GiB) leaves, after the QC fill and the recount.</li>
+        <li><b>Nibi</b>: <span data-k="nr.used"></span> GiB used against a soft quota of <span data-k="nr.quota"></span> GiB. After the QC fill and the recount, the pipeline work folder (<span data-k="nr.work"></span> GiB) left, use fell to <span data-k="sc.after"></span> GiB, and writes resumed.</li>
         <li><b>The window</b>: the run ends <span data-k="nr.deadline"></span>. A training round of several thousand CPU-hours cannot train, score and be read in it.</li>
       </ul>
       <aside class="notes"><p>Nothing was cancelled, and nothing was removed without a verified archive and the PI's yes. Every run that did not start is in the ready queue with its command.</p><p class="srcs" data-s="notrun"></p></aside>
     </div>
   </section>
 
-  <!-- 18 · THE READY QUEUE AS ONE PICTURE
+  <!-- 21 · THE READY QUEUE AS ONE PICTURE
        job      every built, unsent run in sending order, with cost and what it waits for
        source   closeout/ready queue for scaling.md section 1
        numbers  DATA.n rq.*
@@ -474,28 +529,43 @@
   <section class="slide">
     <div class="wrap">
       <div class="kicker"><span class="sec">Next</span>the ready queue</div>
-      <h2><span data-k="rq.n"></span> runs are queued in order; <span data-k="rq.now"></span> can go now, and the rest wait for Fir, an earlier entry or a PI decision</h2>
+      <h2><span data-k="rq.n"></span> runs are queued in order; the first <span data-k="rq.now"></span> were submitted in the close-out window, and the rest wait for Fir, an earlier entry or the next session</h2>
       <img class="figimg tall" data-fig="queue" alt="The ready queue">
       <p class="note">Bars sum to about <span data-k="rq.total"></span> allocated CPU-hours at the lower end of each range; <span data-k="rq.noscript"></span> entries have no submit script yet. Each entry in the document gives the command, the prerequisite and the decision rule.</p>
       <aside class="notes"><p>The color is the first thing the entry waits for. The blind build dominates the cost. The mix-and-match round and the minimum covariate set need the PI's budget.</p><p class="srcs" data-s="queue"></p></aside>
     </div>
   </section>
 
-  <!-- 19 · DECISIONS THAT WAIT FOR THE PI
-       job      the open PI decisions, each with the queue entry that waits for it
-       source   closeout/ready queue for scaling.md section 4; settled miniCANDI design.md row 1
-       numbers  DATA.dec (text with costs, from the document)
-       cut      recommendations (the PI chooses) -->
+  <!-- 22 · DECISIONS TAKEN
+       job      the nine decisions of the PI on 2026-11-17, as a grid
+       source   closeout/PI decisions 2026-11-17.md
+       numbers  DATA.dec (text with costs, from the decision record)
+       cut      job ids (in the decision record and the run log) -->
   <section class="slide">
     <div class="wrap">
-      <div class="kicker"><span class="sec">Decisions</span>for the PI</div>
-      <h2>These decisions wait for the PI</h2>
-      <table class="grid" id="decTable"></table>
-      <aside class="notes"><p>Each line is copied from the ready queue, with its cost in CPU-hours. The architecture choice comes from the design document. No line carries a recommendation here; the documents state the agent's recommendation where it has one.</p><p class="srcs" data-s="dec"></p></aside>
+      <div class="kicker"><span class="sec">Decisions</span>taken by the PI on <span data-src="literal">2026-11-17</span></div>
+      <h2>The PI took <span data-k="dec.n"></span> decisions: five act in this window, four shape the next session</h2>
+      <table class="grid" id="decTable" style="font-size:clamp(11px,0.98vw,14px)"></table>
+      <aside class="notes"><p>Each line is copied from the decision record; each choice was the PI's click. Costs are allocated CPU-hours. Line a was written before the scratch removal; the rescoring now runs more scorings at one time (the pending slide gives the state).</p><p class="srcs" data-s="dec"></p></aside>
     </div>
   </section>
 
-  <!-- 20 · SUMMARY
+  <!-- 23 · MOVED TO THE NEXT SESSION
+       job      the two decisions the PI moved to the next session, with the PI's words and the agent's recommendation
+       source   closeout/settled miniCANDI design.md, last section
+       numbers  none
+       cut      the information column (in the design document) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Decisions</span>moved to the next session</div>
+      <h2>Scaling is the next session's task; this session gives the information and the miniCANDI prototype</h2>
+      <p class="sub" id="decQuote"></p>
+      <table class="grid" id="movedTable" style="margin-top:18px"></table>
+      <aside class="notes"><p>The quotes are the PI's words of the seventeenth. The recommendations are the agent's intent, written in the settled design document with the information for each choice; neither point is asked again in this session.</p><p class="srcs" data-s="dec"></p></aside>
+    </div>
+  </section>
+
+  <!-- 24 · SUMMARY
        job      the four verdicts again, each with its one-line reason; restated from results, none new
        source   the slides above
        numbers  none new
@@ -508,14 +578,14 @@
       <ul class="pts">
         <li><b><span data-src="literal">(1)</span> Data: partial.</b> Tables with counterfactual views and filled covariates are in use. The views help where they match the pair type and keep the correction-only term up; they do not move the composite.</li>
         <li><b><span data-src="literal">(2)</span> Objective: delivered.</b> One Negative Binomial likelihood on three target kinds, traced to the code; no other loss beats it on two or more models.</li>
-        <li><b><span data-src="literal">(3)</span> Evaluation: partial.</b> Defined and tested; correction terms need all regions, and the decisive arms are not rescored yet.</li>
+        <li><b><span data-src="literal">(3)</span> Evaluation: partial.</b> Defined and tested; the replicate ladder ran on the real data. Correction terms need all regions, and the rescoring of the decisive arms is running.</li>
         <li><b><span data-src="literal">(4)</span> Design: partial.</b> Three tied models with configs ready; the count offset is settled; many rows wait for the rescoring, the mix-and-match round and the covariate set.</li>
       </ul>
       <aside class="notes"><p>Each line restates a slide above. When the rescoring lands, the views line and the design line change first.</p><p class="srcs" data-s="status"></p></aside>
     </div>
   </section>
 
-  <!-- 21 · BACKUP: glossary
+  <!-- 25 · BACKUP: glossary
        job      the terms of the deck, each in at most ten words
        source   onion paper.md (Methods); onion training objective.md
        numbers  none
@@ -549,9 +619,10 @@ document.querySelectorAll('[data-k]').forEach(e=>{const v=DATA.n[e.dataset.k]; e
 document.querySelectorAll('img[data-fig]').forEach(e=>{e.src=DATA.fig[e.dataset.fig];});
 document.querySelectorAll('p.srcs').forEach(e=>{e.textContent='Sources: '+(DATA.src[e.dataset.s]||[]).join('; ');});
 (function(){
-  const rows=DATA.dec.map(d=>{const m=d.match(/^(.*?)\s*\((entr(?:y|ies) [^)]*)\)\.?\s*(.*)$/); return m?[(m[1]+(m[3]?' '+m[3]:'')).replace(/\s+,/g,','),m[2]]:[d,''];});
-  rows.push(['Which model goes to scaling: conv autoencoder, conv + attention or U-Net (a tie on the composite).','design table, first row']);
-  document.getElementById('decTable').innerHTML='<tr><th></th><th>decision</th><th>ready-queue entry</th></tr>'+rows.map((r,i)=>`<tr><td>${String.fromCharCode(97+i)}</td><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('');
+  const L=i=>String.fromCharCode(97+i);
+  document.getElementById('decTable').innerHTML='<tr><th></th><th>decision</th><th>PI choice</th><th>consequence</th></tr>'+DATA.dec.map((r,i)=>`<tr><td>${L(i)}</td><td>${r.d}</td><td><b>${r.c}</b></td><td>${r.k}</td></tr>`).join('');
+  document.getElementById('movedTable').innerHTML='<tr><th>decision</th><th>recommendation (the agent\'s intent)</th></tr>'+DATA.moved.map(r=>`<tr><td><b>${r.d}</b></td><td>${r.r}</td></tr>`).join('');
+  document.getElementById('decQuote').innerHTML='PI: &ldquo;'+DATA.quote[0]+'&rdquo; On the data version: &ldquo;'+DATA.quote[1]+'&rdquo;';
 })();
 
 /* navigation and speaker notes, as in the prezit template */
