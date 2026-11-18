@@ -22,9 +22,9 @@ Steps, in order (the first failure ends the attempt):
      string value with a `/` except `model_file`. `model_file` points at the recipe's own
      `model.py` (required except under --local). `model.py`, read as a syntax tree, imports only
      torch, an allowlist of pure-computation standard-library modules (STDLIB_OK) and
-     minicandi.{contract,components,covariates}; it names no file, exec or introspection builtin
-     or attribute (BANNED_NAMES, BANNED_ATTRS), takes no dynamic getattr, and holds no string
-     `y_counts` / `y_base`.
+     minicandi.{contract,components,covariates,dna_fusion}; it names no file, exec or
+     introspection builtin or attribute (BANNED_NAMES, BANNED_ATTRS), takes no dynamic getattr,
+     and holds no string `y_counts` / `y_base`.
   2. Dynamic checks on the built model, on a batch of synthetic tables (`minicandi.synth`): the
      model is built by `registry.build_model`, and a class from the recipe's `model.py` must be in
      it when `model_file` is set (so a registry without `model_file` support never scores the
@@ -118,7 +118,7 @@ STDLIB_OK = frozenset(("__future__", "math", "functools", "itertools", "collecti
                        "collections.abc", "dataclasses", "typing", "enum", "numbers", "abc", "copy",
                        "operator", "warnings", "sys", "pathlib", "re", "string", "bisect", "heapq",
                        "statistics", "fractions", "contextlib"))
-MINICANDI_OK = frozenset(("contract", "components", "covariates"))
+MINICANDI_OK = frozenset(("contract", "components", "covariates", "dna_fusion"))
 TORCH_BANNED = ("torch.hub", "torch.package", "torch.utils.cpp_extension", "torch.multiprocessing",
                 "torch.distributed", "torch.utils.data", "torch.serialization", "torch.onnx",
                 "torch.utils.tensorboard", "torch._C")
