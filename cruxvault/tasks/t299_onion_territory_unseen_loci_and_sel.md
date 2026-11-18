@@ -1,15 +1,15 @@
 ---
 id: t299
 type: task
-title: Onion: Territory, unseen loci and selection: report
+title: "Onion: Territory, unseen loci and selection: report"
 category: implementation
 parent: t152
 blocked_by: t295
 refs: h33, h34, h36
 hypothesis_refs: 
-status: open
-created: 2026-11-13T12:42:53
-updated: 2026-11-13T12:42:53
+status: dropped
+created: "2026-11-13T12:42:53"
+updated: "2026-11-18T23:23:12"
 ---
 
 # t299 — Onion: Territory, unseen loci and selection: report
@@ -19,6 +19,10 @@ Refs:: [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited
 ## Why
 
 PI questions of 2026-11-13 on region budget and selection (Amendment 7): the verdicts on territory, selection and unseen loci
+
+## Dropped (close-out reconciliation, 2026-11-18)
+
+Folded into t295 (territory, unseen loci and selection: scoring and report).
 
 ## Output
 

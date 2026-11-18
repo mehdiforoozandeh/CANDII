@@ -35,10 +35,11 @@ If the views do not raise the scores, the wiring of cross-view training or the c
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**1 children** · open 1, leaning 0, settled 0, parked 0 · 3 finding(s) on this question
+**1 children** · open 1, leaning 0, settled 0, parked 0 · 4 finding(s) on this question
 
 - `q45` _(Q)_ [[q45_why_does_adding_the_no_duplicate_removal|Why does adding the no-duplicate-removal and no-MAPQ-filter views to training lower gap closed on the never-trained pair that combines both (0.08 against 1.77 for base only, half-read floor scale)?]] — *open*
 - `f82` finding (weak) [[f82_3_seeds_per_arm_but_the_all_views_refere|3 seeds per arm, but the all-views reference ran on Nibi from an earlier…]]
 - `f99` finding (moderate) [[f99_beyond_the_seed_range_on_all_three_model|Beyond the seed range on all three models.]]
 - `f106` finding (strong) [[f106_twice_the_seed_range_on_all_three_models|Twice the seed range on all three models with 3 seeds each on all 256…]]
+- `f117` finding (moderate) [[f117_three_seeds_on_the_16_region_screening_s|Three seeds on the 16-region screening set with large seed ranges in the…]]
 <!-- crux:ledger:end -->

@@ -35,7 +35,8 @@ If lab cannot be separated from donor, the cross-lab correction score must be re
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+**0 children** · open 0, leaning 0, settled 0, parked 0 · 2 finding(s) on this question
 
 - `f103` finding (moderate) [[f103_counts_read_from_the_pair_table_and_conf|Counts read from the pair table and confirmed by an independent reviewer; no…]]
+- `f120` finding (weak) [[f120_every_interval_includes_zero_on_4_to_15_|Every interval includes zero on 4 to 15 cells, the form is one-sided, the…]]
 <!-- crux:ledger:end -->

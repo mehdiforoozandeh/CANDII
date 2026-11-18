@@ -1,24 +1,30 @@
 ---
 id: t296
 type: task
-title: Onion: Evaluation-region count: the 1,024-region set and its scorings (submit)
+title: Onion: evaluation-region count: the 1,024-region set, its scorings and the analysis
 category: implementation
 parent: t152
-blocked_by: t287, t294, t186, t213
+blocked_by: t294
 refs: h35
 hypothesis_refs: 
 status: open
 created: 2026-11-13T12:42:53
-updated: 2026-11-13T12:42:53
+updated: "2026-11-18T23:23:12"
 ---
 
-# t296 — Onion: Evaluation-region count: the 1,024-region set and its scorings (submit)
+# t296 — Onion: evaluation-region count: the 1,024-region set, its scorings and the analysis
 
 Refs:: [[h35_256_evaluation_regions_are_enough\|h35]]
 
 ## Why
 
 PI questions of 2026-11-13 on region budget and selection (Amendment 7): the scorings on 1,024 evaluation regions
+
+## Current scope (close-out reconciliation, 2026-11-18)
+
+- State: not run. This task absorbs t301. The 16-versus-256 pair check failed (t336), so 256 regions are the floor today.
+- Cost: not measured; a 256-region scoring of one run-seed costs about 30 to 52 CPU-hours, so a 1,024-region scoring costs more.
+- PI: the evaluation-region count is follow-up work (2026-11-16).
 
 ## Output
 

@@ -35,8 +35,9 @@ If they do not hold, the design choices read from the 16-region screening scores
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**0 children** · open 0, leaning 0, settled 0, parked 0 · 2 finding(s) on this question
+**0 children** · open 0, leaning 0, settled 0, parked 0 · 3 finding(s) on this question
 
 - `f101` finding (moderate) [[f101_three_checks_agree_that_large_effects_ar|Three checks agree that large effects are stable, but the arm-versus-base…]]
 - `f108` finding (moderate) [[f108_the_sign_agreement_is_near_complete_but_|The sign agreement is near complete, but only 4 of 7 arm groups are complete…]]
+- `f114` finding (moderate) [[f114_near_complete_sign_agreement_on_55_cells|Near-complete sign agreement on 55 cells, but 10 of 21 arms (two-step…]]
 <!-- crux:ledger:end -->

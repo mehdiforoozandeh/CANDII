@@ -35,7 +35,8 @@ Decides whether the average baseline input enters the settled design.
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+**1 children** · open 1, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
 
+- `h43` [[h43_on_all_256_regions_the_leave_one_out_ave|On all 256 regions, the leave-one-out average input keeps its place in the U-Net mix-and-match pool: better beyond the seed range on one goal term and worse beyond on none]] — *open*
 - `f92` finding (weak) [[f92_effect_on_one_model_only|Effect on one model only.]]
 <!-- crux:ledger:end -->

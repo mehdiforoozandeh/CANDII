@@ -1,15 +1,15 @@
 ---
 id: t314
 type: task
-title: Onion: The budget curve on rung 1
+title: "Onion: The budget curve on rung 1"
 category: implementation
 parent: t152
 blocked_by: t312
 refs: h32, q25
 hypothesis_refs: 
-status: open
-created: 2026-11-14T00:35:55
-updated: 2026-11-14T00:35:55
+status: dropped
+created: "2026-11-14T00:35:55"
+updated: "2026-11-18T23:23:12"
 ---
 
 # t314 — Onion: The budget curve on rung 1
@@ -19,6 +19,10 @@ Refs:: [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[q25_does_a_run_o
 ## Why
 
 Iteration 2 of Amendment 9 (ships 2026-11-16 12:00 UTC): whether 20,000 or 40,000 windows rank the arms as 80,000 does
+
+## Dropped (close-out reconciliation, 2026-11-18)
+
+Chunk I2d was superseded by Amendment 10. The budget curve is t297.
 
 ## Output
 

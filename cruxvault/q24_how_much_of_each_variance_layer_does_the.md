@@ -35,5 +35,7 @@ Turns the data layers into a target: the unexplained part of each layer is the r
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-_(no children yet)_
+**0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+
+- `f125` finding (weak) [[f125_one_to_three_pairs_from_one_or_two_cells|One to three pairs from one or two cells per assay, unclipped values above 1…]]
 <!-- crux:ledger:end -->

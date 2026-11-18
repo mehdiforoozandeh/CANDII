@@ -4,12 +4,12 @@ type: task
 title: Onion: AG2 on the blind tracks, inside the single blind pass
 category: implementation
 parent: t152
-blocked_by: t225, t281
+blocked_by: t223, t280
 refs: 
 hypothesis_refs: 
 status: open
 created: 2026-11-12T18:39:35
-updated: 2026-11-12T18:39:35
+updated: "2026-11-18T23:23:12"
 ---
 
 # t282 — Onion: AG2 on the blind tracks, inside the single blind pass
@@ -19,6 +19,10 @@ Refs:: _(none)_
 ## Why
 
 PI task of 2026-11-13 (AlphaGenome 2 as a competitor): collects the blind AG2 comparison from the single blind pass and states it with its labels
+
+## Current scope (close-out reconciliation, 2026-11-18)
+
+Still to do inside the single blind pass of the final model (t223).
 
 ## Output
 

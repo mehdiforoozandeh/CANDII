@@ -64,7 +64,7 @@ Root: [[candii]]
 - ◐ `q17` [Q] [[q17_what_is_the_dataset_and_what_did_it_cost|**What is the dataset, and what did it cost to build from FASTQ?**]] — *leaning* · moderate
 - ◐ `q18` [Q] [[q18_how_large_is_each_layer_of_the_variance_|**How large is each layer of the variance of a track on real data (sampling, technical, biological replicate, cell type), per assay?**]] — *leaning* · moderate
   - ◐ `h37` [H] [[h37_on_real_data_the_cell_type_layer_is_the_|On real data the cell-type layer is the largest layer for the narrow marks and for accessibility, and the sampling layer is the largest at 25 bp for the broad marks]] — *leaning* · moderate · mixed
-  - ○ `q24` [Q] [[q24_how_much_of_each_variance_layer_does_the|**How much of each variance layer does the model explain (the explained fraction per layer, beside the data layers of iteration 1)?**]] — *open*
+  - ◐ `q24` [Q] [[q24_how_much_of_each_variance_layer_does_the|**How much of each variance layer does the model explain (the explained fraction per layer, beside the data layers of iteration 1)?**]] — *leaning* · weak
   - ◐ `q31` [Q] [[q31_how_do_the_variance_layer_shares_change_|**How do the variance layer shares change at each assay's full depth and on a variance-stabilized scale, instead of log1p counts at pseudoreplicate-half depth?**]] — *leaning* · moderate
   - ◐ `q33` [Q] [[q33_can_the_negative_binomial_be_written_wit|**Can the negative binomial be written with the depth-corrected eta (mean = depth x exp(eta)) throughout the model design, the variance decomposition and the law of total variance, and does decomposing the variance in eta space instead of on counts help, and how?**]] — *leaning* · moderate
     - ◐ `q34` [Q] [[q34_what_does_the_eta_formulation_change_in_|**What does the eta formulation change in the miniCANDI model: is the depth offset already in it, and would a hard offset, a dispersion tied across depth, or an eta-space readout of the model help?**]] — *leaning* · moderate
@@ -75,6 +75,7 @@ Root: [[candii]]
       - ○ `q38` [Q] [[q38_does_rung_1_s_predicted_nb_size_trend_wi|**Does rung 1's predicted NB size trend with target log2 depth on the depth-ladder targets of one base, and does the PIT deviation differ across log2-depth terciles?**]] — *open*
   - ◐ `q60` [Q] [[q60_how_much_of_the_1_bp_count_variance_of_a|**How much of the 1 bp count variance of a track lies below the 25 bp bin of the model, and how much of that variance is reproducible signal and not read-sampling noise?**]] — *leaning* · moderate
   - ○ `q61` [Q] [[q61_does_duplicate_removal_which_makes_the_t|**Does duplicate removal, which makes the two read halves of one library exclude each other, bias the read-half (sampling) layer of the earlier variance ladders at 25 bp?**]] — *open*
+  - ○ `q62` [Q] [[q62_how_large_are_the_dnase_seq_variance_lay|**How large are the DNase-seq variance layers (read sampling, replicate, cell type, other experiment) when the 15,201-read track ENCSR000EKG is left out of the common depth of the DNase-seq pairs?**]] — *open*
 - ◐ `q19` [Q] [[q19_what_do_the_training_free_baselines_reac|**What do the training-free baselines reach on the three goals, i.e. where does a model have room: imputation (the position average against the marginal NB and the noise floor), covariate correction (the gap between depth-only scaling and the half-against-half floor, per covariate knob: the size of the artifact that a model could remove), calibration (PIT and the variance ratio of the baselines)?**]] — *leaning* · moderate
   - ◐ `h38` [H] [[h38_the_gap_between_depth_only_scaling_and_t|The gap between depth-only scaling and the floor is largest for the depth and run-type knobs and near 0 for pure subset pairs]] — *leaning* · moderate · against
   - ● `q32` [Q] [[q32_which_reference_should_define_the_1_of_t|**Which reference should define the 1 of the correction gap-closed scale (headline metric 4), given that the position average goes below the half-against-half floor?**]] — *settled* · strong
@@ -88,16 +89,27 @@ Root: [[candii]]
     - ◐ `q42` [Q] [[q42_why_does_rung_4_the_u_net_recover_the_mo|**Why does rung 4 (the U-Net) recover the most specific variance of the ladder but close the least correction gap of rungs 1 to 5?**]] — *leaning* · moderate
     - ◐ `q46` [Q] [[q46_why_does_the_held_out_nb_loss_rank_the_u|**Why does the held-out NB loss rank the U-Net first and the conv models third and fourth while the composite ranks the conv models first, and why does more training lower held-out loss without raising the composite?**]] — *leaning* · moderate
     - ◐ `q47` [Q] [[q47_which_attention_axis_carries_the_axial_t|**Which attention axis carries the axial transformer's score: along positions, along assays, or both?**]] — *leaning* · weak
+    - ○ `q70` [Q] [[q70_is_the_pointwise_mlp_below_the_conv_mode|**Is the pointwise MLP below the conv models beyond the seed range under the corrected composite (version 3, with the same-view pass)?**]] — *open*
+    - ○ `q71` [Q] [[q71_does_the_architecture_order_at_equal_tra|**Does the architecture order at equal training windows hold when every architecture gets the same training compute (2.4e15 FLOPs)?**]] — *open*
   - ◐ `q48` [Q] [[q48_which_minicandi_design_choices_move_impu|**Which miniCANDI design choices move imputation, correction or calibration beyond the seed range on the conv autoencoder, conv + attention and the U-Net at about 1.0 M parameters?**]] — *leaning* · moderate
     - ◐ `q49` [Q] [[q49_does_the_chip_seq_control_help_minicandi|**Does the ChIP-seq control help miniCANDI as an input assay and as a predicted output?**]] — *leaning* · weak
     - ◐ `q50` [Q] [[q50_does_the_leave_one_out_average_of_the_tr|**Does the leave-one-out average of the training cell types, given as an input, help miniCANDI?**]] — *leaning* · weak
+      - ○ `h43` [H] [[h43_on_all_256_regions_the_leave_one_out_ave|On all 256 regions, the leave-one-out average input keeps its place in the U-Net mix-and-match pool: better beyond the seed range on one goal term and worse beyond on none]] — *open*
     - ◐ `q51` [Q] [[q51_does_two_step_correction_through_a_base_|**Does two-step correction through a base covariate set help miniCANDI, with native or fixed base depth?**]] — *leaning* · moderate
+      - ○ `h42` [H] [[h42_on_all_256_regions_neither_two_step_arm_|On all 256 regions, neither two-step arm (native or fixed base depth) raises the composite of any of the three models by twice the seed range while keeping every goal term within twice the range]] — *open*
     - ◐ `q52` [Q] [[q52_do_the_dna_source_and_the_way_dna_featur|**Do the DNA source and the way DNA features join the count features matter for miniCANDI?**]] — *leaning* · weak
     - ◐ `q53` [Q] [[q53_does_the_form_of_the_covariate_embedding|**Does the form of the covariate embedding (numeric only, per-value numeric, dropout) matter for miniCANDI?**]] — *leaning* · weak
     - ◐ `q54` [Q] [[q54_does_another_loss_poisson_mean_nb_crps_e|**Does another loss (Poisson mean, NB CRPS, equal bin weight, imputation weight 4) help one of the three goals of miniCANDI?**]] — *leaning* · moderate
     - ◐ `q55` [Q] [[q55_does_a_count_transform_on_the_input_beat|**Does a count transform on the input beat the depth offset in miniCANDI?**]] — *leaning* · moderate
     - ◐ `q56` [Q] [[q56_do_the_ablation_conclusions_drawn_from_t|**Do the ablation conclusions drawn from the 16 pair regions hold on all 256 evaluation regions?**]] — *leaning* · moderate
+    - ○ `q64` [Q] [[q64_which_combination_of_the_switches_that_q|**Which combination of the switches that qualified one at a time gives the best miniCANDI on the conv autoencoder, conv + attention and the U-Net, on all 256 regions (the mix-and-match round)?**]] — *open*
+    - ○ `q65` [Q] [[q65_which_covariate_fields_can_be_removed_fr|**Which covariate fields can be removed from miniCANDI before a goal term drops beyond the seed range (the minimum useful covariate set and its exclusion curve)?**]] — *open*
+    - ○ `q66` [Q] [[q66_does_a_learned_cell_type_embedding_add_i|**Does a learned cell-type embedding add information beyond the input tracks of a cell, as shown by a gain that disappears when the cell id is forced to unknown at scoring?**]] — *open*
+    - ○ `q67` [Q] [[q67_does_a_bin_size_other_than_25_bp_1_to_12|**Does a bin size other than 25 bp (1 to 125 bp) change miniCANDI's goal terms, beyond what the change of context length explains?**]] — *open*
+    - ○ `q68` [Q] [[q68_do_read_derived_qc_metrics_nsc_rsc_fragm|**Do read-derived QC metrics (NSC, RSC, fragment length, NRF, PBC) given as model inputs improve miniCANDI beyond the metadata covariates on two or more models?**]] — *open*
+    - ○ `q69` [Q] [[q69_does_bulk_rna_seq_of_the_cell_given_as_a|**Does bulk RNA-seq of the cell, given as an aligned track or as an expression vector, improve miniCANDI imputation?**]] — *open*
   - ◐ `q57` [Q] [[q57_how_closely_can_a_formula_on_25_bp_binne|**How closely can a formula on 25 bp binned counts reproduce the pipeline's signal p-value track and peaks?**]] — *leaning* · moderate
+    - ◐ `q63` [Q] [[q63_how_well_do_the_signal_p_value_track_and|**How well do the signal p-value track and the peaks of a ChIP-seq target come out of the predicted negative binomial, with the observed control and with the model's own predicted control, under the box-spread signal formula?**]] — *leaning* · weak
   - ◐ `q58` [Q] [[q58_can_the_second_experiments_separate_a_la|**Can the second experiments separate a lab effect from a donor effect in the cross-experiment pairs?**]] — *leaning* · moderate
   - ◐ `q59` [Q] [[q59_do_the_nested_replicate_ladder_and_the_c|**Do the nested replicate ladder and the crossed mixed model give the same variance shares, and which one can be quoted?**]] — *leaning* · moderate
 - ◐ `q23` [Q] [[q23_is_the_model_wired_as_designed_does_scra|**Is the model wired as designed: does scrambling the covariates, switching the DNA off, another injection form, a mask token, or matched compute move the scores (the wiring checks of rung 1)?**]] — *leaning* · moderate
@@ -107,10 +119,12 @@ Root: [[candii]]
     - ○ `q45` [Q] [[q45_why_does_adding_the_no_duplicate_removal|**Why does adding the no-duplicate-removal and no-MAPQ-filter views to training lower gap closed on the never-trained pair that combines both (0.08 against 1.77 for base only, half-read floor scale)?**]] — *open*
 - ◐ `q27` [Q] [[q27_are_the_onion_run_s_estimators_scorers_a|**Are the onion run's estimators, scorers and training pipeline correct, fast and reproducible on the clusters?**]] — *leaning* · moderate
 - ● `q28` [Q] [[q28_did_flashzoi_train_on_eic_blind_tracks_o|**Did Flashzoi train on EIC blind tracks or on the genomic loci of the blind scoring?**]] — *settled* · strong
+- ○ `q72` [Q] [[q72_which_architecture_and_which_data_versio|**Which architecture and which data version should the scaled miniCANDI use, given that the conv autoencoder, conv + attention and the U-Net tie on the composite?**]] — *open*
+- ○ `q73` [Q] [[q73_how_does_the_final_minicandi_score_on_th|**How does the final miniCANDI score on the 51 EIC blind tracks, against the published EIC board and the baselines, once the blind rows are built?**]] — *open*
 
 ## Dashboard
 
-- **Questions** (61): open 14 · leaning 38 · settled 9 · parked 0
-- **Hypotheses** (40): open 10 · leaning 18 · settled 6 · parked 6
-- **Confidence**: weak 21 · moderate 35 · strong 15
-- **Findings**: 110
+- **Questions** (73): open 24 · leaning 40 · settled 9 · parked 0
+- **Hypotheses** (42): open 12 · leaning 18 · settled 6 · parked 6
+- **Confidence**: weak 23 · moderate 35 · strong 15
+- **Findings**: 125

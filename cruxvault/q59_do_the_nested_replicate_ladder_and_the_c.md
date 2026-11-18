@@ -39,5 +39,5 @@ _(optional: the pre-registered rules — endpoints, thresholds, scope — locked
 
 - `f104` finding (moderate) [[f104_one_assay_and_one_scale_in_a_smoke_run_t|One assay and one scale in a smoke run; the cause is shown by matched…]]
 - `f109` finding (moderate) [[f109_the_cause_is_read_from_the_code_and_the_|The cause is read from the code and the depth column of the pair values, but…]]
-- `f110` finding (moderate) [[f110_the_point_estimates_reproduce_byte_for_b|The point estimates reproduce byte for byte and the joint bootstrap covered…]]
+- `f110` finding (moderate) [[f110_the_point_estimates_reproduce_byte_for_b|The one-sided rerun reproduces the cluster report byte for byte and the joint bootstrap covered…]]
 <!-- crux:ledger:end -->

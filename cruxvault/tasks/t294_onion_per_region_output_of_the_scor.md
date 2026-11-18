@@ -9,7 +9,7 @@ refs: h32, h33, h34, h35, h36
 hypothesis_refs: 
 status: open
 created: 2026-11-13T12:42:53
-updated: 2026-11-13T12:42:53
+updated: "2026-11-18T23:23:12"
 ---
 
 # t294 — Onion: Per-region output of the scorer and the region bootstrap
@@ -19,6 +19,10 @@ Refs:: [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[h33_at_80_000_wi
 ## Why
 
 PI questions of 2026-11-13 on region budget and selection (Amendment 7): region-bootstrap intervals for every region comparison
+
+## Current scope (close-out reconciliation, 2026-11-18)
+
+Still to do. Needed by the region studies t295, t296 and t297 (region-bootstrap intervals). Cost not measured.
 
 ## Output
 

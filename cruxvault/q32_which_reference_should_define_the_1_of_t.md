@@ -35,7 +35,8 @@ Sets the scale on which correction room is read, so it decides how much room for
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+**0 children** · open 0, leaning 0, settled 0, parked 0 · 2 finding(s) on this question
 
 - `f68` finding (strong) [[f68_settled_by_pi_ruling_47_on_the_evidence_|Settled by PI ruling 47 on the evidence of the investigation: no further…]]
+- `f123` finding (moderate) [[f123_read_from_stored_per_pair_records_with_a|Read from stored per-pair records with an independent reimplementation that…]]
 <!-- crux:ledger:end -->

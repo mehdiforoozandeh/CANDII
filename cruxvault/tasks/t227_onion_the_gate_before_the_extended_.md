@@ -4,12 +4,12 @@ type: task
 title: Onion: The gate before the extended-dataset step
 category: admin
 parent: t152
-blocked_by: t225, t212, t210
+blocked_by: t223
 refs: 
 hypothesis_refs: 
 status: open
 created: 2026-11-11T11:20:32
-updated: 2026-11-11T11:20:32
+updated: "2026-11-18T23:23:12"
 ---
 
 # t227 — Onion: The gate before the extended-dataset step
@@ -19,6 +19,10 @@ Refs:: _(none)_
 ## Why
 
 gives the PI the evidence for gate G5
+
+## Current scope (close-out reconciliation, 2026-11-18)
+
+Still to do after the final model and its blind pass (t223). The extended dataset is follow-up work (PI, 2026-11-16).
 
 ## Output
 

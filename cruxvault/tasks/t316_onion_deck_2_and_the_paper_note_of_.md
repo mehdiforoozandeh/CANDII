@@ -1,15 +1,15 @@
 ---
 id: t316
 type: task
-title: Onion: Deck 2 and the paper note of iteration 2
+title: "Onion: Deck 2 and the paper note of iteration 2"
 category: manuscript
 parent: t152
 blocked_by: t313
 refs: q22, q23, q24, q25, q26
 hypothesis_refs: 
-status: open
-created: 2026-11-14T00:35:55
-updated: 2026-11-14T00:35:55
+status: done
+created: "2026-11-14T00:35:55"
+updated: "2026-11-18T23:23:12"
 ---
 
 # t316 — Onion: Deck 2 and the paper note of iteration 2
@@ -20,11 +20,15 @@ Refs:: [[q22_does_the_smallest_model_beat_the_baselin\|q22]], [[q23_is_the_model
 
 Iteration 2 of Amendment 9 (ships 2026-11-16 12:00 UTC): ship iteration 2 (I2d and I2e enter as available)
 
+## Close-out note (2026-11-18)
+
+Ship 2 deck delivered 2026-11-15 (commits 89640ad, 09c8d99).
+
 ## Output
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Ship 2 deck](presentations/onion-ship2-2026-11-15/DECK.md)
 
 ## Evidence
 
