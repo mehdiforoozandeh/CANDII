@@ -242,10 +242,25 @@
       <img class="figimg" data-fig="side" alt="QC fill rates and Nibi scratch use">
       <ul class="pts">
         <li><b>QC fill</b>: <span data-k="qc.whole"></span> + <span data-k="qc.pr1"></span> records (<span data-k="qc.ok"></span> ok, <span data-k="qc.noread"></span> without a read set, <span data-k="qc.refused"></span> refused). FRiP is empty, because this pass calls no peaks; NRF and PBC exist only for base and no-duplicate-removal views.</li>
-        <li><b><span data-src="literal">1</span> bp store</b>: <span data-k="bp.views"></span> views recounted; the independent point check matched <span data-k="bp.pts"></span> of <span data-k="bp.ptstore"></span> points. Tables: <span data-k="bp.meas"></span> measurements, <span data-k="bp.pairs"></span> pairs; their verification and the variance by bin size are still running.</li>
+        <li><b><span data-src="literal">1</span> bp store</b>: <span data-k="bp.views"></span> views recounted; the independent point check matched <span data-k="bp.pts"></span> of <span data-k="bp.ptstore"></span> points. Tables: <span data-k="bp.meas"></span> measurements, <span data-k="bp.pairs"></span> pairs; their verification (Nibi job <span data-k="bp.verifyjob"></span>) is still running. The variance by bin size is done (next slide).</li>
         <li><b>Archive</b>: <span data-k="arc.tars"></span> tar files (<span data-k="arc.gib"></span> GiB, <span data-k="arc.entries"></span> entries) on tape, each compared with scratch before any removal.</li>
       </ul>
       <aside class="notes"><p>The QC side tables are what the QC-on-input arm reads; that arm runs in the next session. The table build refuses a view without a passed read-set check, and it built all views. The removal freed scratch for the rescoring on all regions.</p><p class="srcs" data-s="side"></p></aside>
+    </div>
+  </section>
+
+  <!-- 5b · DATA (c, continued): variance by bin size on the 1 bp region store (version 4)
+       job      the PI's question: how much track variance lies below the 25 bp bin, and how much of it is reproducible
+       source   results/closeout_A7/variance_2026-11-18/scale_variance.tsv, VARIANCE_READ.md; run_status.json
+       numbers  DATA.n bv.*
+       cut      per-assay rows, intervals and the log1p scale (in VARIANCE_READ.md) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec"><span data-src="literal">(1)</span> Data</span>(c) side deliverables: the variance by bin size</div>
+      <h2>Almost all variance below the <span data-src="literal">25</span> bp bin is read-sampling noise; a coarser bin starts to lose reproducible signal</h2>
+      <img class="figimg" data-fig="binvar" alt="Share of the 1 base pair count variance below each bin size">
+      <p class="note" style="color:var(--ink2);font-size:clamp(13.5px,1.25vw,16px)">Below the model's bin lie <span data-k="bv.br.raw25"></span> (broad marks, <span data-k="bv.br.n"></span> tracks) and <span data-k="bv.nr.raw25"></span> (narrow marks, <span data-k="bv.nr.n"></span> tracks) of the variance of the base-by-base counts; pure read-sampling noise gives <span data-k="bv.noise25"></span>. Biological replicates reproduce only <span data-k="bv.br.rep25"></span> (<span data-k="bv.br.np"></span> pairs; assays <span data-k="bv.br.rep25.lo"></span> to <span data-k="bv.br.rep25.hi"></span>) and <span data-k="bv.nr.rep25"></span> (<span data-k="bv.nr.np"></span> pairs; <span data-k="bv.nr.rep25.lo"></span> to <span data-k="bv.nr.rep25.hi"></span>) of it, so a finer bin adds noise, not signal. Between <span data-src="literal">25</span> and <span data-src="literal">125</span> bp the reproducible part is <span data-k="bv.br.pct25_125"></span>% (broad) and <span data-k="bv.nr.pct25_125"></span>% (narrow) of the variance in that step, against <span data-k="bv.br.pct25"></span>% and <span data-k="bv.nr.pct25"></span>% below <span data-src="literal">25</span> bp. DNase-seq has one track and no replicate pair, so accessibility is not answered. Data only, no model; the resolution arms run in the next session.</p>
+      <aside class="notes"><p>A share is the variance inside blocks of the bin size divided by the total variance of the track's base-by-base read counts (law of total variance), over the <span data-src="literal">256</span> evaluation regions and the validation tracks; a class value is the mean over its tracks. The reproducible share uses the covariance of two biological replicates of one experiment, in which the read-sampling noise cancels. Raw share below <span data-src="literal">25</span> bp for the one DNase-seq track (<span data-k="bv.dn.id"></span>): <span data-k="bv.dn.raw25"></span>.</p><p>Defect found: all <span data-k="bv.ps.neg"></span> of <span data-k="bv.ps.n"></span> read-half rows are below zero. Duplicate removal leaves at most one read per base and strand, so the two halves of one read set exclude each other at one base. The control track gives <span data-k="bv.ctl.ps5"></span> below <span data-src="literal">5</span> bp; the exclusion term predicts <span data-k="bv.ctl.pred5"></span> from its read density. The read-half rows are therefore not used. The verification of the store (Nibi job <span data-k="bp.verifyjob"></span>) is still running.</p><p class="srcs" data-s="binvar"></p></aside>
     </div>
   </section>
 

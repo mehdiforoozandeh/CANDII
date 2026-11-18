@@ -235,7 +235,7 @@ pl_rsh = _r["predict_hours_per_round"]
 pl_cap = _r["cap_active_run_seeds"]
 pl_now = [_r["status_utc"], _r["active"], _r["scored"]]
 pl_now_day = _r["status_day"]
-if _b["verify_state"] != "running":   # the slide says the 1 bp verify and variance jobs are running
+if _b["verify_state"] != "running":   # slide 5 says the 1 bp verify job is running (the variance job has completed)
     sys.exit(f"build_deck: {RSTAT} bp_store.verify_state is {_b['verify_state']!r}; reword slide 5 first")
 put("arc.tars", pl_arch[0])
 put("arc.gib", pl_arch[2])
@@ -313,6 +313,117 @@ ax.set_ylim(0, float(pl_sc1[0].replace(",", "")) * 1.15)
 ax.set_title("(b) Nibi scratch after the tape archive", loc="left")
 fig.tight_layout()
 png("side", fig)
+
+# ==================================================================================================
+# Variance by bin size on the 1 bp region store (version 4; scale_variance.tsv, VARIANCE_READ.md)
+# ==================================================================================================
+SV = "results/closeout_A7/variance_2026-11-18/scale_variance.tsv"
+SVMD = "results/closeout_A7/variance_2026-11-18/VARIANCE_READ.md"
+if _b.get("variance_state") != "completed":
+    sys.exit(f"build_deck: {RSTAT} bp_store.variance_state is not 'completed'; the variance slide reports a result")
+put("bp.verifyjob", _b["verify_job"])
+SVR = {(r["assay"], r["layer_or_all"], r["chain"], r["from_bp"], r["to_bp"], r["scale"]): r for r in tsv(SV)}
+# assay classes: the assay_class column of the store tables (Nibi CO-A7/tables/eic_res_v1/measurements.tsv)
+SV_BROAD = {"H3K27me3", "H3K36me3", "H3K4me1", "H3K79me1", "H3K79me2", "H3K9me3", "H4K20me1"}
+SV_CLS = [("accessibility", "accessibility (DNase-seq)"), ("broad", "broad histone marks"),
+          ("narrow", "narrow histone marks"), ("control", "control (no antibody)")]
+SV_COL = {"accessibility": "#d9822b", "broad": "#2f6f8f", "narrow": "#b5543a", "control": "#6c6f73"}
+
+
+def sv_cls(a):
+    return ("accessibility" if a == "DNase-seq" else "control" if a == "chipseq-control"
+            else "broad" if a in SV_BROAD else "narrow")
+
+
+SV_STEP = {5: ("1,5,25,125", "1", "5"), 25: ("1,5,25,125", "5", "25"), 50: ("1,5,25,50", "25", "50"),
+           125: ("1,5,25,125", "25", "125")}     # counts rows are cumulative: the share below to_bp
+
+
+def sv_below(c, layer, b):
+    """Track-weighted mean over the assays of class c of the counts share below b; (value, n, assays, lo, hi)."""
+    if b == 1:
+        return 0.0, 0, 0, 0.0, 0.0
+    fld = "share_raw" if layer == "all" else "share_reproducible"
+    num = den = 0.0
+    per = []
+    for (a, l, ch, f, t, s), r in SVR.items():
+        if sv_cls(a) != c or l != layer or s != "counts" or (ch, f, t) != SV_STEP[b]:
+            continue
+        if r["n_tracks"] == "0" or r[fld] == "":
+            continue
+        num += float(r[fld]) * int(r["n_tracks"])
+        den += int(r["n_tracks"])
+        per.append(float(r[fld]))
+    if not den:
+        return None
+    return num / den, int(den), len(per), min(per), max(per)
+
+
+def f4(x):
+    return f"{x:.4f}".replace("-", "−")
+
+
+SVB = {(c, l, b): sv_below(c, l, b) for c, _ in SV_CLS for l in ("all", "isogenic", "pseudoreplicate")
+       for b in (1, 5, 25, 50, 125)}
+for c, k in (("broad", "br"), ("narrow", "nr")):
+    raw, rep = SVB[(c, "all", 25)], SVB[(c, "isogenic", 25)]
+    put(f"bv.{k}.raw25", f3(raw[0]))
+    put(f"bv.{k}.n", str(raw[1]))
+    put(f"bv.{k}.na", str(raw[2]))
+    put(f"bv.{k}.rep25", f4(rep[0]))
+    put(f"bv.{k}.rep25.lo", f4(rep[3]))
+    put(f"bv.{k}.rep25.hi", f4(rep[4]))
+    put(f"bv.{k}.np", str(rep[1]))
+    dr = SVB[(c, "all", 125)][0] - raw[0]
+    dp = SVB[(c, "isogenic", 125)][0] - rep[0]
+    put(f"bv.{k}.raw25_125", f3(dr))
+    put(f"bv.{k}.rep25_125", f4(dp))
+    put(f"bv.{k}.pct25_125", f"{100 * dp / dr:.0f}")
+    put(f"bv.{k}.pct25", f"{100 * rep[0] / raw[0]:.1f}")
+put("bv.noise25", f3(1 - 1 / 25))
+put("bv.dn.raw25", f3(SVB[("accessibility", "all", 25)][0]))
+psall = [float(r["share_reproducible"]) for (a, l, ch, f, t, s), r in SVR.items()
+         if l == "pseudoreplicate" and s == "counts" and r["n_tracks"] != "0"]
+put("bv.ps.n", str(len(psall)))
+put("bv.ps.neg", str(sum(v < 0 for v in psall)))
+put("bv.ctl.ps5", f4(SVB[("control", "pseudoreplicate", 5)][0]))
+ctl_reads = int(grab(SVMD, r"its provenance file holds ([0-9,]+) reads in the 768 regions").replace(",", ""))
+put("bv.ctl.pred5", f4(-ctl_reads / (768 * 409600) * 4 / 5))      # exclusion term -m (b - 1) / b at b = 5
+put("bv.dn.id", grab(SVMD, r"The one DNase-seq track is (ENCSR[0-9A-Z]+)"))
+cite("binvar", SV, SVMD, RSTAT)
+
+fig, axs = plt.subplots(1, 2, figsize=(13.4, 4.7))
+BS = [1, 5, 25, 50, 125]
+for ax, layer, title in ((axs[0], "all", "(a) all variance (raw)"),
+                         (axs[1], "isogenic", "(b) variance shared by biological replicates")):
+    for c, lab in SV_CLS:
+        pts = [(b, SVB[(c, layer, b)]) for b in BS if SVB[(c, layer, b)] is not None]
+        if layer != "all" and len(pts) <= 1:
+            continue
+        x = [b for b, _ in pts]
+        y = [v[0] for _, v in pts]
+        n = max(v[1] for _, v in pts)
+        unit = "track" if layer == "all" else "replicate pair"
+        ax.plot(x, y, "-o", color=SV_COL[c], lw=2.2, ms=5,
+                label=f"{lab}, {n} {unit}{'' if n == 1 else 's'}")
+    ax.axvline(25, color=MUTED, lw=1.2, ls=":")
+    ax.set_xscale("log")
+    ax.set_xticks(BS, [str(b) for b in BS])
+    ax.minorticks_off()
+    ax.set_xlabel("bin size (base pairs, log scale)")
+    ax.set_title(title, loc="left")
+axs[0].plot(BS, [1 - 1 / b for b in BS], "--", color=INK2, lw=1.4, label="pure read-sampling noise")
+axs[0].set_ylim(0, 1.02)
+axs[0].set_ylabel("share of the 1 base pair count variance\nthat lies below the bin size")
+axs[0].text(26.5, 0.66, "model bin", fontsize=11, color=MUTED)
+axs[0].legend(loc="lower right", frameon=True, facecolor="white", edgecolor="white", framealpha=1, fontsize=10.5)
+axs[1].axhline(0, color=HAIR, lw=1)
+axs[1].set_ylim(-0.0005, 0.0075)
+axs[1].set_ylabel("share of the 1 base pair count variance\nthat lies below the bin size")
+axs[1].text(26.5, 0.0068, "model bin", fontsize=11, color=MUTED)
+axs[1].legend(loc="upper left", frameon=False, fontsize=10.5)
+fig.tight_layout()
+png("binvar", fig)
 
 # ==================================================================================================
 # Replicate ladder (two-sided, assay-matched; ladder.tsv, common_cells.tsv) and second-experiment layers

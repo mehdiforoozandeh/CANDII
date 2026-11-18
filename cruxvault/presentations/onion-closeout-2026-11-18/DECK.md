@@ -6,6 +6,8 @@ Version 2 (2026-11-18, not yet published; the foreman publishes): the replicate 
 
 Version 3 (2026-11-18, not yet published): the replicate ladder is two-sided (slide 12). Version 2 showed the one-sided form and called it two-sided. Slide 12 now shows the two-sided values, the one-sided values beside them once (panel a and the note), the check on common cell types in place of telescoping, and the DNase-seq depth defect. Slide 13 says that its pooled rows are one-sided. The run-log facts come from `run_status.json`, no longer from the run log. Evidence: `results/closeout_E4/ladder_two_sided_2026-11-18/COMPARE.md`.
 
+Version 4 (2026-11-18, not yet published): a new slide 6, the variance by bin size on the 1 bp region store (`results/closeout_A7/variance_2026-11-18/scale_variance.tsv` and `VARIANCE_READ.md`), with one figure and one paragraph. Slide 5 now says that the variance job has finished and the verification job of the 1 bp tables (Nibi 27692994) is still running. Every slide after slide 5 moves down by one, so the slide numbers below (version 3 and earlier) are one lower than in version 4; the rescoring placeholder is now slide 20. `run_status.json` carries `bp_store.variance_state` (`completed`); both builders stop on any other value.
+
 Source: `index.html` beside this file, built by `build_deck.py` from `deck_src.html` (prezit paper arc, 25 slides). One part per success criterion of the PI (data and where the counterfactual views help; training objective; evaluation; miniCANDI design), then a marked slide for the pending rescoring on all regions, what did not run, the ready queue, the decisions taken and the decisions moved to the next session, a summary and a glossary. The deck is derived, not evidence: no finding cites it. All slide text is drafted by the agent for the PI's review; the title slide says so.
 
 ## Where the numbers come from
@@ -33,6 +35,8 @@ ${=C} deck --lint presentations/onion-closeout-2026-11-18/index.html
 Verification on 2026-11-18 (version 2): verify (strict) passed, 23 source files unchanged; lint clean. The changed slides (1, 4, 5, 11, 12, 13, 19, 20, 21, 22, 23) were rendered at 1600 x 900 in headless Chrome and checked by eye. `index.html` is 0.73 MB.
 
 Verification on 2026-11-18 (version 3, after review: joint bootstrap): verify (strict) passed, 26 source files unchanged; lint clean. Slides 12 and 13 were rendered at 1600 x 900 in headless Chrome and checked by eye.
+
+Verification on 2026-11-18 (version 4): verify (strict) passed, 28 source files unchanged; lint clean. Slides 5 and 6 were rendered at 1600 x 900 in headless Chrome and checked by eye.
 
 ## Run-log facts (`run_status.json`)
 

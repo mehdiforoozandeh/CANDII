@@ -25,6 +25,11 @@ VERSION 3 (2026-11-18): the replicate ladder is two-sided (results/closeout_E4/l
 two_sided/ and one_sided/ ladder.tsv, two_sided/ladder.md, COMPARE.md; ladder_2026-11-18/pair_values.tsv.gz
 for the DNase-seq depth). Version 2 called the one-sided form two-sided. The run log is no longer read.
 
+VERSION 4 (2026-11-18): subsection "Variance by bin size on the 1 bp store" (sec:binvar), from
+results/closeout_A7/variance_2026-11-18/ (scale_variance.tsv, VARIANCE_READ.md); run_status.json carries
+bp_store.variance_state = completed. Verify: from the vault, `crux story --verify
+presentations/onion-closeout-2026-11-18-report/report.tex --strict`.
+
 RESCORING HOOK. When the 256-region rescoring of the 7 decisive arms lands, copy the
 arm-summary table (select_rule.py arm-summary --runs <runs_fir> --sub p256_sv) to
 RESCORE_REL below and rebuild. The build then fills the 256-region columns of the
@@ -757,6 +762,73 @@ macros["bpPts"] = num(fnum(b_["points_independent"]), 0)
 macros["bpPtsStore"] = num(fnum(b_["points_store"]), 0)
 macros["bpMeas"] = b_["measurements"]
 macros["bpPairs"] = b_["pairs"]
+assert b_.get("variance_state") == "completed", "the variance subsection reports a finished job"
+macros["bpVerifyJob"] = b_["verify_job"]
+
+# variance by bin size on the 1 bp region store (version 4; scale_variance.tsv, VARIANCE_READ.md)
+svl = load(R + "closeout_A7/variance_2026-11-18/scale_variance.tsv").strip("\n").split("\n")
+svh = svl[0].split("\t")
+SVR = {}
+for ln in svl[1:]:
+    r = dict(zip(svh, ln.split("\t")))
+    SVR[(r["assay"], r["layer_or_all"], r["chain"], r["from_bp"], r["to_bp"], r["scale"])] = r
+svmd = load(R + "closeout_A7/variance_2026-11-18/VARIANCE_READ.md")
+# assay classes: the assay_class column of the store tables (Nibi CO-A7/tables/eic_res_v1/measurements.tsv)
+SV_BROAD = {"H3K27me3", "H3K36me3", "H3K4me1", "H3K79me1", "H3K79me2", "H3K9me3", "H4K20me1"}
+
+
+def sv_cls(a):
+    return ("accessibility" if a == "DNase-seq" else "control" if a == "chipseq-control"
+            else "broad" if a in SV_BROAD else "narrow")
+
+
+SV_STEP = {5: ("1,5,25,125", "1", "5"), 25: ("1,5,25,125", "5", "25"), 50: ("1,5,25,50", "25", "50"),
+           125: ("1,5,25,125", "25", "125")}     # counts rows are cumulative: the share below to_bp
+
+
+def sv_below(c, layer, b):
+    """Track-weighted mean over the assays of class c of the counts share below b: (value, n, lo, hi)."""
+    fld = "share_raw" if layer == "all" else "share_reproducible"
+    num_ = den = 0.0
+    per = []
+    for (a, l, ch, f, t, s), r in SVR.items():
+        if sv_cls(a) != c or l != layer or s != "counts" or (ch, f, t) != SV_STEP[b]:
+            continue
+        if r["n_tracks"] == "0" or r[fld] == "":
+            continue
+        num_ += float(r[fld]) * int(r["n_tracks"])
+        den += int(r["n_tracks"])
+        per.append(float(r[fld]))
+    return (num_ / den, int(den), min(per), max(per)) if den else None
+
+
+SVB = {(c, l, b): sv_below(c, l, b) for c in ("accessibility", "broad", "narrow", "control")
+       for l in ("all", "isogenic") for b in (5, 25, 50, 125)}
+for c, k in (("broad", "Br"), ("narrow", "Nr")):
+    raw_, rep_ = SVB[(c, "all", 25)], SVB[(c, "isogenic", 25)]
+    macros[f"bv{k}Raw"] = raw(raw_[0], 3)
+    macros[f"bv{k}N"] = str(raw_[1])
+    macros[f"bv{k}Rep"] = num(rep_[0], 4)
+    macros[f"bv{k}RepLo"], macros[f"bv{k}RepHi"] = num(rep_[2], 4), num(rep_[3], 4)
+    macros[f"bv{k}Np"] = str(rep_[1])
+    dr, dp = SVB[(c, "all", 125)][0] - raw_[0], SVB[(c, "isogenic", 125)][0] - rep_[0]
+    macros[f"bv{k}RawStep"], macros[f"bv{k}RepStep"] = raw(dr, 3), num(dp, 4)
+    macros[f"bv{k}Pct"] = num(100 * dp / dr, 0)
+    macros[f"bv{k}PctFine"] = num(100 * rep_[0] / raw_[0], 1)
+macros["bvNoise"] = raw(1 - 1 / 25, 3)
+macros["bvDnRaw"] = raw(SVB[("accessibility", "all", 25)][0], 3)
+macros["bvDnId"] = grab(svmd, r"The one DNase-seq track is (ENCSR[0-9A-Z]+)")
+macros["bvDnReads"] = num(fnum(grab(svmd, r"The one DNase-seq track is ENCSR[0-9A-Z]+ \(cell C[0-9]+, ([0-9,]+) reads")), 0)
+psv = [float(r["share_reproducible"]) for (a, l, ch, f, t, s), r in SVR.items()
+       if l == "pseudoreplicate" and s == "counts" and r["n_tracks"] != "0"]
+macros["bvPsN"] = str(len(psv))
+macros["bvPsNeg"] = str(sum(v < 0 for v in psv))
+macros["bvPsLo"], macros["bvPsHi"] = num(min(psv), 4), num(max(psv), 4)
+ctl = SVR[("chipseq-control", "pseudoreplicate", "1,5,25,125", "1", "5", "counts")]
+macros["bvCtlPs"] = num(float(ctl["share_reproducible"]), 4)
+ctl_reads = fnum(grab(svmd, r"its provenance file holds ([0-9,]+) reads in the 768 regions"))
+macros["bvCtlPred"] = num(-ctl_reads / (768 * 409600) * 4 / 5, 4)   # exclusion term -m (b - 1) / b at b = 5
+macros["bvRows"] = num(len(svl) - 1, 0)
 macros["arcTars"], macros["arcGib"], macros["arcEntries"] = a_["tars_ok"], num(fnum(a_["gib"]), 0), num(fnum(a_["entries"]), 0)
 macros["scBefore"], macros["scMid"], macros["scAfter"] = (num(fnum(s_[k]), 0) for k in
                                                           ("before_gib", "after_archive_gib", "after_work_folder_gib"))

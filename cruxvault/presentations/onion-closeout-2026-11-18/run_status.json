@@ -28,7 +28,8 @@
     "pairs": "73",
     "verify_job": "27692994",
     "variance_job": "27693041",
-    "verify_state": "running"
+    "verify_state": "running",
+    "variance_state": "completed"
   },
   "rescoring": {
     "submitted_day": "2026-11-17",
