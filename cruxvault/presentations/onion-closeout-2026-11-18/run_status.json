@@ -47,13 +47,13 @@
     "unet_limit_reach_pct": "90 to 96",
     "unet_new_limit_h": "12",
     "fir_jobs": "4535347 to 4535923",
-    "read_dir": "results/rescoring_p256/read_20261118T1203Z",
+    "read_dir": "results/rescoring_p256/read_20261118T1554Z",
     "read_table": "results/rescoring_p256/arm_summary_p256_sv.tsv",
-    "read_as_of": "2026-11-18 09:45 UTC",
-    "scored_p256": "16",
+    "read_as_of": "2026-11-18 15:55 UTC",
+    "scored_p256": "30",
     "planned_p256": "62",
-    "arms_complete": "5",
-    "rules_decided": "2",
+    "arms_complete": "10",
+    "rules_decided": "3",
     "rules": "6"
   }
 }
