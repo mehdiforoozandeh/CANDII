@@ -32,18 +32,35 @@ report    The ladder table from the per-pair values of `layers.py run --pairs-ou
           (never clipped) and flagged. `share` is, on the row's (cell, assay) units that also hold
           other_cell_type pairs, the increment over the other_cell_type pair value of those same units
           (the total between two tracks that share only the assay; the scale of a mixed-model variance
-          fraction); `share_units` counts them. `chain_check.tsv` is the ladder's own telescoping check
-          (pseudoreplicate -> isogenic -> other_cell_type on the units that hold all three). With --layers
-          it also runs the old `total_variance.telescoping_check` on layers.tsv (known to fail: its rungs
-          hold different cells). With --mixed it lists the mixed-model rows; with --design it applies the
-          quote rule (a factor other than cell that varies inside fewer than 3 cells: fraction left empty,
-          "not identified inside cells").
+          fraction); `share_units` counts them. With --mixed it lists the mixed-model rows; with --design
+          it applies the quote rule (a factor other than cell that varies inside fewer than 3 cells:
+          fraction left empty, "not identified inside cells").
+
+          Two forms (PI decision of 2026-11-17, row 5: two-sided is the ladder definition).
+          two_sided (default; needs --tables for the experiment of each side of a pair): the rungs whose
+            two sides are two different experiments (TWO_SIDED: other_cell_type, other_experiment)
+            subtract, pair by pair, 0.5 x (L(a) + L(b)), where L(x) is the mean isogenic pair value of
+            the experiment of side x in the same assay, stratum and band. A pair whose a-side or b-side
+            experiment has no isogenic pair leaves the matched set; `n_pairs_left_b` counts those that
+            left only because of the b-side. A (cell, assay) unit is kept while it holds a kept pair.
+            The bootstrap resamples a-side cells; each L(b) stays fixed (it is computed from all isogenic
+            pairs of the b-side experiment, whatever cell is drawn). The nested rungs and anisogenic
+            (both sides in one experiment) are the same in both forms.
+          one_sided (`--form one_sided`; tonight's form, kept for comparison): every rung subtracts the
+            lower rung of the a-side unit only. Writes ladder.tsv byte-identical to the earlier code, the
+            ladder's own telescoping check `chain_check.tsv`, and with --layers the old
+            `total_variance.telescoping_check` (telescoping.tsv).
+          Both forms write `common_cells.tsv`, the acceptance check that replaces telescoping: per
+          (assay class, stratum, band), the rungs pseudoreplicate, isogenic and other_cell_type are
+          recomputed on the a-side cells that every one of them holds; the check passes when there are at
+          least MIN_CELLS common cells and each common-cell increment lies inside its full row's interval.
 
 CLI:
   python tools/onion_eval/ladder.py pairlist --evalset <json> --tables <dir> --out <json> --changes <tsv>
          [--assays A,B]  (smoke run: keep only these assays)
   python tools/onion_eval/ladder.py design --tables <dir> --out <tsv>
   python tools/onion_eval/ladder.py report --pairs <pair_values.tsv.gz> --out-dir <dir>
+         [--form two_sided|one_sided] [--tables <dir with pairs.tsv, measurements.tsv>]
          [--layers <layers.tsv>] [--mixed <mixed_model.tsv> ...] [--design <design.tsv>] [--n-boot 1000]
 """
 from __future__ import annotations
@@ -68,6 +85,8 @@ from onion_eval import layers as LY  # noqa: E402
 MIN_PAIRS, MIN_CELLS = LY.MIN_PAIRS, LY.MIN_CELLS
 SIBLINGS = ("anisogenic", "other_experiment")
 NESTED = ("pseudoreplicate", "sequencing", "technical", "isogenic")
+TWO_SIDED = ("other_cell_type", "other_experiment")     # the two sides are two different experiments
+FORMS = ("two_sided", "one_sided")
 # The ladder rows: (D12 rung, pair class or "", layer name, what the increment holds)
 LADDER = [
     ("pseudoreplicate", "", "sampling", "Poisson sampling of reads: two read halves of one library"),
@@ -216,18 +235,53 @@ def cmd_design(args):
 # ---------------------------------------------------------------------------------------------------
 # report
 
-def unit_values(pair_rows):
+def unit_values(pair_rows, with_ids=False):
     """{(assay_class, stratum, band): {(rung, pair_class): {(cell, assay): [pair values]}}}; a pair value
-    is 0.5 var_d (the `layers.py` pair value)."""
+    is 0.5 var_d (the `layers.py` pair value). with_ids: each entry is (pair_id, pair value)."""
     out = {}
     for r in pair_rows:
         if r["var_d"] == "":
             continue
         key = (r["assay_class"], r["stratum"], r["band"])
         rk = (r["rung"], r["pair_class"] if r["rung"] == "other_experiment" else "")
+        v = 0.5 * float(r["var_d"])
         out.setdefault(key, {}).setdefault(rk, {}).setdefault((r["cell"], r["assay"]), []).append(
-            0.5 * float(r["var_d"]))
+            (r["pair_id"], v) if with_ids else v)
     return out
+
+
+def pair_sides(pairs_rows, meas_rows):
+    """{pair_id: (experiment of side a, experiment of side b)} from pairs.tsv and measurements.tsv."""
+    exp = {m["measurement_id"]: m["experiment"] for m in meas_rows}
+    return {p["pair_id"]: (exp[p["a"]], exp[p["b"]]) for p in pairs_rows}
+
+
+def _lower_by_experiment(lower_ids, sides):
+    """{(experiment, assay): mean lower-rung pair value} from (cell, assay) -> [(pair_id, value)]. A
+    lower-rung pair (pseudoreplicate, isogenic) has both sides in one experiment: its a-side's."""
+    acc = {}
+    for (_, a), lst in lower_ids.items():
+        for pid, v in lst:
+            acc.setdefault((sides[pid][0], a), []).append(v)
+    return {k: float(np.mean(v)) for k, v in acc.items()}
+
+
+def _two_sided_kept(u_ids, low_by_exp, sides):
+    """(kept, n_left_a, n_left_b). kept: {(cell, assay): [(pair value, pair value - 0.5 (L(a) + L(b)))]}.
+    A pair leaves when its a-side experiment has no lower value (n_left_a), else when its b-side
+    experiment has none (n_left_b)."""
+    kept, n_a, n_b = {}, 0, 0
+    for k, lst in u_ids.items():
+        for pid, v in lst:
+            ea, eb = sides[pid]
+            la, lb = low_by_exp.get((ea, k[1])), low_by_exp.get((eb, k[1]))
+            if la is None:
+                n_a += 1
+            elif lb is None:
+                n_b += 1
+            else:
+                kept.setdefault(k, []).append((v, v - 0.5 * (la + lb)))
+    return kept, n_a, n_b
 
 
 def _lower(rung, populated):
@@ -238,13 +292,22 @@ def _lower(rung, populated):
     return ("isogenic", "")
 
 
-def ladder_block(units, n_boot=1000, seed=0):
-    """Ladder rows of one (assay class, stratum, band). units: the value of `unit_values` for it."""
+def ladder_block(units, n_boot=1000, seed=0, sides=None):
+    """Ladder rows of one (assay class, stratum, band). units: the value of `unit_values` for it.
+    sides None: the one-sided form (units hold values). sides given: the two-sided form (units hold
+    (pair_id, value), as `unit_values(..., with_ids=True)`; sides as `pair_sides`)."""
+    units_ids = None
+    if sides is not None:
+        units_ids = units
+        units = {rk: {k: [v for _, v in lst] for k, lst in u.items()} for rk, u in units_ids.items()}
     populated = {rk[0] for rk, u in units.items() if u}
     oct_ = units.get(("other_cell_type", ""), {})
     rows = []
     for rung, pc, layer, holds in LADDER:
         u = units.get((rung, pc), {})
+        if sides is not None and rung in TWO_SIDED and u:
+            rows.append(_two_sided_row(rung, pc, layer, holds, units_ids, sides, populated, n_boot, seed))
+            continue
         n_all = sum(len(v) for v in u.values())
         c_all = len({c for c, _ in u})
         low = _lower(rung, populated)
@@ -289,9 +352,100 @@ def ladder_block(units, n_boot=1000, seed=0):
             row.update(share=float(num / den), share_units=len(su))
         flag = "ok" if est >= 0 else "ok; negative increment (not clipped)"
         row.update(variance=float(np.mean([var_c[c] for c in cells])), layer_increment=est, ci_low=lo,
-                   ci_high=hi, ci_width=hi - lo, flag=flag)
+                   ci_high=hi, ci_width=hi - lo, flag=flag, _inc_c=inc_c)
         rows.append(row)
     return rows
+
+
+def _two_sided_row(rung, pc, layer, holds, units_ids, sides, populated, n_boot, seed):
+    """One two-sided ladder row (see the module doc). Same cell averaging, estimability rule, bootstrap
+    and interval as the one-sided row; the subtraction is pair by pair, 0.5 x (L(a) + L(b))."""
+    u_ids = units_ids.get((rung, pc), {})
+    low = _lower(rung, populated)
+    low_by_exp = _lower_by_experiment(units_ids.get(low, {}), sides)
+    n_all = sum(len(v) for v in u_ids.values())
+    c_all = len({c for c, _ in u_ids})
+    row = dict(rung=rung, pair_class=pc, layer=layer, holds=holds, n_pairs_all=n_all, n_cells_all=c_all,
+               increment_over=low[0], n_pairs=0, n_cells=0, n_assays=0, variance=float("nan"),
+               layer_increment=float("nan"), ci_low=float("nan"), ci_high=float("nan"),
+               ci_width=float("nan"), share=float("nan"), share_units=0)
+    kept, n_a, n_b = _two_sided_kept(u_ids, low_by_exp, sides)
+    matched = sorted(kept)
+    n_m = sum(len(kept[k]) for k in matched)
+    cells = sorted({c for c, _ in matched})
+    row.update(n_pairs=n_m, n_cells=len(cells), n_assays=len({a for _, a in matched}), n_pairs_left_b=n_b)
+    if n_m < MIN_PAIRS or len(cells) < MIN_CELLS:
+        row["flag"] = (f"not estimable: {n_m} pairs from {len(cells)} cells with a {low[0]} pair in the "
+                       f"experiments of both sides (rule: {MIN_PAIRS} pairs from {MIN_CELLS} cells); left: "
+                       f"{n_b} pairs whose b-side experiment has no {low[0]} pair, {n_a} whose a-side has "
+                       f"none; all pairs of the row: {n_all} from {c_all} cells")
+        return row
+
+    def cell_mean(ks, j):
+        return float(np.mean([np.mean([x[j] for x in kept[k]]) for k in ks]))
+    inc_c = {c: cell_mean([k for k in matched if k[0] == c], 1) for c in cells}
+    var_c = {c: cell_mean([k for k in matched if k[0] == c], 0) for c in cells}
+    vals = np.array([inc_c[c] for c in cells])
+    est = float(vals.mean())
+    rng = np.random.default_rng(seed)
+    boot = vals[rng.integers(0, len(cells), size=(n_boot, len(cells)))].mean(1)
+    lo, hi = LY._interval(est, boot, len(cells))
+    # share: on the units that also hold kept other_cell_type pairs, this increment over the kept
+    # other_cell_type pair value of those units (cell means, then mean)
+    oct_ids = units_ids.get(("other_cell_type", ""), {})
+    oct_kept, _, _ = _two_sided_kept(oct_ids, _lower_by_experiment(units_ids.get(("isogenic", ""), {}),
+                                                                   sides), sides)
+    su = [k for k in matched if k in oct_kept]
+    if su:
+        sc = sorted({c for c, _ in su})
+        num = np.mean([np.mean([np.mean([x[1] for x in kept[k]]) for k in su if k[0] == c]) for c in sc])
+        den = np.mean([np.mean([np.mean([x[0] for x in oct_kept[k]]) for k in su if k[0] == c]) for c in sc])
+        row.update(share=float(num / den), share_units=len(su))
+    flag = "ok" if est >= 0 else "ok; negative increment (not clipped)"
+    row.update(variance=float(np.mean([var_c[c] for c in cells])), layer_increment=est, ci_low=lo,
+               ci_high=hi, ci_width=hi - lo, flag=flag, _inc_c=inc_c)
+    return row
+
+
+COMMON_RUNGS = ("pseudoreplicate", "isogenic", "other_cell_type")
+COMMON_COLUMNS = ["assay_class", "stratum", "band", "rung", "n_common_cells", "common_increment",
+                  "common_ci_low", "common_ci_high", "row_increment", "row_ci_low", "row_ci_high", "row_n_cells",
+                  "inside_row_interval", "ok"]
+
+
+def common_cell_check(rows, n_boot=1000, seed=0, rungs=COMMON_RUNGS):
+    """The acceptance check that replaces telescoping (PI decision of 2026-11-17, row 5). Per (assay
+    class, stratum, band): the a-side cells that every rung of `rungs` holds as an estimable row; each
+    rung's increment recomputed on those cells (the same per-cell increments as its row, so the same
+    form); ok when there are at least MIN_CELLS common cells and every common-cell increment lies inside
+    its full row's 95% interval. A group where a rung is not estimable gets ok empty."""
+    out = []
+    groups = {}
+    for r in rows:
+        groups.setdefault((r["assay_class"], r["stratum"], r["band"]), {})[(r["rung"], r["pair_class"])] = r
+    for (cls, s, b), g in sorted(groups.items()):
+        rr = [g.get((q, "")) for q in rungs]
+        if any(r is None or "_inc_c" not in r for r in rr):
+            continue
+        common = sorted(set(rr[0]["_inc_c"]).intersection(*[set(r["_inc_c"]) for r in rr[1:]]))
+        recs = []
+        for q, r in zip(rungs, rr):
+            rec = dict(assay_class=cls, stratum=s, band=b, rung=q, n_common_cells=len(common),
+                       row_increment=r["layer_increment"], row_ci_low=r["ci_low"], row_ci_high=r["ci_high"],
+                       row_n_cells=r["n_cells"], common_increment=float("nan"), common_ci_low=float("nan"),
+                       common_ci_high=float("nan"), inside_row_interval="")
+            if common:
+                vals = np.array([r["_inc_c"][c] for c in common])
+                est = float(vals.mean())
+                rng = np.random.default_rng(seed)
+                boot = vals[rng.integers(0, len(common), size=(n_boot, len(common)))].mean(1)
+                lo, hi = LY._interval(est, boot, len(common))
+                rec.update(common_increment=est, common_ci_low=lo, common_ci_high=hi,
+                           inside_row_interval=int(r["ci_low"] <= est <= r["ci_high"]))
+            recs.append(rec)
+        ok = bool(len(common) >= MIN_CELLS and all(x["inside_row_interval"] == 1 for x in recs))
+        out.extend(dict(x, ok=int(ok)) for x in recs)
+    return out
 
 
 CHAIN = (("pseudoreplicate", ""), ("isogenic", ""), ("other_cell_type", ""))
@@ -328,12 +482,21 @@ def chain_check(pair_rows, tol=1e-9):
     return out
 
 
-def ladder_rows(pair_rows, n_boot=1000, seed=0):
+def ladder_rows(pair_rows, n_boot=1000, seed=0, form="two_sided", sides=None):
+    """All ladder rows. form two_sided needs sides (`pair_sides`) for every pair of pair_rows."""
+    if form not in FORMS:
+        raise ValueError(f"form must be one of {FORMS}: {form}")
+    if form == "two_sided":
+        if sides is None:
+            raise ValueError("the two-sided form needs the experiment of each side (sides; CLI --tables)")
+        miss = sorted({r["pair_id"] for r in pair_rows} - set(sides))
+        if miss:
+            raise ValueError(f"{len(miss)} pairs have no sides in the tables, e.g. {miss[:3]}")
     out = []
-    for (cls, s, b), units in sorted(unit_values(pair_rows).items()):
+    for (cls, s, b), units in sorted(unit_values(pair_rows, with_ids=form == "two_sided").items()):
         if cls == "control":
             continue
-        for r in ladder_block(units, n_boot, seed):
+        for r in ladder_block(units, n_boot, seed, sides if form == "two_sided" else None):
             out.append(dict(assay_class=cls, stratum=s, band=b, **r))
     return out
 
@@ -365,11 +528,21 @@ def quote_rule(mixed, design, min_cells=MIN_CELLS):
     return out
 
 
-def markdown(rows, tele=None, mixed=None, design=None, chain=None):
+def markdown(rows, tele=None, mixed=None, design=None, chain=None, form="one_sided", common=None, tables=None):
     lines = ["# Replicate ladder (close-out item E4)", "",
              "Stratum all, band all. Increments are assay-matched pair values (0.5 E[(Y - Y')^2] of log1p "
              "counts at each assay's common depth); intervals are 95% cluster-bootstrap intervals over cells. "
              "No row is pooled across assay classes. Full table: ladder.tsv.", ""]
+    if form == "two_sided":
+        lines += ["Form: two-sided (PI decision of 2026-11-17, row 5). The other_cell_type and other_experiment "
+                  "rows subtract, pair by pair, 0.5 x (the isogenic pair value of the a-side experiment + that "
+                  "of the b-side experiment). A pair whose b-side experiment has no isogenic pair leaves the "
+                  "matched set (ladder.tsv column n_pairs_left_b). The bootstrap resamples a-side cells and "
+                  "holds the b-side values fixed." + (f" Sides from: {tables}." if tables else ""), ""]
+    else:
+        lines += ["Form: one-sided (every rung subtracts the lower rung of the a-side unit only). Kept for "
+                  "comparison; for the other_cell_type and other_experiment rows it is not the ladder "
+                  "definition since 2026-11-17.", ""]
     for cls in sorted({r["assay_class"] for r in rows}):
         lines += [f"## {cls}", "", "| rung | layer | increment [95% interval] | pairs (cells) matched | "
                   "pairs (cells) all | share of the cell-type pair value (same cells and assays) | flag |", "|---|---|---|---|---|---|---|"]
@@ -403,6 +576,23 @@ def markdown(rows, tele=None, mixed=None, design=None, chain=None):
                          f"{_g(c.get('sum_of_increments'), 4)} | {_g(c.get('other_cell_type_value'), 4)} | "
                          f"{c['ok']} |")
         lines.append("")
+    if common is not None:
+        cg = {(c["assay_class"], c["stratum"], c["band"]): c["ok"] for c in common}
+        lines += ["## Common-cell check (common_cells.tsv; replaces the telescoping check)", "",
+                  f"Pseudoreplicate, isogenic and other_cell_type recomputed on the a-side cells that all three "
+                  f"rows hold. Pass: at least {MIN_CELLS} common cells and each common-cell increment inside "
+                  f"its row's interval. {sum(1 for v in cg.values() if v == 1)} of {len(cg)} (class, stratum, "
+                  "band) groups pass.", "",
+                  "| assay class | rung | common cells | increment on common cells [95% interval] | "
+                  "row increment [95% interval] (cells) | inside | ok |", "|---|---|---|---|---|---|---|"]
+        for c in common:
+            if c["stratum"] != "all" or c["band"] != "all":
+                continue
+            lines.append(f"| {c['assay_class']} | {c['rung']} | {c['n_common_cells']} | "
+                         f"{_g(c['common_increment'], 4)} [{_g(c['common_ci_low'], 3)}, {_g(c['common_ci_high'], 3)}] | "
+                         f"{_g(c['row_increment'], 4)} [{_g(c['row_ci_low'], 3)}, {_g(c['row_ci_high'], 3)}] "
+                         f"({c['row_n_cells']}) | {c['inside_row_interval']} | {c['ok']} |")
+        lines.append("")
     if mixed:
         if design is None and not any(NOT_IDENTIFIED in m.get("note", "") for m in mixed):
             lines += ["WARNING: no design.tsv given and the mixed-model table carries no quote rule: "
@@ -435,23 +625,38 @@ def markdown(rows, tele=None, mixed=None, design=None, chain=None):
 
 def cmd_report(args):
     pair_rows = _read_tsv(args.pairs)
-    rows = ladder_rows(pair_rows, args.n_boot, args.seed)
+    two = args.form == "two_sided"
+    sides, tables = None, None
+    if two:
+        if not args.tables:
+            raise SystemExit("ladder report --form two_sided needs --tables <dir> (pairs.tsv, measurements.tsv) "
+                             "for the experiment of each side; --form one_sided runs without it")
+        t = Path(args.tables)
+        sides = pair_sides(_read_tsv(t / "pairs.tsv"), _read_tsv(t / "measurements.tsv"))
+        tables = (f"{t} (pairs.tsv sha256 {_sha256(t / 'pairs.tsv')[:12]}, measurements.tsv sha256 "
+                  f"{_sha256(t / 'measurements.tsv')[:12]})")
+    rows = ladder_rows(pair_rows, args.n_boot, args.seed, args.form, sides)
     out = Path(args.out_dir)
-    _write_tsv(rows, REPORT_COLUMNS, out / "ladder.tsv")
-    tele = None
-    if args.layers:
-        from onion_eval import total_variance as TV
-        tele = TV.telescoping_check(args.layers)
-        _write_tsv(tele, ["group", "innermost", "outermost", "sum_of_increments", "outermost_variance",
-                          "abs_diff", "chain_ok", "ok"], out / "telescoping.tsv")
-    chain = chain_check(pair_rows)
-    _write_tsv(chain, CHAIN_COLUMNS, out / "chain_check.tsv")
+    _write_tsv(rows, REPORT_COLUMNS + (["n_pairs_left_b"] if two else []), out / "ladder.tsv")
+    common = common_cell_check(rows, args.n_boot, args.seed)
+    _write_tsv(common, COMMON_COLUMNS, out / "common_cells.tsv")
+    tele, chain = None, None
+    if not two:   # telescoping holds only for the one-sided form; kept for comparison
+        if args.layers:
+            from onion_eval import total_variance as TV
+            tele = TV.telescoping_check(args.layers)
+            _write_tsv(tele, ["group", "innermost", "outermost", "sum_of_increments", "outermost_variance",
+                              "abs_diff", "chain_ok", "ok"], out / "telescoping.tsv")
+        chain = chain_check(pair_rows)
+        _write_tsv(chain, CHAIN_COLUMNS, out / "chain_check.tsv")
+    elif args.layers:
+        print("ladder report: --layers ignored in the two-sided form (the common-cell check replaces telescoping)")
     mixed = [r for p in (args.mixed or []) for r in _read_tsv(p)]
     design = _read_tsv(args.design) if args.design else None
     if design is not None:
         mixed = quote_rule(mixed, design)
-    (out / "ladder.md").write_text(markdown(rows, tele, mixed, design, chain))
-    print(f"ladder report: {len(rows)} rows -> {out / 'ladder.tsv'}, {out / 'ladder.md'}")
+    (out / "ladder.md").write_text(markdown(rows, tele, mixed, design, chain, args.form, common, tables))
+    print(f"ladder report ({args.form}): {len(rows)} rows -> {out / 'ladder.tsv'}, {out / 'ladder.md'}")
     return 0
 
 
@@ -470,6 +675,9 @@ def main(argv=None):
     r = sub.add_parser("report")
     r.add_argument("--pairs", required=True)
     r.add_argument("--out-dir", required=True)
+    r.add_argument("--form", choices=FORMS, default="two_sided",
+                   help="two_sided (default, the ladder definition) or one_sided (the earlier form, comparison)")
+    r.add_argument("--tables", default=None, help="dir with pairs.tsv and measurements.tsv (two_sided)")
     r.add_argument("--layers", default=None)
     r.add_argument("--mixed", nargs="*", default=None)
     r.add_argument("--design", default=None)

@@ -18,8 +18,12 @@ Stdlib only. UTF-8 and "\\n" everywhere, so the build is byte-stable.
 
 VERSION 2 (2026-11-18) also reads results/closeout_E4/ladder_2026-11-18/ (ladder.tsv, ladder.md),
 results/closeout_D2/layers_2026-11-18/layers.tsv, results/closeout_A4/qc_tables_2026-11-18/coverage.txt,
-INSTRUCTIONS/peeling_the_onion/run_state/plan.md (the run-log snapshot; rebuild after each foreman
-snapshot commit) and closeout/PI decisions 2026-11-17.md.
+presentations/onion-closeout-2026-11-18/run_status.json (run-log facts; the foreman updates it by hand,
+see the deck's DECK.md) and closeout/PI decisions 2026-11-17.md.
+
+VERSION 3 (2026-11-18): the replicate ladder is two-sided (results/closeout_E4/ladder_two_sided_2026-11-18/:
+two_sided/ and one_sided/ ladder.tsv, two_sided/ladder.md, COMPARE.md; ladder_2026-11-18/pair_values.tsv.gz
+for the DNase-seq depth). Version 2 called the one-sided form two-sided. The run log is no longer read.
 
 RESCORING HOOK. When the 256-region rescoring of the 7 decisive arms lands, copy the
 arm-summary table (select_rule.py arm-summary --runs <runs_fir> --sub p256_sv) to
@@ -645,14 +649,29 @@ def pct(v, d=1):
     return num(100 * float(v), d) + "\\%"
 
 
-# replicate ladder: two-sided, assay-matched (results/closeout_E4/ladder_2026-11-18)
-LADR = R + "closeout_E4/ladder_2026-11-18/"
-lad = {(r["assay_class"], r["rung"], r["pair_class"]): r for r in tsv_rows(LADR + "ladder.tsv")
+# replicate ladder: two-sided (default) and one-sided beside it (results/closeout_E4/ladder_two_sided_2026-11-18)
+LADR = R + "closeout_E4/ladder_two_sided_2026-11-18/"
+lad = {(r["assay_class"], r["rung"], r["pair_class"]): r for r in tsv_rows(LADR + "two_sided/ladder.tsv")
        if r["stratum"] == "all" and r["band"] == "all"}
-ladmd = load(LADR + "ladder.md")
-macros["ladChainOk"] = grab(ladmd, r"\n.*?: (\d+) of \d+ \(class, stratum, band\) groups telescope exactly")
-macros["ladChainN"] = grab(ladmd, r"\n.*?: \d+ of (\d+) \(class, stratum, band\) groups telescope exactly")
-CLASSES = [("accessibility_dnase", "DNase-seq"), ("broad_histone", "broad marks"), ("narrow_histone", "narrow marks")]
+lad1 = {(r["assay_class"], r["rung"], r["pair_class"]): r for r in tsv_rows(LADR + "one_sided/ladder.tsv")
+        if r["stratum"] == "all" and r["band"] == "all"}
+ladmd = load(LADR + "two_sided/ladder.md")
+macros["ladCcOk"] = grab(ladmd, r"(\d+) of \d+ \(class, stratum, band\) groups pass")
+macros["ladCcN"] = grab(ladmd, r"\d+ of (\d+) \(class, stratum, band\) groups pass")
+cmp_ = load(LADR + "COMPARE.md")
+macros["ladDnCell"] = grab(cmp_, r"The shallowest side is the second experiment [A-Z0-9]+, pooled track, cell (C\d+)")
+macros["ladDnNext"] = num(fnum(grab(cmp_, r"The next shallowest DNase-seq side has ([\d,]+) reads")), 0)
+import gzip
+pvp = VAULT / "results/closeout_E4/ladder_2026-11-18/pair_values.tsv.gz"
+read.append(pvp)
+with gzip.open(pvp, "rt") as fh:
+    head = fh.readline().rstrip("\n").split("\t")
+    ia, idp = head.index("assay"), head.index("depth")
+    dn_depth = {ln.split("\t")[idp] for ln in fh if ln.split("\t")[ia] == "DNase-seq"}
+assert len(dn_depth) == 1, dn_depth
+macros["ladDnDepth"] = num(float(dn_depth.pop()), 0)
+CLASSES = [("accessibility_dnase", "DNase-seq (depth defect)"), ("broad_histone", "broad marks"),
+           ("narrow_histone", "narrow marks")]
 LAYERS = [("pseudoreplicate", "", "read sampling"), ("isogenic", "", "biological replicate"),
           ("other_experiment", "experiment;lab;donor", "lab with donor"),
           ("other_experiment", "experiment;donor", "repeat with donor"),
@@ -666,16 +685,38 @@ for c, cl in CLASSES:
         lrows.append(f"{cl} & {nm} & {r['n_pairs']} ({r['n_cells']}) & {gnum(r['layer_increment'])} "
                      f"[{gnum(r['ci_low'])}, {gnum(r['ci_high'])}] & {pct(r['share'])} ({r['share_units']}) \\\\")
 macros["TabLadder"] = "\n".join(lrows)
+
+
+def est_(r):
+    return r["layer_increment"] not in ("", "nan")
+
+
+frows = []
+for c, cl in CLASSES[1:]:
+    for rg, pc, nm in (("other_cell_type", "", "cell type"), ("other_experiment", "experiment;lab;donor", "lab with donor"),
+                       ("other_experiment", "experiment;donor", "repeat with donor")):
+        a, t = lad1[(c, rg, pc)], lad[(c, rg, pc)]
+        if not est_(a) and not est_(t):
+            continue
+        fa = (f"{gnum(a['layer_increment'])} [{gnum(a['ci_low'])}, {gnum(a['ci_high'])}] ({a['n_pairs']}, {a['n_cells']})"
+              if est_(a) else "not estimable")
+        ft = (f"{gnum(t['layer_increment'])} [{gnum(t['ci_low'])}, {gnum(t['ci_high'])}] ({t['n_pairs']}, {t['n_cells']})"
+              if est_(t) else f"not estimable ({t['n_pairs_left_b']} pairs left)")
+        ch = (num(100 * (float(t["layer_increment"]) - float(a["layer_increment"])) / abs(float(a["layer_increment"])), 0,
+                  sign=True) + "\\%") if est_(a) and est_(t) else ""
+        frows.append(f"{cl} & {nm} & {fa} & {ft} & {ch} \\\\")
+macros["TabLadderForms"] = "\n".join(frows)
 for c, t in (("accessibility_dnase", "Dn"), ("broad_histone", "Br"), ("narrow_histone", "Nr")):
     for rg, pc, k in (("pseudoreplicate", "", "Samp"), ("isogenic", "", "Rep"), ("other_cell_type", "", "Ct")):
         macros[f"lad{t}{k}"] = pct(lad[(c, rg, pc)]["share"])
-macros["ladBrLd"] = gnum(lad[("broad_histone", "other_experiment", "experiment;lab;donor")]["layer_increment"])
-macros["ladBrLdSh"] = pct(lad[("broad_histone", "other_experiment", "experiment;lab;donor")]["share"])
-macros["ladDnRepInc"] = gnum(lad[("accessibility_dnase", "isogenic", "")]["layer_increment"])
+    macros[f"lad{t}CtLeft"] = lad[(c, "other_cell_type", "")]["n_pairs_left_b"]
+    macros[f"lad{t}SampV"] = gnum(lad[(c, "pseudoreplicate", "")]["layer_increment"])
+for c, t in (("broad_histone", "Br"), ("narrow_histone", "Nr")):
+    macros[f"lad{t}OeAll"] = str(sum(int(r["n_pairs_all"]) for (cc, rg, _), r in lad.items()
+                                     if cc == c and rg == "other_experiment"))
 macros["ladAtacN"] = lad[("accessibility_atac", "pseudoreplicate", "")]["n_pairs_all"]
 macros["ladAtacC"] = lad[("accessibility_atac", "pseudoreplicate", "")]["n_cells_all"]
-macros["ladBrLabN"] = lad[("broad_histone", "other_experiment", "experiment;lab")]["n_pairs"]
-macros["ladBrLabC"] = lad[("broad_histone", "other_experiment", "experiment;lab")]["n_cells"]
+macros["ladKeptBrOne"] = gnum(grab(cmp_, r"\| broad_histone \| \d+ \(\d+\) \| [-\de.]+ \| ([-\de.]+) \|"))
 
 # second-experiment layers, rows pooled by assay class (results/closeout_D2/layers_2026-11-18)
 dl = {(r["assay_or_class"], r["pair_class"]): r for r in tsv_rows(R + "closeout_D2/layers_2026-11-18/layers.tsv")
@@ -706,31 +747,26 @@ for k, t in (("nsc", "Nsc"), ("frag_len", "Frag"), ("nrf", "Nrf"), ("frip", "Fri
     macros[f"qc{t}"] = num(cov[k][0], 0)
     macros[f"qc{t}Pct"] = num(100 * cov[k][0] / cov[k][1], 1)
 assert cov["rsc"] == cov["nsc"] and cov["pbc1"] == cov["nrf"] == cov["pbc2"]
-pl = load(INS + "run_state/plan.md")
-q = re.search(r"records whole ([\d,]+) \(= rows\), pr1 ([\d,]+) \(= rows\); row states in the whole pass: "
-              r"([\d,]+) ok, ([\d,]+) no read set, ([\d,]+) refused", pl).groups()
+rst = load("presentations/onion-closeout-2026-11-18/run_status.json")   # run-log facts (DECK.md says how to update)
+q_, b_, a_, s_, r_ = rst["qc_fill"], rst["bp_store"], rst["archive"], rst["scratch"], rst["rescoring"]
 macros["qcWhole"], macros["qcPrOne"], macros["qcOk"], macros["qcNoRead"], macros["qcRefused"] = \
-    (num(fnum(x), 0) for x in q)
-macros["bpViews"] = grab(pl, r"RECOUNT DONE: \d+ of \d+ tasks COMPLETED \([^)]*\), (\d+) views in CO-A7/res_store")
-macros["bpPts"] = num(fnum(grab(pl, r"independent (\d+) points, store \d+, bins differing 0 -> PASS")), 0)
-macros["bpPtsStore"] = num(fnum(grab(pl, r"independent \d+ points, store (\d+), bins differing 0 -> PASS")), 0)
-macros["bpMeas"] = grab(pl, r"tables were built \(CO-A7/tables/eic_res_v1: (\d+) measurements")
-macros["bpPairs"] = grab(pl, r"tables were built \(CO-A7/tables/eic_res_v1: \d+ measurements, (\d+) pairs")
-grab(pl, r"(1 bp verify \d+ and variance \d+ running)")
-a = re.search(r"(\d+) of (\d+) tars OK \(tar -d, 0 non-empty diff files\), 0 failed, ([\d,]+) GiB, ([\d,]+) entries",
-              pl).groups()
-macros["arcTars"], macros["arcGib"], macros["arcEntries"] = a[0], num(fnum(a[2]), 0), num(fnum(a[3]), 0)
-s1 = re.search(r"Scratch ([\d,]+) -> ([\d,]+) GiB \(soft quota ([\d,]+): still read-only\)", pl).groups()
-s2 = re.search(r"Scratch ([\d,]+) -> ([\d,]+) GiB of ([\d,]+); a write test passed", pl).groups()
-macros["scBefore"], macros["scMid"], macros["scAfter"] = (num(fnum(x), 0) for x in (s1[0], s1[1], s2[1]))
-# rescoring status (run log)
-rsub = re.search(r"- (2026-11-17)T([\d:]+)Z RESCORING SUBMITTED on Nibi.*?: (\d+) run-seeds", pl).groups()
-macros["rsDay"], macros["rsStart"], macros["rsN"] = rsub
-macros["rsHours"] = grab(pl, r"so about ([\d.]+) h for the predict stage")
-macros["rsCap"] = grab(pl, r"raise the cap to (\d+) active run-seeds")
-macros["rsNow"] = grab(pl, r"Rescoring ([\d:]+)Z: \d+ active, \d+ scored")
-macros["rsScored"] = grab(pl, r"Rescoring [\d:]+Z: \d+ active, (\d+) scored")
-macros["rsNowDay"] = grab(pl, r"- (2026-11-1\d)T[\d:]+Z REPLICATE LADDER REPORT")
+    (num(fnum(q_[k]), 0) for k in ("records_whole", "records_pr1", "ok", "no_read_set", "refused"))
+macros["bpViews"] = b_["views_recounted"]
+assert b_["bins_differing"] == "0" and b_["verify_state"] == "running", "reword the 1 bp store sentence first"
+macros["bpPts"] = num(fnum(b_["points_independent"]), 0)
+macros["bpPtsStore"] = num(fnum(b_["points_store"]), 0)
+macros["bpMeas"] = b_["measurements"]
+macros["bpPairs"] = b_["pairs"]
+macros["arcTars"], macros["arcGib"], macros["arcEntries"] = a_["tars_ok"], num(fnum(a_["gib"]), 0), num(fnum(a_["entries"]), 0)
+macros["scBefore"], macros["scMid"], macros["scAfter"] = (num(fnum(s_[k]), 0) for k in
+                                                          ("before_gib", "after_archive_gib", "after_work_folder_gib"))
+# rescoring status (run_status.json)
+macros["rsDay"], macros["rsStart"], macros["rsN"] = r_["submitted_day"], r_["submitted_utc"], r_["run_seeds"]
+macros["rsHours"] = r_["predict_hours_per_round"]
+macros["rsCap"] = r_["cap_active_run_seeds"]
+macros["rsNow"] = r_["status_utc"]
+macros["rsScored"] = r_["scored"]
+macros["rsNowDay"] = r_["status_day"]
 rounds = -(-int(macros["rsN"]) // int(macros["rsCap"]))
 macros["rsRounds"] = str(rounds)
 macros["rsTotal"] = num(rounds * float(macros["rsHours"]), 0)

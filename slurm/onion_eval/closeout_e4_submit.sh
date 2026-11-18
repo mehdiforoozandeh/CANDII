@@ -101,7 +101,7 @@ report)
   for b in $BANDS; do "${SSH[@]}" "$WHERE" "test -e $E/mixed/mixed_$b.tsv" && MX+=" $E/mixed/mixed_$b.tsv"; done
   [ -n "$MX" ] && MX="--mixed$MX" || echo "no mixed-model table yet: the report has no mixed-model section"
   if done_or_queued "$E/ladder/ladder.md" co_e4_report; then echo "skip report"; else
-    j=$(remote "$SB --job-name=co_e4_report --time=00:30:00 --cpus-per-task=1 --mem=8000M --output=$E/logs/%x_%j.out $RUN tools/onion_eval/ladder.py report --pairs $E/layers/pair_values.tsv.gz --layers $E/layers/layers.tsv --design $E/layers/design.tsv $MX --n-boot 1000 --out-dir $E/ladder"); echo "report: $j"; fi
+    j=$(remote "$SB --job-name=co_e4_report --time=00:30:00 --cpus-per-task=1 --mem=8000M --output=$E/logs/%x_%j.out $RUN tools/onion_eval/ladder.py report --pairs $E/layers/pair_values.tsv.gz --tables $TX --layers $E/layers/layers.tsv --design $E/layers/design.tsv $MX --n-boot 1000 --out-dir $E/ladder"); echo "report: $j"; fi
   ;;
 *) echo "unknown stage $STAGE" >&2; exit 2 ;;
 esac

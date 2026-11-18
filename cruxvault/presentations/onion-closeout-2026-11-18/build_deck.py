@@ -89,11 +89,15 @@ CHKMD = "results/region_sampling_checks/PAIR_REGIONS_V3.md"
 WV = "results/closeout_A3/where_vs_allviews.tsv"
 WVMD = "results/closeout_A3/WHERE_VIEWS.md"
 # results that landed after version 1 (2026-11-18), and the PI decisions of 2026-11-17
-LAD = "results/closeout_E4/ladder_2026-11-18/ladder.tsv"
-LADCH = "results/closeout_E4/ladder_2026-11-18/chain_check.tsv"
+# version 3: the two-sided ladder (PI decision of 2026-11-17, row 5) and the one-sided form beside it once
+LAD = "results/closeout_E4/ladder_two_sided_2026-11-18/two_sided/ladder.tsv"
+LAD1 = "results/closeout_E4/ladder_two_sided_2026-11-18/one_sided/ladder.tsv"
+LADCC = "results/closeout_E4/ladder_two_sided_2026-11-18/two_sided/common_cells.tsv"
+LADCMP = "results/closeout_E4/ladder_two_sided_2026-11-18/COMPARE.md"
+LADPV = "results/closeout_E4/ladder_2026-11-18/pair_values.tsv.gz"
 D2L = "results/closeout_D2/layers_2026-11-18/layers.tsv"
 QCC = "results/closeout_A4/qc_tables_2026-11-18/coverage.txt"
-PLAN = INS + "run_state/plan.md"
+RSTAT = "presentations/onion-closeout-2026-11-18/run_status.json"   # replaces the run log (it changes per snapshot)
 PID = INS + "closeout/PI decisions 2026-11-17.md"
 
 # ---- colors (light, printed on a white card in both themes) -------------------------------------
@@ -214,24 +218,25 @@ put("data.blindre", d4[2])
 put("data.blindcost", d4[3])
 put("data.qc", qcn[0])
 put("data.qcall", qcn[1])
-cite("data2", TODO, DES, PAPER, PLAN, QCC, PID)
+cite("data2", TODO, DES, PAPER, RSTAT, QCC, PID)
 
 # ---- run-log facts of the last night (the run log snapshot in the vault) ----------------------------
-pl_arch = grab(PLAN, r"([0-9]+) of ([0-9]+) tars OK \(tar -d, 0 non-empty diff files\), 0 failed, ([0-9,]+) GiB, "
-                     r"([0-9,]+) entries", 4)
-pl_sc1 = grab(PLAN, r"Scratch ([0-9,]+) -> ([0-9,]+) GiB \(soft quota ([0-9,]+): still read-only\)", 3)
-pl_sc2 = grab(PLAN, r"Scratch ([0-9,]+) -> ([0-9,]+) GiB of ([0-9,]+); a write test passed", 3)
-pl_qc = grab(PLAN, r"records whole ([0-9,]+) \(= rows\), pr1 ([0-9,]+) \(= rows\); row states in the whole pass: "
-                   r"([0-9,]+) ok, ([0-9,]+) no read set, ([0-9,]+) refused", 5)
-pl_rc = grab(PLAN, r"RECOUNT DONE: [0-9]+ of [0-9]+ tasks COMPLETED \([^)]*\), ([0-9]+) views in CO-A7/res_store")
-pl_pt = grab(PLAN, r"independent ([0-9]+) points, store ([0-9]+), bins differing ([0-9]+) -> PASS", 3)
-pl_tb = grab(PLAN, r"tables were built \(CO-A7/tables/eic_res_v1: ([0-9]+) measurements, ([0-9]+) pairs", 2)
-pl_rs = grab(PLAN, r"- (2026-11-17)T([0-9:]+)Z RESCORING SUBMITTED on Nibi.*?: ([0-9]+) run-seeds, ([0-9,]+) jobs", 4)
-pl_rsh = grab(PLAN, r"so about ([0-9.]+) h for the predict stage")
-pl_cap = grab(PLAN, r"raise the cap to ([0-9]+) active run-seeds")
-pl_now = grab(PLAN, r"Rescoring ([0-9:]+)Z: ([0-9]+) active, ([0-9]+) scored", 3)
-pl_now_day = grab(PLAN, r"- (2026-11-1[0-9])T[0-9:]+Z REPLICATE LADDER REPORT")
-grab(PLAN, r"(1 bp verify [0-9]+ and variance [0-9]+ running)")   # the state that the slide reports
+RS = json.loads(text(RSTAT))       # run-log facts, copied by the foreman from the run log (DECK.md)
+_a, _s, _q, _b, _r = RS["archive"], RS["scratch"], RS["qc_fill"], RS["bp_store"], RS["rescoring"]
+pl_arch = [_a["tars_ok"], _a["tars_all"], _a["gib"], _a["entries"]]
+pl_sc1 = [_s["before_gib"], _s["after_archive_gib"], _s["soft_quota_gib"]]
+pl_sc2 = [_s["after_archive_gib"], _s["after_work_folder_gib"], _s["soft_quota_gib"]]
+pl_qc = [_q["records_whole"], _q["records_pr1"], _q["ok"], _q["no_read_set"], _q["refused"]]
+pl_rc = _b["views_recounted"]
+pl_pt = [_b["points_independent"], _b["points_store"], _b["bins_differing"]]
+pl_tb = [_b["measurements"], _b["pairs"]]
+pl_rs = [_r["submitted_day"], _r["submitted_utc"], _r["run_seeds"], _r["jobs"]]
+pl_rsh = _r["predict_hours_per_round"]
+pl_cap = _r["cap_active_run_seeds"]
+pl_now = [_r["status_utc"], _r["active"], _r["scored"]]
+pl_now_day = _r["status_day"]
+if _b["verify_state"] != "running":   # the slide says the 1 bp verify and variance jobs are running
+    sys.exit(f"build_deck: {RSTAT} bp_store.verify_state is {_b['verify_state']!r}; reword slide 5 first")
 put("arc.tars", pl_arch[0])
 put("arc.gib", pl_arch[2])
 put("arc.entries", pl_arch[3])
@@ -276,7 +281,7 @@ put("qcf.nsc", comma(QCF["nsc"][0]))
 put("qcf.frag", comma(QCF["frag_len"][0]))
 put("qcf.nrf", comma(QCF["nrf"][0]))
 put("qcf.frip", comma(QCF["frip"][0]))
-cite("side", QCC, PLAN, INS + "closeout/closeout A4 QC metrics on the input side.md")
+cite("side", QCC, RSTAT, INS + "closeout/closeout A4 QC metrics on the input side.md")
 
 fig, axs = plt.subplots(1, 2, figsize=(13.2, 4.5), gridspec_kw=dict(width_ratios=[1.15, 1]))
 ax = axs[0]
@@ -310,12 +315,13 @@ fig.tight_layout()
 png("side", fig)
 
 # ==================================================================================================
-# Replicate ladder (two-sided, assay-matched; ladder.tsv, chain_check.tsv) and second-experiment layers
+# Replicate ladder (two-sided, assay-matched; ladder.tsv, common_cells.tsv) and second-experiment layers
 # ==================================================================================================
-LR = {}
-for r in tsv(LAD):
-    if r["stratum"] == "all" and r["band"] == "all":
-        LR[(r["assay_class"], r["rung"], r["pair_class"])] = r
+LR, LR1 = {}, {}
+for d_, f_ in ((LR, LAD), (LR1, LAD1)):
+    for r in tsv(f_):
+        if r["stratum"] == "all" and r["band"] == "all":
+            d_[(r["assay_class"], r["rung"], r["pair_class"])] = r
 CLS = [("accessibility_dnase", "DNase-seq"), ("broad_histone", "broad histone marks"),
        ("narrow_histone", "narrow histone marks")]
 RUNGS = [("pseudoreplicate", "", "sampling (read halves)"), ("sequencing", "", "sequencing run"),
@@ -326,8 +332,8 @@ RUNGS = [("pseudoreplicate", "", "sampling (read halves)"), ("sequencing", "", "
          ("other_cell_type", "", "cell type")]
 for c, _ in CLS + [("accessibility_atac", "")]:
     for rg, pc, _ in RUNGS:
-        if (c, rg, pc) not in LR:
-            sys.exit(f"build_deck: {LAD} has no all/all row {c} {rg} {pc}")
+        if (c, rg, pc) not in LR or (c, rg, pc) not in LR1:
+            sys.exit(f"build_deck: {LAD} or {LAD1} has no all/all row {c} {rg} {pc}")
 
 
 def est(r):
@@ -340,42 +346,56 @@ def why(r):
         return "units not built"
     if f.startswith("no pair in EIC"):
         return "no pair in EIC"
+    if int(r["n_pairs"]) == 0 and int(r["n_pairs_all"]) > 0 and "pairs whose b-side" in f:
+        return f"a side has no replicate pair ({r['n_pairs_all']} pairs)"
     m = re.match(r"not estimable: ([0-9]+) pairs from ([0-9]+) cells", f)
     return f"too few matched: {m.group(1)} pairs, {m.group(2)} cells" if m else f[:30]
 
 
-CH = {}
-for r in tsv(LADCH):
-    if r["stratum"] == "all" and r["band"] == "all":
-        CH[r["assay_class"]] = r
-fig = plt.figure(figsize=(13.4, 6.4))
-gs = fig.add_gridspec(2, 3, height_ratios=[0.95, 2.2], hspace=0.55, wspace=0.08)
+# common-cell check (replaces telescoping): groups that pass, all strata and bands
+CC = {}
+for r in tsv(LADCC):
+    CC.setdefault((r["assay_class"], r["stratum"], r["band"]), r["ok"])
+put("lad.cc.pass", str(sum(v == "1" for v in CC.values())))
+put("lad.cc.n", str(len(CC)))
+put("lad.cc.hpass", str(sum(v == "1" for k, v in CC.items() if k[0] != "accessibility_dnase")))
+put("lad.cc.hn", str(sum(1 for k in CC if k[0] != "accessibility_dnase")))
+# DNase-seq common depth of the ladder's pair values (one value for the assay; see COMPARE.md)
+import gzip
+with gzip.open(path(LADPV), "rt", newline="") as fh_:
+    dn_depth = {r["depth"] for r in csv.DictReader(fh_, delimiter="\t") if r["assay"] == "DNase-seq"}
+if len(dn_depth) != 1:
+    sys.exit(f"build_deck: {LADPV}: DNase-seq has {len(dn_depth)} common depths")
+put("lad.dn.depth", comma(int(float(dn_depth.pop()))))
+put("lad.dn.next", grab(LADCMP, r"The next shallowest DNase-seq side has ([0-9,]+) reads"))
+put("lad.dn.cell", grab(LADCMP, r"The shallowest side is the second experiment [A-Z0-9]+, pooled track, cell (C[0-9]+)"))
+
+fig = plt.figure(figsize=(13.4, 6.6))
+gs = fig.add_gridspec(2, 3, height_ratios=[1.0, 2.2], hspace=0.62, wspace=0.08)
 ax = fig.add_subplot(gs[0, :])
-LC = {"s": "#c8b88f", "r": "#4f9a8a", "c": "#b5543a"}
-for i, (c, lab) in enumerate(CLS):
-    h = CH[c]
-    tot = float(h["other_cell_type_value"])
-    s, rp, ct = (float(h[k]) / tot for k in ("sampling", "replicate_increment", "cell_type_increment"))
-    y = len(CLS) - 1 - i
-    ax.barh(y, s, color=LC["s"], height=0.62)
-    if rp >= 0:
-        ax.barh(y, rp, left=s, color=LC["r"], height=0.62)
-        ax.barh(y, ct, left=s + rp, color=LC["c"], height=0.62)
-    else:
-        ax.barh(y, -rp, left=s + rp, color="white", ec=LC["r"], hatch="///", height=0.62)
-        ax.barh(y, ct, left=s + rp, color=LC["c"], height=0.62, alpha=0.85)
-    ax.text(1.012, y, f"replicate {100 * rp:+.1f}%, cell type {100 * ct:+.1f}%  ({h['n_units']} units, "
-            f"{h['n_cells']} cells)".replace("-", "−"), va="center", fontsize=10.5, color=INK)
-    ax.text(0.01, y, f"sampling {100 * s:.1f}%", va="center", fontsize=10.5, color=INK)
-ax.set_yticks(range(len(CLS)), [lab for _, lab in CLS][::-1], fontsize=11)
-ax.set_xlim(0, 1.55)
-ax.set_xticks([0, 0.25, 0.5, 0.75, 1.0], ["0", "25%", "50%", "75%", "100%"])
-ax.set_xlabel("share of the cell-type pair value, on the (cell, assay) units that hold all three rungs (exact sum)",
-              fontsize=11)
-ax.set_title("(a) The ladder adds up: sampling + replicate + cell type = the cell-type pair value", loc="left",
+sc_ = 1e-3
+yy = 0
+ticks = []
+for c, lab in CLS[1:]:
+    for form, d_, col in (("one-sided (version 2)", LR1, GREY), ("two-sided (now)", LR, "#b5543a")):
+        r = d_[(c, "other_cell_type", "")]
+        v, lo, hi = (float(r[k]) / sc_ for k in ("layer_increment", "ci_low", "ci_high"))
+        ax.plot([lo, hi], [yy, yy], color=col, lw=3)
+        ax.plot(v, yy, "o", color=col, ms=8)
+        ax.text(7.2, yy, f"{v:.2f} [{lo:.2f}, {hi:.2f}]; {r['n_pairs']} pairs, {r['n_cells']} cells", va="center",
+                fontsize=10, color=INK)
+        ticks.append(f"{lab.replace(' histone marks', '')}: {form.split(' ')[0]}")
+        yy += 1
+    yy += 0.4
+ax.set_yticks([0, 1, 2.4, 3.4], ticks, fontsize=10)
+ax.set_ylim(3.9, -0.5)
+ax.set_xlim(0, 12.5)
+ax.set_xticks([0, 1, 2, 3, 4, 5, 6, 7])
+ax.axvline(0, color=MUTED, lw=1)
+ax.set_xlabel("cell-type increment over the biological replicate, in units of $10^{-3}$ (pair value; 95% interval)",
+              fontsize=10.5)
+ax.set_title("(a) Cell-type rung: the one-sided form of version 2 against the two-sided form", loc="left",
              fontsize=13.5)
-for s_ in ("right", "top"):
-    ax.spines[s_].set_visible(False)
 for j, (c, lab) in enumerate(CLS):
     ax = fig.add_subplot(gs[1, j])
     rows_ = [rr for rr in RUNGS if rr[0] != "pseudoreplicate"]
@@ -394,14 +414,15 @@ for j, (c, lab) in enumerate(CLS):
             ax.text(lim * 0.98, i - 0.33, f"{r['n_pairs']} pairs, {r['n_cells']} cells", ha="right", fontsize=8.8,
                     color=MUTED)
         else:
-            ax.text(-lim * 0.95, i, why(r), va="center", fontsize=9.2, color=GREY, style="italic", zorder=4,
+            ax.text(-lim * 0.95, i, why(r), va="center", fontsize=8.6, color=GREY, style="italic", zorder=4,
                     bbox=dict(fc="white", ec="none", pad=0.6))
     ax.axvline(0, color=MUTED, lw=1)
     ax.set_xlim(-lim, lim)
     ax.set_ylim(len(rows_) - 0.5, -0.6)
     ax.set_yticks(range(len(rows_)), [nm for _, _, nm in rows_] if j == 0 else [], fontsize=10.5)
-    ax.set_title(f"({'bcd'[j]}) {lab}", loc="left", fontsize=12.5)
-    ax.set_xlabel(f"increment over the rung below, in units of $10^{{{ex}}}$\n(pair value; 95% interval)",
+    ttl = f"({'bcd'[j]}) {lab}" + (" (depth defect)" if c == "accessibility_dnase" else "")
+    ax.set_title(ttl, loc="left", fontsize=12.5, color=GREY if c == "accessibility_dnase" else INK)
+    ax.set_xlabel(f"two-sided increment over the rung below,\nin units of $10^{{{ex}}}$ (pair value; 95% interval)",
                   fontsize=10.5)
 fig.subplots_adjust(left=0.15, right=0.98, top=0.93, bottom=0.12)
 png("ladder", fig)
@@ -411,23 +432,34 @@ def g3(x):
 
 
 for c, tag in (("accessibility_dnase", "dn"), ("broad_histone", "br"), ("narrow_histone", "nr")):
-    for rg, pc, key in (("pseudoreplicate", "", "samp"), ("isogenic", "", "rep"), ("other_cell_type", "", "ct"),
-                        ("other_experiment", "experiment;lab;donor", "ld"),
-                        ("other_experiment", "experiment;donor", "rd")):
-        r = LR[(c, rg, pc)]
-        if not est(r):
-            continue
-        put(f"lad.{tag}.{key}.sh", f"{100 * float(r['share']):.1f}%".replace("-", "−"))
-        put(f"lad.{tag}.{key}.n", r["n_pairs"])
-        put(f"lad.{tag}.{key}.c", r["n_cells"])
-        put(f"lad.{tag}.{key}.u", r["share_units"])
-        put(f"lad.{tag}.{key}.v", g3(float(r["layer_increment"])))
-        put(f"lad.{tag}.{key}.lo", g3(float(r["ci_low"])))
-        put(f"lad.{tag}.{key}.hi", g3(float(r["ci_high"])))
+    for pre, d_ in (("lad", LR), ("lad1", LR1)):
+        for rg, pc, key in (("pseudoreplicate", "", "samp"), ("isogenic", "", "rep"), ("other_cell_type", "", "ct"),
+                            ("other_experiment", "experiment;lab;donor", "ld"),
+                            ("other_experiment", "experiment;donor", "rd")):
+            r = d_[(c, rg, pc)]
+            if not est(r) or (pre == "lad1" and rg in ("pseudoreplicate", "isogenic")):
+                continue
+            put(f"{pre}.{tag}.{key}.sh", f"{100 * float(r['share']):.1f}%".replace("-", "−"))
+            put(f"{pre}.{tag}.{key}.n", r["n_pairs"])
+            put(f"{pre}.{tag}.{key}.c", r["n_cells"])
+            put(f"{pre}.{tag}.{key}.u", r["share_units"])
+            put(f"{pre}.{tag}.{key}.v", g3(float(r["layer_increment"])))
+            put(f"{pre}.{tag}.{key}.lo", g3(float(r["ci_low"])))
+            put(f"{pre}.{tag}.{key}.hi", g3(float(r["ci_high"])))
+    r1, r2 = LR1[(c, "other_cell_type", "")], LR[(c, "other_cell_type", "")]
+    if est(r1) and est(r2):
+        ch = 100 * (float(r2["layer_increment"]) - float(r1["layer_increment"])) / abs(float(r1["layer_increment"]))
+        put(f"lad.{tag}.ct.chg", f"{ch:+.0f}%".replace("-", "−"))
+        put(f"lad.{tag}.ct.left", r2["n_pairs_left_b"])
+for c, tag in (("broad_histone", "br"), ("narrow_histone", "nr")):
+    put(f"lad.{tag}.oe.left", str(sum(int(LR[(c, "other_experiment", pc)]["n_pairs_left_b"] or 0)
+                                      for rg, pc, _n in RUNGS if rg == "other_experiment")))
+    put(f"lad.{tag}.oe.all", str(sum(int(LR[(c, "other_experiment", pc)]["n_pairs_all"] or 0)
+                                     for rg, pc, _n in RUNGS if rg == "other_experiment")))
 r = LR[("accessibility_atac", "pseudoreplicate", "")]
 put("lad.atac.n", r["n_pairs_all"])
 put("lad.atac.c", r["n_cells_all"])
-cite("ladder", LAD, LADCH, PID, INS + "closeout/closeout E4 complete the replicate ladder.md")
+cite("ladder", LAD, LAD1, LADCC, LADCMP, LADPV, PID, INS + "closeout/closeout E4 complete the replicate ladder.md")
 
 # second-experiment layers (pooled by assay class), lab reported together with donor (PI decision 3)
 DL = {}
@@ -465,7 +497,7 @@ for c, tag in (("broad_histone", "br"), ("narrow_histone", "nr")):
 put("d2.small", str(max(int(DL[(c, pc)]["n_pairs"]) for (c, pc) in DL if c.startswith("accessibility"))))
 put("d2.dropped", grab(PID, r"\| 4 \| The ([0-9]+) unbuilt DNase-seq second-experiment rows"))
 put("d2.kept", grab(PID, r"The add-on stays at ([0-9]+) experiments"))
-cite("second", D2L, PID, LAD, INS + "closeout/closeout D2 second experiments and cross-lab pairs.md")
+cite("second", D2L, PID, LAD, LADCMP, INS + "closeout/closeout D2 second experiments and cross-lab pairs.md")
 
 fig, ax = plt.subplots(figsize=(12.6, 4.4))
 ax.set_xlim(0, 100)
@@ -984,7 +1016,7 @@ put("nr.work", work)
 put("nr.firjobs", fj)
 put("nr.firend", grab(RQ, r"Planned outage from 2026-11-17 07:00 UTC to (about 2026-11-20)"))
 put("nr.deadline", grab(PLAN24, r"deadline: (2026-11-18T20:00Z)"))
-cite("notrun", RQ, PLAN24, PLAN)
+cite("notrun", RQ, PLAN24, RSTAT)
 
 fig, axs = plt.subplots(1, 2, figsize=(13.2, 3.9), gridspec_kw=dict(width_ratios=[1.1, 1]))
 ax = axs[0]
@@ -1092,7 +1124,7 @@ put("rq.n", str(len(QE)))
 put("rq.now", str(sum(1 for e in QE if gclass(e) == "submitted in the close-out window")))
 put("rq.noscript", str(sum(1 for e in QE if cost_of(e["cost"]) is None)))
 put("rq.total", comma(int(round(tot, -2))))
-cite("queue", RQ, PLAN)
+cite("queue", RQ, RSTAT)
 
 # PI decisions of 2026-11-17: the nine taken (decision record) and the two moved to the next session
 pid = grab(PID, r"\| # \| Decision \| PI choice \| Consequence \|\n\|[-|]+\|\n(.*?)\n\n")
@@ -1128,7 +1160,7 @@ rs = grab(DES, r"\*\*The run\.\*\* ([0-9]+) run-seeds of ([0-9]+) decisive arms,
 put("rs.seeds", rs[0])
 put("rs.arms", rs[1])
 put("rs.cost", rs[2])
-cite("pending", DES, RQ, CHKMD, PLAN, PID)
+cite("pending", DES, RQ, CHKMD, RSTAT, PID)
 
 # title
 cite("title", TODO, PLAN24, DES)

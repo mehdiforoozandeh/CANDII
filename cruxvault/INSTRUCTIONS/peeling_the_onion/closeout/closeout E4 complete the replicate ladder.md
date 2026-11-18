@@ -46,7 +46,7 @@ Fill the empty rungs of the replicate ladder (sequencing, technical, anisogenic,
 
 Acceptance checks:
 - `LADDER_COMPLETE.md` lists all seven rungs of D12; an empty rung states the reason (no pair in EIC, or build not approved).
-- `telescoping_check` of `layers.py` passes on the new table.
+- ~~`telescoping_check` of `layers.py` passes on the new table.~~ Replaced by PI decision of 2026-11-17 (row 5): the common-cell check (`common_cells.tsv`, section 10.5) passes.
 
 | outcome | conclusion |
 |---|---|
@@ -154,3 +154,47 @@ Per assay class, report every D12 rung with its increment, interval, pair count 
 - The ladder's own telescoping check (`chain_check.tsv`): pseudoreplicate -> isogenic -> other_cell_type on the (cell, assay) units that hold all three. Smoke: 65 of 65 groups are exact; broad histone, all bands, 16 units: 0.03821 + 0.000369 + 0.004489 = 0.04307. The old check on layers.tsv stays, labeled as known to fail (its rungs hold different cells).
 - `share` uses the same (cell, assay) units as the increment (column `share_units`). A negative increment is kept and flagged.
 - Ladder vs mixed model at the fine band: diagnosis in `results/closeout_E4/E4_MIXED_DIAG.md`. The response is identical and the REML fit is sound. The mixed model's homoscedastic residual and the ladder's one-sided subtraction both fail under track-specific sampling variance (0.021 to 0.049). Do not submit the mixed stage before a per-library residual is added. Quote two-sided ladder rungs as upper values until two-sided subtraction is decided.
+
+## 10. Two-sided subtraction (PI decision of 2026-11-17, row 5; built 2026-11-18, item agent CO-E4b)
+
+### 10.1 The defect
+
+`ladder.py report` up to commit 1c6640c subtracted one side only. A pair is clustered on its a-side cell (`cell` of `pair_values.tsv.gz`), and the row subtracted the lower-rung value of the a-side (cell, assay) unit only. For a pair of two different experiments, the pair value holds the lower-rung variance of both sides. Tonight's ladder (Nibi job 27692829) and the deck and report of version 2 used this one-sided form.
+
+### 10.2 Which rungs are two-sided
+
+- The data structure: `pair_values.tsv.gz` holds one row per (pair, stratum, band) with `pair_id`, `rung`, `pair_class`, `cell` (the a-side cell) and `var_d`; the pair value is 0.5 var_d. It does not hold the b-side. The b-side comes from `pairs.tsv` (`a`, `b`: measurement ids) and `measurements.tsv` (`experiment`, `cell`), joined on `pair_id`.
+- Two-sided rungs (`ladder.TWO_SIDED`): other_cell_type (b-side: another cell, another experiment) and other_experiment (b-side: the second experiment of the same cell). In the 3,979-pair list every other_cell_type pair (2,911) has sides in two cells and two experiments, and every other_experiment pair (71) has sides in one cell and two experiments (counted from the tables).
+- One-sided by construction, unchanged: pseudoreplicate (a == b), isogenic (both sides in one experiment), anisogenic (both sides in one experiment; dropped from the pair list anyway).
+
+### 10.3 The lower rung of a side
+
+- L(x) = the mean isogenic pair value over the isogenic pairs of the experiment of side x, in the same assay, stratum and band (`ladder._lower_by_experiment`). An isogenic pair belongs to the experiment of its a-side (both sides share it).
+- For the a-side, L(a) equals the one-sided unit value: no (cell, assay) unit in the pair list holds isogenic pairs of more than one experiment (0 of 204 units, counted).
+- For the b-side of an other_cell_type pair, L(b) is the isogenic value of the experiment in the other cell. For the b-side of an other_experiment pair, it is the isogenic value of the second experiment.
+- Pair increment: pair value - 0.5 x (L(a) + L(b)). Then, as before: mean over the pairs of a (cell, assay) unit, mean over the assays of a cell, mean over cells.
+
+### 10.4 Pairs without a lower rung, estimability, bootstrap
+
+- A pair leaves the matched set when L(a) does not exist, or else when L(b) does not exist. The column `n_pairs_left_b` and the flag of a row that is not estimable state how many pairs left for the b-side (and for the a-side). A unit stays while it holds one kept pair.
+- Estimable: at least 5 kept pairs from 3 cells (unchanged rule).
+- Bootstrap: 1,000 draws of the a-side cells with replacement (unchanged); each L(b) stays fixed, because it is computed from all isogenic pairs of the b-side experiment. The b-side cells are shared across clusters; the interval ignores this dependence.
+- share (two-sided rows): the increment over the mean pair value of the kept other_cell_type pairs of the same units.
+- Expectation before the run: the cell-type increment falls when partners are noisier than the a-side (smoke run, H3K36me3 fine band: 23% lower). All other_experiment rows become not estimable if the second experiments have no isogenic pair (counted before the run: 0 of 71 b-sides have one).
+
+### 10.5 The common-cell check (replaces telescoping)
+
+Per (assay class, stratum, band): the a-side cells that the estimable rows pseudoreplicate, isogenic and other_cell_type all hold. Each rung's increment is recomputed on those cells (the row's own per-cell increments), with a bootstrap interval. The check passes when there are at least 3 common cells and each common-cell increment lies inside its full row's 95% interval. File `common_cells.tsv`, section in `ladder.md`. The one-sided form still writes `chain_check.tsv` and, with `--layers`, the old telescoping check, for comparison only.
+
+### 10.6 Switches
+
+- `ladder.py report --form two_sided` (default) needs `--tables <dir>` with `pairs.tsv` and `measurements.tsv`. `--form one_sided` is the earlier form; its `ladder.tsv` is byte-identical to the earlier code (checked on tonight's pair values: sha256 a39e9b99... for both).
+- The submit script `slurm/onion_eval/closeout_e4_submit.sh report` passes `--tables $TX`.
+
+### 10.7 Result (evidence `results/closeout_E4/ladder_two_sided_2026-11-18/COMPARE.md`)
+
+- Cell-type rung, all regions and bands, one-sided -> two-sided: broad marks 0.003597 [0.000676, 0.00652] (522 pairs, 17 cells) -> 0.00273 [0.00214, 0.00332] (355, 16); narrow marks 0.004129 [0.00118, 0.00708] (670, 23) -> 0.003547 [0.00253, 0.00457] (445, 23).
+- Most of the drop comes from the pairs that leave (b-side experiment without an isogenic pair). On the kept pairs the one-sided form gives a lower broad value (0.001172). The one-sided form is not an upper value in general.
+- Every other_experiment row is not estimable two-sided: no second experiment has an isogenic pair.
+- Common-cell check: 167 of 195 groups pass; the 28 failures are DNase-seq strata (read sampling on 7 common cells against 17).
+- DNase-seq: every value is at a common depth of 15,201 reads, set by one second experiment (ENCSR000EKG, C23); not interpretable until the layers stage reruns without it.

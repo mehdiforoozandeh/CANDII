@@ -138,7 +138,7 @@ def _planted():
 
 
 def test_report_assay_matched_flags_and_no_cross_class_pool():
-    rows = LD.ladder_rows(_planted(), n_boot=200)
+    rows = LD.ladder_rows(_planted(), n_boot=200, form="one_sided")
     bh = {(r["rung"], r["pair_class"]): r for r in rows if r["assay_class"] == "broad_histone"}
     ld = bh[("other_experiment", "experiment;lab;donor")]
     assert ld["flag"] == "ok" and ld["layer"] == "lab with donor"
@@ -162,7 +162,8 @@ def test_report_cli_writes_tables(tmp_path):
         w = csv.DictWriter(fh, fieldnames=LY.PAIR_COLUMNS, delimiter="\t", lineterminator="\n")
         w.writeheader()
         w.writerows(_planted())
-    assert LD.main(["report", "--pairs", str(pv), "--out-dir", str(tmp_path / "o"), "--n-boot", "50"]) == 0
+    assert LD.main(["report", "--pairs", str(pv), "--out-dir", str(tmp_path / "o"), "--n-boot", "50",
+                    "--form", "one_sided"]) == 0
     md = (tmp_path / "o" / "ladder.md").read_text()
     assert "## broad_histone" in md and "not estimable" in md and "lab with donor" in md
     assert len(LD._read_tsv(tmp_path / "o" / "ladder.tsv")) == 2 * len(LD.LADDER)
@@ -259,9 +260,142 @@ def test_share_is_matched_and_negative_increment_flagged():
     for c in ("C1", "C2", "C3", "C4"):
         _pv(rows, "broad_histone", "B", "other_cell_type", c, 0.4)   # would lower a class-wide denominator
         _pv(rows, "broad_histone", "A", "other_experiment", c, 0.98, "experiment;donor", n=2)
-    bh = {(r["rung"], r["pair_class"]): r for r in LD.ladder_rows(rows, n_boot=100)
+    bh = {(r["rung"], r["pair_class"]): r for r in LD.ladder_rows(rows, n_boot=100, form="one_sided")
           if r["assay_class"] == "broad_histone"}
     ld = bh[("other_experiment", "experiment;lab;donor")]
     assert ld["share"] == pytest.approx(0.05 / 2.0) and ld["share_units"] == 4
     neg = bh[("other_experiment", "experiment;donor")]
     assert neg["layer_increment"] == pytest.approx(-0.02) and "negative increment" in neg["flag"]
+
+
+# ---------------------------------------------------------------------------------------------------
+# two-sided subtraction (PI decision of 2026-11-17, row 5) and the common-cell check
+
+def _two_sided_world(seed=0, n_cells=8, delta=0.003, noise=2e-4):
+    """Cells C0..C7, one experiment E<c> each, assay A. True isogenic value L_c rises with c (quiet cells
+    first). Every cell holds 6 pseudoreplicate and 6 isogenic pairs. other_cell_type pairs (a in a quiet
+    cell, b in a noisier cell, so a < b) have value 0.5 (L_a + L_b) + delta: the true cell-type increment
+    over isogenic is delta. Returns (pair rows, sides)."""
+    rng = np.random.default_rng(seed)
+    L = {c: 0.02 + 0.004 * c for c in range(n_cells)}
+    rows, sides = [], {}
+
+    def add(pid, rung, cell, value, ea, eb):
+        rows.append(dict(pair_id=pid, assay="A", assay_class="broad_histone", rung=rung, pair_class="",
+                         tech_diff="0", cell=f"C{cell}", split="train", depth="1.0", stratum="all", band="all",
+                         var_d=repr(2.0 * float(value))))
+        sides[pid] = (f"E{ea}", f"E{eb}")
+    for c in range(n_cells):
+        for i in range(6):
+            add(f"ps{c}_{i}", "pseudoreplicate", c, 0.8 * L[c] + rng.normal(0, noise), c, c)
+            add(f"iso{c}_{i}", "isogenic", c, L[c] + rng.normal(0, noise), c, c)
+    for a in range(n_cells):
+        for b in range(a + 1, n_cells):
+            add(f"oct{a}_{b}", "other_cell_type", a, 0.5 * (L[a] + L[b]) + delta + rng.normal(0, noise), a, b)
+    return rows, sides, delta
+
+
+def _row(rows, rung, pc=""):
+    return [r for r in rows if r["rung"] == rung and r["pair_class"] == pc and r["stratum"] == "all"][0]
+
+
+def test_two_sided_recovers_planted_increment_one_sided_is_biased_upward():
+    pr, sides, delta = _two_sided_world()
+    one = _row(LD.ladder_rows(pr, n_boot=200, form="one_sided"), "other_cell_type")
+    two = _row(LD.ladder_rows(pr, n_boot=200, form="two_sided", sides=sides), "other_cell_type")
+    # one-sided: delta + mean over pairs of 0.5 (L_b - L_a) > delta (b-sides are the noisier cells)
+    assert one["layer_increment"] > delta + 0.004
+    assert abs(two["layer_increment"] - delta) < 3e-4
+    assert two["ci_low"] <= delta <= two["ci_high"]
+    assert two["n_pairs"] == 28 and two["n_pairs_left_b"] == 0
+    # the nested rungs are the same in both forms
+    for rung in ("pseudoreplicate", "isogenic"):
+        a = _row(LD.ladder_rows(pr, n_boot=200, form="one_sided"), rung)
+        b = _row(LD.ladder_rows(pr, n_boot=200, form="two_sided", sides=sides), rung)
+        assert (a["layer_increment"], a["ci_low"], a["n_pairs"]) == (b["layer_increment"], b["ci_low"], b["n_pairs"])
+
+
+def test_two_sided_drops_pair_whose_b_side_has_no_lower_rung():
+    pr, sides, _ = _two_sided_world()
+    # a second experiment in each of C0..C2 with no isogenic pair of its own (the EIC case)
+    for c in range(3):
+        for i in range(2):
+            pid = f"oe{c}_{i}"
+            pr.append(dict(pair_id=pid, assay="A", assay_class="broad_histone", rung="other_experiment",
+                           pair_class="experiment;lab;donor", tech_diff="0", cell=f"C{c}", split="train",
+                           depth="1.0", stratum="all", band="all", var_d=repr(0.1)))
+            sides[pid] = (f"E{c}", f"S{c}")
+    one = _row(LD.ladder_rows(pr, n_boot=50, form="one_sided"), "other_experiment", "experiment;lab;donor")
+    two = _row(LD.ladder_rows(pr, n_boot=50, form="two_sided", sides=sides), "other_experiment",
+               "experiment;lab;donor")
+    assert one["flag"] == "ok" and one["n_pairs"] == 6
+    assert two["n_pairs"] == 0 and two["n_pairs_left_b"] == 6 and two["flag"].startswith("not estimable")
+    assert "6 pairs whose b-side experiment has no isogenic pair" in two["flag"]
+    assert not np.isfinite(two["layer_increment"])
+
+
+def test_two_sided_needs_sides():
+    pr, sides, _ = _two_sided_world()
+    with pytest.raises(ValueError):
+        LD.ladder_rows(pr, n_boot=10)
+    with pytest.raises(ValueError):
+        LD.ladder_rows(pr, n_boot=10, sides={k: v for k, v in list(sides.items())[1:]})
+    with pytest.raises(ValueError):
+        LD.ladder_rows(pr, n_boot=10, form="both", sides=sides)
+
+
+def test_common_cell_check():
+    pr, sides, _ = _two_sided_world()
+    rows = LD.ladder_rows(pr, n_boot=200, form="two_sided", sides=sides)
+    cc = LD.common_cell_check(rows, n_boot=200)
+    assert [c["rung"] for c in cc] == list(LD.COMMON_RUNGS)
+    # other_cell_type pairs are clustered on a-side cells C0..C6 (C7 is never an a-side)
+    assert all(c["n_common_cells"] == 7 and c["ok"] == 1 for c in cc)
+    iso = [c for c in cc if c["rung"] == "isogenic"][0]
+    assert iso["row_n_cells"] == 8
+    want = np.mean([_row(rows, "isogenic")["_inc_c"][f"C{c}"] for c in range(7)])
+    assert iso["common_increment"] == pytest.approx(want, rel=1e-12)
+    # a shifted cell mix: 8 more cells hold pseudoreplicate and isogenic pairs only, with a larger
+    # isogenic increment; the isogenic row moves onto them, its common-cell value leaves the row interval
+    for c in range(8, 16):
+        for i in range(6):
+            for rung, v in (("pseudoreplicate", 0.08), ("isogenic", 0.1)):
+                pid = f"x{rung}{c}_{i}"
+                pr.append(dict(pr[0], pair_id=pid, rung=rung, cell=f"C{c}", var_d=repr(2.0 * v)))
+                sides[pid] = (f"E{c}", f"E{c}")
+    cc2 = LD.common_cell_check(LD.ladder_rows(pr, n_boot=200, form="two_sided", sides=sides), n_boot=200)
+    iso2 = [c for c in cc2 if c["rung"] == "isogenic"][0]
+    assert iso2["inside_row_interval"] == 0 and all(c["ok"] == 0 for c in cc2)
+
+
+def test_report_cli_two_sided_default_and_one_sided_option(tmp_path):
+    pr, sides, _ = _two_sided_world()
+    pv = tmp_path / "pv.tsv.gz"
+    with gzip.open(pv, "wt", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=LY.PAIR_COLUMNS, delimiter="\t", lineterminator="\n")
+        w.writeheader()
+        w.writerows(pr)
+    t = tmp_path / "tables"
+    t.mkdir()
+    meas = {}
+    for pid, (ea, eb) in sides.items():
+        meas[f"m{ea}"], meas[f"m{eb}"] = ea, eb
+    with open(t / "measurements.tsv", "w", newline="") as fh:
+        fh.write("measurement_id\texperiment\n" + "".join(f"{m}\t{e}\n" for m, e in meas.items()))
+    with open(t / "pairs.tsv", "w", newline="") as fh:
+        fh.write("pair_id\ta\tb\n" + "".join(f"{p}\tm{ea}\tm{eb}\n" for p, (ea, eb) in sides.items()))
+    with pytest.raises(SystemExit):
+        LD.main(["report", "--pairs", str(pv), "--out-dir", str(tmp_path / "x")])
+    assert LD.main(["report", "--pairs", str(pv), "--out-dir", str(tmp_path / "two"), "--tables", str(t),
+                    "--n-boot", "50"]) == 0
+    assert LD.main(["report", "--pairs", str(pv), "--out-dir", str(tmp_path / "one"), "--form", "one_sided",
+                    "--n-boot", "50"]) == 0
+    two = LD._read_tsv(tmp_path / "two" / "ladder.tsv")
+    one = LD._read_tsv(tmp_path / "one" / "ladder.tsv")
+    assert list(one[0]) == LD.REPORT_COLUMNS and list(two[0]) == LD.REPORT_COLUMNS + ["n_pairs_left_b"]
+    assert (tmp_path / "two" / "common_cells.tsv").exists() and not (tmp_path / "two" / "chain_check.tsv").exists()
+    assert (tmp_path / "one" / "chain_check.tsv").exists()
+    assert "Form: two-sided" in (tmp_path / "two" / "ladder.md").read_text()
+    o = [r for r in one if r["rung"] == "other_cell_type"][0]
+    w2 = [r for r in two if r["rung"] == "other_cell_type"][0]
+    assert float(o["layer_increment"]) > float(w2["layer_increment"])

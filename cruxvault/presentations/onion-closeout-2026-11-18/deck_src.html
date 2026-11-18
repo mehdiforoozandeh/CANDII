@@ -24,6 +24,8 @@
            rescoring of the 7 decisive arms lands: 6, 9, 15, 16, 17, 19, 24.
   update   version 2 (2026-11-18): the replicate ladder (slide 12), the second-experiment layers (13), the
            side deliverables (5), the status of the rescoring (19), and the PI decisions of 2026-11-17 (22, 23).
+           version 3 (2026-11-18): the ladder is two-sided (slide 12; version 2 called the one-sided form two-sided),
+           the second-experiment slide says so (13); the run-log facts come from run_status.json, not the run log.
   notes    every slide carries speaker notes (press n). All prose is drafted by the agent for the PI's review.
 -->
 <script type="application/json" id="deck-sources">__SOURCES__</script>
@@ -230,7 +232,7 @@
 
   <!-- 5 · DATA (c): side deliverables of the last night
        job      the QC side tables with their fill rates, the 1 bp region store, the archive and the freed scratch
-       source   results/closeout_A4/qc_tables_2026-11-18/coverage.txt; run_state/plan.md (Log of 2026-11-17 and 18)
+       source   results/closeout_A4/qc_tables_2026-11-18/coverage.txt; run_status.json (facts copied from the run log of 2026-11-17 and 18)
        numbers  DATA.n qcf.*, qc.*, bp.*, arc.*, sc.*
        cut      the job ids and the removal lists (in the run log) -->
   <section class="slide">
@@ -359,16 +361,17 @@
 
   <!-- 12 · EVALUATION (c): the replicate ladder on the real data
        job      which rungs are estimable per assay class, their share of the cell-type pair value, and why the others are not
-       source   results/closeout_E4/ladder_2026-11-18/ladder.tsv, chain_check.tsv; PI decisions 2026-11-17.md row 5
+       source   results/closeout_E4/ladder_two_sided_2026-11-18/ (two_sided/ladder.tsv, common_cells.tsv,
+                one_sided/ladder.tsv, COMPARE.md); ladder_2026-11-18/pair_values.tsv.gz (depth); PI decisions row 5
        numbers  DATA.n lad.*
        cut      strata and signal bands (in ladder.tsv); the mixed model (not run, by rule) -->
   <section class="slide">
     <div class="wrap">
       <div class="kicker"><span class="sec"><span data-src="literal">(3)</span> Evaluation</span>(c) the replicate ladder on the real data</div>
-      <h2>Read sampling holds most of the cell-type pair value; the replicate and cell-type rungs are small, and most rungs above them are not estimable</h2>
+      <h2>Read sampling holds most of the cell-type pair value; the replicate and cell-type rungs are small, and no rung between them is estimable in the two-sided form</h2>
       <img class="figimg xtall" data-fig="ladder" alt="The replicate ladder per assay class">
-      <p class="note">Panel (a) uses the units that hold all three rungs; panels (b) to (d) use all matched pairs of each rung. Above the replicate, two rungs are estimable: lab with donor in broad marks, <span data-k="lad.br.ld.v"></span> (interval <span data-k="lad.br.ld.lo"></span> to <span data-k="lad.br.ld.hi"></span>; share <span data-k="lad.br.ld.sh"></span>), and repeat with donor in narrow marks, <span data-k="lad.nr.rd.v"></span> (<span data-k="lad.nr.rd.lo"></span> to <span data-k="lad.nr.rd.hi"></span>). Both intervals include zero. ATAC-seq has no rung (<span data-k="lad.atac.n"></span> read-half pairs from <span data-k="lad.atac.c"></span> cells). The ladder now subtracts two-sided (PI decision), so earlier ladder numbers are not comparable.</p>
-      <aside class="notes"><p>Each increment is assay-matched: on each cell and assay with pairs of both rungs, the pair value of the rung minus that of the rung below, then a mean over assays and cells. The interval is a <span data-src="literal">95%</span> bootstrap over cells. A rung needs five matched pairs from three cells. The sequencing and library rungs are empty because the per-library and per-lane units were never built. No pair in the challenge data holds two donors inside one experiment. Negative increments are kept, not clipped; every interval above the replicate rung that is negative includes zero. The PI decided the two-sided definition and the check on common cell types; panel (a) is that check, and it adds up exactly in every group.</p><p class="srcs" data-s="ladder"></p></aside>
+      <p class="note">The ladder now subtracts two-sided (PI decision): a pair of two experiments subtracts the mean of the replicate values of both experiments. Version <span data-src="literal">2</span> used the one-sided form (the replicate value of the first side only) and called it two-sided. Cell type over replicate: broad marks <span data-k="lad1.br.ct.v"></span> (<span data-k="lad1.br.ct.lo"></span> to <span data-k="lad1.br.ct.hi"></span>; <span data-k="lad1.br.ct.n"></span> pairs) one-sided, <span data-k="lad.br.ct.v"></span> (<span data-k="lad.br.ct.lo"></span> to <span data-k="lad.br.ct.hi"></span>; <span data-k="lad.br.ct.n"></span> pairs) two-sided, <span data-k="lad.br.ct.chg"></span>; narrow marks <span data-k="lad1.nr.ct.v"></span> to <span data-k="lad.nr.ct.v"></span> (<span data-k="lad1.nr.ct.n"></span> to <span data-k="lad.nr.ct.n"></span> pairs), <span data-k="lad.nr.ct.chg"></span>. No second experiment has a replicate pair, so all <span data-k="lad.br.oe.all"></span> broad and <span data-k="lad.nr.oe.all"></span> narrow second-experiment pairs leave; version <span data-src="literal">2</span> showed lab with donor <span data-k="lad1.br.ld.v"></span> (broad) and repeat with donor <span data-k="lad1.nr.rd.v"></span> (narrow), both intervals across zero. DNase-seq is not interpretable: every DNase-seq pair is thinned to <span data-k="lad.dn.depth"></span> reads, set by one second experiment. ATAC-seq has no rung (<span data-k="lad.atac.n"></span> read-half pairs from <span data-k="lad.atac.c"></span> cells).</p>
+      <aside class="notes"><p>Each increment is assay-matched: on each cell and assay with pairs of both rungs, the pair value of the rung minus that of the rung below, then a mean over assays and cells. The interval is a <span data-src="literal">95%</span> bootstrap over the cells of the first side; the replicate value of the second side is held fixed. A rung needs five matched pairs from three cells. A cell-type pair whose second cell has no replicate pair leaves: <span data-k="lad.br.ct.left"></span> broad and <span data-k="lad.nr.ct.left"></span> narrow pairs. Most of the drop from version <span data-src="literal">2</span> comes from these pairs; on the pairs that stay, the one-sided form gives a lower broad value, so it is not an upper value in general (COMPARE.md). The sequencing and library rungs are empty because the per-library and per-lane units were never built. No pair in the challenge data holds two donors inside one experiment. The check on common cell types replaces telescoping: the three rungs, recomputed on the cells that all three hold, stay inside their own intervals in <span data-k="lad.cc.pass"></span> of <span data-k="lad.cc.n"></span> groups of class, region set and signal band, and in all <span data-k="lad.cc.hn"></span> histone groups (<span data-k="lad.cc.hpass"></span> pass). The DNase-seq depth comes from a second experiment in cell <span data-k="lad.dn.cell"></span> with <span data-k="lad.dn.depth"></span> reads; the next shallowest DNase-seq track has <span data-k="lad.dn.next"></span>. A rerun without it is a cluster job for the foreman.</p><p class="srcs" data-s="ladder"></p></aside>
     </div>
   </section>
 
@@ -386,7 +389,7 @@
         <li>Broad marks: all pairs <span data-k="d2.br.all.v"></span> (<span data-k="d2.br.all.lo"></span> to <span data-k="d2.br.all.hi"></span>; <span data-k="d2.br.all.n"></span> pairs, <span data-k="d2.br.all.c"></span> cells); lab with donor <span data-k="d2.br.ld.v"></span> (<span data-k="d2.br.ld.lo"></span> to <span data-k="d2.br.ld.hi"></span>; <span data-k="d2.br.ld.n"></span> pairs, <span data-k="d2.br.ld.c"></span> cells). Narrow marks: <span data-k="d2.nr.all.v"></span> (<span data-k="d2.nr.all.n"></span> pairs, <span data-k="d2.nr.all.c"></span> cells) and <span data-k="d2.nr.ld.v"></span> (<span data-k="d2.nr.ld.n"></span> pairs, <span data-k="d2.nr.ld.c"></span> cells). Every interval includes zero.</li>
         <li>By PI decision, lab is reported together with donor, never alone. The <span data-k="d2.dropped"></span> unbuilt DNase-seq rows are dropped; the add-on keeps <span data-k="d2.kept"></span> experiments. Accessibility classes have at most <span data-k="d2.small"></span> pairs.</li>
       </ul>
-      <aside class="notes"><p>These rows pool the pairs of an assay class, and their cells differ from the rung below, so the ladder's assay-matched value on the previous slide is the primary one; both say the same. Most lab-with-donor pairs also differ in run type, read length or platform. The models on these pairs have not run.</p><p class="srcs" data-s="second"></p></aside>
+      <aside class="notes"><p>These rows pool the pairs of an assay class, and their cells differ from the rung below. They subtract the replicate value of the first experiment only (one-sided). The two-sided ladder on the previous slide has no value for these pairs, because no second experiment has a replicate pair; read these rows as the one-sided form. Most lab-with-donor pairs also differ in run type, read length or platform. The models on these pairs have not run.</p><p class="srcs" data-s="second"></p></aside>
     </div>
   </section>
 
