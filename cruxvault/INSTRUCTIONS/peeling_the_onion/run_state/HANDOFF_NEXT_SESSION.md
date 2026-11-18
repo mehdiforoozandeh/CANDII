@@ -78,3 +78,8 @@ Every job id below is in the Log. A job in this list is never submitted again on
 ## Open PI decisions
 
 `closeout/closeout todo.md`, section "Open PI decisions" (update of 2026-11-18): the cell-type embedding budget, matched compute, the Nibi scratch quota figure, the architecture for scaling, the data version of the final model, and the cancel of the Fir rescoring copies.
+
+
+## Added 2026-11-18 17:45 UTC: the 1 bp verification did not end
+
+Nibi job 27692994 (verification of the 1 bp tables and build of the resolution eval set) reached its 16-hour limit. Its log reports 6 out-of-memory kills in the step: the job ran `recount.py verify --all --no-rescan --workers 8` with 32000M, and workers were killed, so the verification could not finish. The first try (job 27665563, 4-hour limit) most likely failed for the same reason. State: the 1 bp region store (412 views, every read-set check passed) and the tables `CO-A7/tables/eic_res_v1` (412 measurements, 73 pairs) are built; the tables are NOT verified; `CO-A7/eval/eic_res_v1` does not exist. Before the resolution arms: rerun the verification with more memory per worker (for example `--workers 2` with 64000M, or 8 workers with 128000M) and then the eval set build and check (the steps are in `slurm/onion_data/closeout_a7_submit.sh`, part `tables`, after the `recount.py tables` call). Measure the peak memory of one worker first.
