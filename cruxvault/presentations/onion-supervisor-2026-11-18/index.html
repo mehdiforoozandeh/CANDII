@@ -184,12 +184,7 @@ const DATA = {"n":{"ref.convae.imp":"0.382","ref.convae.imp.r":"0.028","ref.conv
 document.querySelectorAll('[data-k]').forEach(e=>{const v=DATA.n[e.dataset.k]; e.textContent=(v===undefined?'??':v); e.classList.add('v');});
 document.querySelectorAll('img[data-fig]').forEach(e=>{e.src=DATA.fig[e.dataset.fig];});
 document.querySelectorAll('p.srcs').forEach(e=>{e.textContent='Sources: '+(DATA.src[e.dataset.s]||[]).join('; ');});
-(function(){
-  const L=i=>String.fromCharCode(97+i);
-  document.getElementById('decTable').innerHTML='<tr><th></th><th>decision</th><th>PI choice</th><th>consequence</th></tr>'+DATA.dec.map((r,i)=>`<tr><td>${L(i)}</td><td>${r.d}</td><td><b>${r.c}</b></td><td>${r.k}</td></tr>`).join('');
-  document.getElementById('movedTable').innerHTML='<tr><th>decision</th><th>recommendation (the agent\'s intent)</th></tr>'+DATA.moved.map(r=>`<tr><td><b>${r.d}</b></td><td>${r.r}</td></tr>`).join('');
-  document.getElementById('decQuote').innerHTML='PI: &ldquo;'+DATA.quote[0]+'&rdquo; On the data version: &ldquo;'+DATA.quote[1]+'&rdquo;';
-})();
+
 
 /* navigation and speaker notes, as in the prezit template */
 const slides=[...document.querySelectorAll('.slide')];

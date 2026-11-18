@@ -120,5 +120,9 @@ slide('summary', 'what we know now',
 css = '<style>table.sup{border-collapse:collapse;width:100%;margin:10px 0 14px;font-size:.92em}table.sup th,table.sup td{border:1px solid rgba(128,128,128,.45);padding:6px 10px;text-align:left;vertical-align:top}table.sup th{font-size:.82em;text-transform:uppercase;letter-spacing:.04em;opacity:.75}</style>'
 out = shell[:a] + '\n'.join(S) + shell[b:]
 out = out.replace('</head>', css + '</head>', 1).replace('peeling the onion · close-out', 'peeling the onion · what we know now')
+import re
+out, n = re.subn(r"\(function\(\)\{\s*const L=.*?\}\)\(\);", "", out, count=1, flags=re.S)
+assert n == 1 and "decTable" not in out
+out = out.replace('<title>Onion Close-out</title>', '<title>Peeling the Onion</title>')
 open('onion-supervisor-2026-11-18/index.html', 'w').write(out)
 print(len(S), 'slides', round(len(out)/1e6, 2), 'MB', out.count('<section'))
