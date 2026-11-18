@@ -30,11 +30,13 @@ results/closeout_A7/variance_2026-11-18/ (scale_variance.tsv, VARIANCE_READ.md);
 bp_store.variance_state = completed. Verify: from the vault, `crux story --verify
 presentations/onion-closeout-2026-11-18-report/report.tex --strict`.
 
-RESCORING HOOK. When the 256-region rescoring of the 7 decisive arms lands, copy the
-arm-summary table (select_rule.py arm-summary --runs <runs_fir> --sub p256_sv) to
-RESCORE_REL below and rebuild. The build then fills the 256-region columns of the
-rescoring table; the paragraph marked RESCORING-PARAGRAPH in report_src.tex is the one
-piece of prose to rewrite.
+RESCORING (version 5). Do not edit prose by hand. Run, from the worktree root,
+    /Users/mforooz/miniforge3/envs/candii/bin/python tools/onion_eval/apply_rescoring_rules.py <p256 arm summary> --as-of <UTC>
+It applies rules 2.1 to 2.6, writes results/rescoring_p256/read_<stamp>/ (verdicts.json and the rest),
+copies the table to RESCORE_REL, sets run_status.json rescoring.read_dir, and rebuilds this report. This
+build reads verdicts.json from that folder: the 256-region columns of the rescoring table ("not
+finished (k of n)" for an arm with fewer seeds than planned), the section 3.5 paragraphs, the abstract
+tail, criteria rows 3 and 4, the design-table rows of rules 2.1 to 2.6, the discussion and the conclusion.
 """
 import hashlib, json, math, pathlib, re, sys
 
@@ -505,15 +507,30 @@ DECISIVE = [
     ("average input", "abl_average_input_average_input", "average input"),
     ("imputation weight 4", "abl_losses_loss_impute_x4", "loss weights"),
 ]
+# version 5: the 256-region columns come from the rescoring read (verdicts.json of the folder that
+# run_status.json rescoring.read_dir names; tools/onion_eval/apply_rescoring_rules.py writes it). An arm
+# with fewer seeds than planned shows "not finished (k of n)", never a partial value.
+_rst = load("presentations/onion-closeout-2026-11-18/run_status.json")
+V = load(_rst["rescoring"]["read_dir"] + "/verdicts.json")
+VC = {(c["group"], c["model"], c["key"]): c for r in V["rules"].values() for c in r["cells"]}
+GROUP_OF = {"scrambled covariates": "scrambled", "base view only": "views_base", "two-step, native": "two_step_native",
+            "two-step, fixed": "two_step_fixed", "fixed input depth": "fixed_depth", "average input": "average_input",
+            "imputation weight 4": "impute_x4"}
+
+
+def vcell(c):
+    if not c["complete"]:
+        return "\\textit{not finished} (" + c["cls"].replace("incomplete (", "").replace(" seeds)", ")")
+    flag = {"within": 0, "beyond": 1, "2x": 2}[c["cls"]]
+    return num(c["d"], 3, sign=True) + MARK[flag] + ("$^{a}$" if c["planned"] < 3 else "")
+
+
 rs = []
 for lab, stem, why in DECISIVE:
     for m in MODELS:
         arm = varm(m, "base_only") if stem is None else f"{stem}_{m}"
         c16 = [cell(effect(S, arm, REF[m], k)) for k in ("correction_v3_raw", "correction_only")]
-        if S256 is not None:
-            c256 = [cell(effect(S256, arm, REF[m], k)) for k in ("correction_v3_raw", "correction_only")]
-        else:
-            c256 = ["pending", "pending"]
+        c256 = [vcell(VC[(GROUP_OF[lab], m, k)]) for k in ("correction_v3_raw", "correction_only")]
         rs.append(f"{lab} & {NAMES[m]} & " + " & ".join(c16 + c256) + " \\\\")
 macros["TabRescore"] = "\n".join(rs)
 
@@ -842,6 +859,41 @@ macros["rsNowDay"] = r_["status_day"]
 rounds = -(-int(macros["rsN"]) // int(macros["rsCap"]))
 macros["rsRounds"] = str(rounds)
 macros["rsTotal"] = num(rounds * float(macros["rsHours"]), 0)
+
+
+def ttex(x):
+    """A generated sentence for the report: TeX specials escaped, a minus before a digit typeset."""
+    x = tex_text(x).replace("#", "\\#")
+    return re.sub(r"(?<![\w.])-(?=[0-9])", r"\\ensuremath{-}", x)
+
+
+VT = V["text"]
+macros["rescoreAsOf"] = ttex(V["as_of"])
+macros["rescoreStatus"] = ttex(VT["status"])
+macros["rescoreRead"] = ttex(VT["read"])
+macros["rescoreAbstract"] = ttex(VT["abstract"])
+macros["rescoreCritThree"] = ttex(VT["crit3"])
+macros["rescoreCritFour"] = ttex(VT["crit4"])
+macros["rescoreDiscuss"] = ttex(VT["discuss"])
+macros["rescoreConclEval"] = ttex(VT["concl_eval"])
+macros["rescoreConclDesign"] = ttex(VT["concl_design"])
+_r21 = V["rules"]["2.1"]
+macros["rescoreAblNote"] = ttex(
+    ("On 256 regions, rule 2.1 is decided: " + _r21["verdict"].split(". ")[0].rstrip(".")
+     + ". The other effects of this paragraph rest on 16 regions and are not settled")
+    if _r21["decided"] else "These effects rest on 16 regions and are not settled") + " (Section~\\ref{sec:rescore})."
+# condensed design table: the rows that rules 2.1 to 2.6 can move (status and confidence from the read)
+DROWS = {8: ("Cov", "weak", "value by PI ruling; field set provisional"),
+         20: ("Loss", "moderate against Poisson", "provisional (weight 4, NB CRPS)"),
+         23: ("Views", "weak (16-region term)", "provisional (rescoring)"),
+         24: ("Twostep", "moderate", "provisional (rescoring)"),
+         25: ("Depth", "weak", "provisional (rescoring, mix round)"),
+         13: ("Avg", "weak", "provisional (U-Net)")}
+_new = {int(n): v for r in V["rules"].values() if r["decided"] for n, v in r["rows"].items() if "status" in v}
+for n, (tag, conf, stat) in DROWS.items():
+    v = _new.get(n)
+    macros[f"ds{tag}Conf"] = ttex(v["short_conf"]) if v else ttex(conf)
+    macros[f"ds{tag}Status"] = ttex(v["short_status"]) if v else ttex(stat)
 
 # PI decisions of 2026-11-17: the nine taken, and the two moved to the next session
 drows = []

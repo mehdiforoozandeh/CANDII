@@ -18,13 +18,13 @@
 %% VERSION 3 (2026-11-18): the replicate ladder is two-sided (version 2 called the one-sided
 %%           form two-sided); the run-log facts come from run_status.json, not the run log.
 %%
-%% RESCORING. One paragraph (between the RESCORING-PARAGRAPH marks) and one table (between
-%% the RESCORING-TABLE marks) wait for the 256-region rescoring of the 7 decisive arms.
-%% Copy the arm summary to results/rescoring_p256/arm_summary_p256_sv.tsv, rebuild (the
-%% table fills itself), then rewrite the paragraph with build macros.
+%% RESCORING (version 5). Every sentence about the 256-region rescoring is a macro (\rescore...,
+%% \ds...Conf, \ds...Status) that build_story.py takes from verdicts.json of the read folder named by
+%% run_status.json rescoring.read_dir. tools/onion_eval/apply_rescoring_rules.py <table> writes that
+%% folder and rebuilds this report; no rescoring sentence is typed here.
 \documentclass[pdflatex,sn-mathphys-num]{sn-jnl}
 
-% crux-sources: {"INSTRUCTIONS/peeling_the_onion/closeout/PI decisions 2026-11-17.md": "741889fc857bcffa9eb27eca5e1a07dce02abc2fe36fb2a3e7f0f6cf147f9c80", "INSTRUCTIONS/peeling_the_onion/closeout/closeout D2 second experiments and cross-lab pairs.md": "1b19e8c643110cd040275c06811619c405e383d75c109c3b1a76262b298f0cb1", "INSTRUCTIONS/peeling_the_onion/closeout/final 24 hours plan.md": "6d9c595297f429b5cb0736c37b08ee0beff9bea8290342c6c82457034c646139", "INSTRUCTIONS/peeling_the_onion/closeout/ready queue for scaling.md": "36667bbe4592e711eb618651ef2b58a87ed0026a0f749d03a557ef46546c5e6f", "INSTRUCTIONS/peeling_the_onion/closeout/settled miniCANDI design.md": "68e9bf29b3442563791a08d86414d1aeedc340d9a35201161a3311ca2d0bf72e", "INSTRUCTIONS/peeling_the_onion/long-horizon notepad.md": "f147195102f902bc154978f53de17028d2804c29cc46e4e6c09c1a94e70908d9", "presentations/onion-closeout-2026-11-18-report/build_story.py": "31416410502df525b01fac8975dd474f068f620cad8ceff111ae7cb281ed2853", "presentations/onion-closeout-2026-11-18-report/report_src.tex": "70fc00d3911042f061c90badc67cab13f54a2878de3ff316114085827295ef9f", "presentations/onion-closeout-2026-11-18/run_status.json": "434eb13acef0a2768d017c69e73a35f09449d1893433975c149d17a56557b34a", "results/ablations_closeout/arm_summary_p16_sv_2026-11-17.tsv": "c113180fa3dfb061e6660cd170100da2e99121059abc5fbba9ebdc55453f0b1a", "results/closeout_A3/WHERE_VIEWS.md": "8c1744bf1b3a8c1bc4b28a1c2dcd947f0577afdb512ddfbb0d79956a53856453", "results/closeout_A4/qc_tables_2026-11-18/coverage.txt": "a3a1830805ecdd132c253293eea2595259a106051582e63facf5bc8a8d953ee9", "results/closeout_A7/variance_2026-11-18/VARIANCE_READ.md": "d1281375e9b489c6dac0284156e9443e76b247715aa6f72ebdb17ae608382034", "results/closeout_A7/variance_2026-11-18/scale_variance.tsv": "a40e5f015c23d1ea4c6328a48edfacea86f043fe0e4ce99de8dc55fed79fde5c", "results/closeout_D1/D1_RESULT.md": "7327b1cdc3d64c96e0cf1e1e1274b6f5200096f03bb9ba35550bc65ca202343a", "results/closeout_D2/D2_PREP.md": "7136a86eb110bf5888426e8ea142316586235cdb2b28352e9b26c01c2a53b979", "results/closeout_D2/layers_2026-11-18/layers.tsv": "b1cef169b17583f2289d57e3d47b8ef64b9c36c9f02a1e58724721bb61975085", "results/closeout_D4/summary.txt": "b6ba65fba30054987fb03c81e4551706980bfd114e3dcb37d7680f61d3f4228f", "results/closeout_E2/E2_RESULTS.md": "30338d1b1b000a63ceba2edffd08394447d4fce553475a8d7e0c2e0afba04ec1", "results/closeout_E2/FORMULA_EXTENSION.md": "c7b7a9d6cb9af8ab90a549782982c43eebe6f4280e88c3524e871be20efbae67", "results/closeout_E4/E4_MIXED_DIAG.md": "90ec0e4c16477aeec82bc2873c44041ae682efea650ab9cdf6741767e86fcd17", "results/closeout_E4/E4_SMOKE.md": "9a2bc37380b0044a9686253aef914fc0304579914eb6d15d0743e54c7b5d275d", "results/closeout_E4/ladder_2026-11-18/pair_values.tsv.gz": "16c100990d3a6ce48d09e585adc690a7b019af19eee30543bacc64cb13a4a400", "results/closeout_E4/ladder_two_sided_2026-11-18/COMPARE.md": "bdc6cec758989efb4da5e9685fe7c32a903eb0b2c50800660bef3dd47abe4249", "results/closeout_E4/ladder_two_sided_2026-11-18/one_sided/ladder.tsv": "a39e9b99d321a341b04c0d104a4ee66f143e0f47a27142fb6ccae7f08c94f3c1", "results/closeout_E4/ladder_two_sided_2026-11-18/two_sided/ladder.md": "28b62dce86c69e7c6af27f2da5f6be5aa8299b36c37b2a4e9854d8bd6e20148d", "results/closeout_E4/ladder_two_sided_2026-11-18/two_sided/ladder.tsv": "14de5cd82b9ca0fc75e44a2d45d9fb05f4399e34c5efa80a0fb5538a1751a10d", "results/final_round/FINAL_ROUND_EQUAL.md": "43d88b2f2751719d8e0daa39166d997bd42ac4838bd93f0b8ead2f0130db36f7", "results/oracle_floor/ORACLE_FLOOR.md": "c8ff4fa84db1a8e1cb145babc5dd5f3a0566fe3cda9ce2dc2f798b6a16961172", "results/region_sampling_checks/PAIR_REGIONS_V3.md": "7e9fb1ca3f27764b8f845d426da94096bb067891fe6af945e991a97b528cb4a0", "results/region_sampling_checks/REGION_CHECKS.md": "a7a45cfb5938df3a8b30e3edf5dd56fa2095461b4422c92ffb44d3ff36e4e019", "results/region_sampling_checks/check_v3.tsv": "5f269bb5081104b03735fecf5f86f1b2420d46291bd47f2ee0efee7894669947", "results/t170/withheld_design.md": "238d90b01e92f0805b46e0508430792b7d57d6004c41e2ff6d359ceace970aee", "results/t183/DATASET_EIC_V1.md": "4ae2e52ec6f949ebc523c27a271f712e75c49794b0b83f312b91a3eea8dec464", "results/t185/SUBMITTED.md": "ab413ac44825a8276d15155c11a58d738d6923b49325b9d79980843008aa4b4c", "results/t305/LAYERS_REAL.md": "e6bdc2363538da2c986d8e03fac9deb4f0b9f8d8175275ebe2cf68033921d69e", "results/t308/AG2_VS_BASELINES.md": "ebb77d04fdc59270506c2197460e505e197bb8da08c3c8b7397e0e8b9b1e5cf1"}
+% crux-sources: {"INSTRUCTIONS/peeling_the_onion/closeout/PI decisions 2026-11-17.md": "741889fc857bcffa9eb27eca5e1a07dce02abc2fe36fb2a3e7f0f6cf147f9c80", "INSTRUCTIONS/peeling_the_onion/closeout/closeout D2 second experiments and cross-lab pairs.md": "1b19e8c643110cd040275c06811619c405e383d75c109c3b1a76262b298f0cb1", "INSTRUCTIONS/peeling_the_onion/closeout/final 24 hours plan.md": "6d9c595297f429b5cb0736c37b08ee0beff9bea8290342c6c82457034c646139", "INSTRUCTIONS/peeling_the_onion/closeout/ready queue for scaling.md": "36667bbe4592e711eb618651ef2b58a87ed0026a0f749d03a557ef46546c5e6f", "INSTRUCTIONS/peeling_the_onion/closeout/settled miniCANDI design.md": "7a007f92d42b1c12589f5b30d0a947f7c46d1826a6100abcd01baea0fbd6f3b6", "INSTRUCTIONS/peeling_the_onion/long-horizon notepad.md": "f147195102f902bc154978f53de17028d2804c29cc46e4e6c09c1a94e70908d9", "presentations/onion-closeout-2026-11-18-report/build_story.py": "aa3b80f38cd35d458a0336211c060b6d43d3e60ada3fd9d9d34ba91394432f7f", "presentations/onion-closeout-2026-11-18-report/report_src.tex": "9f9760f1cb93de6606c24c378e91206ff9fc8c626067b8bb242d16bae0cd3b1c", "presentations/onion-closeout-2026-11-18/run_status.json": "79ccdd9c6cb4a8052976041f70362bb6e96a2cc8cd8e2d255172b6b5b5ef1b4c", "results/ablations_closeout/arm_summary_p16_sv_2026-11-17.tsv": "c113180fa3dfb061e6660cd170100da2e99121059abc5fbba9ebdc55453f0b1a", "results/closeout_A3/WHERE_VIEWS.md": "8c1744bf1b3a8c1bc4b28a1c2dcd947f0577afdb512ddfbb0d79956a53856453", "results/closeout_A4/qc_tables_2026-11-18/coverage.txt": "a3a1830805ecdd132c253293eea2595259a106051582e63facf5bc8a8d953ee9", "results/closeout_A7/variance_2026-11-18/VARIANCE_READ.md": "d1281375e9b489c6dac0284156e9443e76b247715aa6f72ebdb17ae608382034", "results/closeout_A7/variance_2026-11-18/scale_variance.tsv": "a40e5f015c23d1ea4c6328a48edfacea86f043fe0e4ce99de8dc55fed79fde5c", "results/closeout_D1/D1_RESULT.md": "7327b1cdc3d64c96e0cf1e1e1274b6f5200096f03bb9ba35550bc65ca202343a", "results/closeout_D2/D2_PREP.md": "7136a86eb110bf5888426e8ea142316586235cdb2b28352e9b26c01c2a53b979", "results/closeout_D2/layers_2026-11-18/layers.tsv": "b1cef169b17583f2289d57e3d47b8ef64b9c36c9f02a1e58724721bb61975085", "results/closeout_D4/summary.txt": "b6ba65fba30054987fb03c81e4551706980bfd114e3dcb37d7680f61d3f4228f", "results/closeout_E2/E2_RESULTS.md": "30338d1b1b000a63ceba2edffd08394447d4fce553475a8d7e0c2e0afba04ec1", "results/closeout_E2/FORMULA_EXTENSION.md": "c7b7a9d6cb9af8ab90a549782982c43eebe6f4280e88c3524e871be20efbae67", "results/closeout_E4/E4_MIXED_DIAG.md": "90ec0e4c16477aeec82bc2873c44041ae682efea650ab9cdf6741767e86fcd17", "results/closeout_E4/E4_SMOKE.md": "9a2bc37380b0044a9686253aef914fc0304579914eb6d15d0743e54c7b5d275d", "results/closeout_E4/ladder_2026-11-18/pair_values.tsv.gz": "16c100990d3a6ce48d09e585adc690a7b019af19eee30543bacc64cb13a4a400", "results/closeout_E4/ladder_two_sided_2026-11-18/COMPARE.md": "bdc6cec758989efb4da5e9685fe7c32a903eb0b2c50800660bef3dd47abe4249", "results/closeout_E4/ladder_two_sided_2026-11-18/one_sided/ladder.tsv": "a39e9b99d321a341b04c0d104a4ee66f143e0f47a27142fb6ccae7f08c94f3c1", "results/closeout_E4/ladder_two_sided_2026-11-18/two_sided/ladder.md": "28b62dce86c69e7c6af27f2da5f6be5aa8299b36c37b2a4e9854d8bd6e20148d", "results/closeout_E4/ladder_two_sided_2026-11-18/two_sided/ladder.tsv": "14de5cd82b9ca0fc75e44a2d45d9fb05f4399e34c5efa80a0fb5538a1751a10d", "results/final_round/FINAL_ROUND_EQUAL.md": "43d88b2f2751719d8e0daa39166d997bd42ac4838bd93f0b8ead2f0130db36f7", "results/oracle_floor/ORACLE_FLOOR.md": "c8ff4fa84db1a8e1cb145babc5dd5f3a0566fe3cda9ce2dc2f798b6a16961172", "results/region_sampling_checks/PAIR_REGIONS_V3.md": "7e9fb1ca3f27764b8f845d426da94096bb067891fe6af945e991a97b528cb4a0", "results/region_sampling_checks/REGION_CHECKS.md": "a7a45cfb5938df3a8b30e3edf5dd56fa2095461b4422c92ffb44d3ff36e4e019", "results/region_sampling_checks/check_v3.tsv": "5f269bb5081104b03735fecf5f86f1b2420d46291bd47f2ee0efee7894669947", "results/rescoring_p256/arm_summary_p256_sv.tsv": "cc759bc397563d06b31dbab061c87102c6773ecbee80acc94300606b5090e93a", "results/rescoring_p256/read_20261118T1159Z/verdicts.json": "a9ce238f3b83189a049113d5589b417f5dada6690cfe058f51af63ace89698d9", "results/t170/withheld_design.md": "238d90b01e92f0805b46e0508430792b7d57d6004c41e2ff6d359ceace970aee", "results/t183/DATASET_EIC_V1.md": "4ae2e52ec6f949ebc523c27a271f712e75c49794b0b83f312b91a3eea8dec464", "results/t185/SUBMITTED.md": "ab413ac44825a8276d15155c11a58d738d6923b49325b9d79980843008aa4b4c", "results/t305/LAYERS_REAL.md": "e6bdc2363538da2c986d8e03fac9deb4f0b9f8d8175275ebe2cf68033921d69e", "results/t308/AG2_VS_BASELINES.md": "ebb77d04fdc59270506c2197460e505e197bb8da08c3c8b7397e0e8b9b1e5cf1"}
 
 \usepackage{graphicx}
 \usepackage{amsmath}
@@ -199,27 +199,27 @@ narrow marks & repeat with donor & \ensuremath{2.62\times10^{-4}} [\ensuremath{-
 \newcommand{\TabRefs}{conv autoencoder & 0.382 (0.028) & 0.718 (0.012) & 0.631 (0.178) & 0.528 (0.045) & 0.690 (0.019) \\
 conv + attention & 0.387 (0.012) & 0.673 (0.031) & 0.652 (0.157) & 0.525 (0.048) & 0.659 (0.043) \\
 U-Net & 0.432 (0.023) & 0.507 (0.071) & 0.610 (0.108) & 0.495 (0.010) & 0.318 (0.127) \\}
-\newcommand{\TabRescore}{scrambled covariates & conv autoencoder & \ensuremath{-}0.052$^{\dagger}$ & \ensuremath{-}0.164$^{\ddagger}$ & pending & pending \\
-scrambled covariates & conv + attention & \ensuremath{-}0.004 & \ensuremath{-}0.198$^{\ddagger}$ & pending & pending \\
-scrambled covariates & U-Net & \ensuremath{-}0.075 & \ensuremath{-}0.212$^{\dagger}$ & pending & pending \\
-base view only & conv autoencoder & \ensuremath{+}0.014 & \ensuremath{-}0.289$^{\ddagger}$ & pending & pending \\
-base view only & conv + attention & \ensuremath{+}0.003 & \ensuremath{-}0.270$^{\ddagger}$ & pending & pending \\
-base view only & U-Net & \ensuremath{+}0.046 & \ensuremath{-}0.249$^{\dagger}$ & pending & pending \\
-two-step, native & conv autoencoder & \ensuremath{-}0.115$^{\dagger}$ & \ensuremath{+}0.017 & pending & pending \\
-two-step, native & conv + attention & \ensuremath{-}0.059$^{\dagger}$ & \ensuremath{+}0.106$^{\ddagger}$ & pending & pending \\
-two-step, native & U-Net & \ensuremath{-}0.064 & \ensuremath{-}0.233$^{\dagger}$ & pending & pending \\
-two-step, fixed & conv autoencoder & \ensuremath{-}0.085$^{\ddagger}$ & \ensuremath{+}0.116$^{\ddagger}$ & pending & pending \\
-two-step, fixed & conv + attention & \ensuremath{-}0.055$^{\dagger}$ & \ensuremath{+}0.141$^{\ddagger}$ & pending & pending \\
-two-step, fixed & U-Net & \ensuremath{+}0.129$^{\dagger}$ & \ensuremath{+}0.060 & pending & pending \\
-fixed input depth & conv autoencoder & \ensuremath{-}0.007$^{a}$ & \ensuremath{+}0.038$^{a}$ & pending & pending \\
-fixed input depth & conv + attention & \ensuremath{+}0.049$^{\dagger}$ & \ensuremath{+}0.007 & pending & pending \\
-fixed input depth & U-Net & \ensuremath{+}0.168$^{\ddagger}$ & \ensuremath{+}0.104 & pending & pending \\
-average input & conv autoencoder & \ensuremath{+}0.026 & \ensuremath{+}0.071$^{\ddagger}$ & pending & pending \\
-average input & conv + attention & \ensuremath{+}0.025 & \ensuremath{+}0.054 & pending & pending \\
-average input & U-Net & \ensuremath{-}0.006 & \ensuremath{+}0.081 & pending & pending \\
-imputation weight 4 & conv autoencoder & \ensuremath{-}0.038$^{\dagger}$ & \ensuremath{+}0.060$^{\dagger}$ & pending & pending \\
-imputation weight 4 & conv + attention & 0.000 & \ensuremath{+}0.101$^{\ddagger}$ & pending & pending \\
-imputation weight 4 & U-Net & \ensuremath{+}0.025 & \ensuremath{+}0.051 & pending & pending \\}
+\newcommand{\TabRescore}{scrambled covariates & conv autoencoder & \ensuremath{-}0.052$^{\dagger}$ & \ensuremath{-}0.164$^{\ddagger}$ & \ensuremath{-}0.055$^{\dagger}$ & \ensuremath{-}0.195$^{\ddagger}$ \\
+scrambled covariates & conv + attention & \ensuremath{-}0.004 & \ensuremath{-}0.198$^{\ddagger}$ & \ensuremath{-}0.026$^{\dagger}$ & \ensuremath{-}0.230$^{\ddagger}$ \\
+scrambled covariates & U-Net & \ensuremath{-}0.075 & \ensuremath{-}0.212$^{\dagger}$ & \ensuremath{-}0.070 & \ensuremath{-}0.242$^{\dagger}$ \\
+base view only & conv autoencoder & \ensuremath{+}0.014 & \ensuremath{-}0.289$^{\ddagger}$ & \ensuremath{+}0.002 & \ensuremath{-}0.341$^{\ddagger}$ \\
+base view only & conv + attention & \ensuremath{+}0.003 & \ensuremath{-}0.270$^{\ddagger}$ & \ensuremath{-}0.012 & \ensuremath{-}0.315$^{\ddagger}$ \\
+base view only & U-Net & \ensuremath{+}0.046 & \ensuremath{-}0.249$^{\dagger}$ & \textit{not finished} (0 of 3) & \textit{not finished} (0 of 3) \\
+two-step, native & conv autoencoder & \ensuremath{-}0.115$^{\dagger}$ & \ensuremath{+}0.017 & \textit{not finished} (0 of 3) & \textit{not finished} (0 of 3) \\
+two-step, native & conv + attention & \ensuremath{-}0.059$^{\dagger}$ & \ensuremath{+}0.106$^{\ddagger}$ & \textit{not finished} (0 of 3) & \textit{not finished} (0 of 3) \\
+two-step, native & U-Net & \ensuremath{-}0.064 & \ensuremath{-}0.233$^{\dagger}$ & \textit{not finished} (0 of 3) & \textit{not finished} (0 of 3) \\
+two-step, fixed & conv autoencoder & \ensuremath{-}0.085$^{\ddagger}$ & \ensuremath{+}0.116$^{\ddagger}$ & \textit{not finished} (0 of 3) & \textit{not finished} (0 of 3) \\
+two-step, fixed & conv + attention & \ensuremath{-}0.055$^{\dagger}$ & \ensuremath{+}0.141$^{\ddagger}$ & \textit{not finished} (0 of 3) & \textit{not finished} (0 of 3) \\
+two-step, fixed & U-Net & \ensuremath{+}0.129$^{\dagger}$ & \ensuremath{+}0.060 & \textit{not finished} (0 of 3) & \textit{not finished} (0 of 3) \\
+fixed input depth & conv autoencoder & \ensuremath{-}0.007$^{a}$ & \ensuremath{+}0.038$^{a}$ & \textit{not finished} (0 of 2) & \textit{not finished} (0 of 2) \\
+fixed input depth & conv + attention & \ensuremath{+}0.049$^{\dagger}$ & \ensuremath{+}0.007 & \textit{not finished} (1 of 3) & \textit{not finished} (1 of 3) \\
+fixed input depth & U-Net & \ensuremath{+}0.168$^{\ddagger}$ & \ensuremath{+}0.104 & \textit{not finished} (0 of 3) & \textit{not finished} (0 of 3) \\
+average input & conv autoencoder & \ensuremath{+}0.026 & \ensuremath{+}0.071$^{\ddagger}$ & \textit{not finished} (0 of 3) & \textit{not finished} (0 of 3) \\
+average input & conv + attention & \ensuremath{+}0.025 & \ensuremath{+}0.054 & \textit{not finished} (0 of 3) & \textit{not finished} (0 of 3) \\
+average input & U-Net & \ensuremath{-}0.006 & \ensuremath{+}0.081 & \textit{not finished} (0 of 3) & \textit{not finished} (0 of 3) \\
+imputation weight 4 & conv autoencoder & \ensuremath{-}0.038$^{\dagger}$ & \ensuremath{+}0.060$^{\dagger}$ & \textit{not finished} (0 of 3) & \textit{not finished} (0 of 3) \\
+imputation weight 4 & conv + attention & 0.000 & \ensuremath{+}0.101$^{\ddagger}$ & \textit{not finished} (0 of 3) & \textit{not finished} (0 of 3) \\
+imputation weight 4 & U-Net & \ensuremath{+}0.025 & \ensuremath{+}0.051 & \textit{not finished} (0 of 3) & \textit{not finished} (0 of 3) \\}
 \newcommand{\TabTwoFiftySix}{conv autoencoder & 0.714 (0.015) & 0.651 (0.002) \\
 conv + attention & 0.685 (0.026) & 0.616 (0.046) \\
 U-Net & 0.504 (0.066) & 0.282 (0.129) \\
@@ -331,6 +331,18 @@ U-Net, DNA-only skips & 0.715 (0.056) & 0.684 (0.033) \\}
 \newcommand{\dTwoNrLdTech}{6}
 \newcommand{\dTwoSmall}{4}
 \newcommand{\dUnAeCorTwoFS}{\ensuremath{-}0.210}
+\newcommand{\dsAvgConf}{weak}
+\newcommand{\dsAvgStatus}{provisional (U-Net)}
+\newcommand{\dsCovConf}{strong (use, 256 regions); weak (field set)}
+\newcommand{\dsCovStatus}{value by PI ruling; use for correction settled}
+\newcommand{\dsDepthConf}{weak}
+\newcommand{\dsDepthStatus}{provisional (rescoring, mix round)}
+\newcommand{\dsLossConf}{moderate against Poisson}
+\newcommand{\dsLossStatus}{provisional (weight 4, NB CRPS)}
+\newcommand{\dsTwostepConf}{moderate}
+\newcommand{\dsTwostepStatus}{provisional (rescoring)}
+\newcommand{\dsViewsConf}{weak (16-region term)}
+\newcommand{\dsViewsStatus}{provisional (rescoring)}
 \newcommand{\eAvgImpUN}{\ensuremath{+}0.034}
 \newcommand{\eAvgImpUNBar}{0.023}
 \newcommand{\eAvgImpUNVal}{0.466}
@@ -674,18 +686,28 @@ U-Net, DNA-only skips & 0.715 (0.056) & 0.684 (0.033) \\}
 \newcommand{\regNinetySixTo}{0.128}
 \newcommand{\repHi}{6}
 \newcommand{\repLo}{0.1}
+\newcommand{\rescoreAblNote}{On 256 regions, rule 2.1 is decided: The models use covariates for same-view correction (settled, strong). The other effects of this paragraph rest on 16 regions and are not settled (Section~\ref{sec:rescore}).}
+\newcommand{\rescoreAbstract}{The pre-written check of 16 against 256 regions failed, so correction effects need the 256-region rescoring of the decisive arms. At 2026-11-18 09:45 UTC it had scored 16 of 62 run-seeds and decided 1 of 6 pre-written rules: rule 2.1, covariates used for correction: the models use covariates for same-view correction (settled, strong). The other 5 rules wait for unfinished arms.}
+\newcommand{\rescoreAsOf}{2026-11-18 09:45 UTC}
+\newcommand{\rescoreConclDesign}{three architectures tie with a trade-off between imputation and correction, the count input with a depth offset is settled, the 256-region rescoring updated row 8 by rule 2.1: the models use covariates for same-view correction (settled, strong), and rows 13, 20, 23, 24 and 25 stay provisional until their arms finish.}
+\newcommand{\rescoreConclEval}{the screening tier failed its check, so the correction terms need 256 regions; the rescoring has scored 16 of 62 run-seeds and decided 1 of 6 rules}
 \newcommand{\rescoreCost}{2{,}225}
+\newcommand{\rescoreCritFour}{The 256-region rescoring updated row 8 by rule 2.1: the models use covariates for same-view correction (settled, strong). Many rows are provisional; the choice of architecture is the PI's.}
+\newcommand{\rescoreCritThree}{Metrics, selection rule and scorers are defined and pass their tests, and the replicate ladder ran on the real data. The 16-region screening tier failed its check, so correction terms need 256 regions; the rescoring has scored 16 of 62 run-seeds and decided 1 of 6 rules.}
+\newcommand{\rescoreDiscuss}{The third reading rests on 16-region scores until rule 2.2 of the rescoring is decided.}
+\newcommand{\rescoreRead}{Rule 2.1 (covariates used for correction). The models use covariates for same-view correction (settled, strong). Scrambled covariates lower the correction-only term beyond the seed range on all three models, and beyond twice the range on two. Recorded separately: the correction on crop pairs is lower beyond the seed range on the conv autoencoder and the conv + attention (on the 16 regions: the conv autoencoder). Correction-only term, scrambled covariates minus base: conv autoencoder \ensuremath{-}0.195 (seed range 0.046, beyond twice the seed range); conv + attention \ensuremath{-}0.230 (seed range 0.081, beyond twice the seed range); U-Net \ensuremath{-}0.242 (seed range 0.129, beyond the seed range). Correction on crop pairs: conv autoencoder \ensuremath{-}0.055 (seed range 0.047, beyond the seed range); conv + attention \ensuremath{-}0.0261 (seed range 0.0258, beyond the seed range); U-Net \ensuremath{-}0.070 (seed range 0.084, within the seed range). Rule 2.2 (training views). Not decided; it waits for base view only on the U-Net (0 of 3 seeds). Complete arms so far: base view only, correction-only term: conv autoencoder \ensuremath{-}0.341 (seed range 0.067, beyond twice the seed range); conv + attention \ensuremath{-}0.315 (seed range 0.104, beyond twice the seed range). Rule 2.3 (two-step routing). Not decided; it waits for two-step routing, native base depth on all three models (0 of 3 seeds each); two-step routing, fixed base depth on all three models (0 of 3 seeds each). Rule 2.4 (fixed input depth). Not decided; it waits for fixed input depth on the conv autoencoder (0 of 2 seeds), the conv + attention (1 of 3 seeds) and the U-Net (0 of 3 seeds). Rule 2.5 (average baseline input). Not decided; it waits for average baseline input on all three models (0 of 3 seeds each). Rule 2.6 (imputation loss weight 4). Not decided; it waits for imputation weight 4 on all three models (0 of 3 seeds each).}
 \newcommand{\rescoreSeeds}{62}
+\newcommand{\rescoreStatus}{Scores as of 2026-11-18 09:45 UTC: 16 of 62 run-seeds scored on all regions; 5 of 21 arms are complete. The scoring runs on Nibi since 2026-11-17, 23:22 UTC. One scoring needs about 6.3 hours there, about 10 times the Fir rate, because the jobs wait on input and output. U-Net prediction parts reach their 6-hour limit at 90 to 96\% and are resubmitted with a 12-hour limit (the store resumes). The same jobs wait in the Fir queue (jobs 4535347 to 4535923); the PI cancels them after the Nibi scores are on disk.}
 \newcommand{\rsCap}{12}
 \newcommand{\rsDay}{2026-11-17}
-\newcommand{\rsHours}{4.5}
+\newcommand{\rsHours}{6.3}
 \newcommand{\rsN}{62}
-\newcommand{\rsNow}{01:33}
+\newcommand{\rsNow}{09:45}
 \newcommand{\rsNowDay}{2026-11-18}
 \newcommand{\rsRounds}{6}
-\newcommand{\rsScored}{0}
-\newcommand{\rsStart}{23:30}
-\newcommand{\rsTotal}{27}
+\newcommand{\rsScored}{16}
+\newcommand{\rsStart}{23:22}
+\newcommand{\rsTotal}{38}
 \newcommand{\sampHi}{97}
 \newcommand{\sampLo}{76}
 \newcommand{\scAfter}{635}
@@ -756,7 +778,7 @@ y label dAE bAE dAT bAT dUN bUN
 \author{\fnm{Mehdi} \sur{Foroozandeh}}
 \affil{\orgname{Libbrecht lab, Simon Fraser University. Close-out report, private draft of \lit{2026-11-18}}}
 
-\abstract{\cl{We report the close-out of a run whose aim was to separate the sources of variance in epigenomic count data and to settle a small model, miniCANDI, before scaling. We rebuilt the ENCODE Imputation Challenge data from reads with designed processing views, defined a Negative Binomial training objective, and scored three architectures and \nArmRows{} single-switch ablations with \lit{3} seeds each. No architecture won: the U-Net led on imputation and the two convolutional models led on correction, and on \lit{256} regions the composite of the U-Net was lower than that of the conv autoencoder by \compAeUnAll{}, inside the selection bar of \compAeUnBar{}. Training on the base view only removed most of the correction-only term on all three models (for example \eBoCoAE{}, seed range \eBoCoAEBar{}), but this term was scored on \lit{16} regions, and the pre-written check of \lit{16} against \lit{256} regions failed, so every correction effect stays provisional until a queued rescoring runs.}}
+\abstract{\cl{We report the close-out of a run whose aim was to separate the sources of variance in epigenomic count data and to settle a small model, miniCANDI, before scaling. We rebuilt the ENCODE Imputation Challenge data from reads with designed processing views, defined a Negative Binomial training objective, and scored three architectures and \nArmRows{} single-switch ablations with \lit{3} seeds each. No architecture won: the U-Net led on imputation and the two convolutional models led on correction, and on \lit{256} regions the composite of the U-Net was lower than that of the conv autoencoder by \compAeUnAll{}, inside the selection bar of \compAeUnBar{}. Training on the base view only removed most of the correction-only term on all three models (for example \eBoCoAE{}, seed range \eBoCoAEBar{}), but this term was scored on \lit{16} regions. \rescoreAbstract{}}}
 
 \keywords{epigenome imputation, Negative Binomial, counterfactual views, ablation, ENCODE Imputation Challenge}
 
@@ -781,8 +803,8 @@ criterion & state & evidence and gap \\
 \midrule
 \lit{1}. Augmented EIC data with counterfactual views & partial & Built: the rebuilt tables with designed views and read halves, the covariate fill (lab, antibody, donor), the add-on of second experiments, the QC side tables and the \lit{1}~bp region store. Not built: the blind tracks (\blindRows{} rows), and the table version with DNase-seq in the correction term. \\
 \lit{2}. Training objective & delivered & One document gives every loss term, weight, mask and default with its code line. Open choices are marked; each names the run that closes it. \\
-\lit{3}. Evaluation, defined and tested & partial & Metrics, selection rule and scorers are defined and pass their tests, and the replicate ladder ran on the real data. The \lit{16}-region screening tier failed its check, so correction terms need \lit{256} regions; that rescoring runs and has not landed. \\
-\lit{4}. Settled miniCANDI design & partial & A design table with \nDesignRows{} rows gives a value, the evidence and a status for each choice. Many rows are provisional; the choice of architecture is the PI's. \\
+\lit{3}. Evaluation, defined and tested & partial & Metrics, selection rule and scorers are defined and pass their tests, and the replicate ladder ran on the real data. \rescoreCritThree{} \\
+\lit{4}. Settled miniCANDI design & partial & A design table with \nDesignRows{} rows gives a value, the evidence and a status for each choice. \rescoreCritFour{} \\
 \botrule
 \end{tabular}
 \end{table}
@@ -890,7 +912,7 @@ arm & correction (crop pairs) & correction-only \\
 
 \cl{Many arms are nulls on all three models: language-model DNA embeddings, adaLN-zero injection, covariate dropout, per-value numeric codes, the Poisson-mean loss and the drop mask mode moved no lead term beyond the bar. By the selection rule a null keeps the simpler or the incumbent value. The Anscombe transform is void: its output link has zero gradient at the zero-initialized head, so the mean never trained (imputation \anscImp{} on every seed). It is left out of the tables and needs a fix before a retrain.}
 
-\cl{On the screening terms, the U-Net with a fixed input depth, i.e. every input thinned to \lit{$2^{23}$} reads, gained correction \eFixCorUN{} (bar \eFixCorUNBar{}) and composite \eFixCompUN{} (bar \eFixCompUNBar{}), but lost imputation \eFixImpUN{} (bar \eFixImpUNBar{}, a \lit{256}-region term). The PI noted that a fixed input depth can be unrealistic at deployment. Two-step routing through the base view at native depth lowered correction on both convolutional models (\eNatCorAE{}, bar \eNatCorAEBar{}; \eNatCorAT{}, bar \eNatCorATBar{}) and doubles the compute per window. Training with scrambled covariates lowered the correction-only term on all three models (\eScrCoAE{}, \eScrCoAT{}, \eScrCoUN{}; bars \eScrCoAEBar{}, \eScrCoATBar{}, \eScrCoUNBar{}), so the models use the covariates to correct a track. These effects rest on \lit{16} regions and are not settled (Section~\ref{sec:rescore}).}
+\cl{On the screening terms, the U-Net with a fixed input depth, i.e. every input thinned to \lit{$2^{23}$} reads, gained correction \eFixCorUN{} (bar \eFixCorUNBar{}) and composite \eFixCompUN{} (bar \eFixCompUNBar{}), but lost imputation \eFixImpUN{} (bar \eFixImpUNBar{}, a \lit{256}-region term). The PI noted that a fixed input depth can be unrealistic at deployment. Two-step routing through the base view at native depth lowered correction on both convolutional models (\eNatCorAE{}, bar \eNatCorAEBar{}; \eNatCorAT{}, bar \eNatCorATBar{}) and doubles the compute per window. Training with scrambled covariates lowered the correction-only term on all three models (\eScrCoAE{}, \eScrCoAT{}, \eScrCoUN{}; bars \eScrCoAEBar{}, \eScrCoATBar{}, \eScrCoUNBar{}), so the models use the covariates to correct a track. \rescoreAblNote{}}
 
 \begin{table}[!htbp]
 \caption{\cl{Ablations: terms scored on all \lit{256} regions. Arm minus base, per model (AE conv autoencoder, AT conv + attention, UN U-Net). $^{\dagger}$ beyond the bar (the larger seed range of arm and base); $^{\ddagger}$ beyond twice the bar; $^{a}$ two seeds; -- not run. Base values in Table~\ref{tab:refs}.}}\label{tab:ablfull}
@@ -1002,13 +1024,15 @@ regions & (\lit{1}) interval & (\lit{2}) per assay & (\lit{3}) rule result & (\l
 
 \subsection{The \lit{256}-region rescoring of the decisive arms}\label{sec:rescore}
 
-%% RESCORING-PARAGRAPH START (replace this paragraph when the 256-region scores land)
-\cl{\textbf{[Waits for the rescoring.]} Seven decisive arms (\lit{21} arm folders, \rescoreSeeds{} run-seeds) must be scored on all \lit{256} regions before any correction effect of the ablations can settle: the scrambled covariates, base view only, two-step at native and at fixed base depth, fixed input depth, the average-signal input, and imputation weight \lit{4}. The cost is \rescoreCost{} allocated CPU-hours (\nRunsAE{} conv autoencoder run-seeds at \costAE{}, \nRunsAT{} conv + attention at \costAT{}, \nRunsUN{} U-Net at about \costUN{} each). \textit{Status:} by PI decision the scoring runs on Nibi, since \rsDay{}, \rsStart{} UTC (run log): \rsN{} run-seeds, \rsCap{} at one time, about \rsHours{}~h per scoring, and \rsScored{} of \rsN{} scored at \rsNow{} UTC on \rsNowDay{}. At this rate the predict stage needs \rsRounds{} rounds, about \rsTotal{}~h, so most scores land after the run ends. Table~\ref{tab:rescore} gives the \lit{16}-region effects and leaves the \lit{256}-region columns empty. The settled-design document states, before any result, the rule that each arm's \lit{256}-region effect will apply.}
+%% RESCORING-PARAGRAPH START (macros from the rescoring read; see the header)
+\cl{Seven decisive arms (\lit{21} arm folders, \rescoreSeeds{} run-seeds) are scored on all \lit{256} regions so that the correction effects of the ablations can settle: the scrambled covariates, base view only, two-step at native and at fixed base depth, fixed input depth, the average-signal input, and imputation weight \lit{4}. The cost is \rescoreCost{} allocated CPU-hours (\nRunsAE{} conv autoencoder run-seeds at \costAE{}, \nRunsAT{} conv + attention at \costAT{}, \nRunsUN{} U-Net at about \costUN{} each). The settled-design document states, before any result, the rule that each arm's \lit{256}-region effect applies; a rule is decided only when every arm it names has its planned seeds, and an arm that is not finished gives no number. \textit{Status.} \rescoreStatus{}}
+
+\cl{\rescoreRead{}}
 %% RESCORING-PARAGRAPH END
 
 %% RESCORING-TABLE START (the 256-region columns fill themselves from the build hook)
 \begin{table}[!htbp]
-\caption{\cl{The seven decisive arms: effects on the two correction terms, arm minus base. The \lit{16}-region columns are screening results; the \lit{256}-region columns wait for the rescoring. Marks as in Table~\ref{tab:ablfull}.}}\label{tab:rescore}
+\caption{\cl{The seven decisive arms: effects on the two correction terms, arm minus base. The \lit{16}-region columns are screening results; the \lit{256}-region columns are the rescoring, scores as of \rescoreAsOf{}. ``Not finished'' marks an arm with fewer seeds than planned. Marks as in Table~\ref{tab:ablfull}.}}\label{tab:rescore}
 \scriptsize
 \begin{tabular}{llcccc}
 \toprule
@@ -1086,7 +1110,7 @@ assay class & rung & one-sided & two-sided & change \\
 \cl{Every model beats the position average by more than twice its seed range on imputation and calibration. On the \lit{16}-region correction term both convolutional models do too, and the U-Net does not: its margin is \dTwoMarginUN{} against twice its seed range, \dTwoBarUN{}.}
 
 \begin{table}[!htbp]
-\caption{\cl{The settled miniCANDI design, condensed. Confidence and status are the agent's reading of the evidence, written before the rescoring.}}\label{tab:design}
+\caption{\cl{The settled miniCANDI design, condensed. Confidence and status are the agent's reading of the evidence; the rows of rules \lit{2.1} to \lit{2.6} follow the rescoring read.}}\label{tab:design}
 \scriptsize
 \begin{tabular}{p{2.8cm}p{4.3cm}p{2.0cm}p{2.9cm}}
 \toprule
@@ -1095,15 +1119,15 @@ choice & value & confidence & status \\
 architecture & conv autoencoder, conv + attention and U-Net carried forward; tie with a trade-off & moderate & settled tie; the pick is the PI's \\
 count input & offset, $\log_{\lit{2}}((y+\lit{1})/s)$ & strong against local ratio and quantile & settled \\
 covariate injection & FiLM & moderate & settled; concatenation open on conv + attention \\
-covariate set & \lit{11} metadata columns, no QC columns & weak & value by PI ruling; field set provisional \\
+covariate set & \lit{11} metadata columns, no QC columns & \dsCovConf{} & \dsCovStatus{} \\
 mask mode & learned token (drop is equal) & moderate null & settled \\
 ChIP control & input and output & weak; output by ruling & settled \\
 DNA & own tower, early join & weak & settled \\
-loss & NB negative log-likelihood, weights \lit{1}/\lit{1}/\lit{1} & moderate against Poisson & provisional (weight \lit{4}, NB CRPS) \\
-training views & all views & weak (\lit{16}-region term) & provisional (rescoring) \\
-two-step routing & off & moderate & provisional (rescoring) \\
-input depth & native & weak & provisional (rescoring, mix round) \\
-average-signal input & off & weak & provisional (U-Net) \\
+loss & NB negative log-likelihood, weights \lit{1}/\lit{1}/\lit{1} & \dsLossConf{} & \dsLossStatus{} \\
+training views & all views & \dsViewsConf{} & \dsViewsStatus{} \\
+two-step routing & off & \dsTwostepConf{} & \dsTwostepStatus{} \\
+input depth & native & \dsDepthConf{} & \dsDepthStatus{} \\
+average-signal input & off & \dsAvgConf{} & \dsAvgStatus{} \\
 resolution, context & \lit{25}~bp, \lit{1,024} bins & by ruling & settled for this run \\
 training length & \lit{80,000} windows & weak (no model converged) & provisional \\
 QC on input, cell embedding & off, none & not tested & provisional \\
@@ -1115,7 +1139,7 @@ QC on input, cell embedding & off, none & not tested & provisional \\
 
 \cl{The data and the evaluation are the solid part of the close-out. The rebuilt tables separate processing variance from biology by design, every view has read halves, and the scorer passed exact validity checks on its references. The design part is weaker. Most effects that are large enough to show beyond the seed range are on the imputation term or on correction terms that rest on \lit{16} regions, and most single gains hold on one model only. With \lit{3} seeds, ranges as wide as \refAECalR{} on calibration hide effects of that size, and the many comparisons of the tables make a few false ``beyond'' marks likely.}
 
-\cl{Three readings carry over to scaling with moderate confidence. First, the input must keep the depth scale: every depth-removing transform hurt imputation on all three models, and an earlier arm that hid the depth covariate cut the U-Net composite. Second, the architecture choice is a choice between goals: the count skips of the U-Net raise imputation and lower correction. Third, the counterfactual views are needed for the correction-only term and for depth correction, and they cost no imputation when all views train together. The third reading rests on \lit{16}-region scores until the rescoring runs.}
+\cl{Three readings carry over to scaling with moderate confidence. First, the input must keep the depth scale: every depth-removing transform hurt imputation on all three models, and an earlier arm that hid the depth covariate cut the U-Net composite. Second, the architecture choice is a choice between goals: the count skips of the U-Net raise imputation and lower correction. Third, the counterfactual views are needed for the correction-only term and for depth correction, and they cost no imputation when all views train together. \rescoreDiscuss{}}
 
 \cl{Several numbers told to the PI during the run were later corrected. The cost of one \lit{256}-region scoring was first quoted as \oldScoreCost{} CPU-hours; the measured cost is \costAE{} to about \costUN{}. The cost of the rescoring rose from \oldCheckCost{} to \rescoreCost{} CPU-hours, the blind build from \blindOldCost{} CPU-hours used to about \blindNewCost{} allocated, and the mix-and-match round fell from \mixOldCost{} to \mixCost{}. The composite changed definition twice; every composite in this report is version~\lit{3}.}
 
@@ -1163,7 +1187,7 @@ order & entry & cluster & CPU-hours \\
 
 \section{Conclusion}\label{sec:conclusion}
 
-\cl{The data criterion is partial: the tables, views, halves, covariates and second experiments exist, and the blind build does not. The objective criterion is delivered. The evaluation criterion is partial: the metrics and the scorer are defined and tested, and the replicate ladder shows that read sampling holds most of the cell-type pair value; but the screening tier failed its check, so the correction terms need \lit{256} regions, and that rescoring has not landed. The design criterion is partial: three architectures tie with a trade-off between imputation and correction, the count input with a depth offset is settled, and the rows on views, two-step routing, input depth and loss weights stay provisional.}
+\cl{The data criterion is partial: the tables, views, halves, covariates and second experiments exist, and the blind build does not. The objective criterion is delivered. The evaluation criterion is partial: the metrics and the scorer are defined and tested, and the replicate ladder shows that read sampling holds most of the cell-type pair value; but \rescoreConclEval{}. The design criterion is partial: \rescoreConclDesign{}}
 
 \cl{The main limitations are the \lit{16}-region correction terms, \lit{3} seeds per arm, models that had not converged at \lit{80,000} windows, and ablations on the first table version.}
 

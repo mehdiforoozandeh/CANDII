@@ -20,12 +20,16 @@
            INSTRUCTIONS/peeling_the_onion/{onion training objective.md, onion paper.md, closeout/*.md}.
            Prose numbers are empty spans with a data-k attribute, filled from DATA.n; figures are matplotlib PNGs
            (DATA.fig) built from the same files. Typed design constants: none; panel letters only.
-  depends  slides marked "depends on the 256-region rescoring" in their contract header change when the
-           rescoring of the 7 decisive arms lands: 6, 9, 15, 16, 17, 19, 24.
+  depends  slides marked "depends on the 256-region rescoring" in their contract header take their rescoring
+           sentences from verdicts.json of the read folder that run_status.json names (rescoring.read_dir):
+           7, 10, 12, 16, 17, 18, 20, 25 (version 4 numbering). tools/onion_eval/apply_rescoring_rules.py
+           writes it and rebuilds this deck; no rescoring sentence is typed here.
   update   version 2 (2026-11-18): the replicate ladder (slide 12), the second-experiment layers (13), the
            side deliverables (5), the status of the rescoring (19), and the PI decisions of 2026-11-17 (22, 23).
            version 3 (2026-11-18): the ladder is two-sided (slide 12; version 2 called the one-sided form two-sided),
            the second-experiment slide says so (13); the run-log facts come from run_status.json, not the run log.
+           version 5 (2026-11-18): slide 20 is the 256-region rescoring result (rules 2.1 to 2.6 applied by
+           apply_rescoring_rules.py); slides 7, 10, 12, 16, 17, 18 and 25 carry the rule verdicts.
   notes    every slide carries speaker notes (press n). All prose is drafted by the agent for the PI's review.
 -->
 <script type="application/json" id="deck-sources">__SOURCES__</script>
@@ -277,7 +281,8 @@
       <img class="figimg" data-fig="views_conly" alt="Correction-only term by training views">
       <ul class="pts">
         <li>Base view only against all views: conv autoencoder <span data-k="vw.bo.convae.d"></span> (range <span data-k="vw.bo.convae.bar"></span>), conv + attention <span data-k="vw.bo.convattn.d"></span> (<span data-k="vw.bo.convattn.bar"></span>), U-Net <span data-k="vw.bo.unet.d"></span> (<span data-k="vw.bo.unet.bar"></span>). The composite moved <span data-k="vw.bocomp.convae.d"></span>, <span data-k="vw.bocomp.convattn.d"></span> and <span data-k="vw.bocomp.unet.d"></span>, all within the range.</li>
-        <li>Alignment-level views alone lower imputation on both conv models: <span data-k="vw.al.convae.d"></span> (range <span data-k="vw.al.convae.bar"></span>) and <span data-k="vw.al.convattn.d"></span> (<span data-k="vw.al.convattn.bar"></span>). Screening tier: the correction-only term rests on the pair regions; the rescoring on all regions decides it.</li>
+        <li>Alignment-level views alone lower imputation on both conv models: <span data-k="vw.al.convae.d"></span> (range <span data-k="vw.al.convae.bar"></span>) and <span data-k="vw.al.convattn.d"></span> (<span data-k="vw.al.convattn.bar"></span>).</li>
+        <li><span data-k="vw.p256"></span></li>
       </ul>
       <aside class="notes"><p>The correction-only term asks whether a model can turn one view into another as well as it reconstructs the same view. Without views in training it cannot, on any of the three models. The composite does not see this, because its correction term uses only the crop pairs. This slide depends on the rescoring of the base-view-only arms on all regions.</p><p class="srcs" data-s="views"></p></aside>
     </div>
@@ -331,7 +336,7 @@
       <h2>No loss arm beats the Negative Binomial likelihood on two or more models</h2>
       <img class="figimg" data-fig="losses" alt="Loss arms minus base">
       <ul class="pts">
-        <li>The one clear gain: imputation weight four raises conv + attention imputation by <span data-k="loss.x4.ca.d"></span> (range <span data-k="loss.x4.ca.bar"></span>), beyond twice the range, on one model only. It enters the conv + attention mix-and-match pool.</li>
+        <li>The one clear gain: imputation weight four raises conv + attention imputation by <span data-k="loss.x4.ca.d"></span> (range <span data-k="loss.x4.ca.bar"></span>), beyond twice the range, on one model only. It enters the conv + attention mix-and-match pool. <span data-k="loss.p256"></span></li>
         <li>CRPS (continuous ranked probability score, an error of a whole distribution) as a loss and a Poisson mean change no term on the conv autoencoder or the U-Net.</li>
       </ul>
       <aside class="notes"><p>A filled dot is beyond the larger seed range; an open dot is within it. The composite is a screening score because it holds the correction term; imputation uses all regions. The rescoring of the imputation-weight arm decides whether it stays in the pool.</p><p class="srcs" data-s="losses"></p></aside>
@@ -360,6 +365,7 @@
        job      the evaluation is defined and its code is tested; three evaluation items are not finished
        source   settled miniCANDI design.md section 3; closeout todo.md (Evaluation rows); onion paper.md
        numbers  DATA.n test.*, ev.*
+       depends  on the 256-region rescoring (the "not landed" card: run-seeds scored, rules decided)
        cut      the scorer extension tables (by lab, by antigen) -->
   <section class="slide">
     <div class="wrap">
@@ -368,7 +374,7 @@
       <div class="cards">
         <div class="card" style="--c:var(--ok)"><div class="rl">Defined and tested</div><div class="big"><span data-k="test.pass"></span> passed</div><p>Scorer, pair-region subset, selection rule, sampler, loss and models, on synthetic data (<span data-k="test.skip"></span> skipped, <span data-k="test.fail"></span> failed: a config-key guard, fixed afterwards). The evaluation set holds <span data-k="ev.items"></span> imputation items and <span data-k="ev.pairs"></span> correction pairs.</p></div>
         <div class="card" style="--c:var(--wait)"><div class="rl">Built, not complete</div><p><b>Signal p-value and peaks</b> from the predicted NB: one run scored, the corrected formula not yet run. <b>Mixed model</b> of the ladder: must not run before it has a noise level per library. <b>Foreign covariates at scoring</b>: scored, read on screening scores.</p></div>
-        <div class="card" style="--c:var(--bad)"><div class="rl">Not landed</div><p>Settled scores (all regions) of the decisive ablation arms: running, none landed yet. The blind pass and the EIC board row, which need the final model: not run.</p></div>
+        <div class="card" style="--c:var(--bad)"><div class="rl">Not landed</div><p><span data-k="test.p256"></span> The blind pass and the EIC board row, which need the final model: not run.</p></div>
       </div>
       <aside class="notes"><p>The tests use synthetic tables; the checks on real data are cluster runs. No test proves that a transform's output link trains from a zero-initialized head; the Anscombe defect passed its synthetic check.</p><p class="srcs" data-s="evaltest"></p></aside>
     </div>
@@ -437,7 +443,7 @@
       <div class="kicker"><span class="sec"><span data-src="literal">(4)</span> Design</span>(b) single switches: inputs, DNA and covariates</div>
       <h2>Few switches move a term beyond the range; covariates drive correction on all three models</h2>
       <img class="figimg xtall" data-fig="heat1" alt="Ablation overview, inputs and covariates">
-      <p class="note">Color: arm minus base in units of the larger seed range (blue up, red down). A number is shown when the difference is beyond the range; a dagger marks an arm with two seeds. Scrambled covariates: correction-only <span data-k="sc.convae"></span>, <span data-k="sc.convattn"></span>, <span data-k="sc.unet"></span>. Fixed input depth on the U-Net: correction <span data-k="fd.unet.cor"></span> (range <span data-k="fd.unet.cor.bar"></span>), imputation <span data-k="fd.unet.imp"></span> (<span data-k="fd.unet.imp.bar"></span>); a fixed input depth can be unrealistic in deployment (PI caveat).</p>
+      <p class="note">Color: arm minus base in units of the larger seed range (blue up, red down). A number is shown when the difference is beyond the range; a dagger marks an arm with two seeds. Scrambled covariates: correction-only <span data-k="sc.convae"></span>, <span data-k="sc.convattn"></span>, <span data-k="sc.unet"></span>. Fixed input depth on the U-Net: correction <span data-k="fd.unet.cor"></span> (range <span data-k="fd.unet.cor.bar"></span>), imputation <span data-k="fd.unet.imp"></span> (<span data-k="fd.unet.imp.bar"></span>); a fixed input depth can be unrealistic in deployment (PI caveat). <span data-k="heat1.p256"></span></p>
       <aside class="notes"><p>Column a uses all regions, so its effects stand. Columns b and c are screening scores. The red block of the scrambled-covariate row says that all three models use the covariates for same-view correction. The two-step and fixed-depth rows are trade-offs, not wins. All of these rows are in the rescoring.</p><p class="srcs" data-s="heat"></p></aside>
     </div>
   </section>
@@ -453,7 +459,7 @@
       <div class="kicker"><span class="sec"><span data-src="literal">(4)</span> Design</span>(c) single switches: loss, views and count transforms</div>
       <h2>The default count offset stays: two transforms lower imputation beyond twice the range on all three models</h2>
       <img class="figimg xtall" data-fig="heat2" alt="Ablation overview, loss, views and transforms">
-      <p class="note">A dagger marks an arm with two seeds. Imputation, local ratio: <span data-k="tf.lr.convae"></span>, <span data-k="tf.lr.convattn"></span>, <span data-k="tf.lr.unet"></span>; per-window quantile: <span data-k="tf.q.convae"></span>, <span data-k="tf.q.convattn"></span>, <span data-k="tf.q.unet"></span> (conv autoencoder, conv + attention, U-Net). The Anscombe arm is void: a zero gradient at the zero-initialized head kept its output fixed.</p>
+      <p class="note">A dagger marks an arm with two seeds. Imputation, local ratio: <span data-k="tf.lr.convae"></span>, <span data-k="tf.lr.convattn"></span>, <span data-k="tf.lr.unet"></span>; per-window quantile: <span data-k="tf.q.convae"></span>, <span data-k="tf.q.convattn"></span>, <span data-k="tf.q.unet"></span> (conv autoencoder, conv + attention, U-Net). The Anscombe arm is void: a zero gradient at the zero-initialized head kept its output fixed. <span data-k="heat2.p256"></span></p>
       <aside class="notes"><p>The count-transform result is the strongest in the design table, because it is beyond twice the range on all three models on a term measured on all regions. The view rows repeat the result of the data part. Pearson residuals, asinh and soft clip help the U-Net only and enter its mix-and-match pool.</p><p class="srcs" data-s="heat"></p></aside>
     </div>
   </section>
@@ -469,7 +475,7 @@
       <div class="kicker"><span class="sec"><span data-src="literal">(4)</span> Design</span>(d) the design table</div>
       <h2>Of <span data-k="des.rows"></span> design choices, <span data-k="des.settled"></span> are settled by evidence and <span data-k="des.provisional"></span> wait for a named run</h2>
       <img class="figimg tall" data-fig="design" alt="Status of each design choice">
-      <p class="note">Settled by a PI ruling: <span data-k="des.ruling"></span>; settled for some models only: <span data-k="des.mixed"></span>. Confidence (right of each tile) is weak for <span data-k="des.weak"></span> rows. Each provisional row names its run, its cost and a decision rule written before the run.</p>
+      <p class="note">Settled by a PI ruling: <span data-k="des.ruling"></span>; settled for some models only: <span data-k="des.mixed"></span>. Confidence (right of each tile) is weak for <span data-k="des.weak"></span> rows. Each provisional row names its run, its cost and a decision rule written before the run. <span data-k="des.p256"></span></p>
       <aside class="notes"><p>Confidence follows the design document's scale: strong is beyond twice the range on two or more models on a term measured on all regions; weak is one model only, a correction term on the pair regions, or an untested default. The design is a usable recipe, but it is not settled.</p><p class="srcs" data-s="design"></p></aside>
     </div>
   </section>
@@ -494,29 +500,25 @@
     </div>
   </section>
 
-  <!-- 19 · 256-REGION RESCORING: PENDING (marked slide; the foreman updates it when the scores land)
-       job      the place for the rescoring result; until then, what it decides and which slides it changes
-       source   closeout/settled miniCANDI design.md section 2.0; ready queue for scaling.md entry 5
-       numbers  DATA.n rs.*
-       depends  on the 256-region rescoring (this slide is its placeholder)
-       cut      the rule texts in full (in the design document) -->
+  <!-- 20 · 256-REGION RESCORING: RESULT (built from verdicts.json; the foreman reruns apply_rescoring_rules.py)
+       job      the verdict of each pre-written rule 2.1 to 2.6 on all regions, and which arms are not finished
+       source   results/rescoring_p256/read_<stamp>/verdicts.json (run_status.json rescoring.read_dir);
+                results/rescoring_p256/arm_summary_p256_sv.tsv; settled miniCANDI design.md section 2.0
+       numbers  DATA.n rs.*; figure rescore
+       depends  on the 256-region rescoring (this slide is its result)
+       cut      the full rule texts and every cell (in RESCORING_READ.md and arms.tsv of the read folder) -->
   <section class="slide">
     <div class="wrap">
-      <div class="kicker"><span class="sec">Pending</span>the rescoring on all regions</div>
-      <div class="banner"><span data-k="ev.regions"></span>-region rescoring: pending</div>
-      <h2>The <span data-k="rs.arms"></span> decisive arms (<span data-k="rs.seeds"></span> run-seeds, about <span data-k="rs.cost"></span> CPU-hours) are not scored on all regions yet</h2>
-      <p class="note"><b>Status.</b> Running on Nibi since <span data-k="rs.day"></span>, <span data-k="rs.start"></span> UTC (run log): <span data-k="rs.n"></span> run-seeds, <span data-k="rs.cap"></span> scorings at one time, about <span data-k="rs.hours"></span> h per scoring; <span data-k="rs.scored"></span> of <span data-k="rs.n"></span> scored at <span data-k="rs.now"></span> UTC on <span data-k="rs.nowday"></span>. At this rate the predict stage needs <span data-k="rs.rounds"></span> rounds, about <span data-k="rs.total"></span> h, so most scores land after the run ends.</p>
-      <div class="pending">
-        <table class="grid">
-          <tr><th>arms</th><th>pre-written rule decides</th><th>slides it changes</th></tr>
-          <tr><td>scrambled covariates</td><td>do the models use covariates for correction?</td><td>design (b), summary</td></tr>
-          <tr><td>base view only</td><td>do the counterfactual views help correction?</td><td>data (d), design (c) and (d), summary</td></tr>
-          <tr><td>two-step, native and fixed base depth</td><td>does routing through the base view enter the pool?</td><td>design (b) and (d)</td></tr>
-          <tr><td>fixed input depth</td><td>does the U-Net trade-off hold?</td><td>design (b) and (d)</td></tr>
-          <tr><td>average baseline input; imputation weight four</td><td>do these stay in the mix-and-match pool?</td><td>objective (b), design (b) to (d)</td></tr>
-        </table>
-      </div>
-      <aside class="notes"><p>The PI chose Nibi in the close-out window. The Fir copies of these jobs stay queued; cancelling them is the PI's action. Until the scores land, every effect on a correction term in this deck is a screening result. Foreman: replace this slide with the arm summary on all regions and the verdict of each rule.</p><p class="srcs" data-s="pending"></p></aside>
+      <div class="kicker"><span class="sec">Result</span>the rescoring on all regions</div>
+      <div class="banner"><span data-k="rs.banner"></span></div>
+      <h2><span data-k="rs.h2"></span></h2>
+      <img class="figimg" data-fig="rescore" alt="Arm minus base on the deciding metric of each rule, three models, all regions">
+      <table class="grid" style="font-size:clamp(10px,0.85vw,12.5px);margin-top:6px">
+        <tr><td><b><span data-k="rs.r2.1.head"></span></b></td><td><span data-k="rs.r2.1"></span></td><td><b><span data-k="rs.r2.2.head"></span></b></td><td><span data-k="rs.r2.2"></span></td></tr>
+        <tr><td><b><span data-k="rs.r2.3.head"></span></b></td><td><span data-k="rs.r2.3"></span></td><td><b><span data-k="rs.r2.4.head"></span></b></td><td><span data-k="rs.r2.4"></span></td></tr>
+        <tr><td><b><span data-k="rs.r2.5.head"></span></b></td><td><span data-k="rs.r2.5"></span></td><td><b><span data-k="rs.r2.6.head"></span></b></td><td><span data-k="rs.r2.6"></span></td></tr>
+      </table>
+      <aside class="notes"><p><span data-k="rs.status"></span></p><p>A rule is decided only when every arm it names has its planned seeds; an arm that is not finished gives no number and no verdict. The rules were written before any score; the full texts and every cell are in RESCORING_READ.md and arms.tsv of the read folder.</p><p class="srcs" data-s="rescore"></p></aside>
     </div>
   </section>
 
@@ -564,7 +566,7 @@
       <div class="kicker"><span class="sec">Decisions</span>taken by the PI on <span data-src="literal">2026-11-17</span></div>
       <h2>The PI took <span data-k="dec.n"></span> decisions: five act in this window, four shape the next session</h2>
       <table class="grid" id="decTable" style="font-size:clamp(11px,0.98vw,14px)"></table>
-      <aside class="notes"><p>Each line is copied from the decision record; each choice was the PI's click. Costs are allocated CPU-hours. Line a was written before the scratch removal; the rescoring now runs more scorings at one time (the pending slide gives the state).</p><p class="srcs" data-s="dec"></p></aside>
+      <aside class="notes"><p>Each line is copied from the decision record; each choice was the PI's click. Costs are allocated CPU-hours. Line a was written before the scratch removal; the rescoring now runs more scorings at one time (the rescoring slide gives the state).</p><p class="srcs" data-s="dec"></p></aside>
     </div>
   </section>
 
@@ -594,10 +596,10 @@
       <div class="kicker"><span class="sec">Summary</span>the four criteria</div>
       <h2>One criterion is delivered and three are partial; the design is a usable recipe that is not yet settled</h2>
       <ul class="pts">
-        <li><b><span data-src="literal">(1)</span> Data: partial.</b> Tables with counterfactual views and filled covariates are in use. The views help where they match the pair type and keep the correction-only term up; they do not move the composite.</li>
+        <li><b><span data-src="literal">(1)</span> Data: partial.</b> Tables with counterfactual views and filled covariates are in use. The views help where they match the pair type; they do not move the composite. <span data-k="sum.views"></span></li>
         <li><b><span data-src="literal">(2)</span> Objective: delivered.</b> One Negative Binomial likelihood on three target kinds, traced to the code; no other loss beats it on two or more models.</li>
-        <li><b><span data-src="literal">(3)</span> Evaluation: partial.</b> Defined and tested; the replicate ladder ran on the real data. Correction terms need all regions, and the rescoring of the decisive arms is running.</li>
-        <li><b><span data-src="literal">(4)</span> Design: partial.</b> Three tied models with configs ready; the count offset is settled; many rows wait for the rescoring, the mix-and-match round and the covariate set.</li>
+        <li><b><span data-src="literal">(3)</span> Evaluation: partial.</b> Defined and tested; the replicate ladder ran on the real data. <span data-k="sum.eval"></span></li>
+        <li><b><span data-src="literal">(4)</span> Design: partial.</b> Three tied models with configs ready; the count offset is settled. <span data-k="sum.design"></span></li>
       </ul>
       <aside class="notes"><p>Each line restates a slide above. When the rescoring lands, the views line and the design line change first.</p><p class="srcs" data-s="status"></p></aside>
     </div>

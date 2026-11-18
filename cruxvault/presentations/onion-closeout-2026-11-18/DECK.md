@@ -46,9 +46,22 @@ Both builders (this deck and `../onion-closeout-2026-11-18-report/build_story.py
 2. If the 1 bp verify and variance jobs are no longer running, set `bp_store.verify_state` and reword slide 5 first (the builders stop on any other value).
 3. Rebuild both (`build_deck.py`, then `build_story.py` and `latexmk -pdf report.tex`) and run both verify steps with `--strict`.
 
-## Slides that depend on the 256-region rescoring
+## The 256-region rescoring: one command (version 5)
 
-6 (views, correction-only term), 9 (loss arms), 15 and 16 (ablation overviews, columns b and c), 17 (design table), 19 (the marked placeholder "256-region rescoring: pending", with a status line from the run log), 24 (summary). Each carries a `depends` line in its contract header. When the rescoring lands: put the `p256_sv` arm summary under `results/`, read it in `build_deck.py`, replace slide 19 with the verdict of each rule of `settled miniCANDI design.md` section 2.0, and re-read the prose of the other dependent slides.
+Version 5 (2026-11-18, not yet published): slide 20 is the result slide of the 256-region rescoring (one figure: per rule and model, arm minus base on the deciding metric with the seed-range bands; an arm that is not finished is drawn as "not finished (k of n seeds)" and gives no number), with a verdict line per rule. Slides 7, 10, 12, 16, 17, 18 and 25 (their `depends` lines) take their rescoring sentences from the same read. The report follows: section 3.5 (paragraphs and table), criteria rows 3 and 4, the abstract, the design table rows of rules 2.1 to 2.6, the discussion and the conclusion. The design table and the section "256-region rescoring: what it settled" of `settled miniCANDI design.md` are updated by the same command.
+
+The foreman reruns, from the worktree root, with each new arm-summary table (`select_rule.py arm-summary --runs <runs_fir> --sub p256_sv` on Nibi):
+
+```bash
+export PYTHONPATH=$PWD/src
+/Users/mforooz/miniforge3/envs/candii/bin/python tools/onion_eval/apply_rescoring_rules.py <arm-summary tsv> --as-of 2026-11-18T18:00Z
+```
+
+It applies rules 2.1 to 2.6 of the design document section 2.0 as written (a rule is decided only when every arm it names has its planned seeds), runs `mix_arms.py qualify` on the table, writes `verdicts.tsv`, `arms.tsv`, `verdicts.json`, `qualify.txt` and `RESCORING_READ.md` to `cruxvault/results/rescoring_p256/read_<UTC stamp>/` in this worktree and in the foreman worktree, copies the table to `cruxvault/results/rescoring_p256/arm_summary_p256_sv.tsv`, updates the design document and `run_status.json`, rebuilds the deck and the report (`latexmk -g -pdf`), and runs both verify steps with `--strict`. Its last line is `build and verify: all passed` or `FAILED`. `--no-build` skips the builds; `--dry-run` prints the verdicts only.
+
+**How the builders find the evidence.** `run_status.json` `rescoring.read_dir` names the newest read folder; `rescoring.read_table` names the copied table. `build_deck.py` and `build_story.py` read `verdicts.json` from that folder and the table, and record both in their source manifests, so verify fails if either changes after a build. The run facts of the status text (start time, hours per scoring, the Fir rate, the U-Net limit and the Fir job range) are hand values in `run_status.json` `rescoring`; the counts (`scored_p256`, `arms_complete`, `rules_decided`) are written by the command.
+
+Verification on 2026-11-18 (version 5, partial table of 16 of 62 run-seeds, scores as of 09:45 UTC): verify (strict) passed for the deck and the report; deck lint clean. Slides 7, 10, 12, 16, 17, 18, 20 and 25 were rendered at 1600 x 900 in headless Chrome and checked by eye.
 
 ## Choices
 

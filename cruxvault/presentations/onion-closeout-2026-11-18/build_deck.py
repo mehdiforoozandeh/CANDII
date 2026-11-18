@@ -1273,6 +1273,102 @@ put("rs.arms", rs[1])
 put("rs.cost", rs[2])
 cite("pending", DES, RQ, CHKMD, RSTAT, PID)
 
+# ---- the 256-region rescoring read (version 5) ---------------------------------------------------
+# tools/onion_eval/apply_rescoring_rules.py applies rules 2.1 to 2.6 to the p256_sv arm summary and
+# writes results/rescoring_p256/read_<stamp>/verdicts.json; run_status.json rescoring.read_dir names
+# that folder. Every rescoring sentence of the deck is a string of verdicts.json (no hand edits).
+if "read_dir" not in _r:
+    sys.exit(f"build_deck: {RSTAT} has no rescoring.read_dir; run tools/onion_eval/apply_rescoring_rules.py")
+VREL = _r["read_dir"] + "/verdicts.json"
+V = json.loads(text(VREL))
+P256 = _r["read_table"]
+path(P256)
+VT_ = V["text"]
+
+
+def dk(s):
+    """A generated sentence for the page: a minus before a digit becomes the minus sign."""
+    return re.sub(r"(?<![\w.])-(?=[0-9])", "−", s)
+
+
+put("rs.banner", dk(VT_["banner"]))
+put("rs.h2", dk(VT_["h2"]))
+put("rs.status", dk(VT_["status"]))
+RULE_IDS = list(V["rules"])
+for rid in RULE_IDS:
+    r = V["rules"][rid]
+    put(f"rs.r{rid}.head", dk(VT_[f"rule{rid}.head"]))
+    none = all(not c["seeds_ok"] for c in r["cells"])
+    put(f"rs.r{rid}", dk(r["verdict"].split(". ")[0].rstrip(".") + "." if r["decided"] else
+                         "Not decided: no arm has finished." if none else
+                         "Not decided: it waits for " + "; ".join(r["waiting"]) + "."))
+put("vw.p256", dk(VT_["views"]))
+put("loss.p256", dk(VT_["loss"]))
+put("heat1.p256", dk(VT_["heat1"]))
+put("heat2.p256", dk(VT_["heat2"]))
+put("des.p256", dk(VT_["design"]))
+put("test.p256", dk(VT_["eval_card"]))
+put("sum.views", dk(VT_["sum_views"]))
+put("sum.eval", dk(VT_["sum_eval"]))
+put("sum.design", dk(VT_["sum_design"]))
+
+# figure: per rule and model, arm minus base on the rule's deciding metric, with the bar
+from matplotlib.transforms import blended_transform_factory
+PANELS = [(rid, g) for rid in RULE_IDS for g in V["rules"][rid]["groups"]]
+SHORT = {"two_step_native": "two-step, native base depth", "two_step_fixed": "two-step, fixed base depth"}
+fig, axs = plt.subplots(4, 2, figsize=(13.4, 7.0))
+fig.subplots_adjust(left=0.115, right=0.985, top=0.95, bottom=0.07, wspace=0.08, hspace=0.95)
+for ax, (rid, g) in zip(axs.flat, PANELS):
+    r = V["rules"][rid]
+    k = r["figure_key"]
+    cs = {c["model"]: c for c in r["cells"] if c["group"] == g and c["key"] == k}
+    lim = max([0.1] + [max(abs(c["d"]), 2 * c["bar"]) * 1.15 for c in cs.values() if c["complete"]])
+    tr = blended_transform_factory(ax.transAxes, ax.transData)
+    for i, m in enumerate(MODELS):
+        y = 2 - i
+        c = cs[m]
+        if not c["complete"]:
+            ax.add_patch(Rectangle((-lim, y - 0.36), 3 * lim, 0.72, fc="#f1f1ee", ec="none"))
+            ax.text(0.5 * lim, y, "not finished (" + c["cls"].replace("incomplete (", ""), ha="center",
+                    va="center", fontsize=10, color=MUTED, style="italic")
+            continue
+        b = c["bar"]
+        ax.add_patch(Rectangle((-2 * b, y - 0.36), 4 * b, 0.72, fc="#e9e9e5", ec="none"))
+        ax.add_patch(Rectangle((-b, y - 0.36), 2 * b, 0.72, fc="#cfd0cb", ec="none"))
+        col = {"within": GREY, "beyond": WAIT, "2x": BAD}[c["cls"]] if c["d"] < 0 else \
+            {"within": GREY, "beyond": "#5c8fb0", "2x": "#2f6f8f"}[c["cls"]]
+        ax.plot(c["d"], y, "o", color=col, ms=9, zorder=3)
+        lab = s3(c["d"]) + {"within": " within", "beyond": " beyond", "2x": " beyond twice"}[c["cls"]]
+        ax.text(1.08 * lim, y, lab, ha="left", va="center", fontsize=10, color=INK)
+    ax.axvline(0, color=INK2, lw=1)
+    ax.set_xlim(-lim, 2 * lim)
+    ax.set_xticks([t for t in ax.get_xticks() if -lim <= t <= lim])
+    ax.axvline(lim, color=HAIR, lw=1)
+    ax.set_ylim(-0.5, 2.5)
+    ax.set_yticks([2, 1, 0], [MODEL[m] for m in MODELS] if ax in axs[:, 0] else ["", "", ""], fontsize=10)
+    ax.tick_params(axis="x", labelsize=9)
+    ax.set_title(f"Rule {rid}: {SHORT.get(g, V['groups'][g])}" + (" (decided)" if r["decided"] else " (not decided)"),
+                 loc="left", fontsize=11.5, color=INK if r["decided"] else MUTED)
+    ax.set_xlabel(f"arm minus base: {V['keys'][k]}", fontsize=9.5)
+ax = axs.flat[len(PANELS)]
+ax.axis("off")
+ax.add_patch(Rectangle((0.0, 0.78), 0.07, 0.16, fc="#cfd0cb", transform=ax.transAxes, clip_on=False))
+ax.text(0.10, 0.86, "within the seed range (larger of arm and base)", va="center", fontsize=10, transform=ax.transAxes)
+ax.add_patch(Rectangle((0.0, 0.52), 0.07, 0.16, fc="#e9e9e5", transform=ax.transAxes, clip_on=False))
+ax.text(0.10, 0.60, "within twice the seed range", va="center", fontsize=10, transform=ax.transAxes)
+ax.text(0.0, 0.30, "dot: mean of the seeds; red or orange lower, blue higher, gray within", va="center",
+        fontsize=10, transform=ax.transAxes, color=INK2)
+ax.text(0.0, 0.02, f"256 regions, scores as of {V['as_of']}\nnot finished: fewer seeds than planned; no value shown", va="center",
+        fontsize=10, transform=ax.transAxes, color=MUTED)
+png("rescore", fig)
+cite("rescore", VREL, P256, DES, RSTAT)
+cite("views", VREL)
+cite("losses", VREL)
+cite("heat", VREL)
+cite("design", VREL)
+cite("evaltest", VREL)
+cite("status", VREL)
+
 # title
 cite("title", TODO, PLAN24, DES)
 cite("status", TODO, PLAN24, DES, OBJ, CHKMD)

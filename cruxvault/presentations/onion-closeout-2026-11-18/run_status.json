@@ -33,14 +33,27 @@
   },
   "rescoring": {
     "submitted_day": "2026-11-17",
-    "submitted_utc": "23:30",
+    "submitted_utc": "23:22",
     "run_seeds": "62",
     "jobs": "558",
-    "predict_hours_per_round": "4.5",
+    "predict_hours_per_round": "6.3",
     "cap_active_run_seeds": "12",
     "status_day": "2026-11-18",
-    "status_utc": "01:33",
+    "status_utc": "09:45",
     "active": "12",
-    "scored": "0"
+    "scored": "16",
+    "fir_rate_factor": "10",
+    "unet_limit_h": "6",
+    "unet_limit_reach_pct": "90 to 96",
+    "unet_new_limit_h": "12",
+    "fir_jobs": "4535347 to 4535923",
+    "read_dir": "results/rescoring_p256/read_20261118T1159Z",
+    "read_table": "results/rescoring_p256/arm_summary_p256_sv.tsv",
+    "read_as_of": "2026-11-18 09:45 UTC",
+    "scored_p256": "16",
+    "planned_p256": "62",
+    "arms_complete": "5",
+    "rules_decided": "1",
+    "rules": "6"
   }
 }

@@ -18,10 +18,10 @@
 %% VERSION 3 (2026-11-18): the replicate ladder is two-sided (version 2 called the one-sided
 %%           form two-sided); the run-log facts come from run_status.json, not the run log.
 %%
-%% RESCORING. One paragraph (between the RESCORING-PARAGRAPH marks) and one table (between
-%% the RESCORING-TABLE marks) wait for the 256-region rescoring of the 7 decisive arms.
-%% Copy the arm summary to results/rescoring_p256/arm_summary_p256_sv.tsv, rebuild (the
-%% table fills itself), then rewrite the paragraph with build macros.
+%% RESCORING (version 5). Every sentence about the 256-region rescoring is a macro (\rescore...,
+%% \ds...Conf, \ds...Status) that build_story.py takes from verdicts.json of the read folder named by
+%% run_status.json rescoring.read_dir. tools/onion_eval/apply_rescoring_rules.py <table> writes that
+%% folder and rebuilds this report; no rescoring sentence is typed here.
 \documentclass[pdflatex,sn-mathphys-num]{sn-jnl}
 
 % crux-sources: __SOURCES__
@@ -66,7 +66,7 @@
 \author{\fnm{Mehdi} \sur{Foroozandeh}}
 \affil{\orgname{Libbrecht lab, Simon Fraser University. Close-out report, private draft of \lit{2026-11-18}}}
 
-\abstract{\cl{We report the close-out of a run whose aim was to separate the sources of variance in epigenomic count data and to settle a small model, miniCANDI, before scaling. We rebuilt the ENCODE Imputation Challenge data from reads with designed processing views, defined a Negative Binomial training objective, and scored three architectures and \nArmRows{} single-switch ablations with \lit{3} seeds each. No architecture won: the U-Net led on imputation and the two convolutional models led on correction, and on \lit{256} regions the composite of the U-Net was lower than that of the conv autoencoder by \compAeUnAll{}, inside the selection bar of \compAeUnBar{}. Training on the base view only removed most of the correction-only term on all three models (for example \eBoCoAE{}, seed range \eBoCoAEBar{}), but this term was scored on \lit{16} regions, and the pre-written check of \lit{16} against \lit{256} regions failed, so every correction effect stays provisional until a queued rescoring runs.}}
+\abstract{\cl{We report the close-out of a run whose aim was to separate the sources of variance in epigenomic count data and to settle a small model, miniCANDI, before scaling. We rebuilt the ENCODE Imputation Challenge data from reads with designed processing views, defined a Negative Binomial training objective, and scored three architectures and \nArmRows{} single-switch ablations with \lit{3} seeds each. No architecture won: the U-Net led on imputation and the two convolutional models led on correction, and on \lit{256} regions the composite of the U-Net was lower than that of the conv autoencoder by \compAeUnAll{}, inside the selection bar of \compAeUnBar{}. Training on the base view only removed most of the correction-only term on all three models (for example \eBoCoAE{}, seed range \eBoCoAEBar{}), but this term was scored on \lit{16} regions. \rescoreAbstract{}}}
 
 \keywords{epigenome imputation, Negative Binomial, counterfactual views, ablation, ENCODE Imputation Challenge}
 
@@ -91,8 +91,8 @@ criterion & state & evidence and gap \\
 \midrule
 \lit{1}. Augmented EIC data with counterfactual views & partial & Built: the rebuilt tables with designed views and read halves, the covariate fill (lab, antibody, donor), the add-on of second experiments, the QC side tables and the \lit{1}~bp region store. Not built: the blind tracks (\blindRows{} rows), and the table version with DNase-seq in the correction term. \\
 \lit{2}. Training objective & delivered & One document gives every loss term, weight, mask and default with its code line. Open choices are marked; each names the run that closes it. \\
-\lit{3}. Evaluation, defined and tested & partial & Metrics, selection rule and scorers are defined and pass their tests, and the replicate ladder ran on the real data. The \lit{16}-region screening tier failed its check, so correction terms need \lit{256} regions; that rescoring runs and has not landed. \\
-\lit{4}. Settled miniCANDI design & partial & A design table with \nDesignRows{} rows gives a value, the evidence and a status for each choice. Many rows are provisional; the choice of architecture is the PI's. \\
+\lit{3}. Evaluation, defined and tested & partial & Metrics, selection rule and scorers are defined and pass their tests, and the replicate ladder ran on the real data. \rescoreCritThree{} \\
+\lit{4}. Settled miniCANDI design & partial & A design table with \nDesignRows{} rows gives a value, the evidence and a status for each choice. \rescoreCritFour{} \\
 \botrule
 \end{tabular}
 \end{table}
@@ -200,7 +200,7 @@ arm & correction (crop pairs) & correction-only \\
 
 \cl{Many arms are nulls on all three models: language-model DNA embeddings, adaLN-zero injection, covariate dropout, per-value numeric codes, the Poisson-mean loss and the drop mask mode moved no lead term beyond the bar. By the selection rule a null keeps the simpler or the incumbent value. The Anscombe transform is void: its output link has zero gradient at the zero-initialized head, so the mean never trained (imputation \anscImp{} on every seed). It is left out of the tables and needs a fix before a retrain.}
 
-\cl{On the screening terms, the U-Net with a fixed input depth, i.e. every input thinned to \lit{$2^{23}$} reads, gained correction \eFixCorUN{} (bar \eFixCorUNBar{}) and composite \eFixCompUN{} (bar \eFixCompUNBar{}), but lost imputation \eFixImpUN{} (bar \eFixImpUNBar{}, a \lit{256}-region term). The PI noted that a fixed input depth can be unrealistic at deployment. Two-step routing through the base view at native depth lowered correction on both convolutional models (\eNatCorAE{}, bar \eNatCorAEBar{}; \eNatCorAT{}, bar \eNatCorATBar{}) and doubles the compute per window. Training with scrambled covariates lowered the correction-only term on all three models (\eScrCoAE{}, \eScrCoAT{}, \eScrCoUN{}; bars \eScrCoAEBar{}, \eScrCoATBar{}, \eScrCoUNBar{}), so the models use the covariates to correct a track. These effects rest on \lit{16} regions and are not settled (Section~\ref{sec:rescore}).}
+\cl{On the screening terms, the U-Net with a fixed input depth, i.e. every input thinned to \lit{$2^{23}$} reads, gained correction \eFixCorUN{} (bar \eFixCorUNBar{}) and composite \eFixCompUN{} (bar \eFixCompUNBar{}), but lost imputation \eFixImpUN{} (bar \eFixImpUNBar{}, a \lit{256}-region term). The PI noted that a fixed input depth can be unrealistic at deployment. Two-step routing through the base view at native depth lowered correction on both convolutional models (\eNatCorAE{}, bar \eNatCorAEBar{}; \eNatCorAT{}, bar \eNatCorATBar{}) and doubles the compute per window. Training with scrambled covariates lowered the correction-only term on all three models (\eScrCoAE{}, \eScrCoAT{}, \eScrCoUN{}; bars \eScrCoAEBar{}, \eScrCoATBar{}, \eScrCoUNBar{}), so the models use the covariates to correct a track. \rescoreAblNote{}}
 
 \begin{table}[!htbp]
 \caption{\cl{Ablations: terms scored on all \lit{256} regions. Arm minus base, per model (AE conv autoencoder, AT conv + attention, UN U-Net). $^{\dagger}$ beyond the bar (the larger seed range of arm and base); $^{\ddagger}$ beyond twice the bar; $^{a}$ two seeds; -- not run. Base values in Table~\ref{tab:refs}.}}\label{tab:ablfull}
@@ -312,13 +312,15 @@ regions & (\lit{1}) interval & (\lit{2}) per assay & (\lit{3}) rule result & (\l
 
 \subsection{The \lit{256}-region rescoring of the decisive arms}\label{sec:rescore}
 
-%% RESCORING-PARAGRAPH START (replace this paragraph when the 256-region scores land)
-\cl{\textbf{[Waits for the rescoring.]} Seven decisive arms (\lit{21} arm folders, \rescoreSeeds{} run-seeds) must be scored on all \lit{256} regions before any correction effect of the ablations can settle: the scrambled covariates, base view only, two-step at native and at fixed base depth, fixed input depth, the average-signal input, and imputation weight \lit{4}. The cost is \rescoreCost{} allocated CPU-hours (\nRunsAE{} conv autoencoder run-seeds at \costAE{}, \nRunsAT{} conv + attention at \costAT{}, \nRunsUN{} U-Net at about \costUN{} each). \textit{Status:} by PI decision the scoring runs on Nibi, since \rsDay{}, \rsStart{} UTC (run log): \rsN{} run-seeds, \rsCap{} at one time, about \rsHours{}~h per scoring, and \rsScored{} of \rsN{} scored at \rsNow{} UTC on \rsNowDay{}. At this rate the predict stage needs \rsRounds{} rounds, about \rsTotal{}~h, so most scores land after the run ends. Table~\ref{tab:rescore} gives the \lit{16}-region effects and leaves the \lit{256}-region columns empty. The settled-design document states, before any result, the rule that each arm's \lit{256}-region effect will apply.}
+%% RESCORING-PARAGRAPH START (macros from the rescoring read; see the header)
+\cl{Seven decisive arms (\lit{21} arm folders, \rescoreSeeds{} run-seeds) are scored on all \lit{256} regions so that the correction effects of the ablations can settle: the scrambled covariates, base view only, two-step at native and at fixed base depth, fixed input depth, the average-signal input, and imputation weight \lit{4}. The cost is \rescoreCost{} allocated CPU-hours (\nRunsAE{} conv autoencoder run-seeds at \costAE{}, \nRunsAT{} conv + attention at \costAT{}, \nRunsUN{} U-Net at about \costUN{} each). The settled-design document states, before any result, the rule that each arm's \lit{256}-region effect applies; a rule is decided only when every arm it names has its planned seeds, and an arm that is not finished gives no number. \textit{Status.} \rescoreStatus{}}
+
+\cl{\rescoreRead{}}
 %% RESCORING-PARAGRAPH END
 
 %% RESCORING-TABLE START (the 256-region columns fill themselves from the build hook)
 \begin{table}[!htbp]
-\caption{\cl{The seven decisive arms: effects on the two correction terms, arm minus base. The \lit{16}-region columns are screening results; the \lit{256}-region columns wait for the rescoring. Marks as in Table~\ref{tab:ablfull}.}}\label{tab:rescore}
+\caption{\cl{The seven decisive arms: effects on the two correction terms, arm minus base. The \lit{16}-region columns are screening results; the \lit{256}-region columns are the rescoring, scores as of \rescoreAsOf{}. ``Not finished'' marks an arm with fewer seeds than planned. Marks as in Table~\ref{tab:ablfull}.}}\label{tab:rescore}
 \scriptsize
 \begin{tabular}{llcccc}
 \toprule
@@ -396,7 +398,7 @@ assay class & rung & one-sided & two-sided & change \\
 \cl{Every model beats the position average by more than twice its seed range on imputation and calibration. On the \lit{16}-region correction term both convolutional models do too, and the U-Net does not: its margin is \dTwoMarginUN{} against twice its seed range, \dTwoBarUN{}.}
 
 \begin{table}[!htbp]
-\caption{\cl{The settled miniCANDI design, condensed. Confidence and status are the agent's reading of the evidence, written before the rescoring.}}\label{tab:design}
+\caption{\cl{The settled miniCANDI design, condensed. Confidence and status are the agent's reading of the evidence; the rows of rules \lit{2.1} to \lit{2.6} follow the rescoring read.}}\label{tab:design}
 \scriptsize
 \begin{tabular}{p{2.8cm}p{4.3cm}p{2.0cm}p{2.9cm}}
 \toprule
@@ -405,15 +407,15 @@ choice & value & confidence & status \\
 architecture & conv autoencoder, conv + attention and U-Net carried forward; tie with a trade-off & moderate & settled tie; the pick is the PI's \\
 count input & offset, $\log_{\lit{2}}((y+\lit{1})/s)$ & strong against local ratio and quantile & settled \\
 covariate injection & FiLM & moderate & settled; concatenation open on conv + attention \\
-covariate set & \lit{11} metadata columns, no QC columns & weak & value by PI ruling; field set provisional \\
+covariate set & \lit{11} metadata columns, no QC columns & \dsCovConf{} & \dsCovStatus{} \\
 mask mode & learned token (drop is equal) & moderate null & settled \\
 ChIP control & input and output & weak; output by ruling & settled \\
 DNA & own tower, early join & weak & settled \\
-loss & NB negative log-likelihood, weights \lit{1}/\lit{1}/\lit{1} & moderate against Poisson & provisional (weight \lit{4}, NB CRPS) \\
-training views & all views & weak (\lit{16}-region term) & provisional (rescoring) \\
-two-step routing & off & moderate & provisional (rescoring) \\
-input depth & native & weak & provisional (rescoring, mix round) \\
-average-signal input & off & weak & provisional (U-Net) \\
+loss & NB negative log-likelihood, weights \lit{1}/\lit{1}/\lit{1} & \dsLossConf{} & \dsLossStatus{} \\
+training views & all views & \dsViewsConf{} & \dsViewsStatus{} \\
+two-step routing & off & \dsTwostepConf{} & \dsTwostepStatus{} \\
+input depth & native & \dsDepthConf{} & \dsDepthStatus{} \\
+average-signal input & off & \dsAvgConf{} & \dsAvgStatus{} \\
 resolution, context & \lit{25}~bp, \lit{1,024} bins & by ruling & settled for this run \\
 training length & \lit{80,000} windows & weak (no model converged) & provisional \\
 QC on input, cell embedding & off, none & not tested & provisional \\
@@ -425,7 +427,7 @@ QC on input, cell embedding & off, none & not tested & provisional \\
 
 \cl{The data and the evaluation are the solid part of the close-out. The rebuilt tables separate processing variance from biology by design, every view has read halves, and the scorer passed exact validity checks on its references. The design part is weaker. Most effects that are large enough to show beyond the seed range are on the imputation term or on correction terms that rest on \lit{16} regions, and most single gains hold on one model only. With \lit{3} seeds, ranges as wide as \refAECalR{} on calibration hide effects of that size, and the many comparisons of the tables make a few false ``beyond'' marks likely.}
 
-\cl{Three readings carry over to scaling with moderate confidence. First, the input must keep the depth scale: every depth-removing transform hurt imputation on all three models, and an earlier arm that hid the depth covariate cut the U-Net composite. Second, the architecture choice is a choice between goals: the count skips of the U-Net raise imputation and lower correction. Third, the counterfactual views are needed for the correction-only term and for depth correction, and they cost no imputation when all views train together. The third reading rests on \lit{16}-region scores until the rescoring runs.}
+\cl{Three readings carry over to scaling with moderate confidence. First, the input must keep the depth scale: every depth-removing transform hurt imputation on all three models, and an earlier arm that hid the depth covariate cut the U-Net composite. Second, the architecture choice is a choice between goals: the count skips of the U-Net raise imputation and lower correction. Third, the counterfactual views are needed for the correction-only term and for depth correction, and they cost no imputation when all views train together. \rescoreDiscuss{}}
 
 \cl{Several numbers told to the PI during the run were later corrected. The cost of one \lit{256}-region scoring was first quoted as \oldScoreCost{} CPU-hours; the measured cost is \costAE{} to about \costUN{}. The cost of the rescoring rose from \oldCheckCost{} to \rescoreCost{} CPU-hours, the blind build from \blindOldCost{} CPU-hours used to about \blindNewCost{} allocated, and the mix-and-match round fell from \mixOldCost{} to \mixCost{}. The composite changed definition twice; every composite in this report is version~\lit{3}.}
 
@@ -473,7 +475,7 @@ order & entry & cluster & CPU-hours \\
 
 \section{Conclusion}\label{sec:conclusion}
 
-\cl{The data criterion is partial: the tables, views, halves, covariates and second experiments exist, and the blind build does not. The objective criterion is delivered. The evaluation criterion is partial: the metrics and the scorer are defined and tested, and the replicate ladder shows that read sampling holds most of the cell-type pair value; but the screening tier failed its check, so the correction terms need \lit{256} regions, and that rescoring has not landed. The design criterion is partial: three architectures tie with a trade-off between imputation and correction, the count input with a depth offset is settled, and the rows on views, two-step routing, input depth and loss weights stay provisional.}
+\cl{The data criterion is partial: the tables, views, halves, covariates and second experiments exist, and the blind build does not. The objective criterion is delivered. The evaluation criterion is partial: the metrics and the scorer are defined and tested, and the replicate ladder shows that read sampling holds most of the cell-type pair value; but \rescoreConclEval{}. The design criterion is partial: \rescoreConclDesign{}}
 
 \cl{The main limitations are the \lit{16}-region correction terms, \lit{3} seeds per arm, models that had not converged at \lit{80,000} windows, and ablations on the first table version.}
 
