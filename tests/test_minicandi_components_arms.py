@@ -101,14 +101,25 @@ def _base(r: int) -> dict:
     return {**cfg, "context_bins": L}
 
 
+#: torch threads of the recording (the laptop default). The rung-5 (axial) output digest moves
+#: with the thread count (1, 2, 4 and 8 threads give four digests), and a CLI main run in-process
+#: by an earlier test (score.set_threads via guardrail.main) or OMP_NUM_THREADS changes it
+REFERENCE_THREADS = 4
+
+
 def rung_digests(r: int) -> tuple:
     torch.manual_seed(0)
     m = R.build_model(_base(r))
     keys = hashlib.sha256(";".join(f"{k}:{tuple(v.shape)}" for k, v in m.state_dict().items())
                           .encode()).hexdigest()
     _perturb(m).eval()
-    with torch.no_grad():
-        o = m(_batch())
+    threads = torch.get_num_threads()
+    torch.set_num_threads(REFERENCE_THREADS)
+    try:
+        with torch.no_grad():
+            o = m(_batch())
+    finally:
+        torch.set_num_threads(threads)
     out = hashlib.sha256(o["n"].numpy().tobytes() + o["mu"].numpy().tobytes()).hexdigest()
     return m.param_count(), keys, out
 
