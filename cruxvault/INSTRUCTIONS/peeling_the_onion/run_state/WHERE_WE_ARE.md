@@ -9,7 +9,7 @@ updated: 2026-11-18T17:00Z (end-of-run status, records item; the earlier page is
 
 The foreman agent rewrites this page at each milestone. Read this page first after a context reset. All times are UTC.
 
-This is the end-of-run status page. The run ends 2026-11-18T20:00Z (PI ruling of 2026-11-17 20:15Z). The lines marked **AT 18:00 UTC:** hold values that the foreman refreshes after the final rerun of the rule-application command. Until then they show the state of 2026-11-18 16:42Z to 16:55Z.
+This is the end-of-run status page. The run ends 2026-11-18T20:00Z (PI ruling of 2026-11-17 20:15Z). The lines marked **FINAL (18:15 UTC):** were refreshed by the foreman at 2026-11-18 18:15Z. No new score landed between the read of 15:54Z and 18:12Z, so that read is the final read of this run.
 
 ## Read in this order after a reset
 
@@ -34,8 +34,8 @@ Working copies of items 2 and 3 live in the worktree at `.claude/worktrees/onion
 |---|---|---|
 | 1. The augmented EIC data with counterfactual views | partial | Built: tables `eic_v1_2` with designed views and read halves, the lab, antibody and donor fill, the add-on of 71 second experiments (`eic_v1_2x`), the QC side tables, the 1 bp region store (412 views). Not built: the 722 blind rows and the table version with DNase-seq in the correction term (`../closeout/closeout todo.md`, items D3 and D4). |
 | 2. A well-defined training objective | delivered | `../onion training objective.md` (item O1). Its open weight choices are marked and wait for the mix-and-match round. |
-| 3. A well-defined and tested evaluation | partial | Metrics, scorer, references and the 16-versus-256 check are built and tested; the replicate ladder is in the two-sided form. **AT 18:00 UTC:** the 256-region rescoring had 30 of 62 run-seeds scored at 15:55Z; refresh the count from the final read. |
-| 4. A settled and tested miniCANDI design, ready for scaling | partial | `../closeout/settled miniCANDI design.md`: 31 rows with pre-written rules. **AT 18:00 UTC:** rules 2.1, 2.2 and 2.6 decided, rules 2.3, 2.4 and 2.5 not decided (15:54Z read); refresh from the final `RESCORING_READ.md`. The architecture for scaling and the data version of the final model are next-session choices (PI ruling of 2026-11-17 21:00Z). |
+| 3. A well-defined and tested evaluation | partial | Metrics, scorer, references and the 16-versus-256 check are built and tested; the replicate ladder is in the two-sided form. **FINAL (18:15 UTC):** the 256-region rescoring has 30 of 62 run-seeds scored (unchanged from 15:55Z to 18:12Z); the other 32 are in their second pass or in the queue on Nibi (190 prediction jobs running, 19 pending, 32 final-step jobs pending at 18:12Z). |
+| 4. A settled and tested miniCANDI design, ready for scaling | partial | `../closeout/settled miniCANDI design.md`: 31 rows with pre-written rules. **FINAL (18:15 UTC):** rules 2.1, 2.2 and 2.6 are decided; rules 2.3, 2.4 and 2.5 are not decided (final read `results/rescoring_p256/read_20261118T1554Z/RESCORING_READ.md`). The architecture for scaling and the data version of the final model are next-session choices (PI ruling of 2026-11-17 21:00Z). |
 
 ## 2. What is on the clusters
 
@@ -69,12 +69,12 @@ Working copies of items 2 and 3 live in the worktree at `.claude/worktrees/onion
 
 ### Other Nibi jobs
 
-- **AT 18:00 UTC:** the 1 bp verification job 27692994 (`onion_a7_verify`: verify of the 1 bp tables, resolution eval set build and check; 8 CPUs, 16 h limit) was RUNNING at 15 h 30 min at 16:55Z. Refresh: it ended with a pass, it failed, or it timed out (then ready queue entry 22).
+- **FINAL (18:15 UTC):** the 1 bp verification job 27692994 (`onion_a7_verify`) reached its 16-hour limit (TIMEOUT) with 6 out-of-memory kills in its log (8 workers in 32000M). The 1 bp tables are built and NOT verified; the resolution eval set is not built. Rerun with more memory per worker before the resolution arms (handoff note, section added 2026-11-18 17:45 UTC; ready queue entry 22).
 - Every other close-out job has ended: QC fill and collect, 1 bp recount and tables, variance by bin size, ladder layers and report, second-experiment layers and baselines.
 
 ## 3. Rules decided and not decided (256-region rescoring)
 
-The rule texts are section 2.0 of `../closeout/settled miniCANDI design.md`. d is the arm mean minus the reference mean; the bar is the larger of the two seed ranges. **AT 18:00 UTC:** this section shows the read of 15:54Z (30 of 62 scores); replace it with the verdicts of the final read.
+The rule texts are section 2.0 of `../closeout/settled miniCANDI design.md`. d is the arm mean minus the reference mean; the bar is the larger of the two seed ranges. **FINAL (18:15 UTC):** this section shows the read of 15:54Z (30 of 62 scores), which is the final read of this run.
 
 - Rule 2.1, decided (settled, strong): the models use covariates for same-view correction. Scrambled covariates lower the correction-only term on all three models (conv autoencoder -0.195, bar 0.046; conv + attention -0.230, bar 0.081; U-Net -0.242, bar 0.129).
 - Rule 2.2, decided (settled, strong): all counterfactual views stay in training. Base view only lowers the correction-only term by more than twice the bar on all three models. The composite does not move.
@@ -91,7 +91,7 @@ The rule texts are section 2.0 of `../closeout/settled miniCANDI design.md`. d i
 - DNase-seq layers are not interpretable. One track (ENCSR000EKG, 15,201 reads) sets the common depth of every DNase-seq pair. The rerun without it is ready queue entry 20.
 - Variance by bin size: 0.927 (broad marks) and 0.901 (narrow marks) of the 1 bp count variance lies below 25 bp, against 0.960 for read sampling alone. Biological replicates reproduce about 0.1% of it. Read halves anti-correlate at 1 bp after duplicate removal (exploratory).
 - QC side tables: NSC and RSC are filled for 89.0% of 2,662 rows, the fragment length for 87.8%, NRF and PBC for 37.8%, FRiP for 0%.
-- **AT 18:00 UTC:** full test suite on the umbrella. The rerun after the 32 fixes (background task bp4egq341, log `scratchpad/pytest_full2.log`) was at 97% with no failure at 16:42Z. The run before the fixes gave 6,918 passed, 9 skipped, 32 failed. `tools/golden.py` check against origin/main 0d7936a6: bit-identical. Refresh with the final count.
+- **FINAL (18:15 UTC):** full test suite on the umbrella after the 32 fixes: 6,950 passed, 9 skipped, 0 failed (83 min; code state 6b2a2273, later commits change documents only). The run before the fixes gave 6,918 passed, 9 skipped, 32 failed. `tools/golden.py` check against origin/main 0d7936a6: 0 ULP, bit-identical. Both gates of a non-experiment pull request hold.
 
 ## 5. Documents and where they are
 
