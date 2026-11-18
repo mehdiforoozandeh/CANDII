@@ -635,7 +635,7 @@ macros["firQueued"] = grab(fp, r"The (\d+) queued Fir jobs stay queued")
 # ---- ready queue table ------------------------------------------------------------------------
 rq = load(INS + "closeout/ready queue for scaling.md")
 qrows = re.findall(r"^\| (\d+) \| ([^|]+) \| ([^|]+) \| [^|]+ \| ([^|]+) \|$", rq, re.M)
-assert len(qrows) == 19, len(qrows)
+assert len(qrows) >= 19, len(qrows)   # entries 20 to 22 were added on 2026-11-18
 
 
 def tex_text(s):

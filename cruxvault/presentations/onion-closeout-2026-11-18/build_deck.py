@@ -1168,14 +1168,14 @@ fig.tight_layout()
 png("notrun", fig)
 
 # ready queue: parse section 1
-q = grab(RQ, r"## 1\. Order of sending\n\n(.*?)\n\nEntries 1 to 4")
+q = grab(RQ, r"## 1\. Order of sending\n\n(.*?)\n\n(?:Entries 1 to 4|State on )")
 QE = []
 for line in q.splitlines():
     cells = [c.strip() for c in line.strip().strip("|").split("|")]
     if len(cells) != 5 or not cells[0].isdigit():
         continue
     QE.append(dict(order=int(cells[0]), entry=cells[1].replace("`", "").replace("eic_v1_2", "Filled-covariate tables:"), cluster=cells[2], waits=cells[3], cost=cells[4]))
-if len(QE) != 19:
+if len(QE) < 19:   # entries 20 to 22 were added on 2026-11-18
     sys.exit(f"build_deck: {RQ} order table has {len(QE)} entries")
 
 
