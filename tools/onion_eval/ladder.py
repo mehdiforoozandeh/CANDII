@@ -43,8 +43,8 @@ report    The ladder table from the per-pair values of `layers.py run --pairs-ou
             the experiment of side x in the same assay, stratum and band. A pair whose a-side or b-side
             experiment has no isogenic pair leaves the matched set; `n_pairs_left_b` counts those that
             left only because of the b-side. A (cell, assay) unit is kept while it holds a kept pair.
-            The bootstrap resamples a-side cells; each L(b) stays fixed (it is computed from all isogenic
-            pairs of the b-side experiment, whatever cell is drawn). The nested rungs and anisogenic
+            The bootstrap resamples all cells jointly (`_joint_boot`): a drawn cell counts wherever it
+            appears, as a-side or b-side, and L is recomputed inside each draw. The nested rungs and anisogenic
             (both sides in one experiment) are the same in both forms.
           one_sided (`--form one_sided`; tonight's form, kept for comparison): every rung subtracts the
             lower rung of the a-side unit only. Writes ladder.tsv byte-identical to the earlier code, the
@@ -251,9 +251,10 @@ def unit_values(pair_rows, with_ids=False):
 
 
 def pair_sides(pairs_rows, meas_rows):
-    """{pair_id: (experiment of side a, experiment of side b)} from pairs.tsv and measurements.tsv."""
-    exp = {m["measurement_id"]: m["experiment"] for m in meas_rows}
-    return {p["pair_id"]: (exp[p["a"]], exp[p["b"]]) for p in pairs_rows}
+    """{pair_id: (experiment of side a, experiment of side b, cell of side a, cell of side b)} from
+    pairs.tsv and measurements.tsv. The cells drive the joint cluster bootstrap of the two-sided form."""
+    m = {r["measurement_id"]: (r["experiment"], r["cell"]) for r in meas_rows}
+    return {p["pair_id"]: (m[p["a"]][0], m[p["b"]][0], m[p["a"]][1], m[p["b"]][1]) for p in pairs_rows}
 
 
 def _lower_by_experiment(lower_ids, sides):
@@ -267,20 +268,21 @@ def _lower_by_experiment(lower_ids, sides):
 
 
 def _two_sided_kept(u_ids, low_by_exp, sides):
-    """(kept, n_left_a, n_left_b). kept: {(cell, assay): [(pair value, pair value - 0.5 (L(a) + L(b)))]}.
+    """(kept, n_left_a, n_left_b). kept: {(cell, assay): [(pair value, pair value - 0.5 (L(a) + L(b)),
+    pair_id)]}.
     A pair leaves when its a-side experiment has no lower value (n_left_a), else when its b-side
     experiment has none (n_left_b)."""
     kept, n_a, n_b = {}, 0, 0
     for k, lst in u_ids.items():
         for pid, v in lst:
-            ea, eb = sides[pid]
+            ea, eb = sides[pid][0], sides[pid][1]
             la, lb = low_by_exp.get((ea, k[1])), low_by_exp.get((eb, k[1]))
             if la is None:
                 n_a += 1
             elif lb is None:
                 n_b += 1
             else:
-                kept.setdefault(k, []).append((v, v - 0.5 * (la + lb)))
+                kept.setdefault(k, []).append((v, v - 0.5 * (la + lb), pid))
     return kept, n_a, n_b
 
 
@@ -385,10 +387,8 @@ def _two_sided_row(rung, pc, layer, holds, units_ids, sides, populated, n_boot, 
         return float(np.mean([np.mean([x[j] for x in kept[k]]) for k in ks]))
     inc_c = {c: cell_mean([k for k in matched if k[0] == c], 1) for c in cells}
     var_c = {c: cell_mean([k for k in matched if k[0] == c], 0) for c in cells}
-    vals = np.array([inc_c[c] for c in cells])
-    est = float(vals.mean())
-    rng = np.random.default_rng(seed)
-    boot = vals[rng.integers(0, len(cells), size=(n_boot, len(cells)))].mean(1)
+    est = float(np.mean([inc_c[c] for c in cells]))
+    boot = _joint_boot(kept, matched, units_ids, low, sides, n_boot, seed)
     lo, hi = LY._interval(est, boot, len(cells))
     # share: on the units that also hold kept other_cell_type pairs, this increment over the kept
     # other_cell_type pair value of those units (cell means, then mean)
@@ -407,6 +407,59 @@ def _two_sided_row(rung, pc, layer, holds, units_ids, sides, populated, n_boot, 
     return row
 
 
+def _joint_boot(kept, matched, units_ids, low, sides, n_boot, seed):
+    """Bootstrap draws of a two-sided increment, resampling every cell of the block jointly.
+
+    Each draw takes |U| cells with replacement from U (every a-side cell of any rung in the block, and
+    every b-side cell of the row's kept pairs); w_c is the number of times cell c is drawn, and it applies
+    wherever c appears. Inside a draw: L*(e, assay) is the w-weighted mean of the lower-rung pair values
+    of experiment e (each pair weighted by the w of its cell); a kept pair enters with weight w(b-side
+    cell) when both L*(a) and L*(b) exist, with increment v - 0.5 (L*(a) + L*(b)); unit means are
+    pair-weighted means, cell means are unweighted means over the cell's valid units, and the draw is the
+    w-weighted mean of the cell means over a-side cells. With every w = 1 a draw equals the estimate.
+    Returns an array of n_boot draws (nan where a draw holds no valid a-side cell)."""
+    lower = [(sides[pid][0], a, c, v) for (c, a), lst in units_ids.get(low, {}).items() for pid, v in lst]
+    pairs = [(k, x[0], x[2]) for k in matched for x in kept[k]]
+    acells = {c for u in units_ids.values() for (c, _) in u}
+    U = sorted(acells | {sides[pid][3] for _, _, pid in pairs})
+    ci = {c: i for i, c in enumerate(U)}
+    keys = sorted({(e, a) for e, a, _, _ in lower})
+    ki = {k: i for i, k in enumerate(keys)}
+    lc = np.array([ci[c] for _, _, c, _ in lower])
+    lv = np.array([v for _, _, _, v in lower])
+    K = np.zeros((len(lower), len(keys)))
+    K[np.arange(len(lower)), [ki[(e, a)] for e, a, _, _ in lower]] = 1.0
+    units = sorted({k for k, _, _ in pairs})
+    ui = {u: i for i, u in enumerate(units)}
+    cells = sorted({c for c, _ in units})
+    cj = {c: i for i, c in enumerate(cells)}
+    pv = np.array([v for _, v, _ in pairs])
+    ka = np.array([ki[(sides[pid][0], k[1])] for k, _, pid in pairs])
+    kb = np.array([ki[(sides[pid][1], k[1])] for k, _, pid in pairs])
+    pb = np.array([ci[sides[pid][3]] for _, _, pid in pairs])
+    P = np.zeros((len(pairs), len(units)))
+    P[np.arange(len(pairs)), [ui[k] for k, _, _ in pairs]] = 1.0
+    C = np.zeros((len(units), len(cells)))
+    C[np.arange(len(units)), [cj[u[0]] for u in units]] = 1.0
+    acol = np.array([ci[c] for c in cells])
+    rng = np.random.default_rng(seed)
+    out = np.full(n_boot, np.nan)
+    for i0 in range(0, n_boot, 100):
+        dr = rng.integers(0, len(U), size=(min(100, n_boot - i0), len(U)))
+        W = np.stack([np.bincount(d, minlength=len(U)) for d in dr]).astype(float)
+        wl = W[:, lc]
+        with np.errstate(invalid="ignore", divide="ignore"):
+            L = ((wl * lv) @ K) / (wl @ K)                       # draws x keys (nan: no lower pair drawn)
+            inc = pv - 0.5 * (L[:, ka] + L[:, kb])               # draws x pairs
+            wp = W[:, pb] * np.isfinite(inc)
+            um = (np.nan_to_num(inc) * wp) @ P / (wp @ P)        # draws x units
+            uv = np.isfinite(um)
+            cm = (np.nan_to_num(um) @ C) / (uv.astype(float) @ C)  # draws x cells
+            wa = W[:, acol] * np.isfinite(cm)
+            out[i0:i0 + len(dr)] = (np.nan_to_num(cm) * wa).sum(1) / wa.sum(1)
+    return out
+
+
 COMMON_RUNGS = ("pseudoreplicate", "isogenic", "other_cell_type")
 COMMON_COLUMNS = ["assay_class", "stratum", "band", "rung", "n_common_cells", "common_increment",
                   "common_ci_low", "common_ci_high", "row_increment", "row_ci_low", "row_ci_high", "row_n_cells",
@@ -418,7 +471,7 @@ def common_cell_check(rows, n_boot=1000, seed=0, rungs=COMMON_RUNGS):
     class, stratum, band): the a-side cells that every rung of `rungs` holds as an estimable row; each
     rung's increment recomputed on those cells (the same per-cell increments as its row, so the same
     form); ok when there are at least MIN_CELLS common cells and every common-cell increment lies inside
-    its full row's 95% interval. A group where a rung is not estimable gets ok empty."""
+    its full row's 95% interval. A group where a rung is not estimable is left out of the output."""
     out = []
     groups = {}
     for r in rows:
@@ -537,8 +590,8 @@ def markdown(rows, tele=None, mixed=None, design=None, chain=None, form="one_sid
         lines += ["Form: two-sided (PI decision of 2026-11-17, row 5). The other_cell_type and other_experiment "
                   "rows subtract, pair by pair, 0.5 x (the isogenic pair value of the a-side experiment + that "
                   "of the b-side experiment). A pair whose b-side experiment has no isogenic pair leaves the "
-                  "matched set (ladder.tsv column n_pairs_left_b). The bootstrap resamples a-side cells and "
-                  "holds the b-side values fixed." + (f" Sides from: {tables}." if tables else ""), ""]
+                  "matched set (ladder.tsv column n_pairs_left_b). The bootstrap resamples all cells jointly: a "
+                  "drawn cell counts as a-side and as b-side, and the isogenic values are recomputed in each draw." + (f" Sides from: {tables}." if tables else ""), ""]
     else:
         lines += ["Form: one-sided (every rung subtracts the lower rung of the a-side unit only). Kept for "
                   "comparison; for the other_cell_type and other_experiment rows it is not the ladder "

@@ -178,7 +178,7 @@ Per assay class, report every D12 rung with its increment, interval, pair count 
 
 - A pair leaves the matched set when L(a) does not exist, or else when L(b) does not exist. The column `n_pairs_left_b` and the flag of a row that is not estimable state how many pairs left for the b-side (and for the a-side). A unit stays while it holds one kept pair.
 - Estimable: at least 5 kept pairs from 3 cells (unchanged rule).
-- Bootstrap: 1,000 draws of the a-side cells with replacement (unchanged); each L(b) stays fixed, because it is computed from all isogenic pairs of the b-side experiment. The b-side cells are shared across clusters; the interval ignores this dependence.
+- Bootstrap (revised after review): 1,000 draws that resample all cells of the block jointly (`ladder._joint_boot`). A drawn cell counts wherever it appears, as a-side or b-side; L is recomputed inside each draw from the drawn isogenic pairs; a kept pair enters with the weight of its b-side cell; the draw is the weighted mean over a-side cells. With every cell drawn once a draw equals the estimate (test). On synthetic data with shared b-side cells the interval covered the truth in 93.7% of 300 data sets. The first version (a-side cells only, L(b) fixed) gave intervals about half as wide.
 - share (two-sided rows): the increment over the mean pair value of the kept other_cell_type pairs of the same units.
 - Expectation before the run: the cell-type increment falls when partners are noisier than the a-side (smoke run, H3K36me3 fine band: 23% lower). All other_experiment rows become not estimable if the second experiments have no isogenic pair (counted before the run: 0 of 71 b-sides have one).
 
@@ -193,7 +193,7 @@ Per (assay class, stratum, band): the a-side cells that the estimable rows pseud
 
 ### 10.7 Result (evidence `results/closeout_E4/ladder_two_sided_2026-11-18/COMPARE.md`)
 
-- Cell-type rung, all regions and bands, one-sided -> two-sided: broad marks 0.003597 [0.000676, 0.00652] (522 pairs, 17 cells) -> 0.00273 [0.00214, 0.00332] (355, 16); narrow marks 0.004129 [0.00118, 0.00708] (670, 23) -> 0.003547 [0.00253, 0.00457] (445, 23).
+- Cell-type rung, all regions and bands, one-sided -> two-sided: broad marks 0.003597 [0.000676, 0.00652] (522 pairs, 17 cells) -> 0.00273 [0.0015, 0.00396] (355, 16); narrow marks 0.004129 [0.00118, 0.00708] (670, 23) -> 0.003547 [0.00198, 0.00511] (445, 23) (joint bootstrap).
 - Most of the drop comes from the pairs that leave (b-side experiment without an isogenic pair). On the kept pairs the one-sided form gives a lower broad value (0.001172). The one-sided form is not an upper value in general.
 - Every other_experiment row is not estimable two-sided: no second experiment has an isogenic pair.
 - Common-cell check: 167 of 195 groups pass; the 28 failures are DNase-seq strata (read sampling on 7 common cells against 17).

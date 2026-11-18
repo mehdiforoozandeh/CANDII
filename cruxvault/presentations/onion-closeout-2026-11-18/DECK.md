@@ -32,7 +32,7 @@ ${=C} deck --lint presentations/onion-closeout-2026-11-18/index.html
 
 Verification on 2026-11-18 (version 2): verify (strict) passed, 23 source files unchanged; lint clean. The changed slides (1, 4, 5, 11, 12, 13, 19, 20, 21, 22, 23) were rendered at 1600 x 900 in headless Chrome and checked by eye. `index.html` is 0.73 MB.
 
-Verification on 2026-11-18 (version 3): verify (strict) passed, 26 source files unchanged; lint clean. The figure of slide 12 was checked by eye; the slides were not rendered in a browser.
+Verification on 2026-11-18 (version 3, after review: joint bootstrap): verify (strict) passed, 26 source files unchanged; lint clean. Slides 12 and 13 were rendered at 1600 x 900 in headless Chrome and checked by eye.
 
 ## Run-log facts (`run_status.json`)
 

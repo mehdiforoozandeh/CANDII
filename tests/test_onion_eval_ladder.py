@@ -284,7 +284,7 @@ def _two_sided_world(seed=0, n_cells=8, delta=0.003, noise=2e-4):
         rows.append(dict(pair_id=pid, assay="A", assay_class="broad_histone", rung=rung, pair_class="",
                          tech_diff="0", cell=f"C{cell}", split="train", depth="1.0", stratum="all", band="all",
                          var_d=repr(2.0 * float(value))))
-        sides[pid] = (f"E{ea}", f"E{eb}")
+        sides[pid] = (f"E{ea}", f"E{eb}", f"C{ea}", f"C{eb}")
     for c in range(n_cells):
         for i in range(6):
             add(f"ps{c}_{i}", "pseudoreplicate", c, 0.8 * L[c] + rng.normal(0, noise), c, c)
@@ -324,7 +324,7 @@ def test_two_sided_drops_pair_whose_b_side_has_no_lower_rung():
             pr.append(dict(pair_id=pid, assay="A", assay_class="broad_histone", rung="other_experiment",
                            pair_class="experiment;lab;donor", tech_diff="0", cell=f"C{c}", split="train",
                            depth="1.0", stratum="all", band="all", var_d=repr(0.1)))
-            sides[pid] = (f"E{c}", f"S{c}")
+            sides[pid] = (f"E{c}", f"S{c}", f"C{c}", f"C{c}")
     one = _row(LD.ladder_rows(pr, n_boot=50, form="one_sided"), "other_experiment", "experiment;lab;donor")
     two = _row(LD.ladder_rows(pr, n_boot=50, form="two_sided", sides=sides), "other_experiment",
                "experiment;lab;donor")
@@ -362,7 +362,7 @@ def test_common_cell_check():
             for rung, v in (("pseudoreplicate", 0.08), ("isogenic", 0.1)):
                 pid = f"x{rung}{c}_{i}"
                 pr.append(dict(pr[0], pair_id=pid, rung=rung, cell=f"C{c}", var_d=repr(2.0 * v)))
-                sides[pid] = (f"E{c}", f"E{c}")
+                sides[pid] = (f"E{c}", f"E{c}", f"C{c}", f"C{c}")
     cc2 = LD.common_cell_check(LD.ladder_rows(pr, n_boot=200, form="two_sided", sides=sides), n_boot=200)
     iso2 = [c for c in cc2 if c["rung"] == "isogenic"][0]
     assert iso2["inside_row_interval"] == 0 and all(c["ok"] == 0 for c in cc2)
@@ -378,12 +378,12 @@ def test_report_cli_two_sided_default_and_one_sided_option(tmp_path):
     t = tmp_path / "tables"
     t.mkdir()
     meas = {}
-    for pid, (ea, eb) in sides.items():
-        meas[f"m{ea}"], meas[f"m{eb}"] = ea, eb
+    for pid, (ea, eb, ca, cb) in sides.items():
+        meas[f"m{ea}"], meas[f"m{eb}"] = (ea, ca), (eb, cb)
     with open(t / "measurements.tsv", "w", newline="") as fh:
-        fh.write("measurement_id\texperiment\n" + "".join(f"{m}\t{e}\n" for m, e in meas.items()))
+        fh.write("measurement_id\texperiment\tcell\n" + "".join(f"{m}\t{e}\t{c}\n" for m, (e, c) in meas.items()))
     with open(t / "pairs.tsv", "w", newline="") as fh:
-        fh.write("pair_id\ta\tb\n" + "".join(f"{p}\tm{ea}\tm{eb}\n" for p, (ea, eb) in sides.items()))
+        fh.write("pair_id\ta\tb\n" + "".join(f"{p}\tm{v[0]}\tm{v[1]}\n" for p, v in sides.items()))
     with pytest.raises(SystemExit):
         LD.main(["report", "--pairs", str(pv), "--out-dir", str(tmp_path / "x")])
     assert LD.main(["report", "--pairs", str(pv), "--out-dir", str(tmp_path / "two"), "--tables", str(t),
@@ -399,3 +399,58 @@ def test_report_cli_two_sided_default_and_one_sided_option(tmp_path):
     o = [r for r in one if r["rung"] == "other_cell_type"][0]
     w2 = [r for r in two if r["rung"] == "other_cell_type"][0]
     assert float(o["layer_increment"]) > float(w2["layer_increment"])
+
+
+def _shared_b_world(seed, n_cells=10, delta=0.003):
+    """Cells with a random cell effect u_c that enters every pair of the cell, as a-side or b-side,
+    and a random replicate level L_c. Truth: the cell-type increment is delta (E[u] = 0). Every pair
+    (a, b), a < b, shares its b-side cell with other pairs."""
+    rng = np.random.default_rng(seed)
+    L = 0.02 + 0.01 * rng.random(n_cells)
+    u = rng.normal(0, 0.002, n_cells)
+    rows, sides = [], {}
+
+    def add(pid, rung, ca, cb, value):
+        rows.append(dict(pair_id=pid, assay="A", assay_class="broad_histone", rung=rung, pair_class="",
+                         tech_diff="0", cell=f"C{ca}", split="train", depth="1.0", stratum="all", band="all",
+                         var_d=repr(2.0 * float(value))))
+        sides[pid] = (f"E{ca}", f"E{cb}", f"C{ca}", f"C{cb}")
+    for c in range(n_cells):
+        for i in range(3):
+            add(f"ps{c}_{i}", "pseudoreplicate", c, c, 0.8 * L[c] + rng.normal(0, 2e-4))
+            add(f"iso{c}_{i}", "isogenic", c, c, L[c] + rng.normal(0, 2e-4))
+    for a in range(n_cells):
+        for b in range(a + 1, n_cells):
+            add(f"oct{a}_{b}", "other_cell_type", a, b,
+                0.5 * (L[a] + L[b]) + delta + 0.5 * (u[a] + u[b]) + rng.normal(0, 2e-4))
+    return rows, sides, delta
+
+
+def test_joint_bootstrap_covers_truth_at_about_nominal_rate():
+    hits, widths = [], []
+    for rep in range(120):
+        pr, sides, delta = _shared_b_world(100 + rep)
+        r = _row(LD.ladder_rows(pr, n_boot=300, form="two_sided", sides=sides), "other_cell_type")
+        hits.append(r["ci_low"] <= delta <= r["ci_high"])
+        widths.append(r["ci_width"])
+    cover = float(np.mean(hits))
+    assert 0.85 <= cover <= 1.0, cover
+
+
+def test_joint_bootstrap_draw_with_all_weights_one_is_the_estimate():
+    pr, sides, _ = _shared_b_world(7)
+    units = LD.unit_values(pr, with_ids=True)[("broad_histone", "all", "all")]
+    low = _lower = LD._lower_by_experiment(units[("isogenic", "")], sides)
+    kept, _, _ = LD._two_sided_kept(units[("other_cell_type", "")], low, sides)
+    est = _row(LD.ladder_rows(pr, n_boot=50, form="two_sided", sides=sides), "other_cell_type")["layer_increment"]
+    # n_boot draws are random; check the estimator itself through a draw where every cell is drawn once
+    class One:
+        def integers(self, lo, hi, size):
+            return np.tile(np.arange(hi), (size[0], 1))
+    orig = np.random.default_rng
+    try:
+        np.random.default_rng = lambda seed=None: One()
+        b = LD._joint_boot(kept, sorted(kept), units, ("isogenic", ""), sides, 3, 0)
+    finally:
+        np.random.default_rng = orig
+    assert np.allclose(b, est, rtol=1e-12, atol=0)
