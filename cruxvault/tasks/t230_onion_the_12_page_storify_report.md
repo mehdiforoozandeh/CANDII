@@ -1,15 +1,15 @@
 ---
 id: t230
 type: task
-title: Onion: The 12-page /storify report
+title: "Onion: The 12-page /storify report"
 category: manuscript
 parent: t152
 blocked_by: t225, t226, t212, t228, t227
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-11T11:20:32
-updated: 2026-11-11T11:20:32
+status: done
+created: "2026-11-11T11:20:32"
+updated: "2026-11-18T09:48:19"
 ---
 
 # t230 — Onion: The 12-page /storify report
@@ -24,7 +24,7 @@ the final written report of the programme
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- presentations/onion-closeout-2026-11-18-report/report.pdf
 
 ## Evidence
 

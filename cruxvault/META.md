@@ -73,6 +73,8 @@ Root: [[candii]]
         - ○ `q41` [Q] [[q41_why_does_hiding_depth_from_rung_4_drop_i|**Why does hiding depth from rung 4 drop its uncertainty term below the marginal NB while its mean-based terms move much less: does the predicted NB size lose a needed dependence on depth?**]] — *open*
       - ○ `q37` [Q] [[q37_how_much_of_rung_1_s_correction_gain_ove|**How much of rung 1's correction gain over depth-only scaling comes from depth and how much from the other covariates, read by decoding the model at the source covariates and the target depth?**]] — *open*
       - ○ `q38` [Q] [[q38_does_rung_1_s_predicted_nb_size_trend_wi|**Does rung 1's predicted NB size trend with target log2 depth on the depth-ladder targets of one base, and does the PIT deviation differ across log2-depth terciles?**]] — *open*
+  - ◐ `q60` [Q] [[q60_how_much_of_the_1_bp_count_variance_of_a|**How much of the 1 bp count variance of a track lies below the 25 bp bin of the model, and how much of that variance is reproducible signal and not read-sampling noise?**]] — *leaning* · moderate
+  - ○ `q61` [Q] [[q61_does_duplicate_removal_which_makes_the_t|**Does duplicate removal, which makes the two read halves of one library exclude each other, bias the read-half (sampling) layer of the earlier variance ladders at 25 bp?**]] — *open*
 - ◐ `q19` [Q] [[q19_what_do_the_training_free_baselines_reac|**What do the training-free baselines reach on the three goals, i.e. where does a model have room: imputation (the position average against the marginal NB and the noise floor), covariate correction (the gap between depth-only scaling and the half-against-half floor, per covariate knob: the size of the artifact that a model could remove), calibration (PIT and the variance ratio of the baselines)?**]] — *leaning* · moderate
   - ◐ `h38` [H] [[h38_the_gap_between_depth_only_scaling_and_t|The gap between depth-only scaling and the floor is largest for the depth and run-type knobs and near 0 for pure subset pairs]] — *leaning* · moderate · against
   - ● `q32` [Q] [[q32_which_reference_should_define_the_1_of_t|**Which reference should define the 1 of the correction gap-closed scale (headline metric 4), given that the position average goes below the half-against-half floor?**]] — *settled* · strong
@@ -99,16 +101,16 @@ Root: [[candii]]
   - ◐ `q58` [Q] [[q58_can_the_second_experiments_separate_a_la|**Can the second experiments separate a lab effect from a donor effect in the cross-experiment pairs?**]] — *leaning* · moderate
   - ◐ `q59` [Q] [[q59_do_the_nested_replicate_ladder_and_the_c|**Do the nested replicate ladder and the crossed mixed model give the same variance shares, and which one can be quoted?**]] — *leaning* · moderate
 - ◐ `q23` [Q] [[q23_is_the_model_wired_as_designed_does_scra|**Is the model wired as designed: does scrambling the covariates, switching the DNA off, another injection form, a mask token, or matched compute move the scores (the wiring checks of rung 1)?**]] — *leaning* · moderate
-  - ◐ `h40` [H] [[h40_scrambled_covariates_lowers_the_correcti|scrambled_covariates lowers the correction term by more than 2 seed spreads and leaves imputation within 2; dna_off lowers imputation]] — *leaning* · weak · mixed
+  - ◐ `h40` [H] [[h40_scrambled_covariates_lowers_the_correcti|scrambled_covariates lowers the correction term by more than 2 seed spreads and leaves imputation within 2; dna_off lowers imputation]] — *leaning* · moderate · supports
   - ○ `q43` [Q] [[q43_does_the_gain_of_scrambled_covariates_in|**Does the gain of scrambled covariates in gap closed at rung 4 come from the 84 headline pairs with a duplicate-keeping side, where source and target can share DNA fragments?**]] — *open*
-  - ◐ `q44` [Q] [[q44_does_training_the_u_net_on_the_counterfa|**Does training the U-Net on the counterfactual processing views of EIC (depth thinning, single-end, read crop, no duplicate removal, no MAPQ filter) raise the three goal terms over training on the base view alone, and for which view type and which evaluation pairs?**]] — *leaning* · moderate
+  - ● `q44` [Q] [[q44_does_training_the_u_net_on_the_counterfa|**Does training the U-Net on the counterfactual processing views of EIC (depth thinning, single-end, read crop, no duplicate removal, no MAPQ filter) raise the three goal terms over training on the base view alone, and for which view type and which evaluation pairs?**]] — *settled* · strong
     - ○ `q45` [Q] [[q45_why_does_adding_the_no_duplicate_removal|**Why does adding the no-duplicate-removal and no-MAPQ-filter views to training lower gap closed on the never-trained pair that combines both (0.08 against 1.77 for base only, half-read floor scale)?**]] — *open*
 - ◐ `q27` [Q] [[q27_are_the_onion_run_s_estimators_scorers_a|**Are the onion run's estimators, scorers and training pipeline correct, fast and reproducible on the clusters?**]] — *leaning* · moderate
 - ● `q28` [Q] [[q28_did_flashzoi_train_on_eic_blind_tracks_o|**Did Flashzoi train on EIC blind tracks or on the genomic loci of the blind scoring?**]] — *settled* · strong
 
 ## Dashboard
 
-- **Questions** (59): open 13 · leaning 38 · settled 8 · parked 0
+- **Questions** (61): open 14 · leaning 38 · settled 9 · parked 0
 - **Hypotheses** (40): open 10 · leaning 18 · settled 6 · parked 6
-- **Confidence**: weak 22 · moderate 34 · strong 14
-- **Findings**: 102
+- **Confidence**: weak 21 · moderate 35 · strong 15
+- **Findings**: 110

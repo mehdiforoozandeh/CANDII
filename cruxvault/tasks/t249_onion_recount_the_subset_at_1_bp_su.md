@@ -1,15 +1,15 @@
 ---
 id: t249
 type: task
-title: Onion: Recount the subset at 1 bp (submit and collect)
+title: "Onion: Recount the subset at 1 bp (submit and collect)"
 category: data-acquisition
 parent: t152
 blocked_by: t183, t185, t240, t241
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-11T23:05:10
-updated: 2026-11-11T23:05:10
+status: done
+created: "2026-11-11T23:05:10"
+updated: "2026-11-18T09:48:19"
 ---
 
 # t249 — Onion: Recount the subset at 1 bp (submit and collect)
@@ -24,7 +24,7 @@ builds the 1 bp region store and the eic_res_v1 tables for the resolution work
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- presentations/onion-closeout-2026-11-18-report/report.pdf
 
 ## Evidence
 

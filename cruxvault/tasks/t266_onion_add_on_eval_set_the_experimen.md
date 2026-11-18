@@ -1,15 +1,15 @@
 ---
 id: t266
 type: task
-title: Onion: Add-on eval set, the experiment layer and the baselines' two bounds
+title: "Onion: Add-on eval set, the experiment layer and the baselines' two bounds"
 category: implementation
 parent: t152
 blocked_by: t265, t259, t260, t261, t185, t186, t236
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-12T03:06:51
-updated: 2026-11-12T03:06:51
+status: done
+created: "2026-11-12T03:06:51"
+updated: "2026-11-18T09:48:19"
 ---
 
 # t266 — Onion: Add-on eval set, the experiment layer and the baselines' two bounds
@@ -24,7 +24,7 @@ measures the experiment layer per pair class and gives the baselines both bounds
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- presentations/onion-closeout-2026-11-18-report/report.pdf
 
 ## Evidence
 

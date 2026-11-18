@@ -1,15 +1,15 @@
 ---
 id: t211
 type: task
-title: Onion: Fill the read-derived QC side table (submit and collect)
+title: "Onion: Fill the read-derived QC side table (submit and collect)"
 category: data-acquisition
 parent: t152
 blocked_by: t183, t199
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-11T11:20:29
-updated: 2026-11-11T11:20:29
+status: done
+created: "2026-11-11T11:20:29"
+updated: "2026-11-18T09:48:19"
 ---
 
 # t211 — Onion: Fill the read-derived QC side table (submit and collect)
@@ -28,7 +28,7 @@ unblocks the stage-2 QC arms (chunks QCa and QCb)
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- presentations/onion-closeout-2026-11-18-report/report.pdf
 
 ## Evidence
 
