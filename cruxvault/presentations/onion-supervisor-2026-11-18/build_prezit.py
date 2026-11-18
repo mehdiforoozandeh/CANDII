@@ -117,6 +117,48 @@ slide('summary', 'what we know now',
   ['Data', 'The measurement dimension works: views and covariates make correction possible and do not change imputation'],
   ['miniCANDI', 'Three small architectures tie; U-Net imputes best, conv models correct best; four rules settled']]))
 
+
+slide('beyond the plan', '(a) how each ablation moved the metrics',
+ 'Ablations, by metric: what moved imputation, what moved correction',
+ ['Values are arm minus base, conv autoencoder / conv + attention / U-Net, 3 seeds. "Screening" means that the correction term was scored on 16 regions only.'],
+ 'Read this grid by column. Imputation and calibration were always scored on all 256 regions. Most correction effects here are screening values; the four rows marked "all regions" are settled. The pattern: inputs and transforms move imputation, views and covariates move correction, and almost nothing moves calibration beyond its wide seed range.',
+ table=tbl(['Switch', 'Imputation', 'Correction', 'Reading'], [
+  ['Count transform: local ratio', '-0.113 / -0.112 / -0.089', 'no gain', 'rejected: more than twice the seed range on all three'],
+  ['Count transform: per-window quantile', '-0.095 / -0.082 / -0.054', 'no gain', 'rejected on all three'],
+  ['ChIP control as input, off', '-0.024 / -0.026 / -0.019', 'inside the range', 'the control input helps imputation a little; kept on'],
+  ['DNA off (conv + attention)', '-0.018', 'inside the range', 'DNA helps a little; a shifted-sequence control gives -0.020'],
+  ['DNA late fusion (conv + attention)', '-0.027', 'inside the range', 'early concatenation stays'],
+  ['Covariates as tokens (U-Net)', '-0.049', 'inside the range', 'rejected; FiLM stays'],
+  ['Imputation loss weight 4 (conv + attention)', '+0.039', '-0.050 on the conv autoencoder (all regions)', 'a candidate on conv + attention only'],
+  ['Same-view pairs only', '+0.031 / +0.032 on the conv models', 'U-Net correction collapses; composite -0.133', 'mixed pairs stay'],
+  ['Base view only (all regions)', 'inside the range', 'correction-only term halves on all three', 'all views stay'],
+  ['Scrambled covariates (all regions)', 'inside the range', 'correction-only term -0.20 to -0.24', 'the covariates are used'],
+  ['Fixed input depth, U-Net (all regions)', '-0.028', '+0.166', 'a trade-off; no recipe yet']]))
+
+slide('beyond the plan', '(b) where the views help, by pair type',
+ 'Views help where they match the pair type',
+ ['<b>Depth-thinning views</b> make the U-Net reliable on depth pairs: every seed trained with them scores well there, every seed without them does not.',
+  '<b>Alignment-level views alone</b> lower imputation on both conv models (0.340 and 0.323 against 0.382 and 0.387) and break the U-Net on their own pairs.',
+  '<b>Two-step routing</b> through the base view, the idea from the earlier covariate-correction testbed, lowers correction on both conv models in screening (-0.115, -0.059) at twice the compute.'],
+ 'This is the finer answer to the question whether the counterfactual views help. A view teaches the correction of its own kind of difference. Two-step routing is not decided on all regions yet; its scorings are still running.',
+ fig='views_pairs')
+
+slide('beyond the plan', '(c) inside the architectures',
+ 'The U-Net trade-off comes from its skip connections',
+ ['<b>U-Net with skips that carry DNA only</b> (all regions): correction rises from 0.504 to 0.715, imputation falls from 0.432 to 0.380. So the count skips buy imputation and cost correction.',
+  '<b>Tuned recipes do not beat the base recipes</b>: three levels in the conv autoencoder, attention at 128 positions, a higher learning rate in the U-Net all stay inside the seed range.',
+  '<b>Training length:</b> no model had converged at 80,000 windows; twice the windows lowered the held-out loss but not the composite.'],
+ 'This explains the tie on slide 9. The U-Net copies local count detail through its skips, which helps a hidden track and hurts when the output must differ from the input view. The loss figure shows that no loss arm changes this picture.',
+ fig='losses')
+
+slide('beyond the plan', '(d) other findings',
+ 'Other findings that the plan did not ask for',
+ ['<b>AlphaGenome 2</b> as an outside competitor on tracks never trained on: specific correlation 0.438, against 0.222 for the position average and 0.333 for two read halves of the same track.',
+  '<b>A bias in read halves at 1 bp:</b> after duplicate removal the two halves of a track exclude each other at a single base, so they anti-correlate. Replicate pairs do not have this bias.',
+  '<b>Signal p-value from counts:</b> the first formula overstated the counting noise of a pileup; a corrected "box spread" formula is built and reviewed.'],
+ 'More, if asked. One DNase-seq track with only 15,201 reads sets the common depth of every DNase-seq pair, so those layer values wait for a rerun. The QC side tables fill strand cross-correlation for 89 percent of the rows and library complexity for 38 percent. Scoring on the second cluster was ten times slower, because its jobs wait on input and output.',
+ fig='heat2')
+
 css = '<style>table.sup{border-collapse:collapse;width:100%;margin:10px 0 14px;font-size:.92em}table.sup th,table.sup td{border:1px solid rgba(128,128,128,.45);padding:6px 10px;text-align:left;vertical-align:top}table.sup th{font-size:.82em;text-transform:uppercase;letter-spacing:.04em;opacity:.75}</style>'
 out = shell[:a] + '\n'.join(S) + shell[b:]
 out = out.replace('</head>', css + '</head>', 1).replace('peeling the onion · close-out', 'peeling the onion · what we know now')
