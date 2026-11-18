@@ -3,6 +3,7 @@ title: ready queue for scaling (peeling the onion)
 kind: queue of runs that are built and not sent, written by the ready-queue agent
 parent: "[[closeout todo]]"
 written: 2026-11-17T20:30Z
+updated: 2026-11-18T17:40Z (records item: states of entries 1 to 5, new entries 20 to 22, measured Nibi scoring time)
 sources: run Log (`.orchestrate/plan.md`, `## Log`, to the line of 2026-11-17T20:25Z), the submit scripts at git e8c1955, Nibi read-only checks of 2026-11-17 20:12 to 20:20 UTC
 ---
 
@@ -23,15 +24,17 @@ The PI decided the open points of entries 3, 4, 5, 9, 10, 11 and 14; see `PI dec
 - **Scoring cost per run-seed on 256 regions** (Log 11:04Z, Fir sacct of jobs 4492698 to 4492823): conv autoencoder 30.0, conv + attention 25.4, U-Net about 52 CPU-hours. The A12 script measured the U-Net at 53.43 (`submit_a12.sh` header) and the A13 file uses 51.85; this file uses 52 unless an entry copies a script's own figure. The older figure of 23 is wrong; every entry below that used it is recomputed. Nibi speed is not measured; Fir rates are used for Nibi.
 - **One cluster per comparison.** The scorer refuses to mix table versions; the runs of `eic_v1_2` (`eic_v1_2_rung{2,3,4}_base_heldout`) and the eval sets `eval/eic_v1_2` exist on Fir only (Nibi `ls` of `ONION/eval` on 2026-11-17: `eic_v1`, `regions_v1`, `strata`). Nibi holds a Globus copy of 25 run folders in `ONION/runs_fir` (the 21 arm runs of the rescoring and `rung{2,3,4}_base_heldout`, `final_rung4_mech_skip_dna`) and the `eic_v1` 256-region references (`eval/eic_v1/baselines`, 4 baselines and `oracle_floor`).
 
+- **Nibi scoring time (measured 2026-11-18).** Nibi runs the 256-region scoring about 10 times slower than Fir: the predict jobs use about 1 of 8 cores and wait on input and output (Log 00:50Z and 02:12Z). One run-seed takes about 6.3 hours of wall time from the start of its first predict job to the end of its metrics job (Nibi sacct of the rescoring jobs, read 2026-11-18 16:55Z, 21 run-seeds that finished without a rescue: conv autoencoder median 6.33 h (9 run-seeds, 6.07 to 6.46), conv + attention median 5.77 h (12, 4.97 to 6.10); no U-Net run-seed finished without a rescue). U-Net predict shards reach the 6 h limit at about 90 to 96% of their requests, so every Nibi scoring of a U-Net needs a 12-hour predict limit (`SCORE_PRED_TIME=12:00:00`). Every Nibi scoring estimate below uses these figures.
+
 ## 1. Order of sending
 
 | Order | Entry | Cluster | Waits for | CPU-hours |
 |---|---|---|---|---|
-| 1 | QC-on-input collect | Nibi | the QC fill arrays 27658288, 27658295 | 0.5 |
-| 2 | 1 bp recount | Nibi | the probe 27658461 prints `[pointcheck] PASS` | about 18 (cap 336) |
-| 3 | Replicate ladder: layers and report | Nibi | nothing | about 6 (13 at most) + 0.5 |
-| 4 | Second experiments: layers and baselines | Nibi | nothing (PI decisions only change the report) | about 130 (236 at most) |
-| 5 | 256-region rescoring of the 7 decisive arms | Fir queue, or Nibi | Fir return, or writable Nibi scratch and a PI choice | 2,225 |
+| 1 | QC-on-input collect | Nibi | DONE 2026-11-17 23:12Z (job 27678089) | 0.5 |
+| 2 | 1 bp recount | Nibi | DONE 2026-11-17 (array 27662614, 412 views); tables built, verify 27692994 RUNNING | about 18 (cap 336) |
+| 3 | Replicate ladder: layers and report | Nibi | DONE 2026-11-18 (layers 27678107, report 27692829; two-sided form rerun on the laptop) | about 6 (13 at most) + 0.5 |
+| 4 | Second experiments: layers and baselines | Nibi | DONE 2026-11-18 (layers 27678103; baselines 27664415, 27664417, 27664418, 27664419, 27664422) | about 130 (236 at most) |
+| 5 | 256-region rescoring of the 7 decisive arms | Nibi | RUNNING since 2026-11-17 23:30Z (558 jobs, kit CO9); 30 of 62 scored at 15:55Z | 2,225 |
 | 6 | `eic_v1_2` 256-region references and its 9 base scorings | Fir | Fir return, fresh Fir kit | 95.1 + 322.2 = 417.3 |
 | 7 | Box-spread signal rescoring of the 9 base runs | Fir, then Nibi | Fir return, fresh Fir kit, Globus | about 434 (+ 96 at most) |
 | 8 | Scoring of the 12 matched-compute runs | Fir | the 12 queued trainings | 322.2 + Perceiver IO (not measured) |
@@ -46,12 +49,17 @@ The PI decided the open points of entries 3, 4, 5, 9, 10, 11 and 14; see `PI dec
 | 17 | Final model and EIC board row | Fir | M1, entries 10, 14, 15, 16 | not built |
 | 18 | RNA-seq input | Fir or Nibi | data move, configs | not built |
 | 19 | Pointwise MLP under the corrected composite | Fir CPU or Nibi GPU | checkpoint copy | not built |
+| 20 | DNase-seq layers rerun without the 15,201-read track | Nibi | entry 21 | about 6 (layers stage) |
+| 21 | Fresh code kit before the next cluster ladder report | Nibi | nothing | 0 |
+| 22 | Resolution eval set and verification of the 1 bp tables | Nibi | only if verify job 27692994 does not end | not measured (27692994 has a 16 h limit on 8 CPUs) |
 
-Entries 1 to 4 can go now. Entries 5 to 8 go when Fir returns (about 2026-11-20). Entries 9 to 16 wait for a PI decision or for an earlier entry. Entries 17 to 19 have no submit script.
+State on 2026-11-18 17:40Z: entries 1 to 4 are done, entry 5 runs on Nibi. Entries 20 to 22 were added on 2026-11-18. Entries 6 to 8 go when Fir returns (about 2026-11-20). Entries 9 to 16 wait for a PI decision or for an earlier entry. Entries 17 to 19 have no submit script.
 
 ## 2. Entries
 
 ### Entry 1. QC-on-input collect (item A4)
+
+- **State 2026-11-18: DONE.** Collect 27678089 completed 2026-11-17 23:12Z: `CO-A4/tables/eic_v1_2_qc.tsv`, `eic_v1_2_qc_pr1.tsv`, `coverage.txt`. Fill rates over 2,662 rows: NSC and RSC 89.0%, fragment length 87.8%, NRF, PBC1 and PBC2 37.8%, FRiP 0%. Never resubmit the fill or the collect.
 
 - Answers: it writes the QC side tables (`$Q/tables/eic_v1_2_qc.tsv`, `eic_v1_2_qc_pr1.tsv`) and the fill-rate report that the QC-on-input arm reads. `Q=/project/def-maxwl/mforooz/ONION/CO-A4`.
 - Prerequisite: both fill arrays end (Nibi 27658288, pass whole, 65 tasks; 27658295, pass pr1, 14 tasks; Log 19:58Z; never resubmit). The collect reads only the tars on `/project`, so it can run after `onion/work` leaves.
@@ -62,6 +70,8 @@ Entries 1 to 4 can go now. Entries 5 to 8 go when Fir returns (about 2026-11-20)
 
 ### Entry 2. 1 bp recount (item A7)
 
+- **State 2026-11-18: DONE, verification running.** Probe 27661198 passed (`[pointcheck] PASS`); recount array 27662614 wrote 412 views (task 21 by retry 27664315). Tables job 27665563 built `CO-A7/tables/eic_res_v1` (412 measurements, 73 pairs) and timed out in its verify step; continuation 27692994 (verify, eval set build and check) runs with a 16 h limit. Variance by bin size 27693041 completed. If 27692994 does not end, see entry 22. Never resubmit any of these jobs.
+
 - Answers: it builds the 1 bp region store that every resolution arm and the variance analysis read.
 - Prerequisite: the probe job 27658461 (pending at 20:12 UTC; never resubmit) prints `[pointcheck] PASS` in `/project/def-maxwl/mforooz/ONION/CO-A7/logs`. The recount READS the half tagAligns in `/scratch/mforooz/onion/work`, so it must end before that folder leaves scratch. The PI approved it and said "You submit it" (Log 20:10Z).
 - Command (from the laptop worktree; usage block of `slurm/onion_data/closeout_a7_submit.sh`; dry run checked with `KIT_ID=CO8`: "412 views in 21 tasks; 2 CPUs, 24000M, 08:00:00 each"):
@@ -70,6 +80,8 @@ Entries 1 to 4 can go now. Entries 5 to 8 go when Fir returns (about 2026-11-20)
 - Decision: every view needs a passed read-set check (`provenance.json`). A failed view is redone on resubmit, never skipped.
 
 ### Entry 3. Replicate ladder: layers and report (item E4)
+
+- **State 2026-11-18: DONE.** Layers 27678107 and report 27692829 completed (one-sided). The two-sided form with the joint cluster bootstrap (PI decision 5) was built on the umbrella branch and rerun on the laptop from the cluster pair values. The next cluster run of the report needs a fresh kit and `--tables` (entry 21). The DNase-seq rows are not interpretable (entry 20). The mixed-model stage must not run.
 
 - Answers: the replicate ladder on the second-experiment add-on, i.e. the sampling, replicate, cell-type and other-experiment rungs of the variance.
 - Prerequisite: none. The script reads `/scratch/mforooz/onion/measurements` and the D2 add-on tables; it never reads `onion/work`.
@@ -81,6 +93,8 @@ Entries 1 to 4 can go now. Entries 5 to 8 go when Fir returns (about 2026-11-20)
 
 ### Entry 4. Second experiments: layers and baselines (item D2)
 
+- **State 2026-11-18: DONE.** Layers 27678103 (after the fix of the `pair_class` defect; the failed 27664409 is set aside) and all 5 baselines (27664415, 27664417, 27664418, 27664419, 27664422) completed. The DNase-seq layer values carry the depth defect of entry 20.
+
 - Answers: the variance layers of the 71 second experiments (lab, donor, repeat experiment), and the baselines that the add-on model scores need.
 - Prerequisite: the add-on tables `ONION/CO-D2/tables/eic_v1_2x` (built by prep job 27601259). Its `covariates_fill.tsv` and `CHANGES.md` are plain copies of the base, because the build predates the fill-table fix; a rebuild with `--catalog` gives the appended rows (item D2 file, 9.9). `tables_sha256` does not hash these two files, so the layers and baselines are not affected.
 - Command (laptop worktree; usage block of `slurm/onion_data/closeout_d2_submit.sh`; dry runs checked with `KIT_ID=CO8`):
@@ -89,6 +103,8 @@ Entries 1 to 4 can go now. Entries 5 to 8 go when Fir returns (about 2026-11-20)
 - PI decisions open: report lab together with donor (recommended: the pure lab effect has too few pairs per assay class); drop the 17 unbuilt DNase-seq second-experiment rows (recommended; about 7,300 CPU-hours, and they cannot rescue the lab layer).
 
 ### Entry 5. 256-region rescoring of the 7 decisive arms (item E1, region check 4)
+
+- **State 2026-11-18: RUNNING on Nibi** (PI decision 1). Submitted 2026-11-17 23:30Z with `slurm/onion_eval/rescoring_p256_nibi.sh`, kit CO9: 62 run-seeds, 558 jobs, all held, released by a laptop loop (at most 30 active run-seeds); a second loop resubmits each run-seed with a predict TIMEOUT with a 12 h limit. 30 of 62 scored at 15:55Z; rules 2.1, 2.2 and 2.6 are decided. Measured wall time: about 6.3 hours per run-seed (section 0). The Fir copies (4535347 to 4535923) stay queued until the PI cancels them after the Nibi scores are on disk. Never resubmit. The route descriptions below are history.
 
 - Answers: the 16-versus-256 check failed its pre-written rule (Fir job 4534658, `PAIR_REGIONS_V3.md`), so the correction terms must come from all 256 regions. This entry rescores the arms that decide the settled design: scrambled covariates, base view only, two-step native, two-step with fixed reference depth, fixed input depth, average input, imputation weight 4; on conv autoencoder, conv + attention and U-Net.
 - Prerequisite: route A, Fir returns and the queued jobs 4535347 to 4535923 run (kit CO6, `runs_fir/score_p256_decisive.sh`, log `score_p256_decisive.log`; Log, line "(foreman) 16-versus-256 check"). Route B, Nibi: the PI moved the rescoring to Nibi (ruling 68); it needs writable scratch, a store root, and a choice about the Fir jobs. The run folders on Nibi are in `/project/def-maxwl/mforooz/ONION/runs_fir` (Globus copy, 74 checkpoints verified, Log 10:40Z).
@@ -133,6 +149,8 @@ done
 
 ### Entry 7. Box-spread signal rescoring of the 9 base runs (item E2)
 
+- **Nibi time.** If step 2 runs on Nibi, plan about 6.3 hours of wall time per run-seed and a 12-hour predict limit for the U-Net (section 0).
+
 - Answers: signal p-value and peaks from the predicted NB with the box-spread pileup (PI ruling 71), for conv autoencoder, conv + attention and U-Net, 3 seeds, with the predicted-control route as a headline row (PI comment, ruling 70); and their AlphaGenome 2 board rows. It replaces the in-bin numbers that carry a known flaw (status page, "Earlier numbers that carry a known flaw").
 - Prerequisite: Fir returns; a fresh Fir kit (`<FK>`; the script default COE2f is not known to exist on Fir). Step 2 needs a Globus copy Fir `$O/e2/tracks_box` to Nibi (the foreman starts Globus; about 61 GB for one form, Log 11:15Z).
 - Commands (laptop worktree; usage block of `slurm/onion_eval/e2_submit.sh`):
@@ -162,6 +180,8 @@ done
 - PI decision open: reduced or full design.
 
 ### Entry 10. Mix-and-match gate and round (item A13)
+
+- **Nibi time.** If the round runs on Nibi, its scorings take about 6.3 hours of wall time per run-seed, and the U-Net arms need a 12-hour predict limit (section 0). The 256-region rescoring of entry 5 must finish first, because the gate reads its scores.
 
 - Answers: whether the single settings that helped add up, per model; it names each model's recipe for M1.
 - Prerequisite: entry 5 (the 256-region scores of fixed depth, imputation weight 4 and average input) and entry 6 (the `eic_v1_2` references). The gate runs on Fir (the checkpoints are there). The round refuses unless `mix_arms.py qualify` passes on the 256-region arm summary.
@@ -235,6 +255,24 @@ done
 ### Entry 19. Pointwise MLP under the corrected composite (item A10)
 
 - Not built. Step 1 (composite version 3 from stored files, under 1 CPU-hour) needs no job. Steps 2 and 3 (same-view pass and the unscored seeds) need the rung-1 checkpoints copied from Nibi to Fir, or a Nibi GPU, and no script exists. Rung-1 CPU prediction is not measured on Fir; metrics about 11.5 CPU-hours per seed (item A10 file).
+
+### Entry 20. DNase-seq layers rerun without the 15,201-read track (items E4 and D2)
+
+- Answers: the DNase-seq layers of the replicate ladder and of the second-experiment layers. Today every DNase-seq pair value is computed at a common depth of 15,201 reads, because `layers.py` takes the shallowest side of any pair, and ENCSR000EKG (cell C23) has 15,201 reads. The next shallowest side of a DNase-seq pair has 13,300,584 reads. So the DNase-seq values are not interpretable.
+- Change: leave ENCSR000EKG out of the DNase-seq pairs, or set a minimum common depth; then rerun the layers stage for DNase-seq and the ladder report. The choice of the two is open.
+- Prerequisite: entry 21 (fresh kit). Cost: about 6 CPU-hours for the layers stage (entry 3 estimate).
+- Evidence: `results/closeout_E4/ladder_two_sided_2026-11-18/COMPARE.md` (foreman worktree), task "rerun the DNase-seq layers" in the taskhub.
+
+### Entry 21. Fresh code kit before the next cluster ladder report (item E4)
+
+- Answers: the kits on Nibi (CO8, CO9) predate the two-sided ladder (umbrella merge a480b3b). The report stage now needs `--tables`.
+- Command: from a worktree of the umbrella branch, `bash tools/onion_kit/push_kit.sh --cluster nibi <new kit id>`. Nibi `/project` file slots: check the free count first (428K of 500K on 2026-11-17 19:50Z; one kit is about 2,600 files).
+
+### Entry 22. Resolution eval set and verification of the 1 bp tables (item A7)
+
+- Answers: the end-to-end check of the 1 bp region store and the resolution eval set that every resolution arm needs.
+- Prerequisite: only if Nibi job 27692994 (`onion_a7_verify`: `verify --all --no-rescan`, eval set build and check; 8 CPUs, 16 h limit, kit CO9) does not end with a pass. At 2026-11-18 16:42Z it had run 15.4 h of its 16 h. Read its log in `CO-A7/logs` first.
+- Command: the `tables` stage of `slurm/onion_data/closeout_a7_submit.sh` split into a verify job and an eval set job, each with a longer limit; not built. Never resubmit 27692994 itself.
 
 ## 3. What must come back from tape, or be downloaded again
 
