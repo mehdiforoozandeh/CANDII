@@ -1,0 +1,349 @@
+=== co_d2_prep job 27601259 host=c86.nibi.sharcnet kit=/project/def-maxwl/mforooz/onion_kit/COD2 base=/project/def-maxwl/mforooz/ONION/tables/eic_v1_2 out=/project/def-maxwl/mforooz/ONION/CO-D2 Tue Nov 17 10:53:48 UTC 2026
+kit=COD2 git=4f2dbbc dirty=0 pushed=2026-11-17T10:46:57Z from=/Users/mforooz/Desktop/research/libbrechteam@sfu/.orchestrate-wt/CANDII/onion-CO-D2
+WARNING: Error parsing dependencies of pip: [Errno 2] No such file or directory: '/local/scratch/mforooz.27601259.0/venv/lib/python3.10/site-packages/pip-26.2.2+computecanada.dist-info/METADATA'
+WARNING: Error parsing dependencies of pip: [Errno 2] No such file or directory: '/local/scratch/mforooz.27601259.0/venv/lib/python3.10/site-packages/pip-26.2.2+computecanada.dist-info/METADATA'
+[kit-pin] candi from /project/6014832/mforooz/onion_kit/COD2/src/candi
+
+=== step 1 evalset build on eic_v1_2 10:54:31
+evalset: 256 regions, 63 imputation items (0 targets without halves), 1 control targets, 1480 correction pairs (0 dropped: no halves), 3134 replicate pairs; imputation-scorable 9, correction-scorable 11 -> /project/def-maxwl/mforooz/ONION/CO-D2/eval/eic_v1_2/evalset.json
+evalset sha256 26f9e32f7cfd49f33b841925ff88901ba4b91c2df438ecc840e4074499f31c76; frozen file on Fir 26f9e32f7cfd49f33b841925ff88901ba4b91c2df438ecc840e4074499f31c76; SAME
+
+=== step 2 build_tables addon --catalog 10:54:38
+second-experiment measurements in the build list: 119
+rows appended: 71 (evalonly 71)
+other_experiment pairs appended: 71 (val 71)
+missing.tsv rows appended: 48 (not built (no provenance.json) 48)
+wrote /project/def-maxwl/mforooz/ONION/CO-D2/tables/eic_v1_2x (add-on of /project/def-maxwl/mforooz/ONION/tables/eic_v1_2); wall 320 s
+
+=== step 3 check_dataset --addon-of 11:00:02
+tables: /project/def-maxwl/mforooz/ONION/CO-D2/tables/eic_v1_2x  ledger: /project/6014832/mforooz/ONION/eic/accession_ledger.tsv  published: /project/6014832/mforooz/onion_kit/COD2/tests/fixtures/eic_published_accessions.tsv
+measurements: 2811 (train 2328, val 334, blind 78); evaluation-only rows: 149; store: rows (no sha256): 0
+withheld combinations: 18 rows; never-trained pairs: val 102, blind 0
+pairs: 15194; pairs_shared_reads.tsv: 852
+measurements outside ledger: 0
+accessions outside the published EIC list: 0
+rows whose EIC split differs from the ledger: 0
+validation or blind measurement in a training pair: 0
+pairs whose split is not their sides' EIC role: 0
+withheld combinations in training pairs: 0
+never_trained flags that disagree with withheld.tsv: 0
+blind rows readable in train or val mode: 0
+testbed rows not flagged evaluation-only: 0
+pairs between two testbed arms in pairs.tsv: 0
+arms whose halves do not derive from the parent split: 0
+sha256 mismatches: 0
+pairs naming an unknown measurement: 0
+duplicate ids: 0
+second-experiment rows outside the reviewed list: 0
+second-experiment rows not flagged evaluation-only: 0
+second-experiment rows that are not a pooled uniform base view: 0
+second-experiment rows in a training pair or outside the other_experiment rung: 0
+evaluation-only rows readable in a training mode: 0
+evalonly rows that disagree with evaluation_only.tsv: 0
+rows of the base tables changed or missing: 0
+replicate rungs (4 regions of 16384 bins for the widths):
+rung pseudoreplicate ATAC-seq: 4 pairs, 4 cells, interval width 0.3072 (mean pair variance 0.5929; 4 pairs from 4 cells read)
+rung pseudoreplicate DNase-seq: 34 pairs, 18 cells (1 blind, not read), interval width 0.09679 (mean pair variance 0.2126; 30 pairs from 16 cells read)
+rung pseudoreplicate H2AFZ: 24 pairs, 10 cells, interval width 0.1389 (mean pair variance 0.2159; 24 pairs from 10 cells read)
+rung pseudoreplicate H2AK5ac: 15 pairs, 5 cells, interval width 0.1827 (mean pair variance 0.2324; 15 pairs from 5 cells read)
+rung pseudoreplicate H2AK9ac: 3 pairs, 1 cells, interval width inf (mean pair variance 0.237; 3 pairs from 1 cells read)
+rung pseudoreplicate H2BK120ac: 13 pairs, 5 cells, interval width 0.2295 (mean pair variance 0.188; 13 pairs from 5 cells read)
+rung pseudoreplicate H2BK12ac: 11 pairs, 5 cells, interval width 0.1435 (mean pair variance 0.1742; 11 pairs from 5 cells read)
+rung pseudoreplicate H2BK15ac: 11 pairs, 4 cells, interval width 0.2506 (mean pair variance 0.1942; 11 pairs from 4 cells read)
+rung pseudoreplicate H2BK20ac: 6 pairs, 2 cells, interval width 1.32 (mean pair variance 0.1821; 6 pairs from 2 cells read)
+rung pseudoreplicate H2BK5ac: 13 pairs, 5 cells, interval width 0.04888 (mean pair variance 0.1749; 13 pairs from 5 cells read)
+rung pseudoreplicate H3F3A: 3 pairs, 1 cells, interval width inf (mean pair variance 0.3696; 3 pairs from 1 cells read)
+rung pseudoreplicate H3K14ac: 11 pairs, 5 cells, interval width 0.05536 (mean pair variance 0.2048; 11 pairs from 5 cells read)
+rung pseudoreplicate H3K18ac: 16 pairs, 6 cells, interval width 0.1412 (mean pair variance 0.1806; 16 pairs from 6 cells read)
+rung pseudoreplicate H3K23ac: 7 pairs, 3 cells, interval width 0.1651 (mean pair variance 0.1953; 7 pairs from 3 cells read)
+rung pseudoreplicate H3K23me2: 6 pairs, 2 cells, interval width 0.05102 (mean pair variance 0.1731; 6 pairs from 2 cells read)
+rung pseudoreplicate H3K27ac: 60 pairs, 26 cells (1 blind, not read), interval width 0.1201 (mean pair variance 0.2265; 30 pairs from 18 cells read)
+rung pseudoreplicate H3K27me3: 44 pairs, 20 cells (1 blind, not read), interval width 0.09981 (mean pair variance 0.2419; 30 pairs from 18 cells read)
+rung pseudoreplicate H3K36me3: 60 pairs, 26 cells (1 blind, not read), interval width 0.1215 (mean pair variance 0.1941; 30 pairs from 19 cells read)
+rung pseudoreplicate H3K4ac: 16 pairs, 6 cells, interval width 0.1305 (mean pair variance 0.2081; 16 pairs from 6 cells read)
+rung pseudoreplicate H3K4me1: 50 pairs, 22 cells (1 blind, not read), interval width 0.1159 (mean pair variance 0.201; 30 pairs from 16 cells read)
+rung pseudoreplicate H3K4me2: 31 pairs, 11 cells, interval width 0.1551 (mean pair variance 0.161; 30 pairs from 11 cells read)
+rung pseudoreplicate H3K4me3: 72 pairs, 34 cells (1 blind, not read), interval width 0.1102 (mean pair variance 0.1732; 30 pairs from 20 cells read)
+rung pseudoreplicate H3K56ac: 9 pairs, 3 cells, interval width 0.2774 (mean pair variance 0.1362; 9 pairs from 3 cells read)
+rung pseudoreplicate H3K79me1: 14 pairs, 6 cells, interval width 0.1262 (mean pair variance 0.1915; 14 pairs from 6 cells read)
+rung pseudoreplicate H3K79me2: 28 pairs, 9 cells, interval width 0.1741 (mean pair variance 0.2169; 28 pairs from 9 cells read)
+rung pseudoreplicate H3K9ac: 33 pairs, 14 cells, interval width 0.1479 (mean pair variance 0.1828; 30 pairs from 14 cells read)
+rung pseudoreplicate H3K9me1: 4 pairs, 2 cells, interval width 0.4536 (mean pair variance 0.2126; 4 pairs from 2 cells read)
+rung pseudoreplicate H3K9me2: 3 pairs, 1 cells, interval width inf (mean pair variance 0.3338; 3 pairs from 1 cells read)
+rung pseudoreplicate H3K9me3: 42 pairs, 21 cells (1 blind, not read), interval width 0.1207 (mean pair variance 0.2035; 30 pairs from 16 cells read)
+rung pseudoreplicate H3T11ph: 1 pairs, 1 cells, interval width inf (mean pair variance 0.2365; 1 pairs from 1 cells read)
+rung pseudoreplicate H4K12ac: 3 pairs, 1 cells, interval width inf (mean pair variance 0.1647; 3 pairs from 1 cells read)
+rung pseudoreplicate H4K20me1: 18 pairs, 6 cells, interval width 0.1502 (mean pair variance 0.2396; 18 pairs from 6 cells read)
+rung pseudoreplicate H4K5ac: 9 pairs, 3 cells, interval width 0.257 (mean pair variance 0.1748; 9 pairs from 3 cells read)
+rung pseudoreplicate H4K8ac: 14 pairs, 6 cells, interval width 0.1183 (mean pair variance 0.1417; 14 pairs from 6 cells read)
+rung pseudoreplicate H4K91ac: 9 pairs, 5 cells, interval width 0.2055 (mean pair variance 0.1583; 9 pairs from 5 cells read)
+rung pseudoreplicate chipseq-control: 88 pairs, 38 cells, interval width 0.1824 (mean pair variance 0.2892; 30 pairs from 17 cells read)
+rung sequencing ATAC-seq: 0 pairs, not populated by EIC
+rung sequencing DNase-seq: 0 pairs, not populated by EIC
+rung sequencing H2AFZ: 0 pairs, not populated by EIC
+rung sequencing H2AK5ac: 0 pairs, not populated by EIC
+rung sequencing H2AK9ac: 0 pairs, not populated by EIC
+rung sequencing H2BK120ac: 0 pairs, not populated by EIC
+rung sequencing H2BK12ac: 0 pairs, not populated by EIC
+rung sequencing H2BK15ac: 0 pairs, not populated by EIC
+rung sequencing H2BK20ac: 0 pairs, not populated by EIC
+rung sequencing H2BK5ac: 0 pairs, not populated by EIC
+rung sequencing H3F3A: 0 pairs, not populated by EIC
+rung sequencing H3K14ac: 0 pairs, not populated by EIC
+rung sequencing H3K18ac: 0 pairs, not populated by EIC
+rung sequencing H3K23ac: 0 pairs, not populated by EIC
+rung sequencing H3K23me2: 0 pairs, not populated by EIC
+rung sequencing H3K27ac: 0 pairs, not populated by EIC
+rung sequencing H3K27me3: 0 pairs, not populated by EIC
+rung sequencing H3K36me3: 0 pairs, not populated by EIC
+rung sequencing H3K4ac: 0 pairs, not populated by EIC
+rung sequencing H3K4me1: 0 pairs, not populated by EIC
+rung sequencing H3K4me2: 0 pairs, not populated by EIC
+rung sequencing H3K4me3: 0 pairs, not populated by EIC
+rung sequencing H3K56ac: 0 pairs, not populated by EIC
+rung sequencing H3K79me1: 0 pairs, not populated by EIC
+rung sequencing H3K79me2: 0 pairs, not populated by EIC
+rung sequencing H3K9ac: 0 pairs, not populated by EIC
+rung sequencing H3K9me1: 0 pairs, not populated by EIC
+rung sequencing H3K9me2: 0 pairs, not populated by EIC
+rung sequencing H3K9me3: 0 pairs, not populated by EIC
+rung sequencing H3T11ph: 0 pairs, not populated by EIC
+rung sequencing H4K12ac: 0 pairs, not populated by EIC
+rung sequencing H4K20me1: 0 pairs, not populated by EIC
+rung sequencing H4K5ac: 0 pairs, not populated by EIC
+rung sequencing H4K8ac: 0 pairs, not populated by EIC
+rung sequencing H4K91ac: 0 pairs, not populated by EIC
+rung sequencing chipseq-control: 0 pairs, not populated by EIC
+rung technical ATAC-seq: 0 pairs, not populated by EIC
+rung technical DNase-seq: 0 pairs, not populated by EIC
+rung technical H2AFZ: 0 pairs, not populated by EIC
+rung technical H2AK5ac: 0 pairs, not populated by EIC
+rung technical H2AK9ac: 0 pairs, not populated by EIC
+rung technical H2BK120ac: 0 pairs, not populated by EIC
+rung technical H2BK12ac: 0 pairs, not populated by EIC
+rung technical H2BK15ac: 0 pairs, not populated by EIC
+rung technical H2BK20ac: 0 pairs, not populated by EIC
+rung technical H2BK5ac: 0 pairs, not populated by EIC
+rung technical H3F3A: 0 pairs, not populated by EIC
+rung technical H3K14ac: 0 pairs, not populated by EIC
+rung technical H3K18ac: 0 pairs, not populated by EIC
+rung technical H3K23ac: 0 pairs, not populated by EIC
+rung technical H3K23me2: 0 pairs, not populated by EIC
+rung technical H3K27ac: 0 pairs, not populated by EIC
+rung technical H3K27me3: 0 pairs, not populated by EIC
+rung technical H3K36me3: 0 pairs, not populated by EIC
+rung technical H3K4ac: 0 pairs, not populated by EIC
+rung technical H3K4me1: 0 pairs, not populated by EIC
+rung technical H3K4me2: 0 pairs, not populated by EIC
+rung technical H3K4me3: 0 pairs, not populated by EIC
+rung technical H3K56ac: 0 pairs, not populated by EIC
+rung technical H3K79me1: 0 pairs, not populated by EIC
+rung technical H3K79me2: 0 pairs, not populated by EIC
+rung technical H3K9ac: 0 pairs, not populated by EIC
+rung technical H3K9me1: 0 pairs, not populated by EIC
+rung technical H3K9me2: 0 pairs, not populated by EIC
+rung technical H3K9me3: 0 pairs, not populated by EIC
+rung technical H3T11ph: 0 pairs, not populated by EIC
+rung technical H4K12ac: 0 pairs, not populated by EIC
+rung technical H4K20me1: 0 pairs, not populated by EIC
+rung technical H4K5ac: 0 pairs, not populated by EIC
+rung technical H4K8ac: 0 pairs, not populated by EIC
+rung technical H4K91ac: 0 pairs, not populated by EIC
+rung technical chipseq-control: 0 pairs, not populated by EIC
+rung isogenic ATAC-seq: 0 pairs, not populated by EIC
+rung isogenic DNase-seq: 8 pairs, 8 cells, interval width 0.06798 (mean pair variance 0.2082; 8 pairs from 8 cells read)
+rung isogenic H2AFZ: 7 pairs, 7 cells, interval width 0.1639 (mean pair variance 0.2582; 7 pairs from 7 cells read)
+rung isogenic H2AK5ac: 5 pairs, 5 cells, interval width 0.2257 (mean pair variance 0.2654; 5 pairs from 5 cells read)
+rung isogenic H2AK9ac: 1 pairs, 1 cells, interval width inf (mean pair variance 0.2389; 1 pairs from 1 cells read)
+rung isogenic H2BK120ac: 4 pairs, 4 cells, interval width 0.2559 (mean pair variance 0.1951; 4 pairs from 4 cells read)
+rung isogenic H2BK12ac: 3 pairs, 3 cells, interval width 0.2558 (mean pair variance 0.1908; 3 pairs from 3 cells read)
+rung isogenic H2BK15ac: 5 pairs, 3 cells, interval width 0.7113 (mean pair variance 0.2314; 5 pairs from 3 cells read)
+rung isogenic H2BK20ac: 2 pairs, 2 cells, interval width 1.99 (mean pair variance 0.2223; 2 pairs from 2 cells read)
+rung isogenic H2BK5ac: 4 pairs, 4 cells, interval width 0.1081 (mean pair variance 0.2044; 4 pairs from 4 cells read)
+rung isogenic H3F3A: 1 pairs, 1 cells, interval width inf (mean pair variance 0.4262; 1 pairs from 1 cells read)
+rung isogenic H3K14ac: 3 pairs, 3 cells, interval width 0.3233 (mean pair variance 0.2312; 3 pairs from 3 cells read)
+rung isogenic H3K18ac: 5 pairs, 5 cells, interval width 0.2486 (mean pair variance 0.2235; 5 pairs from 5 cells read)
+rung isogenic H3K23ac: 2 pairs, 2 cells, interval width 0.7391 (mean pair variance 0.2061; 2 pairs from 2 cells read)
+rung isogenic H3K23me2: 2 pairs, 2 cells, interval width 0.5183 (mean pair variance 0.2173; 2 pairs from 2 cells read)
+rung isogenic H3K27ac: 19 pairs, 15 cells, interval width 0.1695 (mean pair variance 0.263; 19 pairs from 15 cells read)
+rung isogenic H3K27me3: 11 pairs, 11 cells, interval width 0.1072 (mean pair variance 0.2624; 11 pairs from 11 cells read)
+rung isogenic H3K36me3: 16 pairs, 16 cells, interval width 0.1299 (mean pair variance 0.2435; 16 pairs from 16 cells read)
+rung isogenic H3K4ac: 5 pairs, 5 cells, interval width 0.1907 (mean pair variance 0.2607; 5 pairs from 5 cells read)
+rung isogenic H3K4me1: 13 pairs, 13 cells, interval width 0.1487 (mean pair variance 0.2344; 13 pairs from 13 cells read)
+rung isogenic H3K4me2: 10 pairs, 10 cells, interval width 0.1987 (mean pair variance 0.1979; 10 pairs from 10 cells read)
+rung isogenic H3K4me3: 19 pairs, 19 cells, interval width 0.1299 (mean pair variance 0.1908; 19 pairs from 19 cells read)
+rung isogenic H3K56ac: 3 pairs, 3 cells, interval width 0.4235 (mean pair variance 0.1687; 3 pairs from 3 cells read)
+rung isogenic H3K79me1: 4 pairs, 4 cells, interval width 0.2122 (mean pair variance 0.2275; 4 pairs from 4 cells read)
+rung isogenic H3K79me2: 11 pairs, 9 cells, interval width 0.2347 (mean pair variance 0.2288; 11 pairs from 9 cells read)
+rung isogenic H3K9ac: 10 pairs, 10 cells, interval width 0.1742 (mean pair variance 0.2101; 10 pairs from 10 cells read)
+rung isogenic H3K9me1: 1 pairs, 1 cells, interval width inf (mean pair variance 0.3001; 1 pairs from 1 cells read)
+rung isogenic H3K9me2: 1 pairs, 1 cells, interval width inf (mean pair variance 0.2868; 1 pairs from 1 cells read)
+rung isogenic H3K9me3: 12 pairs, 10 cells, interval width 0.1833 (mean pair variance 0.2793; 12 pairs from 10 cells read)
+rung isogenic H3T11ph: 0 pairs, not populated by EIC
+rung isogenic H4K12ac: 1 pairs, 1 cells, interval width inf (mean pair variance 0.2337; 1 pairs from 1 cells read)
+rung isogenic H4K20me1: 6 pairs, 6 cells, interval width 0.1557 (mean pair variance 0.2349; 6 pairs from 6 cells read)
+rung isogenic H4K5ac: 3 pairs, 3 cells, interval width 0.2773 (mean pair variance 0.1877; 3 pairs from 3 cells read)
+rung isogenic H4K8ac: 4 pairs, 4 cells, interval width 0.2953 (mean pair variance 0.1513; 4 pairs from 4 cells read)
+rung isogenic H4K91ac: 2 pairs, 2 cells, interval width 2.482 (mean pair variance 0.1958; 2 pairs from 2 cells read)
+rung isogenic chipseq-control: 16 pairs, 11 cells, interval width 0.155 (mean pair variance 0.4017; 16 pairs from 11 cells read)
+rung anisogenic ATAC-seq: 0 pairs, not populated by EIC
+rung anisogenic DNase-seq: 0 pairs, not populated by EIC
+rung anisogenic H2AFZ: 0 pairs, not populated by EIC
+rung anisogenic H2AK5ac: 0 pairs, not populated by EIC
+rung anisogenic H2AK9ac: 0 pairs, not populated by EIC
+rung anisogenic H2BK120ac: 0 pairs, not populated by EIC
+rung anisogenic H2BK12ac: 0 pairs, not populated by EIC
+rung anisogenic H2BK15ac: 0 pairs, not populated by EIC
+rung anisogenic H2BK20ac: 0 pairs, not populated by EIC
+rung anisogenic H2BK5ac: 0 pairs, not populated by EIC
+rung anisogenic H3F3A: 0 pairs, not populated by EIC
+rung anisogenic H3K14ac: 0 pairs, not populated by EIC
+rung anisogenic H3K18ac: 0 pairs, not populated by EIC
+rung anisogenic H3K23ac: 0 pairs, not populated by EIC
+rung anisogenic H3K23me2: 0 pairs, not populated by EIC
+rung anisogenic H3K27ac: 1 pairs, 1 cells, interval width inf (mean pair variance 0.1685; 1 pairs from 1 cells read)
+rung anisogenic H3K27me3: 1 pairs, 1 cells, interval width inf (mean pair variance 0.2629; 1 pairs from 1 cells read)
+rung anisogenic H3K36me3: 1 pairs, 1 cells, interval width inf (mean pair variance 0.2819; 1 pairs from 1 cells read)
+rung anisogenic H3K4ac: 0 pairs, not populated by EIC
+rung anisogenic H3K4me1: 1 pairs, 1 cells, interval width inf (mean pair variance 0.212; 1 pairs from 1 cells read)
+rung anisogenic H3K4me2: 0 pairs, not populated by EIC
+rung anisogenic H3K4me3: 0 pairs, not populated by EIC
+rung anisogenic H3K56ac: 0 pairs, not populated by EIC
+rung anisogenic H3K79me1: 0 pairs, not populated by EIC
+rung anisogenic H3K79me2: 0 pairs, not populated by EIC
+rung anisogenic H3K9ac: 0 pairs, not populated by EIC
+rung anisogenic H3K9me1: 0 pairs, not populated by EIC
+rung anisogenic H3K9me2: 0 pairs, not populated by EIC
+rung anisogenic H3K9me3: 0 pairs, not populated by EIC
+rung anisogenic H3T11ph: 0 pairs, not populated by EIC
+rung anisogenic H4K12ac: 0 pairs, not populated by EIC
+rung anisogenic H4K20me1: 0 pairs, not populated by EIC
+rung anisogenic H4K5ac: 0 pairs, not populated by EIC
+rung anisogenic H4K8ac: 0 pairs, not populated by EIC
+rung anisogenic H4K91ac: 0 pairs, not populated by EIC
+rung anisogenic chipseq-control: 0 pairs, not populated by EIC
+rung other_experiment ATAC-seq: 2 pairs, 2 cells, interval width 0.33 (mean pair variance 0.6348; 2 pairs from 2 cells read)
+rung other_experiment DNase-seq: 8 pairs, 8 cells, interval width 0.3366 (mean pair variance 0.3892; 8 pairs from 8 cells read)
+rung other_experiment H2AFZ: 1 pairs, 1 cells, interval width inf (mean pair variance 0.1509; 1 pairs from 1 cells read)
+rung other_experiment H2AK5ac: 0 pairs, not populated by EIC
+rung other_experiment H2AK9ac: 0 pairs, not populated by EIC
+rung other_experiment H2BK120ac: 0 pairs, not populated by EIC
+rung other_experiment H2BK12ac: 1 pairs, 1 cells, interval width inf (mean pair variance 0.2462; 1 pairs from 1 cells read)
+rung other_experiment H2BK15ac: 0 pairs, not populated by EIC
+rung other_experiment H2BK20ac: 0 pairs, not populated by EIC
+rung other_experiment H2BK5ac: 0 pairs, not populated by EIC
+rung other_experiment H3F3A: 0 pairs, not populated by EIC
+rung other_experiment H3K14ac: 1 pairs, 1 cells, interval width inf (mean pair variance 0.3372; 1 pairs from 1 cells read)
+rung other_experiment H3K18ac: 1 pairs, 1 cells, interval width inf (mean pair variance 0.2112; 1 pairs from 1 cells read)
+rung other_experiment H3K23ac: 1 pairs, 1 cells, interval width inf (mean pair variance 0.3013; 1 pairs from 1 cells read)
+rung other_experiment H3K23me2: 0 pairs, not populated by EIC
+rung other_experiment H3K27ac: 7 pairs, 7 cells, interval width 0.1677 (mean pair variance 0.4182; 7 pairs from 7 cells read)
+rung other_experiment H3K27me3: 6 pairs, 6 cells, interval width 0.2722 (mean pair variance 0.4074; 6 pairs from 6 cells read)
+rung other_experiment H3K36me3: 8 pairs, 8 cells, interval width 0.2981 (mean pair variance 0.4033; 8 pairs from 8 cells read)
+rung other_experiment H3K4ac: 1 pairs, 1 cells, interval width inf (mean pair variance 0.2422; 1 pairs from 1 cells read)
+rung other_experiment H3K4me1: 7 pairs, 7 cells, interval width 0.2667 (mean pair variance 0.4017; 7 pairs from 7 cells read)
+rung other_experiment H3K4me2: 1 pairs, 1 cells, interval width inf (mean pair variance 0.2051; 1 pairs from 1 cells read)
+rung other_experiment H3K4me3: 12 pairs, 12 cells, interval width 0.1636 (mean pair variance 0.3694; 12 pairs from 12 cells read)
+rung other_experiment H3K56ac: 0 pairs, not populated by EIC
+rung other_experiment H3K79me1: 1 pairs, 1 cells, interval width inf (mean pair variance 0.2495; 1 pairs from 1 cells read)
+rung other_experiment H3K79me2: 1 pairs, 1 cells, interval width inf (mean pair variance 0.4709; 1 pairs from 1 cells read)
+rung other_experiment H3K9ac: 3 pairs, 3 cells, interval width 0.2171 (mean pair variance 0.3125; 3 pairs from 3 cells read)
+rung other_experiment H3K9me1: 0 pairs, not populated by EIC
+rung other_experiment H3K9me2: 0 pairs, not populated by EIC
+rung other_experiment H3K9me3: 6 pairs, 6 cells, interval width 0.3056 (mean pair variance 0.3884; 6 pairs from 6 cells read)
+rung other_experiment H3T11ph: 0 pairs, not populated by EIC
+rung other_experiment H4K12ac: 0 pairs, not populated by EIC
+rung other_experiment H4K20me1: 1 pairs, 1 cells, interval width inf (mean pair variance 0.3391; 1 pairs from 1 cells read)
+rung other_experiment H4K5ac: 0 pairs, not populated by EIC
+rung other_experiment H4K8ac: 2 pairs, 2 cells, interval width 0.7311 (mean pair variance 0.2171; 2 pairs from 2 cells read)
+rung other_experiment H4K91ac: 0 pairs, not populated by EIC
+rung other_experiment chipseq-control: 0 pairs, not populated by EIC
+rung other_cell_type ATAC-seq: 6 pairs, 3 cells, interval width 0.2713 (mean pair variance 0.6794; 6 pairs from 3 cells read)
+rung other_cell_type DNase-seq: 136 pairs, 16 cells, interval width 0.07081 (mean pair variance 0.4523; 30 pairs from 13 cells read)
+rung other_cell_type H2AFZ: 45 pairs, 9 cells, interval width 0.2099 (mean pair variance 0.3638; 30 pairs from 9 cells read)
+rung other_cell_type H2AK5ac: 10 pairs, 4 cells, interval width 0.1647 (mean pair variance 0.4312; 10 pairs from 4 cells read)
+rung other_cell_type H2AK9ac: 0 pairs, not populated by EIC
+rung other_cell_type H2BK120ac: 10 pairs, 4 cells, interval width 0.1989 (mean pair variance 0.3479; 10 pairs from 4 cells read)
+rung other_cell_type H2BK12ac: 10 pairs, 4 cells, interval width 0.1366 (mean pair variance 0.3768; 10 pairs from 4 cells read)
+rung other_cell_type H2BK15ac: 6 pairs, 3 cells, interval width 0.3329 (mean pair variance 0.3438; 6 pairs from 3 cells read)
+rung other_cell_type H2BK20ac: 1 pairs, 1 cells, interval width inf (mean pair variance 0.44; 1 pairs from 1 cells read)
+rung other_cell_type H2BK5ac: 10 pairs, 4 cells, interval width 0.09969 (mean pair variance 0.3856; 10 pairs from 4 cells read)
+rung other_cell_type H3F3A: 0 pairs, not populated by EIC
+rung other_cell_type H3K14ac: 10 pairs, 4 cells, interval width 0.1976 (mean pair variance 0.4058; 10 pairs from 4 cells read)
+rung other_cell_type H3K18ac: 15 pairs, 5 cells, interval width 0.1657 (mean pair variance 0.35; 15 pairs from 5 cells read)
+rung other_cell_type H3K23ac: 3 pairs, 2 cells, interval width 2.143 (mean pair variance 0.4008; 3 pairs from 2 cells read)
+rung other_cell_type H3K23me2: 1 pairs, 1 cells, interval width inf (mean pair variance 0.3767; 1 pairs from 1 cells read)
+rung other_cell_type H3K27ac: 300 pairs, 24 cells, interval width 0.1536 (mean pair variance 0.4214; 30 pairs from 19 cells read)
+rung other_cell_type H3K27me3: 171 pairs, 18 cells, interval width 0.1207 (mean pair variance 0.4443; 30 pairs from 14 cells read)
+rung other_cell_type H3K36me3: 300 pairs, 24 cells, interval width 0.09245 (mean pair variance 0.355; 30 pairs from 16 cells read)
+rung other_cell_type H3K4ac: 15 pairs, 5 cells, interval width 0.1453 (mean pair variance 0.3839; 15 pairs from 5 cells read)
+rung other_cell_type H3K4me1: 210 pairs, 20 cells, interval width 0.1373 (mean pair variance 0.4807; 30 pairs from 13 cells read)
+rung other_cell_type H3K4me2: 55 pairs, 10 cells, interval width 0.1937 (mean pair variance 0.3594; 30 pairs from 9 cells read)
+rung other_cell_type H3K4me3: 528 pairs, 32 cells, interval width 0.1272 (mean pair variance 0.3171; 30 pairs from 13 cells read)
+rung other_cell_type H3K56ac: 3 pairs, 2 cells, interval width 0.6346 (mean pair variance 0.2851; 3 pairs from 2 cells read)
+rung other_cell_type H3K79me1: 15 pairs, 5 cells, interval width 0.06107 (mean pair variance 0.3549; 15 pairs from 5 cells read)
+rung other_cell_type H3K79me2: 36 pairs, 8 cells, interval width 0.09633 (mean pair variance 0.474; 30 pairs from 7 cells read)
+rung other_cell_type H3K9ac: 78 pairs, 12 cells, interval width 0.1089 (mean pair variance 0.2683; 30 pairs from 10 cells read)
+rung other_cell_type H3K9me1: 1 pairs, 1 cells, interval width inf (mean pair variance 0.36; 1 pairs from 1 cells read)
+rung other_cell_type H3K9me2: 0 pairs, not populated by EIC
+rung other_cell_type H3K9me3: 190 pairs, 19 cells, interval width 0.1341 (mean pair variance 0.3838; 30 pairs from 15 cells read)
+rung other_cell_type H3T11ph: 0 pairs, not populated by EIC
+rung other_cell_type H4K12ac: 0 pairs, not populated by EIC
+rung other_cell_type H4K20me1: 15 pairs, 5 cells, interval width 0.08418 (mean pair variance 0.4514; 15 pairs from 5 cells read)
+rung other_cell_type H4K5ac: 3 pairs, 2 cells, interval width 1.138 (mean pair variance 0.4693; 3 pairs from 2 cells read)
+rung other_cell_type H4K8ac: 15 pairs, 5 cells, interval width 0.2376 (mean pair variance 0.2857; 15 pairs from 5 cells read)
+rung other_cell_type H4K91ac: 10 pairs, 4 cells, interval width 0.08861 (mean pair variance 0.2935; 10 pairs from 4 cells read)
+rung other_cell_type chipseq-control: 703 pairs, 37 cells, interval width 0.08355 (mean pair variance 0.3759; 30 pairs from 21 cells read)
+second-experiment rows: 71 (other lab 35, same lab 36)
+check: PASS
+check_dataset exit=0
+
+=== step 4 add-on eval set 11:05:44
+add-on evalset: 13 validation targets with a second experiment, 13 evaluation-only targets, 13 other_experiment pair ids -> /project/def-maxwl/mforooz/ONION/CO-D2/eval/eic_v1_2x/evalset.json
+regions: 256 x 16384 bins; fit regions: 16
+imputation-scorable H3K27ac: 0 validation targets
+imputation-scorable H3K27me3: 2 validation targets
+imputation-scorable H3K36me3: 4 validation targets
+imputation-scorable H3K4me1: 2 validation targets
+imputation-scorable H3K4me2: 0 validation targets
+imputation-scorable H3K4me3: 6 validation targets
+imputation-scorable H3K79me2: 0 validation targets
+imputation-scorable H3K9ac: 2 validation targets
+imputation-scorable H3K9me3: 2 validation targets
+correction-scorable H2AFZ: 0 never-trained non-subset pairs
+correction-scorable H3K27ac: 0 never-trained non-subset pairs
+correction-scorable H3K27me3: 0 never-trained non-subset pairs
+correction-scorable H3K36me3: 0 never-trained non-subset pairs
+correction-scorable H3K4me1: 0 never-trained non-subset pairs
+correction-scorable H3K4me2: 0 never-trained non-subset pairs
+correction-scorable H3K4me3: 0 never-trained non-subset pairs
+correction-scorable H3K79me2: 0 never-trained non-subset pairs
+correction-scorable H3K9ac: 0 never-trained non-subset pairs
+correction-scorable H3K9me3: 0 never-trained non-subset pairs
+correction-scorable H4K20me1: 0 never-trained non-subset pairs
+problems: 0
+evalset check exit=0
+
+=== step 5 layer pair file (all pairs, train and val) 11:05:51
+Traceback (most recent call last):
+  File "/project/6014832/mforooz/onion_kit/COD2/tools/onion_eval/evalset.py", line 972, in <module>
+    sys.exit(main())
+  File "/project/6014832/mforooz/onion_kit/COD2/tools/onion_eval/evalset.py", line 952, in main
+    ev = build(a.tables, a.out, strata=a.strata, n_regions=a.n_regions,
+  File "/project/6014832/mforooz/onion_kit/COD2/tools/onion_eval/evalset.py", line 566, in build
+    cands = candidate_blocks(genome_dir(tables), region_bins)
+  File "/project/6014832/mforooz/onion_kit/COD2/tools/onion_eval/evalset.py", line 241, in candidate_blocks
+    sizes = read_chrom_sizes(gdir / "chrom_sizes.json")
+  File "/project/6014832/mforooz/onion_kit/COD2/tools/onion_eval/evalset.py", line 231, in read_chrom_sizes
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+  File "/cvmfs/soft.computecanada.ca/easybuild/software/2023/x86-64-v4/Compiler/gcccore/python/3.10.13/lib/python3.10/pathlib.py", line 1134, in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+  File "/cvmfs/soft.computecanada.ca/easybuild/software/2023/x86-64-v4/Compiler/gcccore/python/3.10.13/lib/python3.10/pathlib.py", line 1119, in open
+    return self._accessor.open(self, mode, buffering, encoding, errors,
+FileNotFoundError: [Errno 2] No such file or directory: '/project/6014832/mforooz/ONION/CO-D2/genome/chrom_sizes.json'
+layer pair file exit=1
+
+=== step 6 pair smoke on every other_experiment pair 11:05:54
+pair smoke exit=0
+=== done Tue Nov 17 11:07:14 UTC 2026
+[co-d2] exit=0

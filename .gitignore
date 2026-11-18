@@ -43,3 +43,8 @@ cruxvault/raw/
 # is what stops that here. Converting a folder = one `!` line below.
 cruxvault/results/*
 !cruxvault/results/t138/
+!cruxvault/results/ablations_closeout/
+!cruxvault/results/closeout_D2/
+!cruxvault/results/closeout_E2/
+!cruxvault/results/closeout_E4/
+!cruxvault/results/region_sampling_checks/
