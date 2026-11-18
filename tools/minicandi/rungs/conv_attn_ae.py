@@ -111,8 +111,6 @@ def check_rung(cfg: dict) -> None:
         raise ValueError(f"{NAME} is rung {RUNG}; config has rung {r!r}")
     if cfg.get("two_step"):
         raise NotApplicable(TWO_STEP_MESSAGE)
-    if max(M.res_subs_of(cfg)) > 1:               # item A7: the decoupled arms are rungs 2 and 4
-        raise NotApplicable("res_in_sub / res_out_sub are built in rungs 2 and 4 only")
 
 
 def resolve_config(config: dict | None) -> dict:
@@ -128,6 +126,8 @@ class Model(MiniCandi):
         super().__init__()
         cfg = resolve_config(config)
         check_rung(cfg)
+        if max(M.res_subs_of(cfg)) > 1:               # item A7: the decoupled arms are rungs 2 and 4
+            raise NotApplicable("res_in_sub / res_out_sub are built in rungs 2 and 4 only")
         # tuning knobs (round-2 tuning, default-off: absent = the module constants)
         n_down = int(cfg.get("n_down", N_DOWN))
         n_layers = int(cfg.get("attn_layers", N_LAYERS))
