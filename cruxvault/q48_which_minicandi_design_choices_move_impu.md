@@ -38,7 +38,7 @@ _(optional: the pre-registered rules — endpoints, thresholds, scope — locked
 **14 children** · open 6, leaning 8, settled 0, parked 0 · 1 finding(s) on this question
 
 - `q49` _(Q)_ [[q49_does_the_chip_seq_control_help_minicandi|Does the ChIP-seq control help miniCANDI as an input assay and as a predicted output?]] — *leaning · weak*
-- `q50` _(Q)_ [[q50_does_the_leave_one_out_average_of_the_tr|Does the leave-one-out average of the training cell types, given as an input, help miniCANDI?]] — *leaning · weak*
+- `q50` _(Q)_ [[q50_does_the_leave_one_out_average_of_the_tr|Does the leave-one-out average of the training cell types, given as an input, help miniCANDI?]] — *leaning · moderate*
 - `q51` _(Q)_ [[q51_does_two_step_correction_through_a_base_|Does two-step correction through a base covariate set help miniCANDI, with native or fixed base depth?]] — *leaning · moderate*
 - `q52` _(Q)_ [[q52_do_the_dna_source_and_the_way_dna_featur|Do the DNA source and the way DNA features join the count features matter for miniCANDI?]] — *leaning · weak*
 - `q53` _(Q)_ [[q53_does_the_form_of_the_covariate_embedding|Does the form of the covariate embedding (numeric only, per-value numeric, dropout) matter for miniCANDI?]] — *leaning · weak*

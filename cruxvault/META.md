@@ -93,8 +93,8 @@ Root: [[candii]]
     - ○ `q71` [Q] [[q71_does_the_architecture_order_at_equal_tra|**Does the architecture order at equal training windows hold when every architecture gets the same training compute (2.4e15 FLOPs)?**]] — *open*
   - ◐ `q48` [Q] [[q48_which_minicandi_design_choices_move_impu|**Which miniCANDI design choices move imputation, correction or calibration beyond the seed range on the conv autoencoder, conv + attention and the U-Net at about 1.0 M parameters?**]] — *leaning* · moderate
     - ◐ `q49` [Q] [[q49_does_the_chip_seq_control_help_minicandi|**Does the ChIP-seq control help miniCANDI as an input assay and as a predicted output?**]] — *leaning* · weak
-    - ◐ `q50` [Q] [[q50_does_the_leave_one_out_average_of_the_tr|**Does the leave-one-out average of the training cell types, given as an input, help miniCANDI?**]] — *leaning* · weak
-      - ○ `h43` [H] [[h43_on_all_256_regions_the_leave_one_out_ave|On all 256 regions, the leave-one-out average input keeps its place in the U-Net mix-and-match pool: better beyond the seed range on one goal term and worse beyond on none]] — *open*
+    - ◐ `q50` [Q] [[q50_does_the_leave_one_out_average_of_the_tr|**Does the leave-one-out average of the training cell types, given as an input, help miniCANDI?**]] — *leaning* · moderate
+      - ◐ `h43` [H] [[h43_on_all_256_regions_the_leave_one_out_ave|On all 256 regions, the leave-one-out average input keeps its place in the U-Net mix-and-match pool: better beyond the seed range on one goal term and worse beyond on none]] — *leaning* · moderate · supports
     - ◐ `q51` [Q] [[q51_does_two_step_correction_through_a_base_|**Does two-step correction through a base covariate set help miniCANDI, with native or fixed base depth?**]] — *leaning* · moderate
       - ○ `h42` [H] [[h42_on_all_256_regions_neither_two_step_arm_|On all 256 regions, neither two-step arm (native or fixed base depth) raises the composite of any of the three models by twice the seed range while keeping every goal term within twice the range]] — *open*
     - ◐ `q52` [Q] [[q52_do_the_dna_source_and_the_way_dna_featur|**Do the DNA source and the way DNA features join the count features matter for miniCANDI?**]] — *leaning* · weak
@@ -126,6 +126,6 @@ Root: [[candii]]
 ## Dashboard
 
 - **Questions** (74): open 25 · leaning 39 · settled 10 · parked 0
-- **Hypotheses** (42): open 12 · leaning 18 · settled 6 · parked 6
-- **Confidence**: weak 23 · moderate 34 · strong 16
-- **Findings**: 128
+- **Hypotheses** (42): open 11 · leaning 19 · settled 6 · parked 6
+- **Confidence**: weak 22 · moderate 36 · strong 16
+- **Findings**: 133

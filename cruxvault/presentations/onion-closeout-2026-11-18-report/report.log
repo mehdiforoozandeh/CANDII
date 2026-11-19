@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.24 (TeX Live 2022) (preloaded format=pdflatex 2022.7.11)  18 NOV 2026 12:43
+This is pdfTeX, Version 3.141592653-2.6-1.40.24 (TeX Live 2022) (preloaded format=pdflatex 2022.7.11)  18 NOV 2026 18:08
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1068,6 +1068,9 @@ Overfull \hbox (31.92328pt too wide) in paragraph at lines 1096--1107
  []
 
 
+Underfull \vbox (badness 10000) has occurred while \output is active []
+
+ [12]
 Underfull \hbox (badness 4927) in paragraph at lines 1122--1122
 []|\OT1/cmr/m/n/9 conv autoen-coder, conv +
  []
@@ -1128,6 +1131,11 @@ Underfull \hbox (badness 10000) in paragraph at lines 1133--1133
  []
 
 
+Underfull \hbox (badness 10000) in paragraph at lines 1133--1134
+[]|\OT1/cmr/m/n/9 provisional (U-Net
+ []
+
+
 Underfull \hbox (badness 10000) in paragraph at lines 1135--1135
 []|\OT1/cmr/m/n/9 weak (no
  []
@@ -1138,9 +1146,6 @@ Underfull \hbox (badness 10000) in paragraph at lines 1135--1135
  []
 
 
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [12]
 Underfull \vbox (badness 10000) has occurred while \output is active []
 
  [13]
@@ -1165,11 +1170,11 @@ Package rerunfilecheck Info: File `report.out' has not changed.
 Here is how much of TeX's memory you used:
  33948 strings out of 478268
  804501 string characters out of 5846347
- 1347993 words of memory out of 5000000
+ 1348821 words of memory out of 5000000
  51545 multiletter control sequences out of 15000+600000
  493574 words of font info for 117 fonts, out of 8000000 for 9000
  1151 hyphenation exceptions out of 8191
- 85i,19n,90p,4743b,2866s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 85i,19n,90p,4755b,2866s stack positions out of 10000i,1000n,20000p,200000b,200000s
 {/usr/local/texlive/2022/texmf-dist/fonts/enc/dvips/cm-super/cm-super-ts1.enc
 }</usr/local/texlive/2022/texmf-dist/fonts/type1/public/amsfonts/cm/cmbsy10.pfb
 ></usr/local/texlive/2022/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb>
@@ -1197,7 +1202,7 @@ s/type1/public/amsfonts/cm/cmti10.pfb></usr/local/texlive/2022/texmf-dist/fonts
 ype1/public/amsfonts/cm/cmti9.pfb></usr/local/texlive/2022/texmf-dist/fonts/typ
 e1/public/amsfonts/cm/cmtt10.pfb></usr/local/texlive/2022/texmf-dist/fonts/type
 1/public/cm-super/sfrm1000.pfb>
-Output written on report.pdf (16 pages, 402137 bytes).
+Output written on report.pdf (16 pages, 402771 bytes).
 PDF statistics:
  368 PDF objects out of 1000 (max. 8388607)
  295 compressed objects within 3 object streams

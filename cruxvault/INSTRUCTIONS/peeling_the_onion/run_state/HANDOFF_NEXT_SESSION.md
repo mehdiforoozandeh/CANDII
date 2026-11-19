@@ -94,3 +94,10 @@ The PI closed the peeling-the-onion sprint. The research tree and the task list 
 - **Scores on Nibi that are not in the vault.** The 5 baseline scorings of the second-experiment add-on (Nibi jobs 27664415, 27664417, 27664418, 27664419, 27664422; folder `ONION/CO-D2`) are done and were not copied. Task t361 holds this.
 - **Not verified.** The 1 bp tables (task t354). The numbers of the supervisor deck are typed literals (task t367).
 - **PI actions.** Review and merge of PR 61 (t365). Cancel of Fir jobs 4535347 to 4535923 after the Nibi scores are on disk (t355). The 14 archived kits (t366). The 35 worktrees and chunk branches (t356).
+
+## Added 2026-11-19 01:30 UTC: read at 50 of 62 scores
+
+- The rules were applied to 50 scored run-seeds (`results/rescoring_p256/read_20261119T0110Z/`). Five of six rules are decided on 256 regions: covariate use, all views, fixed input depth, average input (stays in the U-Net pool only), imputation weight 4 (candidate for conv + attention only). Findings f131 to f134.
+- Only two-step correction waits. Its 12 run-seeds all have live jobs on Nibi (no job held), with a 12-hour limit on the prediction parts. If the laptop session is closed, check for a timed-out prediction part with `run_state/rescoring_rescuer.sh`.
+- The baseline scores of the second experiments are now in the vault (`results/closeout_D2/addon_baselines_2026-11-18/`, finding f135). Task t361 keeps only the model scores.
+- Fir is back. The 570 queued Fir rescoring copies (jobs 4535347 to 4535923) are still pending; the PI cancels them when the 12 two-step scores are on disk.

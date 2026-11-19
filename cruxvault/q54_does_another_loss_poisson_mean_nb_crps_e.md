@@ -35,8 +35,9 @@ Decides the training objective document.
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**0 children** · open 0, leaning 0, settled 0, parked 0 · 2 finding(s) on this question
+**0 children** · open 0, leaning 0, settled 0, parked 0 · 3 finding(s) on this question
 
 - `f96` finding (moderate) [[f96_a_consistent_null_across_three_models_on|A consistent null across three models; one single-model gain.]]
 - `f107` finding (moderate) [[f107_both_effects_exceed_twice_the_seed_range|Both effects exceed twice the seed range on 256 regions, but the U-Net arm…]]
+- `f133` finding (moderate) [[f133_all_three_models_now_have_3_seeds_on_256|All three models now have 3 seeds on 256 regions; the choice for conv +…]]
 <!-- crux:ledger:end -->
