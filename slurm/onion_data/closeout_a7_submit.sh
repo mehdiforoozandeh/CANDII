@@ -20,6 +20,10 @@
 #             eic_res_v1 tables from the store, `verify --all --no-rescan` (store only), the eval
 #             set of the resolution study (64 eval + 16 fit regions drawn inside the 256 eval
 #             regions of the store, seed 0) and its check. 1 job, 8 CPUs.
+#   verify    (when the tables job built $RT but did not pass verify) 2 jobs: (1) `verify --all
+#             --no-rescan` over $RT with VERIFY_WORKERS workers, VERIFY_MEM, VERIFY_TIME; (2) the eval
+#             set build and check of the part tables (same code), --dependency=afterok on (1).
+#             Refused if $REV exists. Defaults from probe job 27849360 (see VERIFY_* below).
 #   variance  scale_variance.py on the validation views (chains 1-5-25-125 and 1-5-25-50). 1 job;
 #             depends on the tables job when both parts are given, else needs $RT/build_info.json.
 #   arms      per (arm, rung, seed): train (res_dataset.py) -> predict (res_score.py, once) ->
@@ -30,13 +34,14 @@
 #             DESIGN=full: 9 arms on conv AE and U-Net, 7 on conv + attention, 3 seeds = 75 runs.
 #
 # Env: DRY_RUN (default 1: print, submit nothing), KIT_ID (default COA7), DESIGN (reduced|full),
-#      SEEDS (default "0 1 2"), TASK_GIB (default 6), MAX_PAR (array throttle, default 40).
+#      SEEDS (default "0 1 2"), TASK_GIB (default 6), MAX_PAR (array throttle, default 40),
+#      VERIFY_WORKERS, VERIFY_MEM, VERIFY_TIME (part verify; defaults below).
 set -uo pipefail
 DRY_RUN="${DRY_RUN:-1}"; KIT_ID="${KIT_ID:-COA7}"; DESIGN="${DESIGN:-reduced}"
 SEEDS="${SEEDS:-0 1 2}"; TASK_GIB="${TASK_GIB:-6}"; MAX_PAR="${MAX_PAR:-40}"
 PARTS="${*:-}"
-[ -n "$PARTS" ] || { echo "usage: closeout_a7_submit.sh probe|plan|recount|tables|variance|arms ..."; exit 2; }
-for p in $PARTS; do case "$p" in probe|plan|recount|tables|variance|arms) ;;
+[ -n "$PARTS" ] || { echo "usage: closeout_a7_submit.sh probe|plan|recount|tables|verify|variance|arms ..."; exit 2; }
+for p in $PARTS; do case "$p" in probe|plan|recount|tables|verify|variance|arms) ;;
   *) echo "unknown part '$p'"; exit 2;; esac; done
 
 O=/project/def-maxwl/mforooz/ONION
@@ -298,22 +303,15 @@ case " $PARTS " in *" recount "*)
 esac
 
 # ------------------------------------------------------------------ tables
-PY_TABLES="
+PY_RUN="
 import csv, json, os, subprocess, sys
-bad = []
-for r in csv.DictReader(open('$PLAN'), delimiter='\t'):
-    pj = os.path.join('$STORE', r['measurement_id'], 'provenance.json')
-    res = (json.load(open(pj)).get('readset_check') or {}).get('result') if os.path.isfile(pj) else 'missing'
-    if res != 'pass':
-        bad.append((r['measurement_id'], str(res)[:80]))
-if bad:
-    print('REFUSED: views without a passed read-set check:', len(bad), bad[:10]); sys.exit(3)
 def run(*a):
     print('+', ' '.join(a), flush=True)
     r = subprocess.run([sys.executable, *a])
     if r.returncode: sys.exit(r.returncode)
-run('tools/onion_data/recount.py', 'tables', '--eic-v1', '$T', '--store', '$STORE', '--out', '$RT')
-run('tools/onion_data/recount.py', 'verify', '--all', '--tables', '$RT', '--no-rescan', '--workers', '8')
+"
+# the eval set build and check (part tables after verify; part verify, job 2)
+PY_EVALSET="
 regs = [l.split('\t') for l in open('$RT/regions.tsv').read().splitlines()[1:]]
 with open('$RT/eval_regions.bed', 'w') as fh:
     for i, c, s, role in regs:
@@ -329,11 +327,38 @@ both = set(map(tuple, ev['regions'])) & set(map(tuple, ev['fit_regions']))
 print('eval regions', len(ev['regions']), 'fit regions', len(ev['fit_regions']), 'shared', len(both))
 if both: sys.exit(4)
 "
+PY_TABLES="$PY_RUN
+bad = []
+for r in csv.DictReader(open('$PLAN'), delimiter='\t'):
+    pj = os.path.join('$STORE', r['measurement_id'], 'provenance.json')
+    res = (json.load(open(pj)).get('readset_check') or {}).get('result') if os.path.isfile(pj) else 'missing'
+    if res != 'pass':
+        bad.append((r['measurement_id'], str(res)[:80]))
+if bad:
+    print('REFUSED: views without a passed read-set check:', len(bad), bad[:10]); sys.exit(3)
+run('tools/onion_data/recount.py', 'tables', '--eic-v1', '$T', '--store', '$STORE', '--out', '$RT')
+run('tools/onion_data/recount.py', 'verify', '--all', '--tables', '$RT', '--no-rescan', '--workers', '8')
+$PY_EVALSET"
 case " $PARTS " in *" tables "*)
   echo "--- tables -> $RT, $REV/evalset.json"
   [ -e "$RT" ] && die "$RT exists (frozen tables are never overwritten)"
   [ "$DRY_RUN" = 1 ] || [ -s "$PLAN" ] || die "no plan $PLAN"
   JT=$(sb tables 04:00:00 8 32000M - -c "$PY_TABLES") ;;
+esac
+
+# ------------------------------------------------------------------ verify
+# Job 27692994 (verify --all --no-rescan, 8 workers in 32000M) hit 6 OOM kills and its 16 h limit.
+# Probe 27849360 (1 CPU, 64000M; the 3 largest views, 768 regions with halves, one at a time):
+# job MaxRSS 10,425,312K = 10,181 MiB; 1.5 x 10,181 = 15,272 MiB per worker; 8 x 16,000 = 128,000 MiB.
+# Wall time 13-16 s per large view, so 412 views on 8 workers take minutes; 2 h is the margin.
+VERIFY_WORKERS="${VERIFY_WORKERS:-8}"; VERIFY_MEM="${VERIFY_MEM:-128000M}"; VERIFY_TIME="${VERIFY_TIME:-02:00:00}"
+case " $PARTS " in *" verify "*)
+  echo "--- verify -> $RT (verify --all --no-rescan, $VERIFY_WORKERS workers, $VERIFY_MEM, $VERIFY_TIME); then $REV/evalset.json"
+  [ -s "$RT/build_info.json" ] || [ "$DRY_RUN" = 1 ] || die "no tables $RT (run the part tables first)"
+  [ -e "$REV" ] && die "$REV exists (the eval set is never overwritten)"
+  JV=$(sb verify "$VERIFY_TIME" "$VERIFY_WORKERS" "$VERIFY_MEM" - tools/onion_data/recount.py verify --all \
+    --tables "$RT" --no-rescan --workers "$VERIFY_WORKERS")
+  sb evalset 04:00:00 2 32000M "$JV" -c "$PY_RUN$PY_EVALSET" >/dev/null ;;
 esac
 
 # ------------------------------------------------------------------ variance

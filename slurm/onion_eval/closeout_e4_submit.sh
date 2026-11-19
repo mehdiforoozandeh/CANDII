@@ -22,6 +22,11 @@
 #   report  1 job (1 CPU x 0.5 h): ladder.py report over the layers pair values, layers.tsv
 #           (telescoping check), the 4 mixed-model tables and design.tsv -> $E/ladder/.
 #
+# EXCLUDE_EXPERIMENTS=ACC[,ACC...] (default empty: unchanged) passes --exclude-experiments to layers.py
+# (stages smoke and layers): pairs of these experiments leave before the common depth. The layers and
+# report stages then use $E/layers_excl_<ACC_...> and $E/ladder_excl_<ACC_...> (pair list and design
+# are copied from $E/layers when present), so an earlier output is never overwritten or taken as done.
+#
 # Names: O=/project/def-maxwl/mforooz/ONION, E=$O/CO-E4, K=<kit root>/$KIT_ID,
 # TX = the D2 add-on tables, EVL = the D2 layers eval set (holds no pseudoreplicate pair: the pair list
 # adds them, ladder.py pairlist).
@@ -40,6 +45,9 @@ SMOKE_ASSAYS="${SMOKE_ASSAYS:-H3K36me3}"
 MIXED_TIME="${MIXED_TIME:-08:00:00}"
 MIXED_CPUS="${MIXED_CPUS:-4}"
 BANDS="fine peak domain broad"
+EXCL="${EXCLUDE_EXPERIMENTS:-}"
+XSUF=""; XARG=""
+[ -n "$EXCL" ] && { XSUF="_excl_$(echo "$EXCL" | tr ',' '_')"; XARG="--exclude-experiments $EXCL"; }
 SSH=(ssh -o BatchMode=yes -o ConnectTimeout=15)
 SB="module load python/3.10.13 >/dev/null 2>&1; sbatch --parsable --account=def-maxwl --gres=none"
 [ "$WHERE" = fir ] && SB+=" --exclude=fc10713,fc10715"
@@ -63,13 +71,13 @@ case "$E" in /scratch/*) echo "E must not be on /scratch" >&2; exit 2 ;; esac
 
 case "$STAGE" in
 smoke)
-  S=$E/smoke
+  S=$E/smoke$XSUF
   remote "mkdir -p $S $E/logs" >/dev/null
   j1=""; j2=""; j3=""
   if done_or_queued "$S/pairlist.json" co_e4_smoke_pl; then echo "skip smoke pair list"; else
     j1=$(remote "$SB --job-name=co_e4_smoke_pl --time=00:30:00 --cpus-per-task=1 --mem=4000M --output=$E/logs/%x_%j.out $RUN tools/onion_eval/ladder.py pairlist --evalset $EVL --tables $TX --assays $SMOKE_ASSAYS --out $S/pairlist.json --changes $S/pairlist_changes.tsv"); echo "pair list: $j1"; fi
   if done_or_queued "$S/layers.tsv" co_e4_smoke_layers; then echo "skip smoke layers"; else
-    j2=$(remote "$SB --job-name=co_e4_smoke_layers $(dep "$j1") --time=01:00:00 --cpus-per-task=4 --mem=16000M --output=$E/logs/%x_%j.out $RUN tools/onion_eval/layers.py run --tables $TX --evalset $S/pairlist.json --strata $STRATA --out $S/layers.tsv --pairs-out $S/pair_values.tsv.gz"); echo "layers: $j2"; fi
+    j2=$(remote "$SB --job-name=co_e4_smoke_layers $(dep "$j1") --time=01:00:00 --cpus-per-task=4 --mem=16000M --output=$E/logs/%x_%j.out $RUN tools/onion_eval/layers.py run --tables $TX --evalset $S/pairlist.json --strata $STRATA --out $S/layers.tsv --pairs-out $S/pair_values.tsv.gz $XARG"); echo "layers: $j2"; fi
   if done_or_queued "$S/mixed_fine.tsv" co_e4_smoke_mm; then echo "skip smoke mixed model"; else
     j3=$(remote "$SB --job-name=co_e4_smoke_mm --time=02:00:00 --cpus-per-task=2 --mem=16000M --output=$E/logs/%x_%j.out $RUN tools/onion_eval/mixed_model.py run --tables $TX --evalset $EVL --band fine --assays $SMOKE_ASSAYS --second-experiments --extra-factors lab --min-contrast-cells 3 --n-boot 20 --out $S/mixed_fine.tsv"); echo "mixed model: $j3"; fi
   d=$(echo "$j2 $j3" | xargs | tr ' ' ':')
@@ -77,15 +85,17 @@ smoke)
     j4=$(remote "$SB --job-name=co_e4_smoke_report $(dep "$d") --time=00:30:00 --cpus-per-task=1 --mem=4000M --output=$E/logs/%x_%j.out $RUN tools/onion_eval/ladder.py report --pairs $S/pair_values.tsv.gz --layers $S/layers.tsv --mixed $S/mixed_fine.tsv --n-boot 1000 --out-dir $S/ladder"); echo "report: $j4"; fi
   ;;
 layers)
-  L=$E/layers
+  L=$E/layers$XSUF
   remote "mkdir -p $L $E/logs" >/dev/null
+  # an excluded run reuses the pair list and design of the plain run (neither depends on the exclusion)
+  [ -n "$XSUF" ] && remote "for f in pairlist.json pairlist_changes.tsv design.tsv; do test -e $L/\$f || ! test -e $E/layers/\$f || cp -p $E/layers/\$f $L/; done" >/dev/null
   j1=""
   if done_or_queued "$L/pairlist.json" co_e4_pairlist; then echo "skip pair list"; else
     j1=$(remote "$SB --job-name=co_e4_pairlist --time=00:30:00 --cpus-per-task=1 --mem=4000M --output=$E/logs/%x_%j.out $RUN tools/onion_eval/ladder.py pairlist --evalset $EVL --tables $TX --out $L/pairlist.json --changes $L/pairlist_changes.tsv"); echo "pair list: $j1"; fi
   if done_or_queued "$L/design.tsv" co_e4_design; then echo "skip design"; else
     jd=$(remote "$SB --job-name=co_e4_design --time=00:30:00 --cpus-per-task=1 --mem=4000M --output=$E/logs/%x_%j.out $RUN tools/onion_eval/ladder.py design --tables $TX --out $L/design.tsv"); echo "design: $jd"; fi
-  if done_or_queued "$L/layers.tsv" co_e4_layers; then echo "skip layers"; else
-    j2=$(remote "$SB --job-name=co_e4_layers $(dep "$j1") --time=03:00:00 --cpus-per-task=4 --mem=32000M --output=$E/logs/%x_%j.out $RUN tools/onion_eval/layers.py run --tables $TX --evalset $L/pairlist.json --strata $STRATA --out $L/layers.tsv --pairs-out $L/pair_values.tsv.gz"); echo "layers: $j2"; fi
+  if done_or_queued "$L/layers.tsv" co_e4_layers$XSUF; then echo "skip layers"; else
+    j2=$(remote "$SB --job-name=co_e4_layers$XSUF $(dep "$j1") --time=03:00:00 --cpus-per-task=4 --mem=32000M --output=$E/logs/%x_%j.out $RUN tools/onion_eval/layers.py run --tables $TX --evalset $L/pairlist.json --strata $STRATA --out $L/layers.tsv --pairs-out $L/pair_values.tsv.gz $XARG"); echo "layers: $j2"; fi
   ;;
 mixed)
   M=$E/mixed
@@ -96,12 +106,13 @@ mixed)
   done
   ;;
 report)
-  need "$E/layers/pair_values.tsv.gz" "$E/layers/layers.tsv" "$E/layers/design.tsv"
+  L=$E/layers$XSUF
+  need "$L/pair_values.tsv.gz" "$L/layers.tsv" "$L/design.tsv"
   MX=""   # the mixed-model tables that exist (the report runs without them, and says so)
   for b in $BANDS; do "${SSH[@]}" "$WHERE" "test -e $E/mixed/mixed_$b.tsv" && MX+=" $E/mixed/mixed_$b.tsv"; done
   [ -n "$MX" ] && MX="--mixed$MX" || echo "no mixed-model table yet: the report has no mixed-model section"
-  if done_or_queued "$E/ladder/ladder.md" co_e4_report; then echo "skip report"; else
-    j=$(remote "$SB --job-name=co_e4_report --time=00:30:00 --cpus-per-task=1 --mem=8000M --output=$E/logs/%x_%j.out $RUN tools/onion_eval/ladder.py report --pairs $E/layers/pair_values.tsv.gz --tables $TX --layers $E/layers/layers.tsv --design $E/layers/design.tsv $MX --n-boot 1000 --out-dir $E/ladder"); echo "report: $j"; fi
+  if done_or_queued "$E/ladder$XSUF/ladder.md" co_e4_report$XSUF; then echo "skip report"; else
+    j=$(remote "$SB --job-name=co_e4_report$XSUF --time=00:30:00 --cpus-per-task=1 --mem=8000M --output=$E/logs/%x_%j.out $RUN tools/onion_eval/ladder.py report --pairs $L/pair_values.tsv.gz --tables $TX --layers $L/layers.tsv --design $L/design.tsv $MX --n-boot 1000 --out-dir $E/ladder$XSUF"); echo "report: $j"; fi
   ;;
 *) echo "unknown stage $STAGE" >&2; exit 2 ;;
 esac

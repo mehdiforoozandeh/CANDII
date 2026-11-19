@@ -10,7 +10,10 @@
 #              with lab, antibody, donor, platform filled), check, add-on eval set, layer pair file,
 #              pair smoke of every pair (slurm/onion_data/closeout_d2_prep.sh). Writes under $D only.
 #   layers     1 job, 8 CPU x 12 h = 96 CPU-h at most (E7a measured about 50): layers.py run on the
-#              add-on tables, all pairs (train and val) -> $D/layers/layers.tsv
+#              add-on tables, all pairs (train and val) -> $D/layers/layers.tsv. With
+#              EXCLUDE_EXPERIMENTS=ACC[,ACC...] (default empty: unchanged) it passes
+#              --exclude-experiments (pairs of these experiments leave before the common depth) and
+#              writes $D/layers_excl_<ACC_...>/layers.tsv (+ layers.tsv.exclusions.json) instead.
 #   baselines  5 jobs, 2 CPU x 14 h = 28 CPU-h each at most, 140 in all: marginal_nb,
 #              position_average, depth_only_scaling, pseudoreplicate_floor (score.sh --addon) and the
 #              retrieval baseline (baseline_retrieval.py --addon) -> $D/eval/<BASE>x/baselines/<name>/seed0
@@ -47,6 +50,9 @@ ROWS="${ROWS:-2015,2023,2028,2039,2040,2042,2049,2052,2067,2072,2075,2076,2077,2
 SSH=(ssh -o BatchMode=yes -o ConnectTimeout=15)
 SB="module load python/3.10.13 >/dev/null 2>&1; sbatch --parsable --account=def-maxwl --gres=none"
 [ "$WHERE" = fir ] && SB+=" --exclude=fc10713,fc10715"
+EXCL="${EXCLUDE_EXPERIMENTS:-}"
+XSUF=""; XARG=""
+[ -n "$EXCL" ] && { XSUF="_excl_$(echo "$EXCL" | tr ',' '_')"; XARG="--exclude-experiments $EXCL"; }
 SCORE="--time=14:00:00 --cpus-per-task=2 --mem=20000M"   # E2 timing job 4448330: 11.7 h, RSS 12.3 GB, full eval set
 
 remote() {   # run one command on the cluster, or print it
@@ -73,8 +79,9 @@ prep)
   ;;
 layers)
   need "$TX/pairs.tsv" "$D/eval/${BASE}x/evalset_layers.json"
-  if done_or_queued "$D/layers/layers.tsv" co_d2_layers; then echo "skip layers: done or queued"; exit 0; fi
-  remote "mkdir -p $D/layers && $SB --job-name=co_d2_layers --time=12:00:00 --cpus-per-task=8 --mem=32000M --output=$D/logs/%x_%j.out $K/slurm/onion_kit/run.sh $K tools/onion_eval/layers.py run --tables $TX --evalset $D/eval/${BASE}x/evalset_layers.json --strata $O/eval/strata/masks.h5 --out $D/layers/layers.tsv"
+  LO=$D/layers$XSUF
+  if done_or_queued "$LO/layers.tsv" co_d2_layers$XSUF; then echo "skip layers: done or queued"; exit 0; fi
+  remote "mkdir -p $LO && $SB --job-name=co_d2_layers$XSUF --time=12:00:00 --cpus-per-task=8 --mem=32000M --output=$D/logs/%x_%j.out $K/slurm/onion_kit/run.sh $K tools/onion_eval/layers.py run --tables $TX --evalset $D/eval/${BASE}x/evalset_layers.json --strata $O/eval/strata/masks.h5 --out $LO/layers.tsv $XARG"
   ;;
 baselines)
   need "$EVX"

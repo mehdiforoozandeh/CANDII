@@ -70,8 +70,13 @@ also writes one row per (pair, stratum, band) with `var_d` = Var(d) of `pair_var
 value), the pair's rung, pair class, cell, split and common depth (PAIR_COLUMNS). `ladder.py report`
 reads it to build the assay-matched ladder without reading the counts again.
 
+Excluded experiments (off by default): `--exclude-experiments ACC[,ACC...]` drops every pair with one of
+these experiments (measurements.tsv `experiment`) on either side before the common depth is set, and
+writes `<out>.exclusions.json` (and `<pairs-out>.exclusions.json`): the accessions, the dropped pairs
+per assay and the common depth per assay. `ladder.py report` prints the sidecar of its --pairs file.
+
 CLI: python tools/onion_eval/layers.py run --tables <dir> --evalset <json> --out <layers.tsv>
-     [--pairs-out <pair_values.tsv.gz>]
+     [--pairs-out <pair_values.tsv.gz>] [--exclude-experiments ACC[,ACC...]]
 """
 from __future__ import annotations
 
@@ -653,7 +658,12 @@ def write_pair_values(pair_rows, path):
                             s, bd, "" if not np.isfinite(x) else repr(float(x))])
 
 
-def run(tables, evalset, out, strata_path=None, n_boot=1000, seed=0, pairs_out=None):
+def exclusions_path(path):
+    """The sidecar of an output written with --exclude-experiments: <path>.exclusions.json."""
+    return Path(str(path) + ".exclusions.json")
+
+
+def run(tables, evalset, out, strata_path=None, n_boot=1000, seed=0, pairs_out=None, exclude_experiments=()):
     tables = Path(tables)
     ev = json.loads(Path(evalset).read_text())
     meas = {r["measurement_id"]: r for r in _read_tsv(tables / "measurements.tsv")}
@@ -661,6 +671,20 @@ def run(tables, evalset, out, strata_path=None, n_boot=1000, seed=0, pairs_out=N
     want = ev.get("replicate_pairs")
     sel = [pairs[p] for p in want] if want is not None else list(pairs.values())
     sel = [p for p in sel if p["rung"] in RUNGS]
+    # --exclude-experiments: a pair with an excluded experiment on either side leaves before the common
+    # depth is set (entry 20 of the ready queue: one 15,201-read DNase-seq track set every DNase-seq depth)
+    excl = sorted(set(exclude_experiments or ()))
+    dropped = []
+    if excl:
+        def exp_of(mid):
+            return meas[mid].get("experiment", "")
+        dropped = [p for p in sel if exp_of(p["a"]) in excl or exp_of(p["b"]) in excl]
+        gone = {p["pair_id"] for p in dropped}
+        sel = [p for p in sel if p["pair_id"] not in gone]
+        seen = {m.get("experiment", "") for m in meas.values()}
+        for acc in excl:
+            if acc not in seen:
+                print(f"layers: --exclude-experiments {acc}: no measurement of this experiment", file=sys.stderr)
     regions = [(c, int(s)) for c, s in ev["regions"]]
     L = 2 ** J
     if strata_path is None:
@@ -727,6 +751,23 @@ def run(tables, evalset, out, strata_path=None, n_boot=1000, seed=0, pairs_out=N
     write_tsv(rows, out)
     if pairs_out is not None:
         write_pair_values(pair_rows, pairs_out)
+    sidecars = [exclusions_path(out)] + ([exclusions_path(pairs_out)] if pairs_out is not None else [])
+    if excl:
+        by_assay = {}
+        for p in dropped:
+            by_assay[p["assay"]] = by_assay.get(p["assay"], 0) + 1
+        note = dict(exclude_experiments=excl, n_pairs_dropped=len(dropped), dropped_by_assay=by_assay,
+                    dropped_pair_ids=sorted(p["pair_id"] for p in dropped),
+                    not_found=[a for a in excl if a not in {m.get("experiment", "") for m in meas.values()}],
+                    common_depth={a: float(d) for a, d in sorted(common.items())},
+                    rule="pairs with an excluded experiment on either side dropped before the common depth")
+        for sc in sidecars:
+            sc.write_text(json.dumps(note, indent=1) + "\n")
+        print(f"layers: excluded {','.join(excl)}: {len(dropped)} pairs dropped {by_assay}", file=sys.stderr)
+    else:
+        for sc in sidecars:   # a stale sidecar of an earlier excluded run would mislabel this output
+            if sc.exists():
+                sc.unlink()
     return rows
 
 
@@ -742,8 +783,14 @@ def main(argv=None):
     r.add_argument("--seed", type=int, default=0)
     r.add_argument("--pairs-out", default=None,
                    help="E4: also write the per-pair values (gzip TSV) for ladder.py report; default off")
+    r.add_argument("--exclude-experiments", default="",
+                   help="ACC[,ACC...]: drop every pair with one of these experiments on either side before the "
+                        "common depth is set; writes <out>.exclusions.json (and one beside --pairs-out). "
+                        "Default empty: no pair dropped, no sidecar")
     args = ap.parse_args(argv)
-    rows = run(args.tables, args.evalset, args.out, args.strata, args.n_boot, args.seed, args.pairs_out)
+    excl = [x for x in args.exclude_experiments.split(",") if x]
+    rows = run(args.tables, args.evalset, args.out, args.strata, args.n_boot, args.seed, args.pairs_out,
+               exclude_experiments=excl)
     empty = sorted({(x["assay_or_class"], x["rung"]) for x in rows if x["flag"] == FLAG_EMPTY})
     print(f"layers: {len(rows)} rows -> {args.out}; {len(empty)} (assay, rung) not populated by EIC")
     return 0

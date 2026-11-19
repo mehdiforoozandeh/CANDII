@@ -57,6 +57,68 @@ def test_pairs_out_off_leaves_layers_tsv_identical_and_values_match(sim, tmp_pat
     assert pv.read_bytes() == pv2.read_bytes()
 
 
+def _tables_with_shallow_experiment(sim, root, shallow="c0x1", factor=1e-3):
+    """The fixture tables with an `experiment` column, every track of `shallow` made 1000x shallower."""
+    pairs = [p for p in sim["pairs"] if p["rung"] in ("pseudoreplicate", "isogenic", "other_cell_type")]
+    tables, ev = TV._write_tables(sim, root, pairs)
+    path = tables / "measurements.tsv"
+    rows = LD._read_tsv(path)
+    for r in rows:
+        r["experiment"] = sim["meta"][r["measurement_id"]]["experiment"]
+        if r["experiment"] == shallow:
+            r["depth_reads"] = str(int(int(r["depth_reads"]) * factor))
+    with open(path, "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(rows[0]), delimiter="\t", lineterminator="\n")
+        w.writeheader()
+        w.writerows(rows)
+    meas = {r["measurement_id"]: r["experiment"] for r in rows}
+    hit = [p["pair_id"] for p in LD._read_tsv(tables / "pairs.tsv") if shallow in (meas[p["a"]], meas[p["b"]])]
+    return tables, ev, hit
+
+
+def test_exclude_experiments_default_is_unchanged(sim, tmp_path):
+    tables, ev, _ = _tables_with_shallow_experiment(sim, tmp_path)
+    a, b = tmp_path / "a.tsv", tmp_path / "b.tsv"
+    LY.run(tables, ev, a, strata_path=tmp_path / "none.h5", n_boot=50, pairs_out=tmp_path / "a.tsv.gz")
+    LY.run(tables, ev, b, strata_path=tmp_path / "none.h5", n_boot=50, pairs_out=tmp_path / "b.tsv.gz",
+           exclude_experiments=())
+    assert a.read_bytes() == b.read_bytes()
+    assert (tmp_path / "a.tsv.gz").read_bytes() == (tmp_path / "b.tsv.gz").read_bytes()
+    assert not LY.exclusions_path(a).exists() and not LY.exclusions_path(tmp_path / "a.tsv.gz").exists()
+    # the CLI with the option absent writes the same bytes
+    c = tmp_path / "c.tsv"
+    LY.main(["run", "--tables", str(tables), "--evalset", str(ev), "--out", str(c),
+             "--strata", str(tmp_path / "none.h5"), "--n-boot", "50"])
+    assert c.read_bytes() == a.read_bytes()
+
+
+def test_exclude_experiments_drops_pairs_and_raises_common_depth(sim, tmp_path):
+    tables, ev, hit = _tables_with_shallow_experiment(sim, tmp_path)
+    assert hit
+    pv0, pv1 = tmp_path / "pv0.tsv.gz", tmp_path / "pv1.tsv.gz"
+    LY.run(tables, ev, tmp_path / "l0.tsv", strata_path=tmp_path / "none.h5", n_boot=50, pairs_out=pv0)
+    LY.main(["run", "--tables", str(tables), "--evalset", str(ev), "--out", str(tmp_path / "l1.tsv"),
+             "--strata", str(tmp_path / "none.h5"), "--n-boot", "50", "--pairs-out", str(pv1),
+             "--exclude-experiments", "c0x1,ENCSR_NOT_THERE"])
+    r0, r1 = LD._read_tsv(pv0), LD._read_tsv(pv1)
+    assert set(hit) <= {r["pair_id"] for r in r0}
+    assert not set(hit) & {r["pair_id"] for r in r1}
+    d0, d1 = {float(r["depth"]) for r in r0}, {float(r["depth"]) for r in r1}
+    assert len(d0) == len(d1) == 1 and d1.pop() > 100 * d0.pop()
+    for sc in (LY.exclusions_path(tmp_path / "l1.tsv"), LY.exclusions_path(pv1)):
+        note = json.loads(sc.read_text())
+        assert note["exclude_experiments"] == ["ENCSR_NOT_THERE", "c0x1"]
+        assert note["n_pairs_dropped"] == len(hit) and note["dropped_by_assay"] == {"A": len(hit)}
+        assert note["not_found"] == ["ENCSR_NOT_THERE"]
+    # the ladder report names the exclusion
+    LD.main(["report", "--pairs", str(pv1), "--out-dir", str(tmp_path / "ld"), "--form", "one_sided",
+             "--n-boot", "20"])
+    assert "Excluded experiments" in (tmp_path / "ld" / "ladder.md").read_text()
+    LD.main(["report", "--pairs", str(pv0), "--out-dir", str(tmp_path / "ld0"), "--form", "one_sided",
+             "--n-boot", "20"])
+    assert "Excluded experiments" not in (tmp_path / "ld0" / "ladder.md").read_text()
+
+
 # ---------------------------------------------------------------------------------------------------
 # mixed_model.py --second-experiments
 

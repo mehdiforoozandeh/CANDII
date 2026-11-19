@@ -581,11 +581,16 @@ def quote_rule(mixed, design, min_cells=MIN_CELLS):
     return out
 
 
-def markdown(rows, tele=None, mixed=None, design=None, chain=None, form="one_sided", common=None, tables=None):
+def markdown(rows, tele=None, mixed=None, design=None, chain=None, form="one_sided", common=None, tables=None,
+             excluded=None):
     lines = ["# Replicate ladder (close-out item E4)", "",
              "Stratum all, band all. Increments are assay-matched pair values (0.5 E[(Y - Y')^2] of log1p "
              "counts at each assay's common depth); intervals are 95% cluster-bootstrap intervals over cells. "
              "No row is pooled across assay classes. Full table: ladder.tsv.", ""]
+    if excluded:
+        lines += [f"Excluded experiments (layers.py --exclude-experiments): "
+                  f"{', '.join(excluded['exclude_experiments'])}. Pairs dropped before the common depth: "
+                  f"{excluded['n_pairs_dropped']} ({excluded['dropped_by_assay']}).", ""]
     if form == "two_sided":
         lines += ["Form: two-sided (PI decision of 2026-11-17, row 5). The other_cell_type and other_experiment "
                   "rows subtract, pair by pair, 0.5 x (the isogenic pair value of the a-side experiment + that "
@@ -708,7 +713,12 @@ def cmd_report(args):
     design = _read_tsv(args.design) if args.design else None
     if design is not None:
         mixed = quote_rule(mixed, design)
-    (out / "ladder.md").write_text(markdown(rows, tele, mixed, design, chain, args.form, common, tables))
+    sc = LY.exclusions_path(args.pairs)
+    excluded = json.loads(sc.read_text()) if sc.exists() else None
+    if excluded:
+        print(f"ladder report: pair values written with excluded experiments {excluded['exclude_experiments']} "
+              f"({excluded['n_pairs_dropped']} pairs dropped)")
+    (out / "ladder.md").write_text(markdown(rows, tele, mixed, design, chain, args.form, common, tables, excluded))
     print(f"ladder report ({args.form}): {len(rows)} rows -> {out / 'ladder.tsv'}, {out / 'ladder.md'}")
     return 0
 
