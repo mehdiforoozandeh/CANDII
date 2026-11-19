@@ -70,6 +70,7 @@ Working copies of items 2 and 3 live in the worktree at `.claude/worktrees/onion
 ### Other Nibi jobs
 
 - **FINAL (18:15 UTC):** the 1 bp verification job 27692994 (`onion_a7_verify`) reached its 16-hour limit (TIMEOUT) with 6 out-of-memory kills in its log (8 workers in 32000M). The 1 bp tables are built and NOT verified; the resolution eval set is not built. Rerun with more memory per worker before the resolution arms (handoff note, section added 2026-11-18 17:45 UTC; ready queue entry 22).
+- **UPDATE (2026-11-19 03:55 UTC):** the 1 bp tables are now VERIFIED (Nibi jobs 27851432 and 27868178: 412 measurements, 0 failures) and the resolution eval set is built (job 27868179). The DNase-seq replicate ladder was rerun without the 15,201-read track (jobs 27851414, 27868089). See the block of 03:55 UTC in `HANDOFF_NEXT_SESSION.md`.
 - Every other close-out job has ended: QC fill and collect, 1 bp recount and tables, variance by bin size, ladder layers and report, second-experiment layers and baselines.
 
 ## 3. Rules decided and not decided (256-region rescoring)

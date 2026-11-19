@@ -1,0 +1,17 @@
+variant	route	fraglen	n	pearson	pearson_asinh	spearman	slope	mad	tile_rec	tile_prec	tile_f1	masked
+inbin	chip	estimated	32	0.83	0.764	0.633	0.742	0.053	0.963	0.41	0.562	0.0
+inbin	chip	table	9	0.887	0.779	0.652	0.836	0.047	0.953	0.422	0.579	0.0
+inbin	dnase		1	0.943	0.797	0.684	0.766	0.051	0.987	0.235	0.379	0.0
+inbin	chip	all	41	0.831	0.776	0.633	0.749	0.049	0.957	0.421	0.573	0.0
+box_d	chip	estimated	32	0.918	0.883	0.769	0.952	0.035	0.761	0.853	0.776	0.0
+box_d	chip	table	9	0.944	0.867	0.76	0.979	0.027	0.723	0.867	0.786	0.0
+box_d	dnase		1	0.994	0.961	0.895	0.97	0.016	0.779	0.954	0.857	0.0
+box_d	chip	all	41	0.921	0.881	0.767	0.962	0.034	0.758	0.853	0.782	0.0
+box_ext	chip	estimated	32	0.902	0.862	0.747	0.884	0.037	0.827	0.727	0.759	0.0
+box_ext	chip	table	9	0.929	0.841	0.74	0.93	0.029	0.809	0.726	0.74	0.0
+box_ext	dnase		1	0.99	0.946	0.874	0.918	0.024	0.879	0.812	0.845	0.0
+box_ext	chip	all	41	0.908	0.86	0.746	0.917	0.035	0.821	0.726	0.752	0.0
+box_ext_submean	chip	estimated	32	0.907	0.869	0.762	0.906	0.035	0.805	0.76	0.775	0.0
+box_ext_submean	chip	table	9	0.935	0.853	0.743	0.945	0.03	0.789	0.761	0.761	0.0
+box_ext_submean	dnase		1	0.991	0.954	0.884	0.927	0.047	0.879	0.821	0.849	0.0
+box_ext_submean	chip	all	41	0.909	0.867	0.76	0.938	0.035	0.8	0.761	0.763	0.0

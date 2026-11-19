@@ -1,0 +1,311 @@
+assay	assay_class	second_experiments	n_obs	n_cells	factor	n_levels	cells_with_contrast	estimable	note
+ATAC-seq	accessibility_atac	0	8	4	cell	4		1	
+ATAC-seq	accessibility_atac	0	8	4	experiment	4	0	0	one experiment per cell; confounded with cell (variance in its row)
+ATAC-seq	accessibility_atac	0	8	4	replicate	4	0	0	one replicate per cell; confounded with cell (variance in its row)
+ATAC-seq	accessibility_atac	0	8	4	library	4	0	0	one library per cell; confounded with cell (variance in its row)
+ATAC-seq	accessibility_atac	0	8	4	lab	1	0	0	one level; not estimable
+ATAC-seq	accessibility_atac	1	12	4	cell	4		1	
+ATAC-seq	accessibility_atac	1	12	4	experiment	6	2	1	
+ATAC-seq	accessibility_atac	1	12	4	replicate	6	2	0	one replicate per experiment; confounded with experiment (variance in its row)
+ATAC-seq	accessibility_atac	1	12	4	library	6	2	0	one library per experiment; confounded with experiment (variance in its row)
+ATAC-seq	accessibility_atac	1	12	4	lab	1	0	0	one level; not estimable
+DNase-seq	accessibility_dnase	0	50	17	cell	17		1	
+DNase-seq	accessibility_dnase	0	50	17	experiment	17	0	0	one experiment per cell; confounded with cell (variance in its row)
+DNase-seq	accessibility_dnase	0	50	17	replicate	17	0	0	one replicate per cell; confounded with cell (variance in its row)
+DNase-seq	accessibility_dnase	0	50	17	library	25	8	1	
+DNase-seq	accessibility_dnase	0	50	17	lab	1	0	0	one level; not estimable
+DNase-seq	accessibility_dnase	1	66	17	cell	17		1	
+DNase-seq	accessibility_dnase	1	66	17	experiment	25	8	1	
+DNase-seq	accessibility_dnase	1	66	17	replicate	19	2	1	
+DNase-seq	accessibility_dnase	1	66	17	library	33	12	1	
+DNase-seq	accessibility_dnase	1	66	17	lab	2	2	1	
+H2AFZ	narrow_histone	0	34	10	cell	10		1	
+H2AFZ	narrow_histone	0	34	10	experiment	10	0	0	one experiment per cell; confounded with cell (variance in its row)
+H2AFZ	narrow_histone	0	34	10	replicate	10	0	0	one replicate per cell; confounded with cell (variance in its row)
+H2AFZ	narrow_histone	0	34	10	library	17	7	1	
+H2AFZ	narrow_histone	0	34	10	lab	2	0	1	
+H2AFZ	narrow_histone	1	36	10	cell	10		1	
+H2AFZ	narrow_histone	1	36	10	experiment	11	1	1	
+H2AFZ	narrow_histone	1	36	10	replicate	10	0	0	one replicate per cell; confounded with cell (variance in its row)
+H2AFZ	narrow_histone	1	36	10	library	18	8	1	
+H2AFZ	narrow_histone	1	36	10	lab	2	1	1	
+H2AK5ac	narrow_histone	0	20	5	cell	5		1	
+H2AK5ac	narrow_histone	0	20	5	experiment	5	0	0	one experiment per cell; confounded with cell (variance in its row)
+H2AK5ac	narrow_histone	0	20	5	replicate	5	0	0	one replicate per cell; confounded with cell (variance in its row)
+H2AK5ac	narrow_histone	0	20	5	library	10	5	1	
+H2AK5ac	narrow_histone	0	20	5	lab	1	0	0	one level; not estimable
+H2AK5ac	narrow_histone	1	20	5	cell	5		1	
+H2AK5ac	narrow_histone	1	20	5	experiment	5	0	0	one experiment per cell; confounded with cell (variance in its row)
+H2AK5ac	narrow_histone	1	20	5	replicate	5	0	0	one replicate per cell; confounded with cell (variance in its row)
+H2AK5ac	narrow_histone	1	20	5	library	10	5	1	
+H2AK5ac	narrow_histone	1	20	5	lab	1	0	0	one level; not estimable
+H2AK9ac	narrow_histone	0	4	1	all			0	too few observations (4) or cells to fit
+H2AK9ac	narrow_histone	1	4	1	all			0	too few observations (4) or cells to fit
+H2BK120ac	narrow_histone	0	18	5	cell	5		1	
+H2BK120ac	narrow_histone	0	18	5	experiment	5	0	0	one experiment per cell; confounded with cell (variance in its row)
+H2BK120ac	narrow_histone	0	18	5	replicate	5	0	0	one replicate per cell; confounded with cell (variance in its row)
+H2BK120ac	narrow_histone	0	18	5	library	9	4	1	
+H2BK120ac	narrow_histone	0	18	5	lab	1	0	0	one level; not estimable
+H2BK120ac	narrow_histone	1	18	5	cell	5		1	
+H2BK120ac	narrow_histone	1	18	5	experiment	5	0	0	one experiment per cell; confounded with cell (variance in its row)
+H2BK120ac	narrow_histone	1	18	5	replicate	5	0	0	one replicate per cell; confounded with cell (variance in its row)
+H2BK120ac	narrow_histone	1	18	5	library	9	4	1	
+H2BK120ac	narrow_histone	1	18	5	lab	1	0	0	one level; not estimable
+H2BK12ac	narrow_histone	0	16	5	cell	5		1	
+H2BK12ac	narrow_histone	0	16	5	experiment	5	0	0	one experiment per cell; confounded with cell (variance in its row)
+H2BK12ac	narrow_histone	0	16	5	replicate	5	0	0	one replicate per cell; confounded with cell (variance in its row)
+H2BK12ac	narrow_histone	0	16	5	library	8	3	1	
+H2BK12ac	narrow_histone	0	16	5	lab	1	0	0	one level; not estimable
+H2BK12ac	narrow_histone	1	18	5	cell	5		1	
+H2BK12ac	narrow_histone	1	18	5	experiment	6	1	1	
+H2BK12ac	narrow_histone	1	18	5	replicate	5	0	0	one replicate per cell; confounded with cell (variance in its row)
+H2BK12ac	narrow_histone	1	18	5	library	9	4	1	
+H2BK12ac	narrow_histone	1	18	5	lab	1	0	0	one level; not estimable
+H2BK15ac	narrow_histone	0	16	4	cell	4		1	
+H2BK15ac	narrow_histone	0	16	4	experiment	4	0	0	one experiment per cell; confounded with cell (variance in its row)
+H2BK15ac	narrow_histone	0	16	4	replicate	4	0	0	one replicate per cell; confounded with cell (variance in its row)
+H2BK15ac	narrow_histone	0	16	4	library	8	3	1	
+H2BK15ac	narrow_histone	0	16	4	lab	1	0	0	one level; not estimable
+H2BK15ac	narrow_histone	1	16	4	cell	4		1	
+H2BK15ac	narrow_histone	1	16	4	experiment	4	0	0	one experiment per cell; confounded with cell (variance in its row)
+H2BK15ac	narrow_histone	1	16	4	replicate	4	0	0	one replicate per cell; confounded with cell (variance in its row)
+H2BK15ac	narrow_histone	1	16	4	library	8	3	1	
+H2BK15ac	narrow_histone	1	16	4	lab	1	0	0	one level; not estimable
+H2BK20ac	narrow_histone	0	8	2	cell	2		1	
+H2BK20ac	narrow_histone	0	8	2	experiment	2	0	0	one experiment per cell; confounded with cell (variance in its row)
+H2BK20ac	narrow_histone	0	8	2	replicate	2	0	0	one replicate per cell; confounded with cell (variance in its row)
+H2BK20ac	narrow_histone	0	8	2	library	4	2	1	
+H2BK20ac	narrow_histone	0	8	2	lab	1	0	0	one level; not estimable
+H2BK20ac	narrow_histone	1	8	2	cell	2		1	
+H2BK20ac	narrow_histone	1	8	2	experiment	2	0	0	one experiment per cell; confounded with cell (variance in its row)
+H2BK20ac	narrow_histone	1	8	2	replicate	2	0	0	one replicate per cell; confounded with cell (variance in its row)
+H2BK20ac	narrow_histone	1	8	2	library	4	2	1	
+H2BK20ac	narrow_histone	1	8	2	lab	1	0	0	one level; not estimable
+H2BK5ac	narrow_histone	0	18	5	cell	5		1	
+H2BK5ac	narrow_histone	0	18	5	experiment	5	0	0	one experiment per cell; confounded with cell (variance in its row)
+H2BK5ac	narrow_histone	0	18	5	replicate	5	0	0	one replicate per cell; confounded with cell (variance in its row)
+H2BK5ac	narrow_histone	0	18	5	library	9	4	1	
+H2BK5ac	narrow_histone	0	18	5	lab	1	0	0	one level; not estimable
+H2BK5ac	narrow_histone	1	18	5	cell	5		1	
+H2BK5ac	narrow_histone	1	18	5	experiment	5	0	0	one experiment per cell; confounded with cell (variance in its row)
+H2BK5ac	narrow_histone	1	18	5	replicate	5	0	0	one replicate per cell; confounded with cell (variance in its row)
+H2BK5ac	narrow_histone	1	18	5	library	9	4	1	
+H2BK5ac	narrow_histone	1	18	5	lab	1	0	0	one level; not estimable
+H3F3A	broad_histone	0	4	1	all			0	too few observations (4) or cells to fit
+H3F3A	broad_histone	1	4	1	all			0	too few observations (4) or cells to fit
+H3K14ac	narrow_histone	0	16	5	cell	5		1	
+H3K14ac	narrow_histone	0	16	5	experiment	5	0	0	one experiment per cell; confounded with cell (variance in its row)
+H3K14ac	narrow_histone	0	16	5	replicate	5	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K14ac	narrow_histone	0	16	5	library	8	3	1	
+H3K14ac	narrow_histone	0	16	5	lab	1	0	0	one level; not estimable
+H3K14ac	narrow_histone	1	18	5	cell	5		1	
+H3K14ac	narrow_histone	1	18	5	experiment	6	1	1	
+H3K14ac	narrow_histone	1	18	5	replicate	5	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K14ac	narrow_histone	1	18	5	library	9	4	1	
+H3K14ac	narrow_histone	1	18	5	lab	1	0	0	one level; not estimable
+H3K18ac	narrow_histone	0	22	6	cell	6		1	
+H3K18ac	narrow_histone	0	22	6	experiment	6	0	0	one experiment per cell; confounded with cell (variance in its row)
+H3K18ac	narrow_histone	0	22	6	replicate	6	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K18ac	narrow_histone	0	22	6	library	11	5	1	
+H3K18ac	narrow_histone	0	22	6	lab	1	0	0	one level; not estimable
+H3K18ac	narrow_histone	1	24	6	cell	6		1	
+H3K18ac	narrow_histone	1	24	6	experiment	7	1	1	
+H3K18ac	narrow_histone	1	24	6	replicate	6	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K18ac	narrow_histone	1	24	6	library	12	6	1	
+H3K18ac	narrow_histone	1	24	6	lab	1	0	0	one level; not estimable
+H3K23ac	narrow_histone	0	10	3	cell	3		1	
+H3K23ac	narrow_histone	0	10	3	experiment	3	0	0	one experiment per cell; confounded with cell (variance in its row)
+H3K23ac	narrow_histone	0	10	3	replicate	3	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K23ac	narrow_histone	0	10	3	library	5	2	1	
+H3K23ac	narrow_histone	0	10	3	lab	1	0	0	one level; not estimable
+H3K23ac	narrow_histone	1	12	3	cell	3		1	
+H3K23ac	narrow_histone	1	12	3	experiment	4	1	1	
+H3K23ac	narrow_histone	1	12	3	replicate	3	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K23ac	narrow_histone	1	12	3	library	6	3	1	
+H3K23ac	narrow_histone	1	12	3	lab	1	0	0	one level; not estimable
+H3K23me2	narrow_histone	0	8	2	cell	2		1	
+H3K23me2	narrow_histone	0	8	2	experiment	2	0	0	one experiment per cell; confounded with cell (variance in its row)
+H3K23me2	narrow_histone	0	8	2	replicate	2	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K23me2	narrow_histone	0	8	2	library	4	2	1	
+H3K23me2	narrow_histone	0	8	2	lab	1	0	0	one level; not estimable
+H3K23me2	narrow_histone	1	8	2	cell	2		1	
+H3K23me2	narrow_histone	1	8	2	experiment	2	0	0	one experiment per cell; confounded with cell (variance in its row)
+H3K23me2	narrow_histone	1	8	2	replicate	2	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K23me2	narrow_histone	1	8	2	library	4	2	1	
+H3K23me2	narrow_histone	1	8	2	lab	1	0	0	one level; not estimable
+H3K27ac	narrow_histone	0	74	20	cell	20		1	
+H3K27ac	narrow_histone	0	74	20	experiment	20	0	0	one experiment per cell; confounded with cell (variance in its row)
+H3K27ac	narrow_histone	0	74	20	replicate	20	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K27ac	narrow_histone	0	74	20	library	37	15	1	
+H3K27ac	narrow_histone	0	74	20	lab	4	0	1	
+H3K27ac	narrow_histone	1	88	20	cell	20		1	
+H3K27ac	narrow_histone	1	88	20	experiment	27	7	1	
+H3K27ac	narrow_histone	1	88	20	replicate	26	6	1	
+H3K27ac	narrow_histone	1	88	20	library	44	17	1	
+H3K27ac	narrow_histone	1	88	20	lab	4	2	1	
+H3K27me3	broad_histone	0	48	13	cell	13		1	
+H3K27me3	broad_histone	0	48	13	experiment	13	0	0	one experiment per cell; confounded with cell (variance in its row)
+H3K27me3	broad_histone	0	48	13	replicate	13	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K27me3	broad_histone	0	48	13	library	24	11	1	
+H3K27me3	broad_histone	0	48	13	lab	4	0	1	
+H3K27me3	broad_histone	1	58	14	cell	14		1	
+H3K27me3	broad_histone	1	58	14	experiment	18	4	1	
+H3K27me3	broad_histone	1	58	14	replicate	16	2	1	
+H3K27me3	broad_histone	1	58	14	library	29	12	1	
+H3K27me3	broad_histone	1	58	14	lab	4	3	1	
+H3K36me3	broad_histone	0	70	19	cell	19		1	
+H3K36me3	broad_histone	0	70	19	experiment	19	0	0	one experiment per cell; confounded with cell (variance in its row)
+H3K36me3	broad_histone	0	70	19	replicate	19	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K36me3	broad_histone	0	70	19	library	35	16	1	
+H3K36me3	broad_histone	0	70	19	lab	3	0	1	
+H3K36me3	broad_histone	1	84	19	cell	19		1	
+H3K36me3	broad_histone	1	84	19	experiment	26	7	1	
+H3K36me3	broad_histone	1	84	19	replicate	23	4	1	
+H3K36me3	broad_histone	1	84	19	library	42	17	1	
+H3K36me3	broad_histone	1	84	19	lab	4	5	1	
+H3K4ac	narrow_histone	0	22	6	cell	6		1	
+H3K4ac	narrow_histone	0	22	6	experiment	6	0	0	one experiment per cell; confounded with cell (variance in its row)
+H3K4ac	narrow_histone	0	22	6	replicate	6	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K4ac	narrow_histone	0	22	6	library	11	5	1	
+H3K4ac	narrow_histone	0	22	6	lab	1	0	0	one level; not estimable
+H3K4ac	narrow_histone	1	24	6	cell	6		1	
+H3K4ac	narrow_histone	1	24	6	experiment	7	1	1	
+H3K4ac	narrow_histone	1	24	6	replicate	6	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K4ac	narrow_histone	1	24	6	library	12	6	1	
+H3K4ac	narrow_histone	1	24	6	lab	1	0	0	one level; not estimable
+H3K4me1	broad_histone	0	56	15	cell	15		1	
+H3K4me1	broad_histone	0	56	15	experiment	15	0	0	one experiment per cell; confounded with cell (variance in its row)
+H3K4me1	broad_histone	0	56	15	replicate	15	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K4me1	broad_histone	0	56	15	library	28	13	1	
+H3K4me1	broad_histone	0	56	15	lab	4	0	1	
+H3K4me1	broad_histone	1	68	15	cell	15		1	
+H3K4me1	broad_histone	1	68	15	experiment	21	6	1	
+H3K4me1	broad_histone	1	68	15	replicate	18	3	1	
+H3K4me1	broad_histone	1	68	15	library	34	14	1	
+H3K4me1	broad_histone	1	68	15	lab	4	4	1	
+H3K4me2	narrow_histone	0	42	11	cell	11		1	
+H3K4me2	narrow_histone	0	42	11	experiment	11	0	0	one experiment per cell; confounded with cell (variance in its row)
+H3K4me2	narrow_histone	0	42	11	replicate	11	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K4me2	narrow_histone	0	42	11	library	21	10	1	
+H3K4me2	narrow_histone	0	42	11	lab	2	0	1	
+H3K4me2	narrow_histone	1	44	11	cell	11		1	
+H3K4me2	narrow_histone	1	44	11	experiment	12	1	1	
+H3K4me2	narrow_histone	1	44	11	replicate	11	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K4me2	narrow_histone	1	44	11	library	22	10	1	
+H3K4me2	narrow_histone	1	44	11	lab	2	1	1	
+H3K4me3	narrow_histone	0	92	27	cell	27		1	
+H3K4me3	narrow_histone	0	92	27	experiment	27	0	0	one experiment per cell; confounded with cell (variance in its row)
+H3K4me3	narrow_histone	0	92	27	replicate	27	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K4me3	narrow_histone	0	92	27	library	46	19	1	
+H3K4me3	narrow_histone	0	92	27	lab	3	0	1	
+H3K4me3	narrow_histone	1	112	27	cell	27		1	
+H3K4me3	narrow_histone	1	112	27	experiment	37	10	1	
+H3K4me3	narrow_histone	1	112	27	replicate	35	8	1	
+H3K4me3	narrow_histone	1	112	27	library	56	24	1	
+H3K4me3	narrow_histone	1	112	27	lab	4	4	1	
+H3K56ac	narrow_histone	0	12	3	cell	3		1	
+H3K56ac	narrow_histone	0	12	3	experiment	3	0	0	one experiment per cell; confounded with cell (variance in its row)
+H3K56ac	narrow_histone	0	12	3	replicate	3	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K56ac	narrow_histone	0	12	3	library	6	3	1	
+H3K56ac	narrow_histone	0	12	3	lab	1	0	0	one level; not estimable
+H3K56ac	narrow_histone	1	12	3	cell	3		1	
+H3K56ac	narrow_histone	1	12	3	experiment	3	0	0	one experiment per cell; confounded with cell (variance in its row)
+H3K56ac	narrow_histone	1	12	3	replicate	3	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K56ac	narrow_histone	1	12	3	library	6	3	1	
+H3K56ac	narrow_histone	1	12	3	lab	1	0	0	one level; not estimable
+H3K79me1	broad_histone	0	20	6	cell	6		1	
+H3K79me1	broad_histone	0	20	6	experiment	6	0	0	one experiment per cell; confounded with cell (variance in its row)
+H3K79me1	broad_histone	0	20	6	replicate	6	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K79me1	broad_histone	0	20	6	library	10	4	1	
+H3K79me1	broad_histone	0	20	6	lab	1	0	0	one level; not estimable
+H3K79me1	broad_histone	1	22	6	cell	6		1	
+H3K79me1	broad_histone	1	22	6	experiment	7	1	1	
+H3K79me1	broad_histone	1	22	6	replicate	6	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K79me1	broad_histone	1	22	6	library	11	4	1	
+H3K79me1	broad_histone	1	22	6	lab	1	0	0	one level; not estimable
+H3K79me2	broad_histone	0	38	9	cell	9		1	
+H3K79me2	broad_histone	0	38	9	experiment	9	0	0	one experiment per cell; confounded with cell (variance in its row)
+H3K79me2	broad_histone	0	38	9	replicate	9	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K79me2	broad_histone	0	38	9	library	19	9	1	
+H3K79me2	broad_histone	0	38	9	lab	2	0	1	
+H3K79me2	broad_histone	1	40	9	cell	9		1	
+H3K79me2	broad_histone	1	40	9	experiment	10	1	1	
+H3K79me2	broad_histone	1	40	9	replicate	9	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K79me2	broad_histone	1	40	9	library	20	9	1	
+H3K79me2	broad_histone	1	40	9	lab	2	1	1	
+H3K9ac	narrow_histone	0	42	11	cell	11		1	
+H3K9ac	narrow_histone	0	42	11	experiment	11	0	0	one experiment per cell; confounded with cell (variance in its row)
+H3K9ac	narrow_histone	0	42	11	replicate	11	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K9ac	narrow_histone	0	42	11	library	21	10	1	
+H3K9ac	narrow_histone	0	42	11	lab	3	0	1	
+H3K9ac	narrow_histone	1	46	11	cell	11		1	
+H3K9ac	narrow_histone	1	46	11	experiment	13	2	1	
+H3K9ac	narrow_histone	1	46	11	replicate	11	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K9ac	narrow_histone	1	46	11	library	23	10	1	
+H3K9ac	narrow_histone	1	46	11	lab	3	2	1	
+H3K9me1	broad_histone	0	6	2	cell	2		1	
+H3K9me1	broad_histone	0	6	2	experiment	2	0	0	one experiment per cell; confounded with cell (variance in its row)
+H3K9me1	broad_histone	0	6	2	replicate	2	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K9me1	broad_histone	0	6	2	library	3	1	1	
+H3K9me1	broad_histone	0	6	2	lab	2	0	0	one lab per cell; confounded with cell (variance in its row)
+H3K9me1	broad_histone	1	6	2	cell	2		1	
+H3K9me1	broad_histone	1	6	2	experiment	2	0	0	one experiment per cell; confounded with cell (variance in its row)
+H3K9me1	broad_histone	1	6	2	replicate	2	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K9me1	broad_histone	1	6	2	library	3	1	1	
+H3K9me1	broad_histone	1	6	2	lab	2	0	0	one lab per cell; confounded with cell (variance in its row)
+H3K9me2	broad_histone	0	4	1	all			0	too few observations (4) or cells to fit
+H3K9me2	broad_histone	1	4	1	all			0	too few observations (4) or cells to fit
+H3K9me3	broad_histone	0	52	15	cell	15		1	
+H3K9me3	broad_histone	0	52	15	experiment	15	0	0	one experiment per cell; confounded with cell (variance in its row)
+H3K9me3	broad_histone	0	52	15	replicate	15	0	0	one replicate per cell; confounded with cell (variance in its row)
+H3K9me3	broad_histone	0	52	15	library	26	10	1	
+H3K9me3	broad_histone	0	52	15	lab	3	0	1	
+H3K9me3	broad_histone	1	60	15	cell	15		1	
+H3K9me3	broad_histone	1	60	15	experiment	19	4	1	
+H3K9me3	broad_histone	1	60	15	replicate	18	3	1	
+H3K9me3	broad_histone	1	60	15	library	30	12	1	
+H3K9me3	broad_histone	1	60	15	lab	4	3	1	
+H3T11ph	narrow_histone	0	2	1	all			0	too few observations (2) or cells to fit
+H3T11ph	narrow_histone	1	2	1	all			0	too few observations (2) or cells to fit
+H4K12ac	narrow_histone	0	4	1	all			0	too few observations (4) or cells to fit
+H4K12ac	narrow_histone	1	4	1	all			0	too few observations (4) or cells to fit
+H4K20me1	broad_histone	0	24	6	cell	6		1	
+H4K20me1	broad_histone	0	24	6	experiment	6	0	0	one experiment per cell; confounded with cell (variance in its row)
+H4K20me1	broad_histone	0	24	6	replicate	6	0	0	one replicate per cell; confounded with cell (variance in its row)
+H4K20me1	broad_histone	0	24	6	library	12	6	1	
+H4K20me1	broad_histone	0	24	6	lab	2	0	1	
+H4K20me1	broad_histone	1	26	6	cell	6		1	
+H4K20me1	broad_histone	1	26	6	experiment	7	1	1	
+H4K20me1	broad_histone	1	26	6	replicate	6	0	0	one replicate per cell; confounded with cell (variance in its row)
+H4K20me1	broad_histone	1	26	6	library	13	6	1	
+H4K20me1	broad_histone	1	26	6	lab	2	1	1	
+H4K5ac	narrow_histone	0	12	3	cell	3		1	
+H4K5ac	narrow_histone	0	12	3	experiment	3	0	0	one experiment per cell; confounded with cell (variance in its row)
+H4K5ac	narrow_histone	0	12	3	replicate	3	0	0	one replicate per cell; confounded with cell (variance in its row)
+H4K5ac	narrow_histone	0	12	3	library	6	3	1	
+H4K5ac	narrow_histone	0	12	3	lab	1	0	0	one level; not estimable
+H4K5ac	narrow_histone	1	12	3	cell	3		1	
+H4K5ac	narrow_histone	1	12	3	experiment	3	0	0	one experiment per cell; confounded with cell (variance in its row)
+H4K5ac	narrow_histone	1	12	3	replicate	3	0	0	one replicate per cell; confounded with cell (variance in its row)
+H4K5ac	narrow_histone	1	12	3	library	6	3	1	
+H4K5ac	narrow_histone	1	12	3	lab	1	0	0	one level; not estimable
+H4K8ac	narrow_histone	0	20	6	cell	6		1	
+H4K8ac	narrow_histone	0	20	6	experiment	6	0	0	one experiment per cell; confounded with cell (variance in its row)
+H4K8ac	narrow_histone	0	20	6	replicate	6	0	0	one replicate per cell; confounded with cell (variance in its row)
+H4K8ac	narrow_histone	0	20	6	library	10	4	1	
+H4K8ac	narrow_histone	0	20	6	lab	1	0	0	one level; not estimable
+H4K8ac	narrow_histone	1	24	6	cell	6		1	
+H4K8ac	narrow_histone	1	24	6	experiment	8	2	1	
+H4K8ac	narrow_histone	1	24	6	replicate	6	0	0	one replicate per cell; confounded with cell (variance in its row)
+H4K8ac	narrow_histone	1	24	6	library	12	5	1	
+H4K8ac	narrow_histone	1	24	6	lab	1	0	0	one level; not estimable
+H4K91ac	narrow_histone	0	14	5	cell	5		1	
+H4K91ac	narrow_histone	0	14	5	experiment	5	0	0	one experiment per cell; confounded with cell (variance in its row)
+H4K91ac	narrow_histone	0	14	5	replicate	5	0	0	one replicate per cell; confounded with cell (variance in its row)
+H4K91ac	narrow_histone	0	14	5	library	7	2	1	
+H4K91ac	narrow_histone	0	14	5	lab	1	0	0	one level; not estimable
+H4K91ac	narrow_histone	1	14	5	cell	5		1	
+H4K91ac	narrow_histone	1	14	5	experiment	5	0	0	one experiment per cell; confounded with cell (variance in its row)
+H4K91ac	narrow_histone	1	14	5	replicate	5	0	0	one replicate per cell; confounded with cell (variance in its row)
+H4K91ac	narrow_histone	1	14	5	library	7	2	1	
+H4K91ac	narrow_histone	1	14	5	lab	1	0	0	one level; not estimable

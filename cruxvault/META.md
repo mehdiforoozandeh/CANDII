@@ -75,7 +75,7 @@ Root: [[candii]]
       - ○ `q38` [Q] [[q38_does_rung_1_s_predicted_nb_size_trend_wi|**Does rung 1's predicted NB size trend with target log2 depth on the depth-ladder targets of one base, and does the PIT deviation differ across log2-depth terciles?**]] — *open*
   - ◐ `q60` [Q] [[q60_how_much_of_the_1_bp_count_variance_of_a|**How much of the 1 bp count variance of a track lies below the 25 bp bin of the model, and how much of that variance is reproducible signal and not read-sampling noise?**]] — *leaning* · moderate
   - ○ `q61` [Q] [[q61_does_duplicate_removal_which_makes_the_t|**Does duplicate removal, which makes the two read halves of one library exclude each other, bias the read-half (sampling) layer of the earlier variance ladders at 25 bp?**]] — *open*
-  - ○ `q62` [Q] [[q62_how_large_are_the_dnase_seq_variance_lay|**How large are the DNase-seq variance layers (read sampling, replicate, cell type, other experiment) when the 15,201-read track ENCSR000EKG is left out of the common depth of the DNase-seq pairs?**]] — *open*
+  - ◐ `q62` [Q] [[q62_how_large_are_the_dnase_seq_variance_lay|**How large are the DNase-seq variance layers (read sampling, replicate, cell type, other experiment) when the 15,201-read track ENCSR000EKG is left out of the common depth of the DNase-seq pairs?**]] — *leaning* · moderate
 - ◐ `q19` [Q] [[q19_what_do_the_training_free_baselines_reac|**What do the training-free baselines reach on the three goals, i.e. where does a model have room: imputation (the position average against the marginal NB and the noise floor), covariate correction (the gap between depth-only scaling and the half-against-half floor, per covariate knob: the size of the artifact that a model could remove), calibration (PIT and the variance ratio of the baselines)?**]] — *leaning* · moderate
   - ◐ `h38` [H] [[h38_the_gap_between_depth_only_scaling_and_t|The gap between depth-only scaling and the floor is largest for the depth and run-type knobs and near 0 for pure subset pairs]] — *leaning* · moderate · against
   - ● `q32` [Q] [[q32_which_reference_should_define_the_1_of_t|**Which reference should define the 1 of the correction gap-closed scale (headline metric 4), given that the position average goes below the half-against-half floor?**]] — *settled* · strong
@@ -125,7 +125,7 @@ Root: [[candii]]
 
 ## Dashboard
 
-- **Questions** (74): open 25 · leaning 39 · settled 10 · parked 0
+- **Questions** (74): open 24 · leaning 40 · settled 10 · parked 0
 - **Hypotheses** (42): open 11 · leaning 19 · settled 6 · parked 6
-- **Confidence**: weak 22 · moderate 36 · strong 16
-- **Findings**: 133
+- **Confidence**: weak 22 · moderate 37 · strong 16
+- **Findings**: 135

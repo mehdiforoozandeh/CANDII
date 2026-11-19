@@ -1,0 +1,3864 @@
+{
+ "accessibility_only": {
+  "count_crps": {
+   "ci": [
+    null,
+    null
+   ],
+   "macro": null,
+   "missing_scorable": [
+    "H3K27ac",
+    "H3K27me3",
+    "H3K36me3",
+    "H3K4me1",
+    "H3K4me2",
+    "H3K4me3",
+    "H3K79me2",
+    "H3K9ac",
+    "H3K9me3"
+   ],
+   "n": 0,
+   "non_scorable_per_assay": {},
+   "per_assay": {},
+   "per_assay_reason": {},
+   "reason": "no scorable assay with a target"
+  },
+  "count_crps_oracle_scaled": {
+   "ci": [
+    null,
+    null
+   ],
+   "macro": null,
+   "missing_scorable": [
+    "H3K27ac",
+    "H3K27me3",
+    "H3K36me3",
+    "H3K4me1",
+    "H3K4me2",
+    "H3K4me3",
+    "H3K79me2",
+    "H3K9ac",
+    "H3K9me3"
+   ],
+   "n": 0,
+   "non_scorable_per_assay": {},
+   "per_assay": {},
+   "per_assay_reason": {},
+   "reason": "no scorable assay with a target"
+  },
+  "count_crps_scale_error": {
+   "ci": [
+    null,
+    null
+   ],
+   "macro": null,
+   "missing_scorable": [
+    "H3K27ac",
+    "H3K27me3",
+    "H3K36me3",
+    "H3K4me1",
+    "H3K4me2",
+    "H3K4me3",
+    "H3K79me2",
+    "H3K9ac",
+    "H3K9me3"
+   ],
+   "n": 0,
+   "non_scorable_per_assay": {},
+   "per_assay": {},
+   "per_assay_reason": {},
+   "reason": "no scorable assay with a target"
+  },
+  "count_crps_skill_vs_position_average": {
+   "ci": [
+    null,
+    null
+   ],
+   "macro": null,
+   "missing_scorable": [
+    "H3K27ac",
+    "H3K27me3",
+    "H3K36me3",
+    "H3K4me1",
+    "H3K4me2",
+    "H3K4me3",
+    "H3K79me2",
+    "H3K9ac",
+    "H3K9me3"
+   ],
+   "n": 0,
+   "non_scorable_per_assay": {},
+   "per_assay": {},
+   "per_assay_reason": {},
+   "reason": "no scorable assay with a target"
+  },
+  "error_budget": {
+   "added": null,
+   "explained": null,
+   "level": null,
+   "noise": null,
+   "per_assay": {},
+   "shared": null,
+   "specific": null,
+   "unexplained": null
+  },
+  "explained_fraction_per_layer": {
+   "description": "reported only, never a selection input (PI ruling 32): per layer, the share of the layer term that the prediction difference of the pair captures, layers.explained_table",
+   "per_assay": {}
+  },
+  "pit_deviation_per_stratum": {
+   "description": "E5: PIT deviation per region stratum of the eval set (strata.py masks), one metric block per stratum, pooled over the assay's targets as pit_deviation_pooled is; pit_deviation_worst_stratum is the per-assay maximum over these strata. The same values follow at report time from suffstats.npz pit/<regime>/<target>/<stratum> (report_extras.py strata).",
+   "per_stratum": {
+    "enhancers": {
+     "ci": [
+      null,
+      null
+     ],
+     "macro": null,
+     "missing_scorable": [
+      "H3K27ac",
+      "H3K27me3",
+      "H3K36me3",
+      "H3K4me1",
+      "H3K4me2",
+      "H3K4me3",
+      "H3K79me2",
+      "H3K9ac",
+      "H3K9me3"
+     ],
+     "n": 0,
+     "non_scorable_per_assay": {},
+     "per_assay": {},
+     "per_assay_reason": {},
+     "reason": "no scorable assay with a target"
+    },
+    "gene_bodies": {
+     "ci": [
+      null,
+      null
+     ],
+     "macro": null,
+     "missing_scorable": [
+      "H3K27ac",
+      "H3K27me3",
+      "H3K36me3",
+      "H3K4me1",
+      "H3K4me2",
+      "H3K4me3",
+      "H3K79me2",
+      "H3K9ac",
+      "H3K9me3"
+     ],
+     "n": 0,
+     "non_scorable_per_assay": {},
+     "per_assay": {},
+     "per_assay_reason": {},
+     "reason": "no scorable assay with a target"
+    },
+    "heterochromatin": {
+     "ci": [
+      null,
+      null
+     ],
+     "macro": null,
+     "missing_scorable": [
+      "H3K27ac",
+      "H3K27me3",
+      "H3K36me3",
+      "H3K4me1",
+      "H3K4me2",
+      "H3K4me3",
+      "H3K79me2",
+      "H3K9ac",
+      "H3K9me3"
+     ],
+     "n": 0,
+     "non_scorable_per_assay": {},
+     "per_assay": {},
+     "per_assay_reason": {},
+     "reason": "no scorable assay with a target"
+    },
+    "mappability_d0": {
+     "ci": [
+      null,
+      null
+     ],
+     "macro": null,
+     "missing_scorable": [
+      "H3K27ac",
+      "H3K27me3",
+      "H3K36me3",
+      "H3K4me1",
+      "H3K4me2",
+      "H3K4me3",
+      "H3K79me2",
+      "H3K9ac",
+      "H3K9me3"
+     ],
+     "n": 0,
+     "non_scorable_per_assay": {},
+     "per_assay": {},
+     "per_assay_reason": {},
+     "reason": "no scorable assay with a target"
+    },
+    "mappability_d1": {
+     "ci": [
+      null,
+      null
+     ],
+     "macro": null,
+     "missing_scorable": [
+      "H3K27ac",
+      "H3K27me3",
+      "H3K36me3",
+      "H3K4me1",
+      "H3K4me2",
+      "H3K4me3",
+      "H3K79me2",
+      "H3K9ac",
+      "H3K9me3"
+     ],
+     "n": 0,
+     "non_scorable_per_assay": {},
+     "per_assay": {},
+     "per_assay_reason": {},
+     "reason": "no scorable assay with a target"
+    },
+    "mappability_d2": {
+     "ci": [
+      null,
+      null
+     ],
+     "macro": null,
+     "missing_scorable": [
+      "H3K27ac",
+      "H3K27me3",
+      "H3K36me3",
+      "H3K4me1",
+      "H3K4me2",
+      "H3K4me3",
+      "H3K79me2",
+      "H3K9ac",
+      "H3K9me3"
+     ],
+     "n": 0,
+     "non_scorable_per_assay": {},
+     "per_assay": {},
+     "per_assay_reason": {},
+     "reason": "no scorable assay with a target"
+    },
+    "mappability_d3": {
+     "ci": [
+      null,
+      null
+     ],
+     "macro": null,
+     "missing_scorable": [
+      "H3K27ac",
+      "H3K27me3",
+      "H3K36me3",
+      "H3K4me1",
+      "H3K4me2",
+      "H3K4me3",
+      "H3K79me2",
+      "H3K9ac",
+      "H3K9me3"
+     ],
+     "n": 0,
+     "non_scorable_per_assay": {},
+     "per_assay": {},
+     "per_assay_reason": {},
+     "reason": "no scorable assay with a target"
+    },
+    "mappability_d4": {
+     "ci": [
+      null,
+      null
+     ],
+     "macro": null,
+     "missing_scorable": [
+      "H3K27ac",
+      "H3K27me3",
+      "H3K36me3",
+      "H3K4me1",
+      "H3K4me2",
+      "H3K4me3",
+      "H3K79me2",
+      "H3K9ac",
+      "H3K9me3"
+     ],
+     "n": 0,
+     "non_scorable_per_assay": {},
+     "per_assay": {},
+     "per_assay_reason": {},
+     "reason": "no scorable assay with a target"
+    },
+    "mappability_d5": {
+     "ci": [
+      null,
+      null
+     ],
+     "macro": null,
+     "missing_scorable": [
+      "H3K27ac",
+      "H3K27me3",
+      "H3K36me3",
+      "H3K4me1",
+      "H3K4me2",
+      "H3K4me3",
+      "H3K79me2",
+      "H3K9ac",
+      "H3K9me3"
+     ],
+     "n": 0,
+     "non_scorable_per_assay": {},
+     "per_assay": {},
+     "per_assay_reason": {},
+     "reason": "no scorable assay with a target"
+    },
+    "mappability_d6": {
+     "ci": [
+      null,
+      null
+     ],
+     "macro": null,
+     "missing_scorable": [
+      "H3K27ac",
+      "H3K27me3",
+      "H3K36me3",
+      "H3K4me1",
+      "H3K4me2",
+      "H3K4me3",
+      "H3K79me2",
+      "H3K9ac",
+      "H3K9me3"
+     ],
+     "n": 0,
+     "non_scorable_per_assay": {},
+     "per_assay": {},
+     "per_assay_reason": {},
+     "reason": "no scorable assay with a target"
+    },
+    "mappability_d7": {
+     "ci": [
+      null,
+      null
+     ],
+     "macro": null,
+     "missing_scorable": [
+      "H3K27ac",
+      "H3K27me3",
+      "H3K36me3",
+      "H3K4me1",
+      "H3K4me2",
+      "H3K4me3",
+      "H3K79me2",
+      "H3K9ac",
+      "H3K9me3"
+     ],
+     "n": 0,
+     "non_scorable_per_assay": {},
+     "per_assay": {},
+     "per_assay_reason": {},
+     "reason": "no scorable assay with a target"
+    },
+    "mappability_d8": {
+     "ci": [
+      null,
+      null
+     ],
+     "macro": null,
+     "missing_scorable": [
+      "H3K27ac",
+      "H3K27me3",
+      "H3K36me3",
+      "H3K4me1",
+      "H3K4me2",
+      "H3K4me3",
+      "H3K79me2",
+      "H3K9ac",
+      "H3K9me3"
+     ],
+     "n": 0,
+     "non_scorable_per_assay": {},
+     "per_assay": {},
+     "per_assay_reason": {},
+     "reason": "no scorable assay with a target"
+    },
+    "mappability_d9": {
+     "ci": [
+      null,
+      null
+     ],
+     "macro": null,
+     "missing_scorable": [
+      "H3K27ac",
+      "H3K27me3",
+      "H3K36me3",
+      "H3K4me1",
+      "H3K4me2",
+      "H3K4me3",
+      "H3K79me2",
+      "H3K9ac",
+      "H3K9me3"
+     ],
+     "n": 0,
+     "non_scorable_per_assay": {},
+     "per_assay": {},
+     "per_assay_reason": {},
+     "reason": "no scorable assay with a target"
+    },
+    "promoters": {
+     "ci": [
+      null,
+      null
+     ],
+     "macro": null,
+     "missing_scorable": [
+      "H3K27ac",
+      "H3K27me3",
+      "H3K36me3",
+      "H3K4me1",
+      "H3K4me2",
+      "H3K4me3",
+      "H3K79me2",
+      "H3K9ac",
+      "H3K9me3"
+     ],
+     "n": 0,
+     "non_scorable_per_assay": {},
+     "per_assay": {},
+     "per_assay_reason": {},
+     "reason": "no scorable assay with a target"
+    }
+   },
+   "strata": [
+    "enhancers",
+    "gene_bodies",
+    "heterochromatin",
+    "mappability_d0",
+    "mappability_d1",
+    "mappability_d2",
+    "mappability_d3",
+    "mappability_d4",
+    "mappability_d5",
+    "mappability_d6",
+    "mappability_d7",
+    "mappability_d8",
+    "mappability_d9",
+    "promoters"
+   ]
+  },
+  "pit_deviation_pooled": {
+   "ci": [
+    null,
+    null
+   ],
+   "macro": null,
+   "missing_scorable": [
+    "H3K27ac",
+    "H3K27me3",
+    "H3K36me3",
+    "H3K4me1",
+    "H3K4me2",
+    "H3K4me3",
+    "H3K79me2",
+    "H3K9ac",
+    "H3K9me3"
+   ],
+   "n": 0,
+   "non_scorable_per_assay": {},
+   "per_assay": {},
+   "per_assay_reason": {},
+   "reason": "no scorable assay with a target"
+  },
+  "pit_deviation_worst_stratum": {
+   "ci": [
+    null,
+    null
+   ],
+   "macro": null,
+   "missing_scorable": [
+    "H3K27ac",
+    "H3K27me3",
+    "H3K36me3",
+    "H3K4me1",
+    "H3K4me2",
+    "H3K4me3",
+    "H3K79me2",
+    "H3K9ac",
+    "H3K9me3"
+   ],
+   "n": 0,
+   "non_scorable_per_assay": {},
+   "per_assay": {},
+   "per_assay_reason": {},
+   "reason": "no scorable assay with a target"
+  },
+  "predicted_over_replicate_variance": {
+   "ci": [
+    null,
+    null
+   ],
+   "description": "lower-bound check: mean predicted NB variance over the pair value of the target's own pseudoreplicate halves (the sampling term); a calibrated model scores >= 1 here. per_rung gives the ratio at every populated rung; pass = ratio >= 1 at pseudoreplicate and <= 1 at upper_bound_rung (PI ruling 31). PIT stays the selection metric.",
+   "macro": null,
+   "missing_scorable": [
+    "H3K27ac",
+    "H3K27me3",
+    "H3K36me3",
+    "H3K4me1",
+    "H3K4me2",
+    "H3K4me3",
+    "H3K79me2",
+    "H3K9ac",
+    "H3K9me3"
+   ],
+   "n": 0,
+   "n_undefined_upper_bound": 0,
+   "non_scorable_per_assay": {},
+   "pass_rate": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K27me3",
+     "H3K36me3",
+     "H3K4me1",
+     "H3K4me2",
+     "H3K4me3",
+     "H3K79me2",
+     "H3K9ac",
+     "H3K9me3"
+    ],
+    "n": 0,
+    "non_scorable_per_assay": {},
+    "per_assay": {},
+    "per_assay_reason": {},
+    "reason": "no scorable assay with a target"
+   },
+   "per_assay": {},
+   "per_assay_reason": {},
+   "per_rung": {},
+   "per_target": {},
+   "reason": "no scorable assay with a target",
+   "upper_bound_rung": {
+    "correction": "pseudoreplicate",
+    "imputation": "other_experiment",
+    "reconstruction": "pseudoreplicate"
+   }
+  },
+  "predicted_over_replicate_variance_robust": {
+   "description": "E5: robust aggregates of headline 7 at the pseudoreplicate rung, beside the existing key predicted_over_replicate_variance (the mean of per-target ratios, unchanged). median_of_targets: per assay, the median of the per-target ratios. ratio_of_means: per assay, the sum over its targets of the mean predicted NB variance over the sum of the mean replicate variance (each target's two means as metrics.variance_ratio pools them; with equal bins per target this is the ratio of the means over all the assay's bins). Both: macro = mean over the scorable assays; undefined for an assay when a target's ratio is undefined.",
+   "median_of_targets": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K27me3",
+     "H3K36me3",
+     "H3K4me1",
+     "H3K4me2",
+     "H3K4me3",
+     "H3K79me2",
+     "H3K9ac",
+     "H3K9me3"
+    ],
+    "n": 0,
+    "non_scorable_per_assay": {},
+    "per_assay": {},
+    "per_assay_reason": {},
+    "reason": "no scorable assay with a target"
+   },
+   "ratio_of_means": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K27me3",
+     "H3K36me3",
+     "H3K4me1",
+     "H3K4me2",
+     "H3K4me3",
+     "H3K79me2",
+     "H3K9ac",
+     "H3K9me3"
+    ],
+    "n": 0,
+    "non_scorable_per_assay": {},
+    "per_assay": {},
+    "per_assay_reason": {},
+    "reason": "no scorable assay with a target"
+   },
+   "rung": "pseudoreplicate"
+  },
+  "r_spec": {
+   "counts_log1p": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K27me3",
+     "H3K36me3",
+     "H3K4me1",
+     "H3K4me2",
+     "H3K4me3",
+     "H3K79me2",
+     "H3K9ac",
+     "H3K9me3"
+    ],
+    "n": 0,
+    "non_scorable_per_assay": {},
+    "per_assay": {},
+    "per_assay_reason": {},
+    "reason": "no scorable assay with a target"
+   },
+   "signal_arcsinh": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K27me3",
+     "H3K36me3",
+     "H3K4me1",
+     "H3K4me2",
+     "H3K4me3",
+     "H3K79me2",
+     "H3K9ac",
+     "H3K9me3"
+    ],
+    "n": 0,
+    "non_scorable_per_assay": {},
+    "per_assay": {},
+    "per_assay_reason": {},
+    "reason": "no scorable assay with a target"
+   },
+   "signal_arcsinh_plug_in": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K27me3",
+     "H3K36me3",
+     "H3K4me1",
+     "H3K4me2",
+     "H3K4me3",
+     "H3K79me2",
+     "H3K9ac",
+     "H3K9me3"
+    ],
+    "n": 0,
+    "non_scorable_per_assay": {},
+    "per_assay": {},
+    "per_assay_reason": {},
+    "reason": "no scorable assay with a target"
+   }
+  },
+  "regime": "accessibility_only",
+  "specific_variance_recovered_above_noise": {
+   "counts_log1p": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K27me3",
+     "H3K36me3",
+     "H3K4me1",
+     "H3K4me2",
+     "H3K4me3",
+     "H3K79me2",
+     "H3K9ac",
+     "H3K9me3"
+    ],
+    "n": 0,
+    "n_targets_without_halves": 0,
+    "non_scorable_per_assay": {},
+    "per_assay": {},
+    "per_assay_reason": {},
+    "per_assay_status": {},
+    "per_target": {},
+    "reason": "no scorable assay with a target",
+    "targets_without_halves": []
+   },
+   "signal_arcsinh": {
+    "ci": [
+     null,
+     null
+    ],
+    "dnase_route": "macs2_no_control",
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K27me3",
+     "H3K36me3",
+     "H3K4me1",
+     "H3K4me2",
+     "H3K4me3",
+     "H3K79me2",
+     "H3K9ac",
+     "H3K9me3"
+    ],
+    "n": 0,
+    "non_scorable_per_assay": {},
+    "per_assay": {},
+    "per_assay_reason": {},
+    "per_target": {},
+    "reason": "no scorable assay with a target",
+    "signal_mode": "expectation"
+   },
+   "signal_arcsinh_plug_in": {
+    "ci": [
+     null,
+     null
+    ],
+    "dnase_route": "macs2_no_control",
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K27me3",
+     "H3K36me3",
+     "H3K4me1",
+     "H3K4me2",
+     "H3K4me3",
+     "H3K79me2",
+     "H3K9ac",
+     "H3K9me3"
+    ],
+    "n": 0,
+    "non_scorable_per_assay": {},
+    "per_assay": {},
+    "per_assay_reason": {},
+    "per_target": {},
+    "reason": "no scorable assay with a target",
+    "signal_mode": "plug_in"
+   }
+  }
+ },
+ "addon": {
+  "addon_of": "26f9e32f7cfd49f33b841925ff88901ba4b91c2df438ecc840e4074499f31c76",
+  "addon_of_path": "/project/6014832/mforooz/ONION/CO-D2/eval/eic_v1_2/evalset.json",
+  "addon_of_tables_sha256": "7a1a0325d00ddff30b01d7a2b4db655da8bcf98b8dd719545d778b8b5635fc5e",
+  "evaluation_only_targets": [
+   "ENCSR000AKQ.pooled.uniform.base",
+   "ENCSR000AMH.pooled.uniform.base",
+   "ENCSR004ZWW.pooled.uniform.base",
+   "ENCSR005YZH.pooled.uniform.base",
+   "ENCSR006GPM.pooled.native.base",
+   "ENCSR060BFU.pooled.uniform.base",
+   "ENCSR169BGF.pooled.uniform.base",
+   "ENCSR395USV.pooled.uniform.base",
+   "ENCSR433FJP.pooled.uniform.base",
+   "ENCSR487BEW.pooled.uniform.base",
+   "ENCSR619EZG.pooled.uniform.base",
+   "ENCSR642DSR.pooled.uniform.base",
+   "ENCSR926NMC.pooled.uniform.base"
+  ],
+  "n_evaluation_only_targets": 13,
+  "note": "add-on score (Amendment 4): reported only; evaluation-only targets enter explained_fraction_per_layer and per_target only, never a headline block, a selection term or n_targets"
+ },
+ "baseline_fit_on": "fit_regions",
+ "context_bins": 1024,
+ "copy_leak": {
+  "copy_leak_pass": null,
+  "hidden_input_max_abs_change": null,
+  "part1_wiring_pass": null,
+  "reason": "not applicable: a training-free baseline reads no hidden input",
+  "same_view_copy_gain": null,
+  "same_view_copy_gain_flag": null,
+  "same_view_copy_gain_spread_ok": null,
+  "unavailable_input_max_abs_change": null
+ },
+ "correction_crps_depth_only": {
+  "ci": [
+   null,
+   null
+  ],
+  "macro": null,
+  "missing_scorable": [
+   "H2AFZ",
+   "H3K27ac",
+   "H3K27me3",
+   "H3K36me3",
+   "H3K4me1",
+   "H3K4me2",
+   "H3K4me3",
+   "H3K79me2",
+   "H3K9ac",
+   "H3K9me3",
+   "H4K20me1"
+  ],
+  "n": 0,
+  "non_scorable_per_assay": {},
+  "per_assay": {},
+  "per_assay_reason": {},
+  "reason": "no scorable assay with a target"
+ },
+ "correction_crps_model": {
+  "ci": [
+   null,
+   null
+  ],
+  "macro": null,
+  "missing_scorable": [
+   "H2AFZ",
+   "H3K27ac",
+   "H3K27me3",
+   "H3K36me3",
+   "H3K4me1",
+   "H3K4me2",
+   "H3K4me3",
+   "H3K79me2",
+   "H3K9ac",
+   "H3K9me3",
+   "H4K20me1"
+  ],
+  "n": 0,
+  "non_scorable_per_assay": {},
+  "per_assay": {},
+  "per_assay_reason": {},
+  "reason": "no scorable assay with a target"
+ },
+ "correction_crps_model_oracle_scaled": {
+  "ci": [
+   null,
+   null
+  ],
+  "macro": null,
+  "missing_scorable": [
+   "H2AFZ",
+   "H3K27ac",
+   "H3K27me3",
+   "H3K36me3",
+   "H3K4me1",
+   "H3K4me2",
+   "H3K4me3",
+   "H3K79me2",
+   "H3K9ac",
+   "H3K9me3",
+   "H4K20me1"
+  ],
+  "n": 0,
+  "non_scorable_per_assay": {},
+  "per_assay": {},
+  "per_assay_reason": {},
+  "reason": "no scorable assay with a target"
+ },
+ "correction_crps_pseudoreplicate_floor": {
+  "ci": [
+   null,
+   null
+  ],
+  "macro": null,
+  "missing_scorable": [
+   "H2AFZ",
+   "H3K27ac",
+   "H3K27me3",
+   "H3K36me3",
+   "H3K4me1",
+   "H3K4me2",
+   "H3K4me3",
+   "H3K79me2",
+   "H3K9ac",
+   "H3K9me3",
+   "H4K20me1"
+  ],
+  "n": 0,
+  "non_scorable_per_assay": {},
+  "per_assay": {},
+  "per_assay_reason": {},
+  "reason": "no scorable assay with a target"
+ },
+ "correction_gap_closed_vs_depth_only_never_trained": {
+  "ci": [
+   null,
+   null
+  ],
+  "denominator_relative_by_assay": {
+   "H2AFZ": null,
+   "H3K27ac": null,
+   "H3K27me3": null,
+   "H3K36me3": null,
+   "H3K4me1": null,
+   "H3K4me2": null,
+   "H3K4me3": null,
+   "H3K79me2": null,
+   "H3K9ac": null,
+   "H3K9me3": null,
+   "H4K20me1": null
+  },
+  "macro": null,
+  "missing_scorable": [
+   "H2AFZ",
+   "H3K27ac",
+   "H3K27me3",
+   "H3K36me3",
+   "H3K4me1",
+   "H3K4me2",
+   "H3K4me3",
+   "H3K79me2",
+   "H3K9ac",
+   "H3K9me3",
+   "H4K20me1"
+  ],
+  "n": 0,
+  "n_pairs": 0,
+  "non_scorable_per_assay": {},
+  "per_assay": {},
+  "per_assay_reason": {},
+  "per_knob": {},
+  "reason": "no scorable assay with a target"
+ },
+ "count_crps": {
+  "ci": [
+   null,
+   null
+  ],
+  "macro": null,
+  "missing_scorable": [
+   "H3K27ac",
+   "H3K4me2",
+   "H3K79me2"
+  ],
+  "n": 13,
+  "non_scorable_per_assay": {
+   "DNase-seq": 0.776968979824992,
+   "H3K18ac": 0.42558683096977395,
+   "H4K20me1": 0.6588393071230835,
+   "H4K8ac": 0.6713344750364862
+  },
+  "per_assay": {
+   "H3K27me3": 0.6375253418686947,
+   "H3K36me3": 1.0865238015579863,
+   "H3K4me1": 1.976206050102254,
+   "H3K4me3": 1.3180659114857745,
+   "H3K9ac": 0.44946459505474373,
+   "H3K9me3": 0.49382494128428056
+  },
+  "per_assay_reason": {},
+  "reason": "scorable assay with no target in this split and regime: H3K27ac, H3K4me2, H3K79me2"
+ },
+ "count_crps_oracle_scaled": {
+  "ci": [
+   null,
+   null
+  ],
+  "macro": null,
+  "missing_scorable": [
+   "H3K27ac",
+   "H3K4me2",
+   "H3K79me2"
+  ],
+  "n": 13,
+  "non_scorable_per_assay": {
+   "DNase-seq": 0.6572631918645927,
+   "H3K18ac": 0.3171369670039634,
+   "H4K20me1": 0.6443167225384699,
+   "H4K8ac": 0.6701381803485499
+  },
+  "per_assay": {
+   "H3K27me3": 0.5805964017042019,
+   "H3K36me3": 1.0381387096773378,
+   "H3K4me1": 1.707943294907942,
+   "H3K4me3": 1.0626841778867235,
+   "H3K9ac": 0.43914725592982723,
+   "H3K9me3": 0.4097174832822328
+  },
+  "per_assay_reason": {},
+  "reason": "scorable assay with no target in this split and regime: H3K27ac, H3K4me2, H3K79me2"
+ },
+ "count_crps_scale_error": {
+  "ci": [
+   null,
+   null
+  ],
+  "macro": null,
+  "missing_scorable": [
+   "H3K27ac",
+   "H3K4me2",
+   "H3K79me2"
+  ],
+  "n": 13,
+  "non_scorable_per_assay": {
+   "DNase-seq": 0.11970578796039932,
+   "H3K18ac": 0.10844986396581058,
+   "H4K20me1": 0.01452258458461353,
+   "H4K8ac": 0.0011962946879363612
+  },
+  "per_assay": {
+   "H3K27me3": 0.05692894016449279,
+   "H3K36me3": 0.048385091880648656,
+   "H3K4me1": 0.268262755194312,
+   "H3K4me3": 0.25538173359905086,
+   "H3K9ac": 0.010317339124916503,
+   "H3K9me3": 0.08410745800204777
+  },
+  "per_assay_reason": {},
+  "reason": "scorable assay with no target in this split and regime: H3K27ac, H3K4me2, H3K79me2"
+ },
+ "count_crps_skill_vs_position_average": {
+  "ci": [
+   null,
+   null
+  ],
+  "macro": null,
+  "missing_scorable": [
+   "H3K27ac",
+   "H3K4me2",
+   "H3K79me2"
+  ],
+  "n": 13,
+  "non_scorable_per_assay": {
+   "DNase-seq": -0.22773173530442115,
+   "H3K18ac": -0.18508353706078728,
+   "H4K20me1": 0.030748510488352587,
+   "H4K8ac": -0.027921642825225468
+  },
+  "per_assay": {
+   "H3K27me3": -0.12139669320229829,
+   "H3K36me3": -0.2829126686370324,
+   "H3K4me1": -0.4863857708034147,
+   "H3K4me3": -0.38279147367469585,
+   "H3K9ac": -0.040959491816092375,
+   "H3K9me3": -0.1134713133032963
+  },
+  "per_assay_reason": {},
+  "reason": "scorable assay with no target in this split and regime: H3K27ac, H3K4me2, H3K79me2"
+ },
+ "depth_law_abs_log2_error_never_trained": {
+  "ci": [
+   null,
+   null
+  ],
+  "macro": null,
+  "missing_scorable": [
+   "H2AFZ",
+   "H3K27ac",
+   "H3K27me3",
+   "H3K36me3",
+   "H3K4me1",
+   "H3K4me2",
+   "H3K4me3",
+   "H3K79me2",
+   "H3K9ac",
+   "H3K9me3",
+   "H4K20me1"
+  ],
+  "n": 0,
+  "non_scorable_per_assay": {},
+  "per_assay": {},
+  "per_assay_reason": {},
+  "reason": "no scorable assay with a target"
+ },
+ "device": "cpu",
+ "dnase_route": "macs2_no_control",
+ "error_budget": {
+  "added": null,
+  "explained": null,
+  "level": 0.49059120138506235,
+  "noise": null,
+  "per_assay": {
+   "DNase-seq": {
+    "added": null,
+    "explained": null,
+    "level": 0.9777731131963708,
+    "noise": null,
+    "shared": null,
+    "specific": null,
+    "unexplained": null
+   },
+   "H3K18ac": {
+    "added": null,
+    "explained": null,
+    "level": 1.6569367631263259,
+    "noise": null,
+    "shared": null,
+    "specific": null,
+    "unexplained": null
+   },
+   "H3K27me3": {
+    "added": null,
+    "explained": null,
+    "level": 0.6848991661439882,
+    "noise": null,
+    "shared": null,
+    "specific": null,
+    "unexplained": null
+   },
+   "H3K36me3": {
+    "added": 0.0,
+    "explained": 3.4724373806381314e-32,
+    "level": 0.1404878834029679,
+    "noise": 0.4437768703497969,
+    "shared": 0.30894362142688925,
+    "specific": 0.6910563785731382,
+    "unexplained": 0.5562231296502305
+   },
+   "H3K4me1": {
+    "added": null,
+    "explained": null,
+    "level": 0.07001275383625427,
+    "noise": null,
+    "shared": null,
+    "specific": null,
+    "unexplained": null
+   },
+   "H3K4me3": {
+    "added": 0.0,
+    "explained": 3.1544283171344547e-31,
+    "level": 0.5568087728249543,
+    "noise": 0.6889084965919045,
+    "shared": 0.18752625454226893,
+    "specific": 0.8124737454577368,
+    "unexplained": 0.3110915034081014
+   },
+   "H3K9ac": {
+    "added": null,
+    "explained": null,
+    "level": 0.40791087537495246,
+    "noise": null,
+    "shared": null,
+    "specific": null,
+    "unexplained": null
+   },
+   "H3K9me3": {
+    "added": null,
+    "explained": null,
+    "level": 1.0834277567272568,
+    "noise": null,
+    "shared": null,
+    "specific": null,
+    "unexplained": null
+   },
+   "H4K20me1": {
+    "added": null,
+    "explained": null,
+    "level": 0.3244042131940955,
+    "noise": null,
+    "shared": null,
+    "specific": null,
+    "unexplained": null
+   },
+   "H4K8ac": {
+    "added": null,
+    "explained": null,
+    "level": 0.06978892652766164,
+    "noise": null,
+    "shared": null,
+    "specific": null,
+    "unexplained": null
+   }
+  },
+  "shared": null,
+  "specific": null,
+  "unexplained": null
+ },
+ "evalset": "/project/6014832/mforooz/ONION/CO-D2/eval/eic_v1_2x/evalset.json",
+ "evalset_sha256": "138fa26e43c2e9525f84f8205ec941b89ab59c13466bad6e45df22ceb972ae03",
+ "explained_fraction_per_layer": {
+  "description": "reported only, never a selection input (PI ruling 32): per layer, the share of the layer term that the prediction difference of the pair captures, layers.explained_table",
+  "per_assay": {
+   "DNase-seq": {
+    "depth": 32188277.0,
+    "reason": "",
+    "rows": [],
+    "zero_by_shared_inputs": [
+     "isogenic",
+     "anisogenic"
+    ]
+   },
+   "H3K18ac": {
+    "depth": 16850875.0,
+    "reason": "",
+    "rows": [],
+    "zero_by_shared_inputs": [
+     "isogenic",
+     "anisogenic"
+    ]
+   },
+   "H3K27me3": {
+    "depth": 13758148.0,
+    "reason": "",
+    "rows": [
+     {
+      "captured": -7.703719777548943e-33,
+      "ci_high": null,
+      "ci_low": null,
+      "explained_fraction": -7.4531504289038665e-31,
+      "flag": "ok",
+      "increment_over": "isogenic",
+      "layer": "experiment",
+      "layer_term": 0.010336192528294277,
+      "n_cells": 1,
+      "n_pairs": 1,
+      "rung": "other_experiment"
+     }
+    ],
+    "zero_by_shared_inputs": [
+     "isogenic",
+     "anisogenic"
+    ]
+   },
+   "H3K36me3": {
+    "depth": 15877943.0,
+    "reason": "",
+    "rows": [
+     {
+      "captured": -3.590053786959332e-33,
+      "ci_high": null,
+      "ci_low": null,
+      "explained_fraction": 2.5817731218180715e-31,
+      "flag": "ok",
+      "increment_over": "isogenic",
+      "layer": "experiment",
+      "layer_term": -0.013905380595298916,
+      "n_cells": 1,
+      "n_pairs": 2,
+      "rung": "other_experiment"
+     }
+    ],
+    "zero_by_shared_inputs": [
+     "isogenic",
+     "anisogenic"
+    ]
+   },
+   "H3K4me1": {
+    "depth": 25995841.0,
+    "reason": "",
+    "rows": [
+     {
+      "captured": 0.0,
+      "ci_high": null,
+      "ci_low": null,
+      "explained_fraction": 0.0,
+      "flag": "ok",
+      "increment_over": "isogenic",
+      "layer": "experiment",
+      "layer_term": 0.023646087067522803,
+      "n_cells": 1,
+      "n_pairs": 1,
+      "rung": "other_experiment"
+     }
+    ],
+    "zero_by_shared_inputs": [
+     "isogenic",
+     "anisogenic"
+    ]
+   },
+   "H3K4me3": {
+    "depth": 17812308.0,
+    "reason": "",
+    "rows": [],
+    "zero_by_shared_inputs": [
+     "isogenic",
+     "anisogenic"
+    ]
+   },
+   "H3K9ac": {
+    "depth": 9456113.0,
+    "reason": "",
+    "rows": [
+     {
+      "captured": 2.992808617193544e-35,
+      "ci_high": null,
+      "ci_low": null,
+      "explained_fraction": 1.0615802855642883e-32,
+      "flag": "ok",
+      "increment_over": "isogenic",
+      "layer": "experiment",
+      "layer_term": 0.0028192013905031232,
+      "n_cells": 1,
+      "n_pairs": 1,
+      "rung": "other_experiment"
+     }
+    ],
+    "zero_by_shared_inputs": [
+     "isogenic",
+     "anisogenic"
+    ]
+   },
+   "H3K9me3": {
+    "depth": 8469153.0,
+    "reason": "",
+    "rows": [
+     {
+      "captured": -1.6204894922695727e-33,
+      "ci_high": null,
+      "ci_low": null,
+      "explained_fraction": -3.572741878672732e-31,
+      "flag": "ok",
+      "increment_over": "isogenic",
+      "layer": "experiment",
+      "layer_term": 0.004535702682421552,
+      "n_cells": 1,
+      "n_pairs": 1,
+      "rung": "other_experiment"
+     }
+    ],
+    "zero_by_shared_inputs": [
+     "isogenic",
+     "anisogenic"
+    ]
+   },
+   "H4K20me1": {
+    "depth": 20832426.0,
+    "reason": "",
+    "rows": [
+     {
+      "captured": -7.775942150463465e-33,
+      "ci_high": null,
+      "ci_low": null,
+      "explained_fraction": -1.007812372522982e-30,
+      "flag": "ok",
+      "increment_over": "isogenic",
+      "layer": "experiment",
+      "layer_term": 0.007715664505087372,
+      "n_cells": 1,
+      "n_pairs": 1,
+      "rung": "other_experiment"
+     }
+    ],
+    "zero_by_shared_inputs": [
+     "isogenic",
+     "anisogenic"
+    ]
+   },
+   "H4K8ac": {
+    "depth": 14420466.0,
+    "reason": "",
+    "rows": [
+     {
+      "captured": 2.029373447259597e-33,
+      "ci_high": null,
+      "ci_low": null,
+      "explained_fraction": -5.612756998944472e-31,
+      "flag": "ok",
+      "increment_over": "isogenic",
+      "layer": "experiment",
+      "layer_term": -0.0036156445889983096,
+      "n_cells": 1,
+      "n_pairs": 1,
+      "rung": "other_experiment"
+     }
+    ],
+    "zero_by_shared_inputs": [
+     "isogenic",
+     "anisogenic"
+    ]
+   }
+  }
+ },
+ "infer_batch": 8,
+ "n_pairs": 0,
+ "n_regions": 256,
+ "n_replicate_pairs": 13,
+ "n_targets": 13,
+ "n_targets_without_halves": 0,
+ "noise_floor": "pseudoreplicate_halves",
+ "other_experiment_gap_closed_by_pair_class": {
+  "definition": "Close-out D2 (add-on scores only): the other_experiment pair jobs (EIC track pr1 -> second\n    experiment pr2, the model given the second experiment's own covariates) split by pair class\n    (`experiment`, `experiment;lab`, `experiment;donor`, `experiment;lab;donor`, ... from\n    `knobs_differing`; `layers.pair_class_of`), with the per-pair records. The value is\n    `replicate_pair_gap_closed_vs_depth_only` restricted to a class: (depth-only - model) /\n    (depth-only - floor) on mean CRPS, floor = the second experiment's pr1 -> pr2. The class\n    `experiment;lab` is the cross-lab correction at the same donor; no aggregate reads this block.",
+  "per_pair": [
+   {
+    "assay": "H3K4me3",
+    "cell": "C20",
+    "crps_depth_only": 0.1583427102335506,
+    "crps_floor": 0.1614346914901949,
+    "crps_model": 0.3157488967272516,
+    "crps_model_oracle_scaled": 0.17698992145345435,
+    "gap_closed": null,
+    "knob": "experiment;lab;donor;read_length;platform",
+    "log2_depth_ratio": -2.4675750732421875,
+    "pair_class": "experiment;lab;donor",
+    "pair_id": "p0c008a3ada09",
+    "pred_total": 3547698.5,
+    "source": "ENCSR901SIL.pooled.uniform.base",
+    "source_total": 7334105.0,
+    "target": "ENCSR487BEW.pooled.uniform.base"
+   },
+   {
+    "assay": "H3K9me3",
+    "cell": "C17",
+    "crps_depth_only": 0.2221044344486588,
+    "crps_floor": 0.2131864203275625,
+    "crps_model": 0.43585255796826083,
+    "crps_model_oracle_scaled": 0.2075329158519677,
+    "gap_closed": -23.968130193241468,
+    "knob": "experiment;lab;read_length",
+    "log2_depth_ratio": -0.8429756164550781,
+    "pair_class": "experiment;lab",
+    "pair_id": "p20ecf4e34056",
+    "pred_total": 5028508.0,
+    "source": "ENCSR883AQJ.pooled.uniform.base",
+    "source_total": 1149116.0,
+    "target": "ENCSR395USV.pooled.uniform.base"
+   },
+   {
+    "assay": "H3K9ac",
+    "cell": "C27",
+    "crps_depth_only": 0.8495154554788066,
+    "crps_floor": 0.5681843817581268,
+    "crps_model": 0.7047099128985846,
+    "crps_model_oracle_scaled": 0.6987044292174519,
+    "gap_closed": 0.5147157783359276,
+    "knob": "experiment;lab;donor;platform;source",
+    "log2_depth_ratio": 1.519144058227539,
+    "pair_class": "experiment;lab;donor",
+    "pair_id": "p296f88c0d819",
+    "pred_total": 3757937.25,
+    "source": "ENCSR701KJD.pooled.uniform.base",
+    "source_total": 1265823.0,
+    "target": "ENCSR006GPM.pooled.native.base"
+   },
+   {
+    "assay": "H3K27me3",
+    "cell": "C24",
+    "crps_depth_only": 0.8517129146704843,
+    "crps_floor": 0.6587649662754117,
+    "crps_model": 0.6027388081740093,
+    "crps_model_oracle_scaled": 0.5845102546037391,
+    "gap_closed": 1.2903692864703877,
+    "knob": "experiment;lab;read_length;platform",
+    "log2_depth_ratio": 1.1904830932617188,
+    "pair_class": "experiment;lab",
+    "pair_id": "p308f8f57f7b1",
+    "pred_total": 5426030.0,
+    "source": "ENCSR000EWB.pooled.uniform.base",
+    "source_total": 1589710.0,
+    "target": "ENCSR000AKQ.pooled.uniform.base"
+   },
+   {
+    "assay": "H3K4me3",
+    "cell": "C45",
+    "crps_depth_only": 0.8778143183619911,
+    "crps_floor": 0.7894619386895605,
+    "crps_model": 0.680928403741927,
+    "crps_model_oracle_scaled": 0.6621811895253766,
+    "gap_closed": 2.2284166578198032,
+    "knob": "experiment;donor",
+    "log2_depth_ratio": 0.40081787109375,
+    "pair_class": "experiment;donor",
+    "pair_id": "p31fcb7647ca1",
+    "pred_total": 3547698.5,
+    "source": "ENCSR611DJQ.pooled.uniform.base",
+    "source_total": 3485857.0,
+    "target": "ENCSR619EZG.pooled.uniform.base"
+   },
+   {
+    "assay": "H3K18ac",
+    "cell": "C27",
+    "crps_depth_only": 0.31639738872015455,
+    "crps_floor": 0.29330415594855014,
+    "crps_model": 0.38378010322756856,
+    "crps_model_oracle_scaled": 0.2747430058640397,
+    "gap_closed": -2.9178554243071693,
+    "knob": "experiment",
+    "log2_depth_ratio": 0.862518310546875,
+    "pair_class": "experiment",
+    "pair_id": "p59849d8dac8a",
+    "pred_total": 4500541.0,
+    "source": "ENCSR604THF.pooled.uniform.base",
+    "source_total": 776087.0,
+    "target": "ENCSR433FJP.pooled.uniform.base"
+   },
+   {
+    "assay": "DNase-seq",
+    "cell": "C03",
+    "crps_depth_only": 0.30096550716077275,
+    "crps_floor": 0.304198466270553,
+    "crps_model": 0.7004729619610828,
+    "crps_model_oracle_scaled": 0.30320238743328637,
+    "gap_closed": null,
+    "knob": "experiment;donor;platform",
+    "log2_depth_ratio": -0.43726539611816406,
+    "pair_class": "experiment;donor",
+    "pair_id": "p88d94e2f0e9d",
+    "pred_total": 7448327.0,
+    "source": "ENCSR080PZL.pooled.uniform.base",
+    "source_total": 2011621.0,
+    "target": "ENCSR060BFU.pooled.uniform.base"
+   },
+   {
+    "assay": "H3K36me3",
+    "cell": "C46",
+    "crps_depth_only": 0.1288602912660619,
+    "crps_floor": 0.13739431691474185,
+    "crps_model": 0.4185400060392658,
+    "crps_model_oracle_scaled": 0.14961649400218502,
+    "gap_closed": null,
+    "knob": "experiment",
+    "log2_depth_ratio": -1.7257347106933594,
+    "pair_class": "experiment",
+    "pair_id": "p940361cded7f",
+    "pred_total": 5272631.5,
+    "source": "ENCSR038OIN.pooled.uniform.base",
+    "source_total": 2300400.0,
+    "target": "ENCSR005YZH.pooled.uniform.base"
+   },
+   {
+    "assay": "H4K20me1",
+    "cell": "C17",
+    "crps_depth_only": 0.2622972368307467,
+    "crps_floor": 0.27372770401453306,
+    "crps_model": 0.45546396331795647,
+    "crps_model_oracle_scaled": 0.2265560947940438,
+    "gap_closed": null,
+    "knob": "experiment;lab;platform",
+    "log2_depth_ratio": -0.8206501007080078,
+    "pair_class": "experiment;lab",
+    "pair_id": "pcbc9fc4f8b6c",
+    "pred_total": 5450986.5,
+    "source": "ENCSR728SZE.pooled.uniform.base",
+    "source_total": 2073182.0,
+    "target": "ENCSR000AMH.pooled.uniform.base"
+   },
+   {
+    "assay": "H3K4me1",
+    "cell": "C32",
+    "crps_depth_only": 0.23294881933616451,
+    "crps_floor": 0.2545012204835559,
+    "crps_model": 0.43791240667685255,
+    "crps_model_oracle_scaled": 0.23751135836090548,
+    "gap_closed": null,
+    "knob": "experiment;lab;donor",
+    "log2_depth_ratio": -2.3804931640625,
+    "pair_class": "experiment;lab;donor",
+    "pair_id": "pe3fb69e4e80b",
+    "pred_total": 5319806.0,
+    "source": "ENCSR254NLC.pooled.uniform.base",
+    "source_total": 6110282.0,
+    "target": "ENCSR169BGF.pooled.uniform.base"
+   },
+   {
+    "assay": "H4K8ac",
+    "cell": "C23",
+    "crps_depth_only": 0.20319139457192947,
+    "crps_floor": 0.21842352547893876,
+    "crps_model": 0.29196140132005355,
+    "crps_model_oracle_scaled": 0.24604323171630058,
+    "gap_closed": null,
+    "knob": "experiment",
+    "log2_depth_ratio": -0.5100574493408203,
+    "pair_class": "experiment",
+    "pair_id": "pe6a7f524d54d",
+    "pred_total": 2473731.25,
+    "source": "ENCSR444TMC.pooled.uniform.base",
+    "source_total": 1626244.0,
+    "target": "ENCSR004ZWW.pooled.uniform.base"
+   },
+   {
+    "assay": "H3K36me3",
+    "cell": "C47",
+    "crps_depth_only": 0.866784074709447,
+    "crps_floor": 0.824616676708095,
+    "crps_model": 0.6924556937257348,
+    "crps_model_oracle_scaled": 0.6923366541486611,
+    "gap_closed": 4.134198201608811,
+    "knob": "experiment;donor",
+    "log2_depth_ratio": 0.11746025085449219,
+    "pair_class": "experiment;donor",
+    "pair_id": "pf052a2bf8fd8",
+    "pred_total": 5272631.5,
+    "source": "ENCSR869GBP.pooled.uniform.base",
+    "source_total": 4541960.0,
+    "target": "ENCSR642DSR.pooled.uniform.base"
+   },
+   {
+    "assay": "H3K4me3",
+    "cell": "C02",
+    "crps_depth_only": 0.5360748034687504,
+    "crps_floor": 0.4928173410589531,
+    "crps_model": 0.3888420810530606,
+    "crps_model_oracle_scaled": 0.37758282329784587,
+    "gap_closed": 3.403637527807072,
+    "knob": "experiment;lab;donor;read_length",
+    "log2_depth_ratio": 0.4609203338623047,
+    "pair_class": "experiment;lab;donor",
+    "pair_id": "pfb4af9218f9f",
+    "pred_total": 3547698.5,
+    "source": "ENCSR234YIU.pooled.uniform.base",
+    "source_total": 1007878.0,
+    "target": "ENCSR926NMC.pooled.uniform.base"
+   }
+  ],
+  "per_pair_class": {
+   "experiment": {
+    "assays": [
+     "H3K18ac",
+     "H3K36me3",
+     "H4K8ac"
+    ],
+    "flag": "few pairs",
+    "n_cells": 3,
+    "n_pairs": 3,
+    "reason": "baseline is not above the floor",
+    "value": null
+   },
+   "experiment;donor": {
+    "assays": [
+     "DNase-seq",
+     "H3K36me3",
+     "H3K4me3"
+    ],
+    "flag": "few pairs",
+    "n_cells": 3,
+    "n_pairs": 3,
+    "reason": "",
+    "value": -0.22227878358281672
+   },
+   "experiment;lab": {
+    "assays": [
+     "H3K27me3",
+     "H3K9me3",
+     "H4K20me1"
+    ],
+    "flag": "few pairs",
+    "n_cells": 2,
+    "n_pairs": 3,
+    "reason": "",
+    "value": -0.8293660970853668
+   },
+   "experiment;lab;donor": {
+    "assays": [
+     "H3K4me1",
+     "H3K4me3",
+     "H3K9ac"
+    ],
+    "flag": "few pairs",
+    "n_cells": 4,
+    "n_pairs": 4,
+    "reason": "",
+    "value": -0.2344820126169949
+   }
+  },
+  "pooled": {
+   "assays": [
+    "DNase-seq",
+    "H3K18ac",
+    "H3K27me3",
+    "H3K36me3",
+    "H3K4me1",
+    "H3K4me3",
+    "H3K9ac",
+    "H3K9me3",
+    "H4K20me1",
+    "H4K8ac"
+   ],
+   "flag": "ok",
+   "n_cells": 11,
+   "n_pairs": 13,
+   "reason": "",
+   "value": -1.1384200930272133
+  }
+ },
+ "pit_deviation_per_stratum": {
+  "description": "E5: PIT deviation per region stratum of the eval set (strata.py masks), one metric block per stratum, pooled over the assay's targets as pit_deviation_pooled is; pit_deviation_worst_stratum is the per-assay maximum over these strata. The same values follow at report time from suffstats.npz pit/<regime>/<target>/<stratum> (report_extras.py strata).",
+  "per_stratum": {
+   "enhancers": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K4me2",
+     "H3K79me2"
+    ],
+    "n": 13,
+    "non_scorable_per_assay": {
+     "DNase-seq": 0.026599077689830036,
+     "H3K18ac": 0.028256287267907874,
+     "H4K20me1": 0.06505427033580971,
+     "H4K8ac": 0.10149728293082347
+    },
+    "per_assay": {
+     "H3K27me3": 0.015198131932738107,
+     "H3K36me3": 0.12272278009347157,
+     "H3K4me1": 0.31276851795411265,
+     "H3K4me3": 0.17672978476517848,
+     "H3K9ac": 0.06002851193556843,
+     "H3K9me3": 0.07031554762679618
+    },
+    "per_assay_reason": {},
+    "reason": "scorable assay with no target in this split and regime: H3K27ac, H3K4me2, H3K79me2"
+   },
+   "gene_bodies": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K4me2",
+     "H3K79me2"
+    ],
+    "n": 13,
+    "non_scorable_per_assay": {
+     "DNase-seq": 0.09872572170396729,
+     "H3K18ac": 0.11211200828863307,
+     "H4K20me1": 0.011376098250234308,
+     "H4K8ac": 0.015706437984690614
+    },
+    "per_assay": {
+     "H3K27me3": 0.0839631153817508,
+     "H3K36me3": 0.10586199824324417,
+     "H3K4me1": 0.16912301993972445,
+     "H3K4me3": 0.14777407721814756,
+     "H3K9ac": 0.021558084298889304,
+     "H3K9me3": 0.11099650566666326
+    },
+    "per_assay_reason": {},
+    "reason": "scorable assay with no target in this split and regime: H3K27ac, H3K4me2, H3K79me2"
+   },
+   "heterochromatin": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K4me2",
+     "H3K79me2"
+    ],
+    "n": 13,
+    "non_scorable_per_assay": {
+     "DNase-seq": 0.13099782825096928,
+     "H3K18ac": 0.12412158046624848,
+     "H4K20me1": 0.04298729196591084,
+     "H4K8ac": 0.1074126598526498
+    },
+    "per_assay": {
+     "H3K27me3": 0.06525216857281374,
+     "H3K36me3": 0.07018392876681981,
+     "H3K4me1": 0.2129404848944223,
+     "H3K4me3": 0.14457488391736395,
+     "H3K9ac": 0.033582463699245946,
+     "H3K9me3": 0.06215904651227509
+    },
+    "per_assay_reason": {},
+    "reason": "scorable assay with no target in this split and regime: H3K27ac, H3K4me2, H3K79me2"
+   },
+   "mappability_d0": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K4me2",
+     "H3K79me2"
+    ],
+    "n": 13,
+    "non_scorable_per_assay": {
+     "DNase-seq": 0.23981430319293617,
+     "H3K18ac": 0.18195401630245725,
+     "H4K20me1": 0.1758679514293871,
+     "H4K8ac": 0.11720386533848519
+    },
+    "per_assay": {
+     "H3K27me3": 0.17835644161207265,
+     "H3K36me3": 0.0631849681924382,
+     "H3K4me1": 0.05743286764663745,
+     "H3K4me3": 0.013523363511834854,
+     "H3K9ac": 0.1043175207878779,
+     "H3K9me3": 0.16584105980018832
+    },
+    "per_assay_reason": {},
+    "reason": "scorable assay with no target in this split and regime: H3K27ac, H3K4me2, H3K79me2"
+   },
+   "mappability_d1": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K4me2",
+     "H3K79me2"
+    ],
+    "n": 13,
+    "non_scorable_per_assay": {
+     "DNase-seq": 0.16324577259616058,
+     "H3K18ac": 0.13501545645518123,
+     "H4K20me1": 0.06978798745818078,
+     "H4K8ac": 0.03583505402103
+    },
+    "per_assay": {
+     "H3K27me3": 0.0848937315163748,
+     "H3K36me3": 0.058407995934565526,
+     "H3K4me1": 0.10703363622474728,
+     "H3K4me3": 0.11955653291015891,
+     "H3K9ac": 0.029078212957994048,
+     "H3K9me3": 0.1067595609198883
+    },
+    "per_assay_reason": {},
+    "reason": "scorable assay with no target in this split and regime: H3K27ac, H3K4me2, H3K79me2"
+   },
+   "mappability_d2": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K4me2",
+     "H3K79me2"
+    ],
+    "n": 13,
+    "non_scorable_per_assay": {
+     "DNase-seq": 0.1377689474899712,
+     "H3K18ac": 0.12667274496735834,
+     "H4K20me1": 0.04794594518604117,
+     "H4K8ac": 0.02424301541404859
+    },
+    "per_assay": {
+     "H3K27me3": 0.07291070283335031,
+     "H3K36me3": 0.06288191403453838,
+     "H3K4me1": 0.14414204145998505,
+     "H3K4me3": 0.13649376996009238,
+     "H3K9ac": 0.020551547786042308,
+     "H3K9me3": 0.10115796198458
+    },
+    "per_assay_reason": {},
+    "reason": "scorable assay with no target in this split and regime: H3K27ac, H3K4me2, H3K79me2"
+   },
+   "mappability_d3": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K4me2",
+     "H3K79me2"
+    ],
+    "n": 13,
+    "non_scorable_per_assay": {
+     "DNase-seq": 0.1190090911832636,
+     "H3K18ac": 0.12359186870329657,
+     "H4K20me1": 0.0344614737713975,
+     "H4K8ac": 0.021260810984651827
+    },
+    "per_assay": {
+     "H3K27me3": 0.07740155276650433,
+     "H3K36me3": 0.06449053363665626,
+     "H3K4me1": 0.16445428250666877,
+     "H3K4me3": 0.14484688450446073,
+     "H3K9ac": 0.023335229971319944,
+     "H3K9me3": 0.09281434402651932
+    },
+    "per_assay_reason": {},
+    "reason": "scorable assay with no target in this split and regime: H3K27ac, H3K4me2, H3K79me2"
+   },
+   "mappability_d4": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K4me2",
+     "H3K79me2"
+    ],
+    "n": 13,
+    "non_scorable_per_assay": {
+     "DNase-seq": 0.10237827114020412,
+     "H3K18ac": 0.12442883073610106,
+     "H4K20me1": 0.026231422457730934,
+     "H4K8ac": 0.02298759102031797
+    },
+    "per_assay": {
+     "H3K27me3": 0.08884637248510871,
+     "H3K36me3": 0.06188198564471312,
+     "H3K4me1": 0.1729881464009794,
+     "H3K4me3": 0.15224665860273995,
+     "H3K9ac": 0.0248443434893454,
+     "H3K9me3": 0.0877146370969881
+    },
+    "per_assay_reason": {},
+    "reason": "scorable assay with no target in this split and regime: H3K27ac, H3K4me2, H3K79me2"
+   },
+   "mappability_d5": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K4me2",
+     "H3K79me2"
+    ],
+    "n": 13,
+    "non_scorable_per_assay": {
+     "DNase-seq": 0.09379877990083771,
+     "H3K18ac": 0.12885979927815305,
+     "H4K20me1": 0.02671643677953354,
+     "H4K8ac": 0.028856246251711713
+    },
+    "per_assay": {
+     "H3K27me3": 0.0952100924034457,
+     "H3K36me3": 0.047409227747827756,
+     "H3K4me1": 0.1701027227015399,
+     "H3K4me3": 0.15615260682851068,
+     "H3K9ac": 0.022566571674205886,
+     "H3K9me3": 0.09411191812679445
+    },
+    "per_assay_reason": {},
+    "reason": "scorable assay with no target in this split and regime: H3K27ac, H3K4me2, H3K79me2"
+   },
+   "mappability_d6": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K4me2",
+     "H3K79me2"
+    ],
+    "n": 13,
+    "non_scorable_per_assay": {
+     "DNase-seq": 0.08941143889103506,
+     "H3K18ac": 0.13159384598400875,
+     "H4K20me1": 0.025498039476783037,
+     "H4K8ac": 0.028612626372075532
+    },
+    "per_assay": {
+     "H3K27me3": 0.09142915899779612,
+     "H3K36me3": 0.047523118524263566,
+     "H3K4me1": 0.16526338649452252,
+     "H3K4me3": 0.1598094679466539,
+     "H3K9ac": 0.02276208465196901,
+     "H3K9me3": 0.0980330618316725
+    },
+    "per_assay_reason": {},
+    "reason": "scorable assay with no target in this split and regime: H3K27ac, H3K4me2, H3K79me2"
+   },
+   "mappability_d7": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K4me2",
+     "H3K79me2"
+    ],
+    "n": 13,
+    "non_scorable_per_assay": {
+     "DNase-seq": null,
+     "H3K18ac": null,
+     "H4K20me1": null,
+     "H4K8ac": null
+    },
+    "per_assay": {
+     "H3K27me3": null,
+     "H3K36me3": null,
+     "H3K4me1": null,
+     "H3K4me3": null,
+     "H3K9ac": null,
+     "H3K9me3": null
+    },
+    "per_assay_reason": {
+     "DNase-seq": "no bins",
+     "H3K18ac": "no bins",
+     "H3K27me3": "no bins",
+     "H3K36me3": "no bins",
+     "H3K4me1": "no bins",
+     "H3K4me3": "no bins",
+     "H3K9ac": "no bins",
+     "H3K9me3": "no bins",
+     "H4K20me1": "no bins",
+     "H4K8ac": "no bins"
+    },
+    "reason": "undefined for H3K27me3 (no bins), H3K36me3 (no bins), H3K4me1 (no bins), H3K4me3 (no bins), H3K9ac (no bins), H3K9me3 (no bins)"
+   },
+   "mappability_d8": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K4me2",
+     "H3K79me2"
+    ],
+    "n": 13,
+    "non_scorable_per_assay": {
+     "DNase-seq": 0.06987666647960913,
+     "H3K18ac": 0.1111030959934361,
+     "H4K20me1": 0.015376364572328669,
+     "H4K8ac": 0.01603255478265793
+    },
+    "per_assay": {
+     "H3K27me3": 0.0782173270075563,
+     "H3K36me3": 0.059746884267501355,
+     "H3K4me1": 0.19627446238700505,
+     "H3K4me3": 0.1668453613514706,
+     "H3K9ac": 0.02570001598262996,
+     "H3K9me3": 0.10604545609021658
+    },
+    "per_assay_reason": {},
+    "reason": "scorable assay with no target in this split and regime: H3K27ac, H3K4me2, H3K79me2"
+   },
+   "mappability_d9": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K4me2",
+     "H3K79me2"
+    ],
+    "n": 13,
+    "non_scorable_per_assay": {
+     "DNase-seq": null,
+     "H3K18ac": null,
+     "H4K20me1": null,
+     "H4K8ac": null
+    },
+    "per_assay": {
+     "H3K27me3": null,
+     "H3K36me3": null,
+     "H3K4me1": null,
+     "H3K4me3": null,
+     "H3K9ac": null,
+     "H3K9me3": null
+    },
+    "per_assay_reason": {
+     "DNase-seq": "no bins",
+     "H3K18ac": "no bins",
+     "H3K27me3": "no bins",
+     "H3K36me3": "no bins",
+     "H3K4me1": "no bins",
+     "H3K4me3": "no bins",
+     "H3K9ac": "no bins",
+     "H3K9me3": "no bins",
+     "H4K20me1": "no bins",
+     "H4K8ac": "no bins"
+    },
+    "reason": "undefined for H3K27me3 (no bins), H3K36me3 (no bins), H3K4me1 (no bins), H3K4me3 (no bins), H3K9ac (no bins), H3K9me3 (no bins)"
+   },
+   "promoters": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K4me2",
+     "H3K79me2"
+    ],
+    "n": 13,
+    "non_scorable_per_assay": {
+     "DNase-seq": 0.2039582765952765,
+     "H3K18ac": 0.10908193542628855,
+     "H4K20me1": 0.019337858391959218,
+     "H4K8ac": 0.20149418870735564
+    },
+    "per_assay": {
+     "H3K27me3": 0.027094227274234838,
+     "H3K36me3": 0.1037083975645375,
+     "H3K4me1": 0.24937960510075102,
+     "H3K4me3": 0.30869722558681856,
+     "H3K9ac": 0.2032242064845801,
+     "H3K9me3": 0.05964033502338351
+    },
+    "per_assay_reason": {},
+    "reason": "scorable assay with no target in this split and regime: H3K27ac, H3K4me2, H3K79me2"
+   }
+  },
+  "strata": [
+   "enhancers",
+   "gene_bodies",
+   "heterochromatin",
+   "mappability_d0",
+   "mappability_d1",
+   "mappability_d2",
+   "mappability_d3",
+   "mappability_d4",
+   "mappability_d5",
+   "mappability_d6",
+   "mappability_d7",
+   "mappability_d8",
+   "mappability_d9",
+   "promoters"
+  ]
+ },
+ "pit_deviation_pooled": {
+  "ci": [
+   null,
+   null
+  ],
+  "macro": null,
+  "missing_scorable": [
+   "H3K27ac",
+   "H3K4me2",
+   "H3K79me2"
+  ],
+  "n": 13,
+  "non_scorable_per_assay": {
+   "DNase-seq": 0.11136633536460705,
+   "H3K18ac": 0.12583725386784694,
+   "H4K20me1": 0.037767033221387275,
+   "H4K8ac": 0.02824896415086368
+  },
+  "per_assay": {
+   "H3K27me3": 0.08979426950501598,
+   "H3K36me3": 0.04853729988040674,
+   "H3K4me1": 0.15180802256254705,
+   "H3K4me3": 0.1411255911470052,
+   "H3K9ac": 0.019173770746249177,
+   "H3K9me3": 0.10617115088528803
+  },
+  "per_assay_reason": {},
+  "reason": "scorable assay with no target in this split and regime: H3K27ac, H3K4me2, H3K79me2"
+ },
+ "pit_deviation_worst_stratum": {
+  "ci": [
+   null,
+   null
+  ],
+  "macro": null,
+  "missing_scorable": [
+   "H3K27ac",
+   "H3K4me2",
+   "H3K79me2"
+  ],
+  "n": 13,
+  "non_scorable_per_assay": {
+   "DNase-seq": 0.23981430319293617,
+   "H3K18ac": 0.18195401630245725,
+   "H4K20me1": 0.1758679514293871,
+   "H4K8ac": 0.20149418870735564
+  },
+  "per_assay": {
+   "H3K27me3": 0.17835644161207265,
+   "H3K36me3": 0.12272278009347157,
+   "H3K4me1": 0.31276851795411265,
+   "H3K4me3": 0.30869722558681856,
+   "H3K9ac": 0.2032242064845801,
+   "H3K9me3": 0.16584105980018832
+  },
+  "per_assay_reason": {},
+  "reason": "scorable assay with no target in this split and regime: H3K27ac, H3K4me2, H3K79me2"
+ },
+ "predicted_control": {
+  "n_targets": 0,
+  "reason": "predict_control is off or the predictor is a training-free baseline"
+ },
+ "predicted_over_replicate_variance": {
+  "ci": [
+   null,
+   null
+  ],
+  "description": "lower-bound check: mean predicted NB variance over the pair value of the target's own pseudoreplicate halves (the sampling term); a calibrated model scores >= 1 here. per_rung gives the ratio at every populated rung; pass = ratio >= 1 at pseudoreplicate and <= 1 at upper_bound_rung (PI ruling 31). PIT stays the selection metric.",
+  "macro": null,
+  "missing_scorable": [
+   "H3K27ac",
+   "H3K4me2",
+   "H3K79me2"
+  ],
+  "n": 13,
+  "n_undefined_upper_bound": 3,
+  "non_scorable_per_assay": {
+   "DNase-seq": 3.5194434894870894,
+   "H3K18ac": 5.5544614965073755,
+   "H4K20me1": 2.197992785626031,
+   "H4K8ac": 1.06553366027547
+  },
+  "pass_rate": {
+   "ci": [
+    null,
+    null
+   ],
+   "macro": null,
+   "missing_scorable": [
+    "H3K27ac",
+    "H3K4me2",
+    "H3K79me2"
+   ],
+   "n": 13,
+   "non_scorable_per_assay": {
+    "DNase-seq": 0.0,
+    "H3K18ac": 0.0,
+    "H4K20me1": 0.0,
+    "H4K8ac": 0.0
+   },
+   "per_assay": {
+    "H3K27me3": 0.0,
+    "H3K36me3": 0.0,
+    "H3K4me1": 0.0,
+    "H3K4me3": null,
+    "H3K9ac": 0.0,
+    "H3K9me3": null
+   },
+   "per_assay_reason": {
+    "H3K4me3": "2 of 3 targets undefined: rung other_experiment not populated for this cell and assay",
+    "H3K9me3": "1 of 1 targets undefined: rung other_experiment not populated for this cell and assay"
+   },
+   "reason": "undefined for H3K4me3 (2 of 3 targets undefined: rung other_experiment not populated for this cell and assay), H3K9me3 (1 of 1 targets undefined: rung other_experiment not populated for this cell and assay)"
+  },
+  "per_assay": {
+   "H3K27me3": 3.1163101947972414,
+   "H3K36me3": 1.7009948512797868,
+   "H3K4me1": 0.8278252264064193,
+   "H3K4me3": 1.439505312495302,
+   "H3K9ac": 2.9963228380208498,
+   "H3K9me3": 3.7358093642313936
+  },
+  "per_assay_reason": {},
+  "per_rung": {
+   "isogenic": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K4me2",
+     "H3K79me2"
+    ],
+    "n": 13,
+    "non_scorable_per_assay": {
+     "DNase-seq": null,
+     "H3K18ac": null,
+     "H4K20me1": 1.9593405098037175,
+     "H4K8ac": 0.7884292479732979
+    },
+    "per_assay": {
+     "H3K27me3": 2.3994495296534044,
+     "H3K36me3": null,
+     "H3K4me1": 0.6602329795503857,
+     "H3K4me3": null,
+     "H3K9ac": 2.4274021614150016,
+     "H3K9me3": 1.7614383398689952
+    },
+    "per_assay_reason": {
+     "DNase-seq": "1 of 1 targets undefined: rung isogenic not populated",
+     "H3K18ac": "1 of 1 targets undefined: rung isogenic not populated",
+     "H3K36me3": "1 of 2 targets undefined: rung isogenic not populated",
+     "H3K4me3": "3 of 3 targets undefined: rung isogenic not populated"
+    },
+    "reason": "undefined for H3K36me3 (1 of 2 targets undefined: rung isogenic not populated), H3K4me3 (3 of 3 targets undefined: rung isogenic not populated)"
+   },
+   "other_experiment": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K4me2",
+     "H3K79me2"
+    ],
+    "n": 13,
+    "non_scorable_per_assay": {
+     "DNase-seq": 3.1472573014370657,
+     "H3K18ac": 7.203798457585396,
+     "H4K20me1": 2.146389193890233,
+     "H4K8ac": 1.1206135294535773
+    },
+    "per_assay": {
+     "H3K27me3": 3.4431030590716385,
+     "H3K36me3": 1.4006671752281914,
+     "H3K4me1": 0.42565682769033775,
+     "H3K4me3": null,
+     "H3K9ac": 1.5983317711864988,
+     "H3K9me3": null
+    },
+    "per_assay_reason": {
+     "H3K4me3": "2 of 3 targets undefined: no pair of rung other_experiment gave a defined ratio",
+     "H3K9me3": "1 of 1 targets undefined: no pair of rung other_experiment gave a defined ratio"
+    },
+    "reason": "undefined for H3K4me3 (2 of 3 targets undefined: no pair of rung other_experiment gave a defined ratio), H3K9me3 (1 of 1 targets undefined: no pair of rung other_experiment gave a defined ratio)"
+   },
+   "pseudoreplicate": {
+    "ci": [
+     1.3719934487206755,
+     2.9161097154693763
+    ],
+    "macro": 2.3027946312051655,
+    "missing_scorable": [
+     "H3K27ac",
+     "H3K4me2",
+     "H3K79me2"
+    ],
+    "n": 13,
+    "non_scorable_per_assay": {
+     "DNase-seq": 3.5194434894870894,
+     "H3K18ac": 5.5544614965073755,
+     "H4K20me1": 2.197992785626031,
+     "H4K8ac": 1.06553366027547
+    },
+    "per_assay": {
+     "H3K27me3": 3.1163101947972414,
+     "H3K36me3": 1.7009948512797868,
+     "H3K4me1": 0.8278252264064193,
+     "H3K4me3": 1.439505312495302,
+     "H3K9ac": 2.9963228380208498,
+     "H3K9me3": 3.7358093642313936
+    },
+    "per_assay_reason": {},
+    "reason": ""
+   }
+  },
+  "per_target": {
+   "ENCSR000AKQ.pooled.uniform.base": {
+    "evaluation_only": true,
+    "pass": 1.0,
+    "per_rung": {
+     "isogenic": 0.8245079106806371,
+     "other_experiment": 0.9799773828261293,
+     "pseudoreplicate": 1.3038964871505776
+    },
+    "per_rung_reason": {},
+    "reason": ""
+   },
+   "ENCSR000AMH.pooled.uniform.base": {
+    "evaluation_only": true,
+    "pass": 0.0,
+    "per_rung": {
+     "isogenic": 4.459008691960696,
+     "other_experiment": 5.051083298762369,
+     "pseudoreplicate": 3.85389149774996
+    },
+    "per_rung_reason": {},
+    "reason": ""
+   },
+   "ENCSR000EWB.pooled.uniform.base": {
+    "pass": 0.0,
+    "per_rung": {
+     "isogenic": 2.3994495296534044,
+     "other_experiment": 3.4431030590716385,
+     "pseudoreplicate": 3.1163101947972414
+    },
+    "per_rung_reason": {},
+    "reason": ""
+   },
+   "ENCSR004ZWW.pooled.uniform.base": {
+    "evaluation_only": true,
+    "pass": 0.0,
+    "per_rung": {
+     "isogenic": 1.239824158426305,
+     "other_experiment": 1.841125655649319,
+     "pseudoreplicate": 1.5122755402263002
+    },
+    "per_rung_reason": {},
+    "reason": ""
+   },
+   "ENCSR005YZH.pooled.uniform.base": {
+    "evaluation_only": true,
+    "pass": 0.0,
+    "per_rung": {
+     "isogenic": 9.041022130716367,
+     "other_experiment": 8.904851717170772,
+     "pseudoreplicate": 7.634563263637334
+    },
+    "per_rung_reason": {},
+    "reason": ""
+   },
+   "ENCSR006GPM.pooled.native.base": {
+    "evaluation_only": true,
+    "pass": 1.0,
+    "per_rung": {
+     "isogenic": 0.6221999691303799,
+     "other_experiment": 0.31379741144336465,
+     "pseudoreplicate": 1.0509387420345704
+    },
+    "per_rung_reason": {},
+    "reason": ""
+   },
+   "ENCSR038OIN.pooled.uniform.base": {
+    "pass": 0.0,
+    "per_rung": {
+     "isogenic": 1.3474932243358932,
+     "other_experiment": 1.4542768100623167,
+     "pseudoreplicate": 2.2604286851824202
+    },
+    "per_rung_reason": {},
+    "reason": ""
+   },
+   "ENCSR060BFU.pooled.uniform.base": {
+    "evaluation_only": true,
+    "pass": 0.0,
+    "per_rung": {
+     "other_experiment": 5.123469774879438,
+     "pseudoreplicate": 4.772739722618834
+    },
+    "per_rung_reason": {},
+    "reason": ""
+   },
+   "ENCSR080PZL.pooled.uniform.base": {
+    "pass": 0.0,
+    "per_rung": {
+     "other_experiment": 3.1472573014370657,
+     "pseudoreplicate": 3.5194434894870894
+    },
+    "per_rung_reason": {},
+    "reason": ""
+   },
+   "ENCSR169BGF.pooled.uniform.base": {
+    "evaluation_only": true,
+    "pass": 0.0,
+    "per_rung": {
+     "isogenic": 8.340511681726362,
+     "other_experiment": 4.620846451513011,
+     "pseudoreplicate": 4.268110827256115
+    },
+    "per_rung_reason": {},
+    "reason": ""
+   },
+   "ENCSR234YIU.pooled.uniform.base": {
+    "pass": null,
+    "per_rung": {
+     "other_experiment": null,
+     "pseudoreplicate": 3.0267841252768513
+    },
+    "per_rung_reason": {
+     "other_experiment": "no pair of rung other_experiment gave a defined ratio: ENCSR234YIU.pooled.uniform.base:ENCSR926NMC.pooled.uniform.base: replicate totals differ after depth matching: sum(a)/sum(b) = 0.603"
+    },
+    "reason": "rung other_experiment not populated for this cell and assay"
+   },
+   "ENCSR254NLC.pooled.uniform.base": {
+    "pass": 0.0,
+    "per_rung": {
+     "isogenic": 0.6602329795503857,
+     "other_experiment": 0.42565682769033775,
+     "pseudoreplicate": 0.8278252264064193
+    },
+    "per_rung_reason": {},
+    "reason": ""
+   },
+   "ENCSR395USV.pooled.uniform.base": {
+    "evaluation_only": true,
+    "pass": null,
+    "per_rung": {
+     "isogenic": 3.9518723792367907,
+     "other_experiment": null,
+     "pseudoreplicate": 4.329386761737421
+    },
+    "per_rung_reason": {
+     "other_experiment": "no pair of rung other_experiment gave a defined ratio: ENCSR883AQJ.pooled.uniform.base:ENCSR395USV.pooled.uniform.base: replicate totals differ after depth matching: sum(a)/sum(b) = 0.648"
+    },
+    "reason": "rung other_experiment not populated for this cell and assay"
+   },
+   "ENCSR433FJP.pooled.uniform.base": {
+    "evaluation_only": true,
+    "pass": 0.0,
+    "per_rung": {
+     "other_experiment": 2.81021649777812,
+     "pseudoreplicate": 3.0742873830410002
+    },
+    "per_rung_reason": {},
+    "reason": ""
+   },
+   "ENCSR444TMC.pooled.uniform.base": {
+    "pass": 0.0,
+    "per_rung": {
+     "isogenic": 0.7884292479732979,
+     "other_experiment": 1.1206135294535773,
+     "pseudoreplicate": 1.06553366027547
+    },
+    "per_rung_reason": {},
+    "reason": ""
+   },
+   "ENCSR487BEW.pooled.uniform.base": {
+    "evaluation_only": true,
+    "pass": null,
+    "per_rung": {
+     "other_experiment": null,
+     "pseudoreplicate": 3.913508631605997
+    },
+    "per_rung_reason": {
+     "other_experiment": "no pair of rung other_experiment gave a defined ratio: ENCSR901SIL.pooled.uniform.base:ENCSR487BEW.pooled.uniform.base: replicate totals differ after depth matching: sum(a)/sum(b) = 1.678"
+    },
+    "reason": "rung other_experiment not populated for this cell and assay"
+   },
+   "ENCSR604THF.pooled.uniform.base": {
+    "pass": 0.0,
+    "per_rung": {
+     "other_experiment": 7.203798457585396,
+     "pseudoreplicate": 5.5544614965073755
+    },
+    "per_rung_reason": {},
+    "reason": ""
+   },
+   "ENCSR611DJQ.pooled.uniform.base": {
+    "pass": 0.0,
+    "per_rung": {
+     "other_experiment": 0.9240110446052552,
+     "pseudoreplicate": 0.8752263178024668
+    },
+    "per_rung_reason": {},
+    "reason": ""
+   },
+   "ENCSR619EZG.pooled.uniform.base": {
+    "evaluation_only": true,
+    "pass": 0.0,
+    "per_rung": {
+     "other_experiment": 0.5996515530111926,
+     "pseudoreplicate": 0.6623812142052209
+    },
+    "per_rung_reason": {},
+    "reason": ""
+   },
+   "ENCSR642DSR.pooled.uniform.base": {
+    "evaluation_only": true,
+    "pass": 0.0,
+    "per_rung": {
+     "other_experiment": 1.177733383355216,
+     "pseudoreplicate": 1.0391057512727482
+    },
+    "per_rung_reason": {},
+    "reason": ""
+   },
+   "ENCSR701KJD.pooled.uniform.base": {
+    "pass": 0.0,
+    "per_rung": {
+     "isogenic": 2.4274021614150016,
+     "other_experiment": 1.5983317711864988,
+     "pseudoreplicate": 2.9963228380208498
+    },
+    "per_rung_reason": {},
+    "reason": ""
+   },
+   "ENCSR728SZE.pooled.uniform.base": {
+    "pass": 0.0,
+    "per_rung": {
+     "isogenic": 1.9593405098037175,
+     "other_experiment": 2.146389193890233,
+     "pseudoreplicate": 2.197992785626031
+    },
+    "per_rung_reason": {},
+    "reason": ""
+   },
+   "ENCSR869GBP.pooled.uniform.base": {
+    "pass": 0.0,
+    "per_rung": {
+     "other_experiment": 1.3470575403940659,
+     "pseudoreplicate": 1.1415610173771535
+    },
+    "per_rung_reason": {},
+    "reason": ""
+   },
+   "ENCSR883AQJ.pooled.uniform.base": {
+    "pass": null,
+    "per_rung": {
+     "isogenic": 1.7614383398689952,
+     "other_experiment": null,
+     "pseudoreplicate": 3.7358093642313936
+    },
+    "per_rung_reason": {
+     "other_experiment": "no pair of rung other_experiment gave a defined ratio: ENCSR883AQJ.pooled.uniform.base:ENCSR395USV.pooled.uniform.base: replicate totals differ after depth matching: sum(a)/sum(b) = 0.648"
+    },
+    "reason": "rung other_experiment not populated for this cell and assay"
+   },
+   "ENCSR901SIL.pooled.uniform.base": {
+    "pass": null,
+    "per_rung": {
+     "other_experiment": null,
+     "pseudoreplicate": 0.41650549440658763
+    },
+    "per_rung_reason": {
+     "other_experiment": "no pair of rung other_experiment gave a defined ratio: ENCSR901SIL.pooled.uniform.base:ENCSR487BEW.pooled.uniform.base: replicate totals differ after depth matching: sum(a)/sum(b) = 1.678"
+    },
+    "reason": "rung other_experiment not populated for this cell and assay"
+   },
+   "ENCSR926NMC.pooled.uniform.base": {
+    "evaluation_only": true,
+    "pass": null,
+    "per_rung": {
+     "other_experiment": null,
+     "pseudoreplicate": 1.3283204619557354
+    },
+    "per_rung_reason": {
+     "other_experiment": "no pair of rung other_experiment gave a defined ratio: ENCSR234YIU.pooled.uniform.base:ENCSR926NMC.pooled.uniform.base: replicate totals differ after depth matching: sum(a)/sum(b) = 0.603"
+    },
+    "reason": "rung other_experiment not populated for this cell and assay"
+   }
+  },
+  "reason": "scorable assay with no target in this split and regime: H3K27ac, H3K4me2, H3K79me2",
+  "upper_bound_rung": {
+   "correction": "pseudoreplicate",
+   "imputation": "other_experiment",
+   "reconstruction": "pseudoreplicate"
+  }
+ },
+ "predicted_over_replicate_variance_robust": {
+  "description": "E5: robust aggregates of headline 7 at the pseudoreplicate rung, beside the existing key predicted_over_replicate_variance (the mean of per-target ratios, unchanged). median_of_targets: per assay, the median of the per-target ratios. ratio_of_means: per assay, the sum over its targets of the mean predicted NB variance over the sum of the mean replicate variance (each target's two means as metrics.variance_ratio pools them; with equal bins per target this is the ratio of the means over all the assay's bins). Both: macro = mean over the scorable assays; undefined for an assay when a target's ratio is undefined.",
+  "median_of_targets": {
+   "ci": [
+    null,
+    null
+   ],
+   "macro": null,
+   "missing_scorable": [
+    "H3K27ac",
+    "H3K4me2",
+    "H3K79me2"
+   ],
+   "n": 13,
+   "non_scorable_per_assay": {
+    "DNase-seq": 3.5194434894870894,
+    "H3K18ac": 5.5544614965073755,
+    "H4K20me1": 2.197992785626031,
+    "H4K8ac": 1.06553366027547
+   },
+   "per_assay": {
+    "H3K27me3": 3.1163101947972414,
+    "H3K36me3": 1.7009948512797868,
+    "H3K4me1": 0.8278252264064193,
+    "H3K4me3": 0.8752263178024668,
+    "H3K9ac": 2.9963228380208498,
+    "H3K9me3": 3.7358093642313936
+   },
+   "per_assay_reason": {},
+   "reason": "scorable assay with no target in this split and regime: H3K27ac, H3K4me2, H3K79me2"
+  },
+  "ratio_of_means": {
+   "ci": [
+    null,
+    null
+   ],
+   "macro": null,
+   "missing_scorable": [
+    "H3K27ac",
+    "H3K4me2",
+    "H3K79me2"
+   ],
+   "n": 13,
+   "non_scorable_per_assay": {
+    "DNase-seq": 3.5194434894870894,
+    "H3K18ac": 5.5544614965073755,
+    "H4K20me1": 2.197992785626031,
+    "H4K8ac": 1.06553366027547
+   },
+   "per_assay": {
+    "H3K27me3": 3.1163101947972414,
+    "H3K36me3": 1.5169330573040913,
+    "H3K4me1": 0.8278252264064193,
+    "H3K4me3": 0.7744306575164911,
+    "H3K9ac": 2.9963228380208498,
+    "H3K9me3": 3.7358093642313936
+   },
+   "per_assay_reason": {},
+   "reason": "scorable assay with no target in this split and regime: H3K27ac, H3K4me2, H3K79me2"
+  },
+  "rung": "pseudoreplicate"
+ },
+ "predictor": "marginal_nb",
+ "r_spec": {
+  "counts_log1p": {
+   "ci": [
+    null,
+    null
+   ],
+   "macro": null,
+   "missing_scorable": [
+    "H3K27ac",
+    "H3K4me2",
+    "H3K79me2"
+   ],
+   "n": 13,
+   "non_scorable_per_assay": {
+    "DNase-seq": 0.0,
+    "H3K18ac": 1.4566660171580175e-08,
+    "H4K20me1": 1.0203941521103385e-08,
+    "H4K8ac": -2.116591983124099e-11
+   },
+   "per_assay": {
+    "H3K27me3": -1.1628450409799843e-07,
+    "H3K36me3": 1.2525770150275968e-08,
+    "H3K4me1": 6.066452462004599e-09,
+    "H3K4me3": -2.0286987335985363e-08,
+    "H3K9ac": 2.0030577203440075e-07,
+    "H3K9me3": -2.0073556139793632e-08
+   },
+   "per_assay_reason": {},
+   "reason": "scorable assay with no target in this split and regime: H3K27ac, H3K4me2, H3K79me2"
+  },
+  "signal_arcsinh": {
+   "ci": [
+    null,
+    null
+   ],
+   "macro": null,
+   "missing_scorable": [
+    "H3K27ac",
+    "H3K4me2",
+    "H3K79me2"
+   ],
+   "n": 13,
+   "non_scorable_per_assay": {
+    "DNase-seq": -0.010429821677547895,
+    "H3K18ac": -0.06341970039342879,
+    "H4K20me1": null,
+    "H4K8ac": null
+   },
+   "per_assay": {
+    "H3K27me3": null,
+    "H3K36me3": null,
+    "H3K4me1": null,
+    "H3K4me3": 0.021997312936460244,
+    "H3K9ac": null,
+    "H3K9me3": null
+   },
+   "per_assay_reason": {
+    "H3K27me3": "1 of 1 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H3K36me3": "1 of 2 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H3K4me1": "1 of 1 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H3K9ac": "1 of 1 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H3K9me3": "1 of 1 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H4K20me1": "1 of 1 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H4K8ac": "1 of 1 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\""
+   },
+   "reason": "undefined for H3K27me3 (1 of 1 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\"), H3K36me3 (1 of 2 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\"), H3K4me1 (1 of 1 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\"), H3K9ac (1 of 1 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\"), H3K9me3 (1 of 1 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\")"
+  },
+  "signal_arcsinh_plug_in": {
+   "ci": [
+    null,
+    null
+   ],
+   "macro": null,
+   "missing_scorable": [
+    "H3K27ac",
+    "H3K4me2",
+    "H3K79me2"
+   ],
+   "n": 13,
+   "non_scorable_per_assay": {
+    "DNase-seq": -0.012167285410387068,
+    "H3K18ac": -0.1363433823344239,
+    "H4K20me1": null,
+    "H4K8ac": null
+   },
+   "per_assay": {
+    "H3K27me3": null,
+    "H3K36me3": null,
+    "H3K4me1": null,
+    "H3K4me3": 0.03038520022888458,
+    "H3K9ac": null,
+    "H3K9me3": null
+   },
+   "per_assay_reason": {
+    "H3K27me3": "1 of 1 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H3K36me3": "1 of 2 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H3K4me1": "1 of 1 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H3K9ac": "1 of 1 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H3K9me3": "1 of 1 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H4K20me1": "1 of 1 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H4K8ac": "1 of 1 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\""
+   },
+   "reason": "undefined for H3K27me3 (1 of 1 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\"), H3K36me3 (1 of 2 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\"), H3K4me1 (1 of 1 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\"), H3K9ac (1 of 1 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\"), H3K9me3 (1 of 1 targets undefined: no signal from the prediction: \"covariates lack ['frag_len']\")"
+  }
+ },
+ "regime": "leave_one_assay_out",
+ "region_bins": 16384,
+ "region_cache": true,
+ "replicate_pair_gap_closed_vs_depth_only": {
+  "per_rung": {
+   "other_experiment": {
+    "ci": [
+     null,
+     null
+    ],
+    "macro": null,
+    "missing_scorable": [],
+    "n": 13,
+    "non_scorable_per_assay": {
+     "DNase-seq": null,
+     "H3K18ac": -2.9178554243071693,
+     "H3K27me3": 1.2903692864703877,
+     "H3K36me3": -3.4296689781786873,
+     "H3K4me1": null,
+     "H3K4me3": 1.4528132458993201,
+     "H3K9ac": 0.5147157783359276,
+     "H3K9me3": -23.968130193241468,
+     "H4K20me1": null,
+     "H4K8ac": null
+    },
+    "per_assay": {},
+    "per_assay_reason": {
+     "DNase-seq": "baseline is not above the floor",
+     "H3K4me1": "baseline is not above the floor",
+     "H4K20me1": "baseline is not above the floor",
+     "H4K8ac": "baseline is not above the floor"
+    },
+    "reason": "no scorable assay with a target"
+   }
+  }
+ },
+ "run_tables_sha256": null,
+ "scorable": {
+  "correction": [
+   "H2AFZ",
+   "H3K27ac",
+   "H3K27me3",
+   "H3K36me3",
+   "H3K4me1",
+   "H3K4me2",
+   "H3K4me3",
+   "H3K79me2",
+   "H3K9ac",
+   "H3K9me3",
+   "H4K20me1"
+  ],
+  "imputation": [
+   "H3K27ac",
+   "H3K27me3",
+   "H3K36me3",
+   "H3K4me1",
+   "H3K4me2",
+   "H3K4me3",
+   "H3K79me2",
+   "H3K9ac",
+   "H3K9me3"
+  ],
+  "layers": {
+   "anisogenic": [],
+   "isogenic": [
+    "DNase-seq",
+    "H2AFZ",
+    "H2AK5ac",
+    "H2BK15ac",
+    "H3K18ac",
+    "H3K27ac",
+    "H3K27me3",
+    "H3K36me3",
+    "H3K4ac",
+    "H3K4me1",
+    "H3K4me2",
+    "H3K4me3",
+    "H3K79me2",
+    "H3K9ac",
+    "H3K9me3",
+    "H4K20me1",
+    "chipseq-control"
+   ],
+   "other_cell_type": [],
+   "other_experiment": [],
+   "pseudoreplicate": [],
+   "sequencing": [],
+   "technical": []
+  }
+ },
+ "scorer_version": 1,
+ "selection": {
+  "composite": null,
+  "composite_status": "superseded: selection.composite is composite version 1 (correction term = the half-read gap closed, selection.correction_gap_closed). The current composite (version 3) is computed at report time: select_rule.py arm-summary --runs <runs root> --sub <score sub-directory>.",
+  "correction_gap_closed": null,
+  "correction_reason": "no scorable assay with a target",
+  "denominators": {
+   "correction_baseline_minus_floor_relative_by_assay": {
+    "H2AFZ": null,
+    "H3K27ac": null,
+    "H3K27me3": null,
+    "H3K36me3": null,
+    "H3K4me1": null,
+    "H3K4me2": null,
+    "H3K4me3": null,
+    "H3K79me2": null,
+    "H3K9ac": null,
+    "H3K9me3": null,
+    "H4K20me1": null
+   },
+   "correction_baseline_minus_floor_relative_min": null,
+   "uncertainty_marginal_pit_deviation": null
+  },
+  "headline1_per_assay_status": {
+   "DNase-seq": {
+    "fallback": "none: non-scorable (PI ruling 4), so outside the macro and the composite; reported apart",
+    "floor_exists": true,
+    "headline1_defined": false,
+    "in_imputation_term": false,
+    "n_targets": 1,
+    "n_targets_with_floor": 1,
+    "reason": "1 validation target: the shared/specific split needs >= 2 targets of the assay (E_sp: no target of another group in this assay; V_sp: no target of another group in this assay)",
+    "scorable": false,
+    "value": null
+   },
+   "H3K18ac": {
+    "fallback": "none: non-scorable (PI ruling 4), so outside the macro and the composite; reported apart",
+    "floor_exists": true,
+    "headline1_defined": false,
+    "in_imputation_term": false,
+    "n_targets": 1,
+    "n_targets_with_floor": 1,
+    "reason": "1 validation target: the shared/specific split needs >= 2 targets of the assay (E_sp: no target of another group in this assay; V_sp: no target of another group in this assay)",
+    "scorable": false,
+    "value": null
+   },
+   "H3K27me3": {
+    "fallback": "none: a scorable assay is undefined, so the macro and the composite's imputation term are undefined (select_rule escalates)",
+    "floor_exists": true,
+    "headline1_defined": false,
+    "in_imputation_term": true,
+    "n_targets": 1,
+    "n_targets_with_floor": 1,
+    "reason": "1 validation target: the shared/specific split needs >= 2 targets of the assay (E_sp: no target of another group in this assay; V_sp: no target of another group in this assay)",
+    "scorable": true,
+    "value": null
+   },
+   "H3K36me3": {
+    "fallback": "none needed: defined, in the imputation term",
+    "floor_exists": true,
+    "headline1_defined": true,
+    "in_imputation_term": true,
+    "n_targets": 2,
+    "n_targets_with_floor": 2,
+    "reason": "",
+    "scorable": true,
+    "value": 0.0
+   },
+   "H3K4me1": {
+    "fallback": "none: a scorable assay is undefined, so the macro and the composite's imputation term are undefined (select_rule escalates)",
+    "floor_exists": true,
+    "headline1_defined": false,
+    "in_imputation_term": true,
+    "n_targets": 1,
+    "n_targets_with_floor": 1,
+    "reason": "1 validation target: the shared/specific split needs >= 2 targets of the assay (E_sp: no target of another group in this assay; V_sp: no target of another group in this assay)",
+    "scorable": true,
+    "value": null
+   },
+   "H3K4me3": {
+    "fallback": "none needed: defined, in the imputation term",
+    "floor_exists": true,
+    "headline1_defined": true,
+    "in_imputation_term": true,
+    "n_targets": 3,
+    "n_targets_with_floor": 3,
+    "reason": "",
+    "scorable": true,
+    "value": 0.0
+   },
+   "H3K9ac": {
+    "fallback": "none: a scorable assay is undefined, so the macro and the composite's imputation term are undefined (select_rule escalates)",
+    "floor_exists": true,
+    "headline1_defined": false,
+    "in_imputation_term": true,
+    "n_targets": 1,
+    "n_targets_with_floor": 1,
+    "reason": "1 validation target: the shared/specific split needs >= 2 targets of the assay (E_sp: no target of another group in this assay; V_sp: no target of another group in this assay)",
+    "scorable": true,
+    "value": null
+   },
+   "H3K9me3": {
+    "fallback": "none: a scorable assay is undefined, so the macro and the composite's imputation term are undefined (select_rule escalates)",
+    "floor_exists": true,
+    "headline1_defined": false,
+    "in_imputation_term": true,
+    "n_targets": 1,
+    "n_targets_with_floor": 1,
+    "reason": "1 validation target: the shared/specific split needs >= 2 targets of the assay (E_sp: no target of another group in this assay; V_sp: no target of another group in this assay)",
+    "scorable": true,
+    "value": null
+   },
+   "H4K20me1": {
+    "fallback": "none: non-scorable (PI ruling 4), so outside the macro and the composite; reported apart",
+    "floor_exists": true,
+    "headline1_defined": false,
+    "in_imputation_term": false,
+    "n_targets": 1,
+    "n_targets_with_floor": 1,
+    "reason": "1 validation target: the shared/specific split needs >= 2 targets of the assay (E_sp: no target of another group in this assay; V_sp: no target of another group in this assay)",
+    "scorable": false,
+    "value": null
+   },
+   "H4K8ac": {
+    "fallback": "none: non-scorable (PI ruling 4), so outside the macro and the composite; reported apart",
+    "floor_exists": true,
+    "headline1_defined": false,
+    "in_imputation_term": false,
+    "n_targets": 1,
+    "n_targets_with_floor": 1,
+    "reason": "1 validation target: the shared/specific split needs >= 2 targets of the assay (E_sp: no target of another group in this assay; V_sp: no target of another group in this assay)",
+    "scorable": false,
+    "value": null
+   }
+  },
+  "imputation_assays_in_term": [
+   "H3K27me3",
+   "H3K36me3",
+   "H3K4me1",
+   "H3K4me3",
+   "H3K9ac",
+   "H3K9me3"
+  ],
+  "imputation_gap_closed": null,
+  "imputation_reason": "missing",
+  "imputation_term_definition": "macro mean, over the eval set's imputation-scorable assays (>= 3 validation tracks with pseudoreplicate halves from >= 3 cells, evalset.py), of headline 1 per assay in counts_log1p (leave-one-assay-out, validation). It is undefined when any scorable assay is undefined or has no target. A non-scorable assay never enters it, so it needs no fallback; its headline 1 is reported apart, per assay, with its floor status. No floor and no value is ever invented.",
+  "reason": "undefined goal term: imputation, correction, uncertainty",
+  "space": "counts_log1p",
+  "uncertainty_gap_closed": null,
+  "uncertainty_reason": "scorable assay with no target: H3K27ac, H3K4me2, H3K79me2"
+ },
+ "signal_box_dependence": "comonotone",
+ "signal_pileup": "box_d",
+ "specific_variance_recovered_above_noise": {
+  "counts_log1p": {
+   "ci": [
+    null,
+    null
+   ],
+   "macro": null,
+   "missing_scorable": [
+    "H3K27ac",
+    "H3K4me2",
+    "H3K79me2"
+   ],
+   "n": 13,
+   "n_targets_without_halves": 0,
+   "non_scorable_per_assay": {
+    "DNase-seq": null,
+    "H3K18ac": null,
+    "H4K20me1": null,
+    "H4K8ac": null
+   },
+   "per_assay": {
+    "H3K27me3": null,
+    "H3K36me3": 0.0,
+    "H3K4me1": null,
+    "H3K4me3": 0.0,
+    "H3K9ac": null,
+    "H3K9me3": null
+   },
+   "per_assay_reason": {
+    "DNase-seq": "E_sp: no target of another group in this assay; V_sp: no target of another group in this assay",
+    "H3K18ac": "E_sp: no target of another group in this assay; V_sp: no target of another group in this assay",
+    "H3K27me3": "E_sp: no target of another group in this assay; V_sp: no target of another group in this assay",
+    "H3K4me1": "E_sp: no target of another group in this assay; V_sp: no target of another group in this assay",
+    "H3K9ac": "E_sp: no target of another group in this assay; V_sp: no target of another group in this assay",
+    "H3K9me3": "E_sp: no target of another group in this assay; V_sp: no target of another group in this assay",
+    "H4K20me1": "E_sp: no target of another group in this assay; V_sp: no target of another group in this assay",
+    "H4K8ac": "E_sp: no target of another group in this assay; V_sp: no target of another group in this assay"
+   },
+   "per_assay_status": {
+    "DNase-seq": {
+     "fallback": "none: non-scorable (PI ruling 4), so outside the macro and the composite; reported apart",
+     "floor_exists": true,
+     "headline1_defined": false,
+     "in_imputation_term": false,
+     "n_targets": 1,
+     "n_targets_with_floor": 1,
+     "reason": "1 validation target: the shared/specific split needs >= 2 targets of the assay (E_sp: no target of another group in this assay; V_sp: no target of another group in this assay)",
+     "scorable": false,
+     "value": null
+    },
+    "H3K18ac": {
+     "fallback": "none: non-scorable (PI ruling 4), so outside the macro and the composite; reported apart",
+     "floor_exists": true,
+     "headline1_defined": false,
+     "in_imputation_term": false,
+     "n_targets": 1,
+     "n_targets_with_floor": 1,
+     "reason": "1 validation target: the shared/specific split needs >= 2 targets of the assay (E_sp: no target of another group in this assay; V_sp: no target of another group in this assay)",
+     "scorable": false,
+     "value": null
+    },
+    "H3K27me3": {
+     "fallback": "none: a scorable assay is undefined, so the macro and the composite's imputation term are undefined (select_rule escalates)",
+     "floor_exists": true,
+     "headline1_defined": false,
+     "in_imputation_term": true,
+     "n_targets": 1,
+     "n_targets_with_floor": 1,
+     "reason": "1 validation target: the shared/specific split needs >= 2 targets of the assay (E_sp: no target of another group in this assay; V_sp: no target of another group in this assay)",
+     "scorable": true,
+     "value": null
+    },
+    "H3K36me3": {
+     "fallback": "none needed: defined, in the imputation term",
+     "floor_exists": true,
+     "headline1_defined": true,
+     "in_imputation_term": true,
+     "n_targets": 2,
+     "n_targets_with_floor": 2,
+     "reason": "",
+     "scorable": true,
+     "value": 0.0
+    },
+    "H3K4me1": {
+     "fallback": "none: a scorable assay is undefined, so the macro and the composite's imputation term are undefined (select_rule escalates)",
+     "floor_exists": true,
+     "headline1_defined": false,
+     "in_imputation_term": true,
+     "n_targets": 1,
+     "n_targets_with_floor": 1,
+     "reason": "1 validation target: the shared/specific split needs >= 2 targets of the assay (E_sp: no target of another group in this assay; V_sp: no target of another group in this assay)",
+     "scorable": true,
+     "value": null
+    },
+    "H3K4me3": {
+     "fallback": "none needed: defined, in the imputation term",
+     "floor_exists": true,
+     "headline1_defined": true,
+     "in_imputation_term": true,
+     "n_targets": 3,
+     "n_targets_with_floor": 3,
+     "reason": "",
+     "scorable": true,
+     "value": 0.0
+    },
+    "H3K9ac": {
+     "fallback": "none: a scorable assay is undefined, so the macro and the composite's imputation term are undefined (select_rule escalates)",
+     "floor_exists": true,
+     "headline1_defined": false,
+     "in_imputation_term": true,
+     "n_targets": 1,
+     "n_targets_with_floor": 1,
+     "reason": "1 validation target: the shared/specific split needs >= 2 targets of the assay (E_sp: no target of another group in this assay; V_sp: no target of another group in this assay)",
+     "scorable": true,
+     "value": null
+    },
+    "H3K9me3": {
+     "fallback": "none: a scorable assay is undefined, so the macro and the composite's imputation term are undefined (select_rule escalates)",
+     "floor_exists": true,
+     "headline1_defined": false,
+     "in_imputation_term": true,
+     "n_targets": 1,
+     "n_targets_with_floor": 1,
+     "reason": "1 validation target: the shared/specific split needs >= 2 targets of the assay (E_sp: no target of another group in this assay; V_sp: no target of another group in this assay)",
+     "scorable": true,
+     "value": null
+    },
+    "H4K20me1": {
+     "fallback": "none: non-scorable (PI ruling 4), so outside the macro and the composite; reported apart",
+     "floor_exists": true,
+     "headline1_defined": false,
+     "in_imputation_term": false,
+     "n_targets": 1,
+     "n_targets_with_floor": 1,
+     "reason": "1 validation target: the shared/specific split needs >= 2 targets of the assay (E_sp: no target of another group in this assay; V_sp: no target of another group in this assay)",
+     "scorable": false,
+     "value": null
+    },
+    "H4K8ac": {
+     "fallback": "none: non-scorable (PI ruling 4), so outside the macro and the composite; reported apart",
+     "floor_exists": true,
+     "headline1_defined": false,
+     "in_imputation_term": false,
+     "n_targets": 1,
+     "n_targets_with_floor": 1,
+     "reason": "1 validation target: the shared/specific split needs >= 2 targets of the assay (E_sp: no target of another group in this assay; V_sp: no target of another group in this assay)",
+     "scorable": false,
+     "value": null
+    }
+   },
+   "per_target": {
+    "ENCSR000AKQ.pooled.uniform.base": {
+     "E_sp": null,
+     "N": 0.5239931011793294,
+     "N_log1p_bias_sim": -0.015210898456382682,
+     "V_sp": null,
+     "assay": "H3K27me3",
+     "cell": "C24",
+     "depth_reads": 83480563.0,
+     "evaluation_only": true,
+     "has_halves": true,
+     "level": null,
+     "recovered": null
+    },
+    "ENCSR000AMH.pooled.uniform.base": {
+     "E_sp": null,
+     "N": 0.8145941428571206,
+     "N_log1p_bias_sim": -0.002521086329432376,
+     "V_sp": null,
+     "assay": "H4K20me1",
+     "cell": "C17",
+     "depth_reads": 26430312.0,
+     "evaluation_only": true,
+     "has_halves": true,
+     "level": null,
+     "recovered": null
+    },
+    "ENCSR000EWB.pooled.uniform.base": {
+     "E_sp": null,
+     "N": 0.43647548163697075,
+     "N_log1p_bias_sim": 0.004531027517535313,
+     "V_sp": null,
+     "assay": "H3K27me3",
+     "cell": "C24",
+     "depth_reads": 36577542.0,
+     "has_halves": true,
+     "level": 0.6848991661439882,
+     "recovered": null
+    },
+    "ENCSR004ZWW.pooled.uniform.base": {
+     "E_sp": null,
+     "N": 0.36156740423555167,
+     "N_log1p_bias_sim": -0.01939828276465877,
+     "V_sp": null,
+     "assay": "H4K8ac",
+     "cell": "C23",
+     "depth_reads": 25153544.0,
+     "evaluation_only": true,
+     "has_halves": true,
+     "level": null,
+     "recovered": null
+    },
+    "ENCSR005YZH.pooled.uniform.base": {
+     "E_sp": null,
+     "N": 0.39879942173518157,
+     "N_log1p_bias_sim": -0.012788874429957187,
+     "V_sp": null,
+     "assay": "H3K36me3",
+     "cell": "C46",
+     "depth_reads": 15877943.0,
+     "evaluation_only": true,
+     "has_halves": true,
+     "level": null,
+     "recovered": null
+    },
+    "ENCSR006GPM.pooled.native.base": {
+     "E_sp": null,
+     "N": 0.3527615132859775,
+     "N_log1p_bias_sim": -0.027475892996152662,
+     "V_sp": null,
+     "assay": "H3K9ac",
+     "cell": "C27",
+     "depth_reads": 80592354.0,
+     "evaluation_only": true,
+     "has_halves": true,
+     "level": null,
+     "recovered": null
+    },
+    "ENCSR038OIN.pooled.uniform.base": {
+     "E_sp": 0.6910563785731114,
+     "N": 0.387317519197816,
+     "N_log1p_bias_sim": -0.013956716942554237,
+     "V_sp": 0.6910563785731114,
+     "assay": "H3K36me3",
+     "cell": "C46",
+     "depth_reads": 52516087.0,
+     "has_halves": true,
+     "level": 0.26690626337410644,
+     "recovered": 0.0
+    },
+    "ENCSR060BFU.pooled.uniform.base": {
+     "E_sp": null,
+     "N": 0.512090266426434,
+     "N_log1p_bias_sim": -0.04916305122985232,
+     "V_sp": null,
+     "assay": "DNase-seq",
+     "cell": "C03",
+     "depth_reads": 32188277.0,
+     "evaluation_only": true,
+     "has_halves": true,
+     "level": null,
+     "recovered": null
+    },
+    "ENCSR080PZL.pooled.uniform.base": {
+     "E_sp": null,
+     "N": 0.6082672237755861,
+     "N_log1p_bias_sim": -0.03213270092758769,
+     "V_sp": null,
+     "assay": "DNase-seq",
+     "cell": "C03",
+     "depth_reads": 43584083.0,
+     "has_halves": true,
+     "level": 0.9777731131963708,
+     "recovered": null
+    },
+    "ENCSR169BGF.pooled.uniform.base": {
+     "E_sp": null,
+     "N": 0.5742817007212961,
+     "N_log1p_bias_sim": -0.04141570282735574,
+     "V_sp": null,
+     "assay": "H3K4me1",
+     "cell": "C32",
+     "depth_reads": 25995841.0,
+     "evaluation_only": true,
+     "has_halves": true,
+     "level": null,
+     "recovered": null
+    },
+    "ENCSR234YIU.pooled.uniform.base": {
+     "E_sp": 0.8646970755601837,
+     "N": 0.7693476297621731,
+     "N_log1p_bias_sim": 0.004091901002765463,
+     "V_sp": 0.8646970755601837,
+     "assay": "H3K4me3",
+     "cell": "C02",
+     "depth_reads": 22286014.0,
+     "has_halves": true,
+     "level": 0.5945340153999389,
+     "recovered": 0.0
+    },
+    "ENCSR254NLC.pooled.uniform.base": {
+     "E_sp": null,
+     "N": 0.28013972501694995,
+     "N_log1p_bias_sim": 0.018961238601018948,
+     "V_sp": null,
+     "assay": "H3K4me1",
+     "cell": "C32",
+     "depth_reads": 135364172.0,
+     "has_halves": true,
+     "level": 0.07001275383625427,
+     "recovered": null
+    },
+    "ENCSR395USV.pooled.uniform.base": {
+     "E_sp": null,
+     "N": 0.5278381234671848,
+     "N_log1p_bias_sim": -0.029581136777140804,
+     "V_sp": null,
+     "assay": "H3K9me3",
+     "cell": "C17",
+     "depth_reads": 14547836.0,
+     "evaluation_only": true,
+     "has_halves": true,
+     "level": null,
+     "recovered": null
+    },
+    "ENCSR433FJP.pooled.uniform.base": {
+     "E_sp": null,
+     "N": 0.5223847600273013,
+     "N_log1p_bias_sim": 0.012088134444214749,
+     "V_sp": null,
+     "assay": "H3K18ac",
+     "cell": "C27",
+     "depth_reads": 30638444.0,
+     "evaluation_only": true,
+     "has_halves": true,
+     "level": null,
+     "recovered": null
+    },
+    "ENCSR444TMC.pooled.uniform.base": {
+     "E_sp": null,
+     "N": 0.28927492501948426,
+     "N_log1p_bias_sim": -0.02098568055506239,
+     "V_sp": null,
+     "assay": "H4K8ac",
+     "cell": "C23",
+     "depth_reads": 35821330.0,
+     "has_halves": true,
+     "level": 0.06978892652766164,
+     "recovered": null
+    },
+    "ENCSR487BEW.pooled.uniform.base": {
+     "E_sp": null,
+     "N": 0.4658854401156116,
+     "N_log1p_bias_sim": -0.06590874435107247,
+     "V_sp": null,
+     "assay": "H3K4me3",
+     "cell": "C20",
+     "depth_reads": 17812308.0,
+     "evaluation_only": true,
+     "has_halves": true,
+     "level": null,
+     "recovered": null
+    },
+    "ENCSR604THF.pooled.uniform.base": {
+     "E_sp": null,
+     "N": 0.4779647515724749,
+     "N_log1p_bias_sim": -0.0185638287606118,
+     "V_sp": null,
+     "assay": "H3K18ac",
+     "cell": "C27",
+     "depth_reads": 16850875.0,
+     "has_halves": true,
+     "level": 1.6569367631263259,
+     "recovered": null
+    },
+    "ENCSR611DJQ.pooled.uniform.base": {
+     "E_sp": 0.7871775131047137,
+     "N": 0.7093312694114011,
+     "N_log1p_bias_sim": -0.03599946807302645,
+     "V_sp": 0.7871775131047137,
+     "assay": "H3K4me3",
+     "cell": "C45",
+     "depth_reads": 46461458.0,
+     "has_halves": true,
+     "level": 0.07503841147609655,
+     "recovered": 0.0
+    },
+    "ENCSR619EZG.pooled.uniform.base": {
+     "E_sp": null,
+     "N": 0.7035884327387334,
+     "N_log1p_bias_sim": -0.008658992580193092,
+     "V_sp": null,
+     "assay": "H3K4me3",
+     "cell": "C45",
+     "depth_reads": 61341067.0,
+     "evaluation_only": true,
+     "has_halves": true,
+     "level": null,
+     "recovered": null
+    },
+    "ENCSR642DSR.pooled.uniform.base": {
+     "E_sp": null,
+     "N": 0.6640848004031239,
+     "N_log1p_bias_sim": -0.013712372293451902,
+     "V_sp": null,
+     "assay": "H3K36me3",
+     "cell": "C47",
+     "depth_reads": 67802237.0,
+     "evaluation_only": true,
+     "has_halves": true,
+     "level": null,
+     "recovered": null
+    },
+    "ENCSR701KJD.pooled.uniform.base": {
+     "E_sp": null,
+     "N": 0.7108790442748509,
+     "N_log1p_bias_sim": -0.021152006987823158,
+     "V_sp": null,
+     "assay": "H3K9ac",
+     "cell": "C27",
+     "depth_reads": 28118070.0,
+     "has_halves": true,
+     "level": 0.40791087537495246,
+     "recovered": null
+    },
+    "ENCSR728SZE.pooled.uniform.base": {
+     "E_sp": null,
+     "N": 0.5849450132841509,
+     "N_log1p_bias_sim": 0.006346724331805387,
+     "V_sp": null,
+     "assay": "H4K20me1",
+     "cell": "C17",
+     "depth_reads": 46681250.0,
+     "has_halves": true,
+     "level": 0.3244042131940955,
+     "recovered": null
+    },
+    "ENCSR869GBP.pooled.uniform.base": {
+     "E_sp": 0.6910563785731118,
+     "N": 0.5002362215017231,
+     "N_log1p_bias_sim": -0.028973514707994474,
+     "V_sp": 0.6910563785731118,
+     "assay": "H3K36me3",
+     "cell": "C47",
+     "depth_reads": 62500706.0,
+     "has_halves": true,
+     "level": 0.014069503431829335,
+     "recovered": 0.0
+    },
+    "ENCSR883AQJ.pooled.uniform.base": {
+     "E_sp": null,
+     "N": 0.6490822377186332,
+     "N_log1p_bias_sim": -0.013366185965491995,
+     "V_sp": null,
+     "assay": "H3K9me3",
+     "cell": "C17",
+     "depth_reads": 26095123.0,
+     "has_halves": true,
+     "level": 1.0834277567272568,
+     "recovered": null
+    },
+    "ENCSR901SIL.pooled.uniform.base": {
+     "E_sp": 0.7855466477082985,
+     "N": 0.5880465906021168,
+     "N_log1p_bias_sim": 0.010202461853484945,
+     "V_sp": 0.7855466477082985,
+     "assay": "H3K4me3",
+     "cell": "C20",
+     "depth_reads": 98522194.0,
+     "has_halves": true,
+     "level": 1.0008538915988276,
+     "recovered": 0.0
+    },
+    "ENCSR926NMC.pooled.uniform.base": {
+     "E_sp": null,
+     "N": 0.8537259276978193,
+     "N_log1p_bias_sim": 0.007923201248666967,
+     "V_sp": null,
+     "assay": "H3K4me3",
+     "cell": "C02",
+     "depth_reads": 30674926.0,
+     "evaluation_only": true,
+     "has_halves": true,
+     "level": null,
+     "recovered": null
+    }
+   },
+   "reason": "undefined for H3K27me3 (E_sp: no target of another group in this assay; V_sp: no target of another group in this assay), H3K4me1 (E_sp: no target of another group in this assay; V_sp: no target of another group in this assay), H3K9ac (E_sp: no target of another group in this assay; V_sp: no target of another group in this assay), H3K9me3 (E_sp: no target of another group in this assay; V_sp: no target of another group in this assay)",
+   "targets_without_halves": []
+  },
+  "signal_arcsinh": {
+   "ci": [
+    null,
+    null
+   ],
+   "dnase_route": "macs2_no_control",
+   "macro": null,
+   "missing_scorable": [
+    "H3K27ac",
+    "H3K4me2",
+    "H3K79me2"
+   ],
+   "n": 13,
+   "non_scorable_per_assay": {
+    "DNase-seq": null,
+    "H3K18ac": null,
+    "H4K20me1": null,
+    "H4K8ac": null
+   },
+   "per_assay": {
+    "H3K27me3": null,
+    "H3K36me3": null,
+    "H3K4me1": null,
+    "H3K4me3": 0.016718707116263443,
+    "H3K9ac": null,
+    "H3K9me3": null
+   },
+   "per_assay_reason": {
+    "DNase-seq": "sig_E_sp: no target of another group in this assay; sig_V_sp: no target of another group in this assay",
+    "H3K18ac": "sig_E_sp: no target of another group in this assay; sig_V_sp: no target of another group in this assay",
+    "H3K27me3": "sig_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H3K36me3": "sig_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H3K4me1": "sig_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H3K9ac": "sig_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H3K9me3": "sig_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H4K20me1": "sig_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H4K8ac": "sig_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\""
+   },
+   "per_target": {
+    "ENCSR000EWB.pooled.uniform.base": {
+     "N": 0.1167754236836221,
+     "assay": "H3K27me3",
+     "cell": "C24",
+     "lambda_reason": "no signal from the prediction: \"covariates lack ['frag_len']\"",
+     "lambda_source": null,
+     "level": null,
+     "signal_edge_bins": 0,
+     "signal_edge_bins_masked": 0
+    },
+    "ENCSR038OIN.pooled.uniform.base": {
+     "N": 0.18583096491742404,
+     "assay": "H3K36me3",
+     "cell": "C46",
+     "lambda_reason": "no signal from the prediction: \"covariates lack ['frag_len']\"",
+     "lambda_source": null,
+     "level": null,
+     "signal_edge_bins": 0,
+     "signal_edge_bins_masked": 0
+    },
+    "ENCSR080PZL.pooled.uniform.base": {
+     "N": 0.25892918414377625,
+     "assay": "DNase-seq",
+     "cell": "C03",
+     "lambda_reason": "",
+     "lambda_source": "local_background",
+     "level": 1.2593913675671995,
+     "signal_edge_bins": 3,
+     "signal_edge_bins_masked": 1536
+    },
+    "ENCSR234YIU.pooled.uniform.base": {
+     "N": 0.49489490514836104,
+     "assay": "H3K4me3",
+     "cell": "C02",
+     "lambda_reason": "",
+     "lambda_source": "observed_control",
+     "level": 6.317306021483411,
+     "signal_edge_bins": 4,
+     "signal_edge_bins_masked": 2048
+    },
+    "ENCSR254NLC.pooled.uniform.base": {
+     "N": 0.17601363584544483,
+     "assay": "H3K4me1",
+     "cell": "C32",
+     "lambda_reason": "no signal from the prediction: \"covariates lack ['frag_len']\"",
+     "lambda_source": null,
+     "level": null,
+     "signal_edge_bins": 0,
+     "signal_edge_bins_masked": 0
+    },
+    "ENCSR444TMC.pooled.uniform.base": {
+     "N": 0.13359363805178776,
+     "assay": "H4K8ac",
+     "cell": "C23",
+     "lambda_reason": "no signal from the prediction: \"covariates lack ['frag_len']\"",
+     "lambda_source": null,
+     "level": null,
+     "signal_edge_bins": 0,
+     "signal_edge_bins_masked": 0
+    },
+    "ENCSR604THF.pooled.uniform.base": {
+     "N": 0.2788746623423577,
+     "assay": "H3K18ac",
+     "cell": "C27",
+     "lambda_reason": "",
+     "lambda_source": "observed_control",
+     "level": 5.082818090826445,
+     "signal_edge_bins": 2,
+     "signal_edge_bins_masked": 1024
+    },
+    "ENCSR611DJQ.pooled.uniform.base": {
+     "N": 0.18923944618502134,
+     "assay": "H3K4me3",
+     "cell": "C45",
+     "lambda_reason": "",
+     "lambda_source": "observed_control",
+     "level": 0.008523754380153478,
+     "signal_edge_bins": 6,
+     "signal_edge_bins_masked": 3072
+    },
+    "ENCSR701KJD.pooled.uniform.base": {
+     "N": 0.3791743305231299,
+     "assay": "H3K9ac",
+     "cell": "C27",
+     "lambda_reason": "no signal from the prediction: \"covariates lack ['frag_len']\"",
+     "lambda_source": null,
+     "level": null,
+     "signal_edge_bins": 0,
+     "signal_edge_bins_masked": 0
+    },
+    "ENCSR728SZE.pooled.uniform.base": {
+     "N": 0.3305745509600118,
+     "assay": "H4K20me1",
+     "cell": "C17",
+     "lambda_reason": "no signal from the prediction: \"covariates lack ['frag_len']\"",
+     "lambda_source": null,
+     "level": null,
+     "signal_edge_bins": 0,
+     "signal_edge_bins_masked": 0
+    },
+    "ENCSR869GBP.pooled.uniform.base": {
+     "N": 0.11926031918427005,
+     "assay": "H3K36me3",
+     "cell": "C47",
+     "lambda_reason": "",
+     "lambda_source": "observed_control",
+     "level": null,
+     "signal_edge_bins": 4,
+     "signal_edge_bins_masked": 2048
+    },
+    "ENCSR883AQJ.pooled.uniform.base": {
+     "N": 0.3263432401408697,
+     "assay": "H3K9me3",
+     "cell": "C17",
+     "lambda_reason": "no signal from the prediction: \"covariates lack ['frag_len']\"",
+     "lambda_source": null,
+     "level": null,
+     "signal_edge_bins": 0,
+     "signal_edge_bins_masked": 0
+    },
+    "ENCSR901SIL.pooled.uniform.base": {
+     "N": 0.12995379146795388,
+     "assay": "H3K4me3",
+     "cell": "C20",
+     "lambda_reason": "",
+     "lambda_source": "observed_control",
+     "level": 0.12895835127692729,
+     "signal_edge_bins": 4,
+     "signal_edge_bins_masked": 2048
+    }
+   },
+   "reason": "undefined for H3K27me3 (sig_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\"), H3K36me3 (sig_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\"), H3K4me1 (sig_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\"), H3K9ac (sig_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\"), H3K9me3 (sig_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\")",
+   "signal_mode": "expectation"
+  },
+  "signal_arcsinh_plug_in": {
+   "ci": [
+    null,
+    null
+   ],
+   "dnase_route": "macs2_no_control",
+   "macro": null,
+   "missing_scorable": [
+    "H3K27ac",
+    "H3K4me2",
+    "H3K79me2"
+   ],
+   "n": 13,
+   "non_scorable_per_assay": {
+    "DNase-seq": null,
+    "H3K18ac": null,
+    "H4K20me1": null,
+    "H4K8ac": null
+   },
+   "per_assay": {
+    "H3K27me3": null,
+    "H3K36me3": null,
+    "H3K4me1": null,
+    "H3K4me3": 0.008917147947604898,
+    "H3K9ac": null,
+    "H3K9me3": null
+   },
+   "per_assay_reason": {
+    "DNase-seq": "sig_pi_E_sp: no target of another group in this assay; sig_pi_V_sp: no target of another group in this assay",
+    "H3K18ac": "sig_pi_E_sp: no target of another group in this assay; sig_pi_V_sp: no target of another group in this assay",
+    "H3K27me3": "sig_pi_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_pi_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H3K36me3": "sig_pi_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_pi_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H3K4me1": "sig_pi_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_pi_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H3K9ac": "sig_pi_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_pi_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H3K9me3": "sig_pi_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_pi_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H4K20me1": "sig_pi_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_pi_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\"",
+    "H4K8ac": "sig_pi_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_pi_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\""
+   },
+   "per_target": {
+    "ENCSR000EWB.pooled.uniform.base": {
+     "N": 0.1167754236836221,
+     "assay": "H3K27me3",
+     "cell": "C24",
+     "lambda_source": null,
+     "level": null
+    },
+    "ENCSR038OIN.pooled.uniform.base": {
+     "N": 0.18583096491742404,
+     "assay": "H3K36me3",
+     "cell": "C46",
+     "lambda_source": null,
+     "level": null
+    },
+    "ENCSR080PZL.pooled.uniform.base": {
+     "N": 0.25892918414377625,
+     "assay": "DNase-seq",
+     "cell": "C03",
+     "lambda_source": "local_background",
+     "level": 0.016311169586206434
+    },
+    "ENCSR234YIU.pooled.uniform.base": {
+     "N": 0.49489490514836104,
+     "assay": "H3K4me3",
+     "cell": "C02",
+     "lambda_source": "observed_control",
+     "level": 1.0503796981213978
+    },
+    "ENCSR254NLC.pooled.uniform.base": {
+     "N": 0.17601363584544483,
+     "assay": "H3K4me1",
+     "cell": "C32",
+     "lambda_source": null,
+     "level": null
+    },
+    "ENCSR444TMC.pooled.uniform.base": {
+     "N": 0.13359363805178776,
+     "assay": "H4K8ac",
+     "cell": "C23",
+     "lambda_source": null,
+     "level": null
+    },
+    "ENCSR604THF.pooled.uniform.base": {
+     "N": 0.2788746623423577,
+     "assay": "H3K18ac",
+     "cell": "C27",
+     "lambda_source": "observed_control",
+     "level": 2.830257903071589
+    },
+    "ENCSR611DJQ.pooled.uniform.base": {
+     "N": 0.18923944618502134,
+     "assay": "H3K4me3",
+     "cell": "C45",
+     "lambda_source": "observed_control",
+     "level": 0.19804632520277804
+    },
+    "ENCSR701KJD.pooled.uniform.base": {
+     "N": 0.3791743305231299,
+     "assay": "H3K9ac",
+     "cell": "C27",
+     "lambda_source": null,
+     "level": null
+    },
+    "ENCSR728SZE.pooled.uniform.base": {
+     "N": 0.3305745509600118,
+     "assay": "H4K20me1",
+     "cell": "C17",
+     "lambda_source": null,
+     "level": null
+    },
+    "ENCSR869GBP.pooled.uniform.base": {
+     "N": 0.11926031918427005,
+     "assay": "H3K36me3",
+     "cell": "C47",
+     "lambda_source": "observed_control",
+     "level": null
+    },
+    "ENCSR883AQJ.pooled.uniform.base": {
+     "N": 0.3263432401408697,
+     "assay": "H3K9me3",
+     "cell": "C17",
+     "lambda_source": null,
+     "level": null
+    },
+    "ENCSR901SIL.pooled.uniform.base": {
+     "N": 0.12995379146795388,
+     "assay": "H3K4me3",
+     "cell": "C20",
+     "lambda_source": "observed_control",
+     "level": 0.20171367535155527
+    }
+   },
+   "reason": "undefined for H3K27me3 (sig_pi_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_pi_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\"), H3K36me3 (sig_pi_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_pi_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\"), H3K4me1 (sig_pi_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_pi_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\"), H3K9ac (sig_pi_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_pi_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\"), H3K9me3 (sig_pi_E_sp: no signal from the prediction: \"covariates lack ['frag_len']\"; sig_pi_V_sp: no signal from the prediction: \"covariates lack ['frag_len']\")",
+   "signal_mode": "plug_in"
+  }
+ },
+ "split": "val",
+ "subset_pairs_gap_closed": {
+  "ci": [
+   null,
+   null
+  ],
+  "macro": null,
+  "missing_scorable": [
+   "H2AFZ",
+   "H3K27ac",
+   "H3K27me3",
+   "H3K36me3",
+   "H3K4me1",
+   "H3K4me2",
+   "H3K4me3",
+   "H3K79me2",
+   "H3K9ac",
+   "H3K9me3",
+   "H4K20me1"
+  ],
+  "n": 0,
+  "non_scorable_per_assay": {},
+  "per_assay": {},
+  "per_assay_reason": {},
+  "reason": "no scorable assay with a target"
+ },
+ "tables": "/project/6014832/mforooz/ONION/CO-D2/tables/eic_v1_2x",
+ "tables_sha256": "d07474642345868aa78049881791240ad53b3b65506bab3fc60e7e91c178f736",
+ "timing_seconds": {
+  "assembly": 0.0,
+  "fit_marginal": 12.0,
+  "guardrail": 0.0,
+  "model_forward": 0.4,
+  "pairs_total": 0.0,
+  "reference_predictors": 509.7,
+  "stage": 161.2,
+  "targets_total": 0.0,
+  "windows": 156.9,
+  "workers_wall": 3428.3
+ },
+ "torch_threads": 2,
+ "wall_seconds": 3601.9
+}

@@ -101,3 +101,12 @@ The PI closed the peeling-the-onion sprint. The research tree and the task list 
 - Only two-step correction waits. Its 12 run-seeds all have live jobs on Nibi (no job held), with a 12-hour limit on the prediction parts. If the laptop session is closed, check for a timed-out prediction part with `run_state/rescoring_rescuer.sh`.
 - The baseline scores of the second experiments are now in the vault (`results/closeout_D2/addon_baselines_2026-11-18/`, finding f135). Task t361 keeps only the model scores.
 - Fir is back. The 570 queued Fir rescoring copies (jobs 4535347 to 4535923) are still pending; the PI cancels them when the 12 two-step scores are on disk.
+
+## Added 2026-11-19 03:55 UTC: two of the four extension items ended
+
+The PI extended the session by four small items: the two-step correction read, base-model scores on `eic_v1_2` at 256 regions (Fir), verification of the 1 bp tables, and the DNase-seq variance layers without the 15,201-read track.
+
+- **1 bp tables: verified.** 412 measurements checked, 0 failures, in two runs (Nibi jobs 27851432, 27868178). The resolution eval set is built: `ONION/CO-A7/eval/eic_res_v1/evalset.json` (64 eval regions, 16 fit regions; job 27868179). The folder `ONION/CO-A7/genome` is now a link to `ONION/genome`. Finding f137; task t354 is done. The resolution arms no longer wait on this.
+- **DNase-seq replicate ladder without ENCSR000EKG: done.** Common depth 6,648,864 reads (was 15,201). Read sampling 0.0483 [0.0450, 0.0517], biological replicate 0.00059 [-0.00023, 0.00142], cell type 0.0127 [0.0084, 0.0170]; cell type is 23% of the cell-type pair value. The common-cell check failed for DNase-seq read sampling. Finding f136; evidence `results/closeout_E4/ladder_excl_ENCSR000EKG_2026-11-19/`.
+- **Still running.** Second-experiment layers without the track (Nibi job 27851431, output `ONION/CO-D2/layers_excl_ENCSR000EKG/layers.tsv`; task t353 stays open until it is read). Two-step correction: 12 run-seeds on Nibi. Fir references for `eic_v1_2` at 256 regions: jobs 4581644 to 4581648; then 81 scoring jobs (`STEP=ref` of `submit_a12.sh`, kit CO10; task t357).
+

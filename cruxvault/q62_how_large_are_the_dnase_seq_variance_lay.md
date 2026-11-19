@@ -35,5 +35,7 @@ Gives the first interpretable DNase-seq layer values of the replicate ladder and
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-_(no children yet)_
+**0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+
+- `f136` finding (moderate) [[f136_an_asked_for_rerun_with_a_95_cluster_boo|An asked-for rerun with a 95% cluster bootstrap, but the DNase-seq…]]
 <!-- crux:ledger:end -->

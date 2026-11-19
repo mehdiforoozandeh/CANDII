@@ -1,15 +1,15 @@
 ---
 id: t354
 type: task
-title: Onion: verify the 1 bp tables with more memory per worker and build the resolution eval set (job 27692994 ran out of memory)
+title: "Onion: verify the 1 bp tables with more memory per worker and build the resolution eval set (job 27692994 ran out of memory)"
 category: implementation
 parent: t152
 blocked_by: None
 refs: q60
 hypothesis_refs: 
-status: open
-created: 2026-11-18T09:48:04
-updated: "2026-11-18T23:23:12"
+status: done
+created: "2026-11-18T09:48:04"
+updated: "2026-11-18T20:58:27"
 ---
 
 # t354 — Onion: verify the 1 bp tables with more memory per worker and build the resolution eval set (job 27692994 ran out of memory)
@@ -30,7 +30,7 @@ Ready queue entry 22 (`closeout/ready queue for scaling.md`). Nibi job 27692994 
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [1 bp tables verified, eval set built](results/closeout_A7/verify_2026-11-19/onion_a7_verify_27868178.out)
 
 ## Evidence
 

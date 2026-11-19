@@ -1,0 +1,38 @@
+{
+ "by_route": {
+  "chip": {
+   "median_bin_f1": 0.7079176058716062,
+   "median_median_abs_diff": 0.03486163035267964,
+   "median_p99_abs_diff": 2.194884534478185,
+   "median_pearson_asinh": 0.8669401735311899,
+   "median_pearson_raw": 0.9090990557306067,
+   "median_slope": 0.9377035311946218,
+   "median_spearman": 0.7603730266711343,
+   "median_tile_f1": 0.7633597078514912,
+   "median_tile_precision": 0.7612940496822646,
+   "median_tile_recall": 0.7997320830542531,
+   "min_pearson_raw": 0.7185776791336659,
+   "n": 41
+  },
+  "dnase": {
+   "median_bin_f1": 0.8592700901673095,
+   "median_median_abs_diff": 0.04676496237516403,
+   "median_p99_abs_diff": 1.168025455474849,
+   "median_pearson_asinh": 0.9539372835531399,
+   "median_pearson_raw": 0.9913388848230613,
+   "median_slope": 0.9271461294384994,
+   "median_spearman": 0.8838895372346168,
+   "median_tile_f1": 0.849064938889707,
+   "median_tile_precision": 0.8208218658062068,
+   "median_tile_recall": 0.8793208621390809,
+   "min_pearson_raw": 0.9913388848230613,
+   "n": 1
+  }
+ },
+ "dnase_route": "macs2_no_control",
+ "evalset": "/project/6014832/mforooz/ONION/eval/eic_v1/evalset.json",
+ "fraglen_table": "/project/def-maxwl/mforooz/ONION/tables/eic_v1_fraglen.tsv",
+ "n_checked": 42,
+ "n_targets": 43,
+ "pileup": "box_ext_submean"
+}

@@ -1,0 +1,52 @@
+{
+ "exclude_experiments": [
+  "ENCSR000EKG"
+ ],
+ "n_pairs_dropped": 1,
+ "dropped_by_assay": {
+  "DNase-seq": 1
+ },
+ "dropped_pair_ids": [
+  "pd4626cb394db"
+ ],
+ "not_found": [],
+ "common_depth": {
+  "ATAC-seq": 18508054.0,
+  "DNase-seq": 6648864.0,
+  "H2AFZ": 4126583.0,
+  "H2AK5ac": 5631151.0,
+  "H2AK9ac": 7553434.0,
+  "H2BK120ac": 3546998.0,
+  "H2BK12ac": 6165133.0,
+  "H2BK15ac": 5564981.0,
+  "H2BK20ac": 6044303.0,
+  "H2BK5ac": 5369345.0,
+  "H3F3A": 17935543.0,
+  "H3K14ac": 4467213.0,
+  "H3K18ac": 2184825.0,
+  "H3K23ac": 6468268.0,
+  "H3K23me2": 5854340.0,
+  "H3K27ac": 2458592.0,
+  "H3K27me3": 4455877.0,
+  "H3K36me3": 3739866.0,
+  "H3K4ac": 6117866.0,
+  "H3K4me1": 3211703.0,
+  "H3K4me2": 2503056.0,
+  "H3K4me3": 2323010.0,
+  "H3K56ac": 2303164.0,
+  "H3K79me1": 4968306.0,
+  "H3K79me2": 4274344.0,
+  "H3K9ac": 2032707.0,
+  "H3K9me1": 10542469.0,
+  "H3K9me2": 9790373.0,
+  "H3K9me3": 4234531.0,
+  "H3T11ph": 14152309.0,
+  "H4K12ac": 7124288.0,
+  "H4K20me1": 3121137.0,
+  "H4K5ac": 5485142.0,
+  "H4K8ac": 754493.0,
+  "H4K91ac": 4408814.0,
+  "chipseq-control": 2851097.0
+ },
+ "rule": "pairs with an excluded experiment on either side dropped before the common depth"
+}

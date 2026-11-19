@@ -35,8 +35,9 @@ If almost none of the variance below 25 bp is reproducible, a finer bin adds noi
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**0 children** · open 0, leaning 0, settled 0, parked 0 · 2 finding(s) on this question
+**0 children** · open 0, leaning 0, settled 0, parked 0 · 3 finding(s) on this question
 
 - `f111` finding (moderate) [[f111_found_while_reading_the_variance_file_wi|Found while reading the variance file with no prior prediction; the…]]
 - `f112` finding (moderate) [[f112_an_asked_for_measurement_on_43_validatio|An asked-for measurement on 43 validation tracks and 256 regions with…]]
+- `f137` finding (moderate) [[f137_a_direct_pass_fail_check_on_every_measur|A direct pass/fail check on every measurement, repeated once with the same…]]
 <!-- crux:ledger:end -->

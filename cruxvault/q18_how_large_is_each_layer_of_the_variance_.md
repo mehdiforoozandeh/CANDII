@@ -35,7 +35,7 @@ Sets, per assay, how much variance imputation must explain (the cell-type layer)
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**7 children** · open 2, leaning 5, settled 0, parked 0 · 7 finding(s) on this question
+**7 children** · open 1, leaning 6, settled 0, parked 0 · 7 finding(s) on this question
 
 - `h37` [[h37_on_real_data_the_cell_type_layer_is_the_|On real data the cell-type layer is the largest layer for the narrow marks and for accessibility, and the sampling layer is the largest at 25 bp for the broad marks]] — *leaning · moderate*
 - `q24` _(Q)_ [[q24_how_much_of_each_variance_layer_does_the|How much of each variance layer does the model explain (the explained fraction per layer, beside the data layers of iteration 1)?]] — *leaning · weak*
@@ -43,7 +43,7 @@ _(optional: the pre-registered rules — endpoints, thresholds, scope — locked
 - `q33` _(Q)_ [[q33_can_the_negative_binomial_be_written_wit|Can the negative binomial be written with the depth-corrected eta (mean = depth x exp(eta)) throughout the model design, the variance decomposition and the law of total variance, and does decomposing the variance in eta space instead of on counts help, and how?]] — *leaning · moderate*
 - `q60` _(Q)_ [[q60_how_much_of_the_1_bp_count_variance_of_a|How much of the 1 bp count variance of a track lies below the 25 bp bin of the model, and how much of that variance is reproducible signal and not read-sampling noise?]] — *leaning · moderate*
 - `q61` _(Q)_ [[q61_does_duplicate_removal_which_makes_the_t|Does duplicate removal, which makes the two read halves of one library exclude each other, bias the read-half (sampling) layer of the earlier variance ladders at 25 bp?]] — *open*
-- `q62` _(Q)_ [[q62_how_large_are_the_dnase_seq_variance_lay|How large are the DNase-seq variance layers (read sampling, replicate, cell type, other experiment) when the 15,201-read track ENCSR000EKG is left out of the common depth of the DNase-seq pairs?]] — *open*
+- `q62` _(Q)_ [[q62_how_large_are_the_dnase_seq_variance_lay|How large are the DNase-seq variance layers (read sampling, replicate, cell type, other experiment) when the 15,201-read track ENCSR000EKG is left out of the common depth of the DNase-seq pairs?]] — *leaning · moderate*
 - `f35` finding (weak) [[f35_partial_answer_on_eic_v1_no_model_involv|Partial answer on eic_v1 (no model involved): only two layers resolve, a…]]
 - `f51` finding (moderate) [[f51_read_from_the_rerun_with_the_pseudorepli|Read from the rerun with the pseudoreplicate pairs added (Nibi job…]]
 - `f52` finding (moderate) [[f52_read_from_layers_by_assay_tsv_of_the_rer|Read from layers_by_assay.tsv of the rerun (job 27265045); moderate because…]]

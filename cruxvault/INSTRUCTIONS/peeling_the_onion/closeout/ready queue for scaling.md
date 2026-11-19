@@ -262,6 +262,7 @@ done
 - Change: leave ENCSR000EKG out of the DNase-seq pairs, or set a minimum common depth; then rerun the layers stage for DNase-seq and the ladder report. The choice of the two is open.
 - Prerequisite: entry 21 (fresh kit). Cost: about 6 CPU-hours for the layers stage (entry 3 estimate).
 - Evidence: `results/closeout_E4/ladder_two_sided_2026-11-18/COMPARE.md` (foreman worktree), task "rerun the DNase-seq layers" in the taskhub.
+- **State 2026-11-19 03:55 UTC: replicate ladder half DONE; second-experiment half running.** `layers.py --exclude-experiments ENCSR000EKG` (kit CO11) dropped 1 DNase-seq pair; the DNase-seq common depth is now 6,648,864 reads. Nibi jobs: ladder layers 27851414 and report 27868089 completed; second-experiment layers 27851431 running (12 h limit). Never resubmit. DNase-seq rows (0.5 E[(Y-Y')^2] of log1p counts): read sampling 0.0483 [0.0450, 0.0517], biological replicate 0.00059 [-0.00023, 0.00142], cell type 0.0127 [0.0084, 0.0170]. The common-cell check failed for DNase-seq read sampling (0.0415 on 7 common cells). Experiment and lab rows stay not estimable. Evidence: `results/closeout_E4/ladder_excl_ENCSR000EKG_2026-11-19/ladder.md`; cluster folder `ONION/CO-E4/ladder_excl_ENCSR000EKG`.
 
 ### Entry 21. Fresh code kit before the next cluster ladder report (item E4)
 
@@ -273,6 +274,7 @@ done
 - Answers: the end-to-end check of the 1 bp region store and the resolution eval set that every resolution arm needs.
 - Prerequisite: only if Nibi job 27692994 (`onion_a7_verify`: `verify --all --no-rescan`, eval set build and check; 8 CPUs, 16 h limit, kit CO9) does not end with a pass. At 2026-11-18 16:42Z it had run 15.4 h of its 16 h. Read its log in `CO-A7/logs` first.
 - Command: the `tables` stage of `slurm/onion_data/closeout_a7_submit.sh` split into a verify job and an eval set job, each with a longer limit; not built. Never resubmit 27692994 itself.
+- **State 2026-11-19 03:55 UTC: DONE.** Part `verify` of `closeout_a7_submit.sh` (kit CO11; 8 workers, 128000M). Verification passed twice (Nibi jobs 27851432 and 27868178): 412 measurements checked, 0 failures. The first eval-set job 27851433 failed because `ONION/CO-A7/genome` did not exist; the link `CO-A7/genome -> ONION/genome` was added and job 27868179 built `ONION/CO-A7/eval/eic_res_v1/evalset.json` (64 eval regions, 16 fit regions, 0 shared, 0 problems). Never resubmit. Evidence: `results/closeout_A7/verify_2026-11-19/`.
 
 ## 3. What must come back from tape, or be downloaded again
 
