@@ -110,3 +110,7 @@ The PI extended the session by four small items: the two-step correction read, b
 - **DNase-seq replicate ladder without ENCSR000EKG: done.** Common depth 6,648,864 reads (was 15,201). Read sampling 0.0483 [0.0450, 0.0517], biological replicate 0.00059 [-0.00023, 0.00142], cell type 0.0127 [0.0084, 0.0170]; cell type is 23% of the cell-type pair value. The common-cell check failed for DNase-seq read sampling. Finding f136; evidence `results/closeout_E4/ladder_excl_ENCSR000EKG_2026-11-19/`.
 - **Still running.** Second-experiment layers without the track (Nibi job 27851431, output `ONION/CO-D2/layers_excl_ENCSR000EKG/layers.tsv`; task t353 stays open until it is read). Two-step correction: 12 run-seeds on Nibi. Fir references for `eic_v1_2` at 256 regions: jobs 4581644 to 4581648; then 81 scoring jobs (`STEP=ref` of `submit_a12.sh`, kit CO10; task t357).
 
+## Added 2026-11-19 04:15 UTC: DNase-seq second-experiment layers without the track
+
+Nibi job 27851431 completed. DNase-seq common depth 13,300,584 reads (was 15,201). One-sided values: biological-replicate pair value 0.0732 [0.0692, 0.0772]; other-experiment increment 0.0192 [0.0110, 0.0274] (7 pairs, 26% of the replicate value); cell-type increment 0.0113 [-0.0005, 0.0232]. A second DNase-seq experiment of the same cell type differs by more than a biological replicate; the cell-type step above it is not resolved. Finding f138; task t353 is done. Still running: two-step correction (Nibi) and the `eic_v1_2` base-model scores (Fir, task t357).
+
