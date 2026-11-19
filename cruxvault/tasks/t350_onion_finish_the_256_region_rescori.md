@@ -1,15 +1,15 @@
 ---
 id: t350
 type: task
-title: Onion: finish the 256-region rescoring on Nibi (62 run-seeds of 7 arms) and rerun the final-pass command on the full arm-summary table
+title: "Onion: finish the 256-region rescoring on Nibi (62 run-seeds of 7 arms) and rerun the final-pass command on the full arm-summary table"
 category: implementation
 parent: t152
 blocked_by: None
 refs: q56, q48
 hypothesis_refs: 
-status: open
-created: 2026-11-18T09:46:40
-updated: 2026-11-18T09:46:40
+status: done
+created: "2026-11-18T09:46:40"
+updated: "2026-11-19T01:47:43"
 ---
 
 # t350 — Onion: finish the 256-region rescoring on Nibi (62 run-seeds of 7 arms) and rerun the final-pass command on the full arm-summary table
@@ -24,7 +24,7 @@ decides rules 2.3, 2.4 and 2.5 and completes design rows 13, 24 and 25
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [All 62 run-seeds scored on 256 regions; six rules decided](results/rescoring_p256/read_20261119T0850Z/RESCORING_READ.md)
 
 ## Evidence
 

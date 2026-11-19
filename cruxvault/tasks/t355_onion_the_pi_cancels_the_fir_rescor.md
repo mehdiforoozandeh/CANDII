@@ -1,15 +1,15 @@
 ---
 id: t355
 type: task
-title: Onion: the PI cancels the Fir rescoring copies (jobs 4535347 to 4535923) after the Nibi scores are on disk
+title: "Onion: the PI cancels the Fir rescoring copies (jobs 4535347 to 4535923) after the Nibi scores are on disk"
 category: admin
 parent: t152
 blocked_by: t350
 refs: q56
 hypothesis_refs: 
-status: open
-created: 2026-11-18T09:48:04
-updated: 2026-11-18T09:48:04
+status: done
+created: "2026-11-18T09:48:04"
+updated: "2026-11-19T01:49:30"
 ---
 
 # t355 — Onion: the PI cancels the Fir rescoring copies (jobs 4535347 to 4535923) after the Nibi scores are on disk
@@ -24,7 +24,7 @@ the queued Fir jobs duplicate the Nibi rescoring and would spend about 2,225 CPU
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [558 pending Fir copies cancelled after 62 of 62 scores on Nibi](results/rescoring_p256/read_20261119T0850Z/RESCORING_READ.md)
 
 ## Evidence
 

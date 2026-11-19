@@ -81,6 +81,7 @@ The rule texts are section 2.0 of `../closeout/settled miniCANDI design.md`. d i
 - Rule 2.2, decided (settled, strong): all counterfactual views stay in training. Base view only lowers the correction-only term by more than twice the bar on all three models. The composite does not move.
 - Rule 2.6, decided: imputation loss weight 4 stays a candidate on the conv + attention only (imputation +0.039, bar 0.017). It costs crop-pair correction on the conv autoencoder (-0.050, bar 0.021).
 - Rule 2.3 (two-step routing, native and fixed base depth): not decided, 0 seeds scored.
+- **UPDATE (2026-11-19 08:50 UTC):** all 62 run-seeds are scored on 256 regions and all six rules are decided (`results/rescoring_p256/read_20261119T0850Z/RESCORING_READ.md`). Rule 2.3: two-step routing stays off; the composite change is zero or negative on all three models for both arms. The 558 pending Fir copies (job range 4535347 to 4535923) were cancelled under the PI ruling of 2026-11-19 01:40 UTC.
 - Rule 2.4 (fixed input depth): not decided, U-Net 1 of 3 seeds.
 - Rule 2.5 (average baseline input): not decided, 0 seeds scored.
 - Mix-and-match gate (`mix_arms.py qualify`): exit 3 (WAIT), as expected, because five single runs of the pool are not in the rescoring.

@@ -35,8 +35,8 @@ Decides whether the CAC two-step route enters the settled design; the CAC test b
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**1 children** · open 1, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+**1 children** · open 0, leaning 0, settled 1, parked 0 · 1 finding(s) on this question
 
-- `h42` [[h42_on_all_256_regions_neither_two_step_arm_|On all 256 regions, neither two-step arm (native or fixed base depth) raises the composite of any of the three models by twice the seed range while keeping every goal term within twice the range]] — *open*
+- `h42` [[h42_on_all_256_regions_neither_two_step_arm_|On all 256 regions, neither two-step arm (native or fixed base depth) raises the composite of any of the three models by twice the seed range while keeping every goal term within twice the range]] — *settled · strong*
 - `f93` finding (moderate) [[f93_beyond_the_range_on_all_three_models_the|Beyond the range on all three models; the expectation from the CAC test bed…]]
 <!-- crux:ledger:end -->

@@ -114,3 +114,12 @@ The PI extended the session by four small items: the two-step correction read, b
 
 Nibi job 27851431 completed. DNase-seq common depth 13,300,584 reads (was 15,201). One-sided values: biological-replicate pair value 0.0732 [0.0692, 0.0772]; other-experiment increment 0.0192 [0.0110, 0.0274] (7 pairs, 26% of the replicate value); cell-type increment 0.0113 [-0.0005, 0.0232]. A second DNase-seq experiment of the same cell type differs by more than a biological replicate; the cell-type step above it is not resolved. Finding f138; task t353 is done. Still running: two-step correction (Nibi) and the `eic_v1_2` base-model scores (Fir, task t357).
 
+## Added 2026-11-19 08:55 UTC: the rescoring is finished (62 of 62)
+
+- All 62 run-seeds are scored on 256 regions. All six pre-written rules are decided; the read is `results/rescoring_p256/read_20261119T0850Z/`, and the settled-design document, the close-out deck (artifact version 8) and the close-out report carry it.
+- **Two-step routing stays off (settled).** Composite change against the reference: native base depth -0.079 (conv autoencoder, seed range 0.043), -0.051 (conv + attention, 0.056), -0.087 (U-Net, 0.060); fixed base depth -0.051 (0.065), -0.058 (0.048), -0.003 (0.048). Recorded trade-off on the U-Net with a fixed base depth: correction on crop pairs +0.117, calibration -0.165. Finding f139 settles h42.
+- The five rules decided at 50 scores did not change.
+- The 558 pending Fir copies (job range 4535347 to 4535923) were cancelled under the PI ruling; 0 are left. Tasks t350 and t355 are done. The laptop release and rescue loops end by themselves at 62 scores; nothing needs a restart.
+- PR 61 no longer waits for scores. Review and merge are the PI's (t365).
+- **Still open from the four extension items:** the base-model scores on `eic_v1_2` at 256 regions. The 5 Fir reference jobs 4581644 to 4581648 were still PENDING at 08:50 UTC (about 7 hours in the queue). After them: `STEP=ref` of `submit_a12.sh` with kit CO10 (81 jobs; task t357).
+

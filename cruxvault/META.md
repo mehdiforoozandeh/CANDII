@@ -96,7 +96,7 @@ Root: [[candii]]
     - ◐ `q50` [Q] [[q50_does_the_leave_one_out_average_of_the_tr|**Does the leave-one-out average of the training cell types, given as an input, help miniCANDI?**]] — *leaning* · moderate
       - ◐ `h43` [H] [[h43_on_all_256_regions_the_leave_one_out_ave|On all 256 regions, the leave-one-out average input keeps its place in the U-Net mix-and-match pool: better beyond the seed range on one goal term and worse beyond on none]] — *leaning* · moderate · supports
     - ◐ `q51` [Q] [[q51_does_two_step_correction_through_a_base_|**Does two-step correction through a base covariate set help miniCANDI, with native or fixed base depth?**]] — *leaning* · moderate
-      - ○ `h42` [H] [[h42_on_all_256_regions_neither_two_step_arm_|On all 256 regions, neither two-step arm (native or fixed base depth) raises the composite of any of the three models by twice the seed range while keeping every goal term within twice the range]] — *open*
+      - ● `h42` [H] [[h42_on_all_256_regions_neither_two_step_arm_|On all 256 regions, neither two-step arm (native or fixed base depth) raises the composite of any of the three models by twice the seed range while keeping every goal term within twice the range]] — *settled* · strong · supports
     - ◐ `q52` [Q] [[q52_do_the_dna_source_and_the_way_dna_featur|**Do the DNA source and the way DNA features join the count features matter for miniCANDI?**]] — *leaning* · weak
       - ○ `q74` [Q] [[q74_does_the_flashzoi_dna_embedding_help_min|**Does the Flashzoi DNA embedding help miniCANDI when it is judged only on Borzoi test fold 3, where Flashzoi saw no sequence in training?**]] — *open*
     - ◐ `q53` [Q] [[q53_does_the_form_of_the_covariate_embedding|**Does the form of the covariate embedding (numeric only, per-value numeric, dropout) matter for miniCANDI?**]] — *leaning* · weak
@@ -126,6 +126,6 @@ Root: [[candii]]
 ## Dashboard
 
 - **Questions** (74): open 24 · leaning 40 · settled 10 · parked 0
-- **Hypotheses** (42): open 11 · leaning 19 · settled 6 · parked 6
-- **Confidence**: weak 22 · moderate 37 · strong 16
-- **Findings**: 136
+- **Hypotheses** (42): open 10 · leaning 19 · settled 7 · parked 6
+- **Confidence**: weak 22 · moderate 37 · strong 17
+- **Findings**: 137
