@@ -131,3 +131,10 @@ The PI reported that Fir is temporarily down. The 5 reference jobs 4581644 to 45
 ## Added 2026-11-20 00:25 UTC: PI ruling, the Fir base-model scores move to the next sprint
 
 The PI ruled: leave the base-model scores on `eic_v1_2` at 256 regions to the next sprint. This session does no more work on them. Task t357 stays open and carries the steps above.
+
+## Added 2026-11-20 20:15 UTC: Fir references done, base-model scoring submitted
+
+- Fir came back. The 5 reference jobs 4581644 to 4581648 all ended COMPLETED (sacct). Outputs are on disk under `/project/def-maxwl/mforooz/ONION/eval/eic_v1_2/baselines/`: 4 `SCORED` markers and `oracle_floor/seed0/oracle_floor.json`.
+- The PI ruled on 2026-11-20 (question dialog): submit the scoring now. This replaces the ruling "leave it to the next sprint" of 00:25 UTC.
+- Submitted at 20:11 UTC with kit CO10, `STEP=ref DRY_RUN=0` of `submit_a12.sh`: 3 base runs x 3 seeds = 9 scorings, 81 jobs (8 predict + 1 metrics each), 326.7 CPU-hours. Job ids 4712722 to 4712931 (not contiguous). All 81 were PENDING at submission. Submit log on Fir: `~/a12_ref_submit_20261120T2011Z.log`; per-run ids in `/project/def-maxwl/mforooz/ONION/runs_fir/SUBMITTED.tsv`.
+- NEVER resubmit these jobs. Left to do: when each `seed<k>/p256_sv/` has its metrics output, read the scores for `eic_v1_2_rung{2,3,4}_base_heldout`, then close task t357.
