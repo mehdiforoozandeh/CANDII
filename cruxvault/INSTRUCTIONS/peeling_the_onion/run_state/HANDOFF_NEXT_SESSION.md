@@ -127,3 +127,7 @@ Nibi job 27851431 completed. DNase-seq common depth 13,300,584 reads (was 15,201
 ## Added 2026-11-20 00:15 UTC: Fir is down
 
 The PI reported that Fir is temporarily down. The 5 reference jobs 4581644 to 4581648 were PENDING at the last good reading (2026-11-19 21:21 UTC), with no score on disk. When Fir is back: check them with `squeue -j 4581644,4581645,4581646,4581647,4581648` and `sacct`; never resubmit a job that is still queued. If the outage removed them, resubmit is a PI decision. Then `STEP=ref` of `submit_a12.sh` with kit CO10 (81 jobs; task t357).
+
+## Added 2026-11-20 00:25 UTC: PI ruling, the Fir base-model scores move to the next sprint
+
+The PI ruled: leave the base-model scores on `eic_v1_2` at 256 regions to the next sprint. This session does no more work on them. Task t357 stays open and carries the steps above.
