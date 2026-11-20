@@ -1,0 +1,2 @@
+arm	keys changed	comparison incumbent	d14_condition_1	needs	group	simpler_than_base	joins_design	status
+inject_adaln_zero	covariate_injection=adaln_zero	incumbent	false		covariate embedding and injection	false	yes	write

@@ -1,0 +1,2 @@
+arm	keys changed	comparison incumbent	d14_condition_1	needs	group	simpler_than_base	joins_design	status
+scrambled_covariates	scramble_covariates=true	incumbent	false		scrambled covariates (control for covariate use)	false	yes	write

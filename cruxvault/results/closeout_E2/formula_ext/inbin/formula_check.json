@@ -1,0 +1,38 @@
+{
+ "by_route": {
+  "chip": {
+   "median_bin_f1": 0.5764276391160864,
+   "median_median_abs_diff": 0.04899198384464398,
+   "median_p99_abs_diff": 3.642818717956512,
+   "median_pearson_asinh": 0.7760457903179357,
+   "median_pearson_raw": 0.8310903733328839,
+   "median_slope": 0.7494625955141835,
+   "median_spearman": 0.6330496160379233,
+   "median_tile_f1": 0.572882651288821,
+   "median_tile_precision": 0.4208820376703588,
+   "median_tile_recall": 0.9568128557080683,
+   "min_pearson_raw": 0.582849223314034,
+   "n": 41
+  },
+  "dnase": {
+   "median_bin_f1": 0.5076232201533406,
+   "median_median_abs_diff": 0.05122921243309975,
+   "median_p99_abs_diff": 3.326040506362915,
+   "median_pearson_asinh": 0.7965194960751752,
+   "median_pearson_raw": 0.9428244723866536,
+   "median_slope": 0.7658448480007526,
+   "median_spearman": 0.6835445808528526,
+   "median_tile_f1": 0.3792571473207311,
+   "median_tile_precision": 0.23471188243256308,
+   "median_tile_recall": 0.9872407482716552,
+   "min_pearson_raw": 0.9428244723866536,
+   "n": 1
+  }
+ },
+ "dnase_route": "macs2_no_control",
+ "evalset": "/project/6014832/mforooz/ONION/eval/eic_v1/evalset.json",
+ "fraglen_table": "/project/def-maxwl/mforooz/ONION/tables/eic_v1_fraglen.tsv",
+ "n_checked": 42,
+ "n_targets": 43,
+ "pileup": "inbin"
+}

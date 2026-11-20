@@ -1,0 +1,1153 @@
+effect	model	term	dropped_region	effect_without_region
+scrambled_covariates	conv autoencoder	gap_closed_crop_oracle	0	-0.0515299
+scrambled_covariates	conv autoencoder	gap_closed_crop_oracle	16	-0.0521032
+scrambled_covariates	conv autoencoder	gap_closed_crop_oracle	32	-0.0500466
+scrambled_covariates	conv autoencoder	gap_closed_crop_oracle	48	-0.0511656
+scrambled_covariates	conv autoencoder	gap_closed_crop_oracle	64	-0.0530887
+scrambled_covariates	conv autoencoder	gap_closed_crop_oracle	80	-0.0512387
+scrambled_covariates	conv autoencoder	gap_closed_crop_oracle	96	-0.0488132
+scrambled_covariates	conv autoencoder	gap_closed_crop_oracle	112	-0.0549551
+scrambled_covariates	conv autoencoder	gap_closed_crop_oracle	128	-0.0536935
+scrambled_covariates	conv autoencoder	gap_closed_crop_oracle	144	-0.0507345
+scrambled_covariates	conv autoencoder	gap_closed_crop_oracle	160	-0.0507159
+scrambled_covariates	conv autoencoder	gap_closed_crop_oracle	176	-0.0514838
+scrambled_covariates	conv autoencoder	gap_closed_crop_oracle	192	-0.0556054
+scrambled_covariates	conv autoencoder	gap_closed_crop_oracle	208	-0.0521897
+scrambled_covariates	conv autoencoder	gap_closed_crop_oracle	224	-0.0505356
+scrambled_covariates	conv autoencoder	gap_closed_crop_oracle	240	-0.0510362
+scrambled_covariates	conv autoencoder	correction_only	0	-0.168088
+scrambled_covariates	conv autoencoder	correction_only	16	-0.168882
+scrambled_covariates	conv autoencoder	correction_only	32	-0.158745
+scrambled_covariates	conv autoencoder	correction_only	48	-0.156441
+scrambled_covariates	conv autoencoder	correction_only	64	-0.156952
+scrambled_covariates	conv autoencoder	correction_only	80	-0.155994
+scrambled_covariates	conv autoencoder	correction_only	96	-0.190155
+scrambled_covariates	conv autoencoder	correction_only	112	-0.179234
+scrambled_covariates	conv autoencoder	correction_only	128	-0.156202
+scrambled_covariates	conv autoencoder	correction_only	144	-0.157782
+scrambled_covariates	conv autoencoder	correction_only	160	-0.163242
+scrambled_covariates	conv autoencoder	correction_only	176	-0.160993
+scrambled_covariates	conv autoencoder	correction_only	192	-0.178262
+scrambled_covariates	conv autoencoder	correction_only	208	-0.159252
+scrambled_covariates	conv autoencoder	correction_only	224	-0.165851
+scrambled_covariates	conv autoencoder	correction_only	240	-0.160176
+scrambled_covariates	conv + attention	gap_closed_crop_oracle	0	-0.00143124
+scrambled_covariates	conv + attention	gap_closed_crop_oracle	16	-0.0043429
+scrambled_covariates	conv + attention	gap_closed_crop_oracle	32	-8.23526e-06
+scrambled_covariates	conv + attention	gap_closed_crop_oracle	48	-0.000890651
+scrambled_covariates	conv + attention	gap_closed_crop_oracle	64	-0.00351966
+scrambled_covariates	conv + attention	gap_closed_crop_oracle	80	-0.00220666
+scrambled_covariates	conv + attention	gap_closed_crop_oracle	96	-0.00702384
+scrambled_covariates	conv + attention	gap_closed_crop_oracle	112	-0.00966311
+scrambled_covariates	conv + attention	gap_closed_crop_oracle	128	-0.00359366
+scrambled_covariates	conv + attention	gap_closed_crop_oracle	144	-0.000262435
+scrambled_covariates	conv + attention	gap_closed_crop_oracle	160	-0.000564467
+scrambled_covariates	conv + attention	gap_closed_crop_oracle	176	-0.00281175
+scrambled_covariates	conv + attention	gap_closed_crop_oracle	192	-0.01666
+scrambled_covariates	conv + attention	gap_closed_crop_oracle	208	-0.00343533
+scrambled_covariates	conv + attention	gap_closed_crop_oracle	224	-0.000770761
+scrambled_covariates	conv + attention	gap_closed_crop_oracle	240	-0.00155448
+scrambled_covariates	conv + attention	correction_only	0	-0.202245
+scrambled_covariates	conv + attention	correction_only	16	-0.20284
+scrambled_covariates	conv + attention	correction_only	32	-0.191156
+scrambled_covariates	conv + attention	correction_only	48	-0.188031
+scrambled_covariates	conv + attention	correction_only	64	-0.18976
+scrambled_covariates	conv + attention	correction_only	80	-0.188681
+scrambled_covariates	conv + attention	correction_only	96	-0.228788
+scrambled_covariates	conv + attention	correction_only	112	-0.213367
+scrambled_covariates	conv + attention	correction_only	128	-0.188548
+scrambled_covariates	conv + attention	correction_only	144	-0.192357
+scrambled_covariates	conv + attention	correction_only	160	-0.197968
+scrambled_covariates	conv + attention	correction_only	176	-0.193686
+scrambled_covariates	conv + attention	correction_only	192	-0.211002
+scrambled_covariates	conv + attention	correction_only	208	-0.192489
+scrambled_covariates	conv + attention	correction_only	224	-0.200201
+scrambled_covariates	conv + attention	correction_only	240	-0.193668
+scrambled_covariates	U-Net	gap_closed_crop_oracle	0	-0.0779119
+scrambled_covariates	U-Net	gap_closed_crop_oracle	16	-0.075851
+scrambled_covariates	U-Net	gap_closed_crop_oracle	32	-0.0744245
+scrambled_covariates	U-Net	gap_closed_crop_oracle	48	-0.0732301
+scrambled_covariates	U-Net	gap_closed_crop_oracle	64	-0.0748065
+scrambled_covariates	U-Net	gap_closed_crop_oracle	80	-0.0736272
+scrambled_covariates	U-Net	gap_closed_crop_oracle	96	-0.0782897
+scrambled_covariates	U-Net	gap_closed_crop_oracle	112	-0.0797144
+scrambled_covariates	U-Net	gap_closed_crop_oracle	128	-0.0748471
+scrambled_covariates	U-Net	gap_closed_crop_oracle	144	-0.0758236
+scrambled_covariates	U-Net	gap_closed_crop_oracle	160	-0.0749993
+scrambled_covariates	U-Net	gap_closed_crop_oracle	176	-0.0747295
+scrambled_covariates	U-Net	gap_closed_crop_oracle	192	-0.0727886
+scrambled_covariates	U-Net	gap_closed_crop_oracle	208	-0.0739997
+scrambled_covariates	U-Net	gap_closed_crop_oracle	224	-0.0762001
+scrambled_covariates	U-Net	gap_closed_crop_oracle	240	-0.0746849
+scrambled_covariates	U-Net	correction_only	0	-0.211566
+scrambled_covariates	U-Net	correction_only	16	-0.213994
+scrambled_covariates	U-Net	correction_only	32	-0.201571
+scrambled_covariates	U-Net	correction_only	48	-0.201507
+scrambled_covariates	U-Net	correction_only	64	-0.203806
+scrambled_covariates	U-Net	correction_only	80	-0.199952
+scrambled_covariates	U-Net	correction_only	96	-0.248919
+scrambled_covariates	U-Net	correction_only	112	-0.226874
+scrambled_covariates	U-Net	correction_only	128	-0.203374
+scrambled_covariates	U-Net	correction_only	144	-0.206195
+scrambled_covariates	U-Net	correction_only	160	-0.210398
+scrambled_covariates	U-Net	correction_only	176	-0.204654
+scrambled_covariates	U-Net	correction_only	192	-0.242838
+scrambled_covariates	U-Net	correction_only	208	-0.206032
+scrambled_covariates	U-Net	correction_only	224	-0.210636
+scrambled_covariates	U-Net	correction_only	240	-0.205418
+views_base_only	conv autoencoder	gap_closed_crop_oracle	0	0.0135087
+views_base_only	conv autoencoder	gap_closed_crop_oracle	16	0.0130911
+views_base_only	conv autoencoder	gap_closed_crop_oracle	32	0.0172346
+views_base_only	conv autoencoder	gap_closed_crop_oracle	48	0.0185758
+views_base_only	conv autoencoder	gap_closed_crop_oracle	64	0.01525
+views_base_only	conv autoencoder	gap_closed_crop_oracle	80	0.0166709
+views_base_only	conv autoencoder	gap_closed_crop_oracle	96	0.0121684
+views_base_only	conv autoencoder	gap_closed_crop_oracle	112	0.00463905
+views_base_only	conv autoencoder	gap_closed_crop_oracle	128	0.0157399
+views_base_only	conv autoencoder	gap_closed_crop_oracle	144	0.0162907
+views_base_only	conv autoencoder	gap_closed_crop_oracle	160	0.0156168
+views_base_only	conv autoencoder	gap_closed_crop_oracle	176	0.0152004
+views_base_only	conv autoencoder	gap_closed_crop_oracle	192	-0.00439403
+views_base_only	conv autoencoder	gap_closed_crop_oracle	208	0.0169182
+views_base_only	conv autoencoder	gap_closed_crop_oracle	224	0.0148518
+views_base_only	conv autoencoder	gap_closed_crop_oracle	240	0.01657
+views_base_only	conv autoencoder	correction_only	0	-0.291509
+views_base_only	conv autoencoder	correction_only	16	-0.297239
+views_base_only	conv autoencoder	correction_only	32	-0.281705
+views_base_only	conv autoencoder	correction_only	48	-0.27931
+views_base_only	conv autoencoder	correction_only	64	-0.282517
+views_base_only	conv autoencoder	correction_only	80	-0.282237
+views_base_only	conv autoencoder	correction_only	96	-0.304403
+views_base_only	conv autoencoder	correction_only	112	-0.30607
+views_base_only	conv autoencoder	correction_only	128	-0.281216
+views_base_only	conv autoencoder	correction_only	144	-0.282133
+views_base_only	conv autoencoder	correction_only	160	-0.29095
+views_base_only	conv autoencoder	correction_only	176	-0.288187
+views_base_only	conv autoencoder	correction_only	192	-0.297151
+views_base_only	conv autoencoder	correction_only	208	-0.284609
+views_base_only	conv autoencoder	correction_only	224	-0.293505
+views_base_only	conv autoencoder	correction_only	240	-0.28566
+views_base_only	conv + attention	gap_closed_crop_oracle	0	0.00239364
+views_base_only	conv + attention	gap_closed_crop_oracle	16	0.00262499
+views_base_only	conv + attention	gap_closed_crop_oracle	32	0.00674474
+views_base_only	conv + attention	gap_closed_crop_oracle	48	0.00753367
+views_base_only	conv + attention	gap_closed_crop_oracle	64	0.00443887
+views_base_only	conv + attention	gap_closed_crop_oracle	80	0.00590056
+views_base_only	conv + attention	gap_closed_crop_oracle	96	0.000284129
+views_base_only	conv + attention	gap_closed_crop_oracle	112	-0.00654798
+views_base_only	conv + attention	gap_closed_crop_oracle	128	0.00497024
+views_base_only	conv + attention	gap_closed_crop_oracle	144	0.00588533
+views_base_only	conv + attention	gap_closed_crop_oracle	160	0.00513525
+views_base_only	conv + attention	gap_closed_crop_oracle	176	0.00442505
+views_base_only	conv + attention	gap_closed_crop_oracle	192	-0.0158148
+views_base_only	conv + attention	gap_closed_crop_oracle	208	0.00598397
+views_base_only	conv + attention	gap_closed_crop_oracle	224	0.00393478
+views_base_only	conv + attention	gap_closed_crop_oracle	240	0.00568138
+views_base_only	conv + attention	correction_only	0	-0.273896
+views_base_only	conv + attention	correction_only	16	-0.278951
+views_base_only	conv + attention	correction_only	32	-0.260821
+views_base_only	conv + attention	correction_only	48	-0.259904
+views_base_only	conv + attention	correction_only	64	-0.265016
+views_base_only	conv + attention	correction_only	80	-0.26345
+views_base_only	conv + attention	correction_only	96	-0.266788
+views_base_only	conv + attention	correction_only	112	-0.288085
+views_base_only	conv + attention	correction_only	128	-0.263397
+views_base_only	conv + attention	correction_only	144	-0.264654
+views_base_only	conv + attention	correction_only	160	-0.273337
+views_base_only	conv + attention	correction_only	176	-0.269658
+views_base_only	conv + attention	correction_only	192	-0.280541
+views_base_only	conv + attention	correction_only	208	-0.266707
+views_base_only	conv + attention	correction_only	224	-0.276489
+views_base_only	conv + attention	correction_only	240	-0.267361
+views_base_only	U-Net	gap_closed_crop_oracle	0	0.0460077
+views_base_only	U-Net	gap_closed_crop_oracle	16	0.0450848
+views_base_only	U-Net	gap_closed_crop_oracle	32	0.0469383
+views_base_only	U-Net	gap_closed_crop_oracle	48	0.0472298
+views_base_only	U-Net	gap_closed_crop_oracle	64	0.0469856
+views_base_only	U-Net	gap_closed_crop_oracle	80	0.0465887
+views_base_only	U-Net	gap_closed_crop_oracle	96	0.0463385
+views_base_only	U-Net	gap_closed_crop_oracle	112	0.0458025
+views_base_only	U-Net	gap_closed_crop_oracle	128	0.0467986
+views_base_only	U-Net	gap_closed_crop_oracle	144	0.0470483
+views_base_only	U-Net	gap_closed_crop_oracle	160	0.0472249
+views_base_only	U-Net	gap_closed_crop_oracle	176	0.0455331
+views_base_only	U-Net	gap_closed_crop_oracle	192	0.0434111
+views_base_only	U-Net	gap_closed_crop_oracle	208	0.0465509
+views_base_only	U-Net	gap_closed_crop_oracle	224	0.0458682
+views_base_only	U-Net	gap_closed_crop_oracle	240	0.0460718
+views_base_only	U-Net	correction_only	0	-0.249867
+views_base_only	U-Net	correction_only	16	-0.252217
+views_base_only	U-Net	correction_only	32	-0.245696
+views_base_only	U-Net	correction_only	48	-0.242311
+views_base_only	U-Net	correction_only	64	-0.240208
+views_base_only	U-Net	correction_only	80	-0.242889
+views_base_only	U-Net	correction_only	96	-0.285351
+views_base_only	U-Net	correction_only	112	-0.260512
+views_base_only	U-Net	correction_only	128	-0.240763
+views_base_only	U-Net	correction_only	144	-0.243167
+views_base_only	U-Net	correction_only	160	-0.24996
+views_base_only	U-Net	correction_only	176	-0.243837
+views_base_only	U-Net	correction_only	192	-0.258481
+views_base_only	U-Net	correction_only	208	-0.243333
+views_base_only	U-Net	correction_only	224	-0.249822
+views_base_only	U-Net	correction_only	240	-0.243861
+views_base_alignment	conv autoencoder	gap_closed_crop_oracle	0	-0.104014
+views_base_alignment	conv autoencoder	gap_closed_crop_oracle	16	-0.103019
+views_base_alignment	conv autoencoder	gap_closed_crop_oracle	32	-0.100078
+views_base_alignment	conv autoencoder	gap_closed_crop_oracle	48	-0.0974497
+views_base_alignment	conv autoencoder	gap_closed_crop_oracle	64	-0.100101
+views_base_alignment	conv autoencoder	gap_closed_crop_oracle	80	-0.098241
+views_base_alignment	conv autoencoder	gap_closed_crop_oracle	96	-0.106067
+views_base_alignment	conv autoencoder	gap_closed_crop_oracle	112	-0.112675
+views_base_alignment	conv autoencoder	gap_closed_crop_oracle	128	-0.098875
+views_base_alignment	conv autoencoder	gap_closed_crop_oracle	144	-0.0991325
+views_base_alignment	conv autoencoder	gap_closed_crop_oracle	160	-0.100327
+views_base_alignment	conv autoencoder	gap_closed_crop_oracle	176	-0.0990421
+views_base_alignment	conv autoencoder	gap_closed_crop_oracle	192	-0.121286
+views_base_alignment	conv autoencoder	gap_closed_crop_oracle	208	-0.0972278
+views_base_alignment	conv autoencoder	gap_closed_crop_oracle	224	-0.102088
+views_base_alignment	conv autoencoder	gap_closed_crop_oracle	240	-0.0993391
+views_base_alignment	conv autoencoder	correction_only	0	-0.212137
+views_base_alignment	conv autoencoder	correction_only	16	-0.218004
+views_base_alignment	conv autoencoder	correction_only	32	-0.20883
+views_base_alignment	conv autoencoder	correction_only	48	-0.20436
+views_base_alignment	conv autoencoder	correction_only	64	-0.20465
+views_base_alignment	conv autoencoder	correction_only	80	-0.205277
+views_base_alignment	conv autoencoder	correction_only	96	-0.241488
+views_base_alignment	conv autoencoder	correction_only	112	-0.225075
+views_base_alignment	conv autoencoder	correction_only	128	-0.204315
+views_base_alignment	conv autoencoder	correction_only	144	-0.20575
+views_base_alignment	conv autoencoder	correction_only	160	-0.21264
+views_base_alignment	conv autoencoder	correction_only	176	-0.2101
+views_base_alignment	conv autoencoder	correction_only	192	-0.218699
+views_base_alignment	conv autoencoder	correction_only	208	-0.206949
+views_base_alignment	conv autoencoder	correction_only	224	-0.214175
+views_base_alignment	conv autoencoder	correction_only	240	-0.207917
+views_base_alignment	conv + attention	gap_closed_crop_oracle	0	-0.0795541
+views_base_alignment	conv + attention	gap_closed_crop_oracle	16	-0.0783477
+views_base_alignment	conv + attention	gap_closed_crop_oracle	32	-0.0748221
+views_base_alignment	conv + attention	gap_closed_crop_oracle	48	-0.0737657
+views_base_alignment	conv + attention	gap_closed_crop_oracle	64	-0.0757172
+views_base_alignment	conv + attention	gap_closed_crop_oracle	80	-0.0737295
+views_base_alignment	conv + attention	gap_closed_crop_oracle	96	-0.0826595
+views_base_alignment	conv + attention	gap_closed_crop_oracle	112	-0.088028
+views_base_alignment	conv + attention	gap_closed_crop_oracle	128	-0.0747784
+views_base_alignment	conv + attention	gap_closed_crop_oracle	144	-0.0759151
+views_base_alignment	conv + attention	gap_closed_crop_oracle	160	-0.0761991
+views_base_alignment	conv + attention	gap_closed_crop_oracle	176	-0.0743041
+views_base_alignment	conv + attention	gap_closed_crop_oracle	192	-0.0981005
+views_base_alignment	conv + attention	gap_closed_crop_oracle	208	-0.0729543
+views_base_alignment	conv + attention	gap_closed_crop_oracle	224	-0.0775243
+views_base_alignment	conv + attention	gap_closed_crop_oracle	240	-0.075542
+views_base_alignment	conv + attention	correction_only	0	-0.224315
+views_base_alignment	conv + attention	correction_only	16	-0.229256
+views_base_alignment	conv + attention	correction_only	32	-0.216666
+views_base_alignment	conv + attention	correction_only	48	-0.213509
+views_base_alignment	conv + attention	correction_only	64	-0.216075
+views_base_alignment	conv + attention	correction_only	80	-0.216057
+views_base_alignment	conv + attention	correction_only	96	-0.235747
+views_base_alignment	conv + attention	correction_only	112	-0.23618
+views_base_alignment	conv + attention	correction_only	128	-0.214452
+views_base_alignment	conv + attention	correction_only	144	-0.216743
+views_base_alignment	conv + attention	correction_only	160	-0.225012
+views_base_alignment	conv + attention	correction_only	176	-0.219631
+views_base_alignment	conv + attention	correction_only	192	-0.227208
+views_base_alignment	conv + attention	correction_only	208	-0.217489
+views_base_alignment	conv + attention	correction_only	224	-0.226838
+views_base_alignment	conv + attention	correction_only	240	-0.218848
+views_base_alignment	U-Net	gap_closed_crop_oracle	0	0.0104677
+views_base_alignment	U-Net	gap_closed_crop_oracle	16	0.00983789
+views_base_alignment	U-Net	gap_closed_crop_oracle	32	0.0118312
+views_base_alignment	U-Net	gap_closed_crop_oracle	48	0.0115822
+views_base_alignment	U-Net	gap_closed_crop_oracle	64	0.0115306
+views_base_alignment	U-Net	gap_closed_crop_oracle	80	0.0112047
+views_base_alignment	U-Net	gap_closed_crop_oracle	96	0.0114509
+views_base_alignment	U-Net	gap_closed_crop_oracle	112	0.010633
+views_base_alignment	U-Net	gap_closed_crop_oracle	128	0.0111842
+views_base_alignment	U-Net	gap_closed_crop_oracle	144	0.0109058
+views_base_alignment	U-Net	gap_closed_crop_oracle	160	0.0112164
+views_base_alignment	U-Net	gap_closed_crop_oracle	176	0.0102205
+views_base_alignment	U-Net	gap_closed_crop_oracle	192	0.0105203
+views_base_alignment	U-Net	gap_closed_crop_oracle	208	0.010968
+views_base_alignment	U-Net	gap_closed_crop_oracle	224	0.0105517
+views_base_alignment	U-Net	gap_closed_crop_oracle	240	0.0104918
+views_base_alignment	U-Net	correction_only	0	-0.273783
+views_base_alignment	U-Net	correction_only	16	-0.274279
+views_base_alignment	U-Net	correction_only	32	-0.270058
+views_base_alignment	U-Net	correction_only	48	-0.265713
+views_base_alignment	U-Net	correction_only	64	-0.263548
+views_base_alignment	U-Net	correction_only	80	-0.264804
+views_base_alignment	U-Net	correction_only	96	-0.300441
+views_base_alignment	U-Net	correction_only	112	-0.284204
+views_base_alignment	U-Net	correction_only	128	-0.264677
+views_base_alignment	U-Net	correction_only	144	-0.265772
+views_base_alignment	U-Net	correction_only	160	-0.271725
+views_base_alignment	U-Net	correction_only	176	-0.264483
+views_base_alignment	U-Net	correction_only	192	-0.281567
+views_base_alignment	U-Net	correction_only	208	-0.264597
+views_base_alignment	U-Net	correction_only	224	-0.271168
+views_base_alignment	U-Net	correction_only	240	-0.265851
+views_all_same_view_only	conv autoencoder	gap_closed_crop_oracle	0	0.0152913
+views_all_same_view_only	conv autoencoder	gap_closed_crop_oracle	16	0.0118175
+views_all_same_view_only	conv autoencoder	gap_closed_crop_oracle	32	0.0138402
+views_all_same_view_only	conv autoencoder	gap_closed_crop_oracle	48	0.0125181
+views_all_same_view_only	conv autoencoder	gap_closed_crop_oracle	64	0.0113785
+views_all_same_view_only	conv autoencoder	gap_closed_crop_oracle	80	0.0119571
+views_all_same_view_only	conv autoencoder	gap_closed_crop_oracle	96	0.0144866
+views_all_same_view_only	conv autoencoder	gap_closed_crop_oracle	112	0.0093993
+views_all_same_view_only	conv autoencoder	gap_closed_crop_oracle	128	0.0107478
+views_all_same_view_only	conv autoencoder	gap_closed_crop_oracle	144	0.0111787
+views_all_same_view_only	conv autoencoder	gap_closed_crop_oracle	160	0.0125431
+views_all_same_view_only	conv autoencoder	gap_closed_crop_oracle	176	0.0118245
+views_all_same_view_only	conv autoencoder	gap_closed_crop_oracle	192	0.00453064
+views_all_same_view_only	conv autoencoder	gap_closed_crop_oracle	208	0.0112751
+views_all_same_view_only	conv autoencoder	gap_closed_crop_oracle	224	0.0138548
+views_all_same_view_only	conv autoencoder	gap_closed_crop_oracle	240	0.0125512
+views_all_same_view_only	conv autoencoder	correction_only	0	-0.037887
+views_all_same_view_only	conv autoencoder	correction_only	16	-0.0396963
+views_all_same_view_only	conv autoencoder	correction_only	32	-0.0305855
+views_all_same_view_only	conv autoencoder	correction_only	48	-0.0348555
+views_all_same_view_only	conv autoencoder	correction_only	64	-0.0367667
+views_all_same_view_only	conv autoencoder	correction_only	80	-0.0362249
+views_all_same_view_only	conv autoencoder	correction_only	96	-0.00730612
+views_all_same_view_only	conv autoencoder	correction_only	112	-0.0413888
+views_all_same_view_only	conv autoencoder	correction_only	128	-0.0355432
+views_all_same_view_only	conv autoencoder	correction_only	144	-0.0343652
+views_all_same_view_only	conv autoencoder	correction_only	160	-0.0384753
+views_all_same_view_only	conv autoencoder	correction_only	176	-0.0376629
+views_all_same_view_only	conv autoencoder	correction_only	192	-0.0391583
+views_all_same_view_only	conv autoencoder	correction_only	208	-0.0363551
+views_all_same_view_only	conv autoencoder	correction_only	224	-0.0388004
+views_all_same_view_only	conv autoencoder	correction_only	240	-0.0363691
+views_all_same_view_only	conv + attention	gap_closed_crop_oracle	0	0.0132313
+views_all_same_view_only	conv + attention	gap_closed_crop_oracle	16	0.00990605
+views_all_same_view_only	conv + attention	gap_closed_crop_oracle	32	0.00986868
+views_all_same_view_only	conv + attention	gap_closed_crop_oracle	48	0.00743213
+views_all_same_view_only	conv + attention	gap_closed_crop_oracle	64	0.00884235
+views_all_same_view_only	conv + attention	gap_closed_crop_oracle	80	0.00782468
+views_all_same_view_only	conv + attention	gap_closed_crop_oracle	96	0.0163345
+views_all_same_view_only	conv + attention	gap_closed_crop_oracle	112	0.0148225
+views_all_same_view_only	conv + attention	gap_closed_crop_oracle	128	0.00775365
+views_all_same_view_only	conv + attention	gap_closed_crop_oracle	144	0.00775003
+views_all_same_view_only	conv + attention	gap_closed_crop_oracle	160	0.00888194
+views_all_same_view_only	conv + attention	gap_closed_crop_oracle	176	0.0075072
+views_all_same_view_only	conv + attention	gap_closed_crop_oracle	192	0.0133541
+views_all_same_view_only	conv + attention	gap_closed_crop_oracle	208	0.00718562
+views_all_same_view_only	conv + attention	gap_closed_crop_oracle	224	0.0106766
+views_all_same_view_only	conv + attention	gap_closed_crop_oracle	240	0.00791612
+views_all_same_view_only	conv + attention	correction_only	0	0.038095
+views_all_same_view_only	conv + attention	correction_only	16	0.0388647
+views_all_same_view_only	conv + attention	correction_only	32	0.0414905
+views_all_same_view_only	conv + attention	correction_only	48	0.0399053
+views_all_same_view_only	conv + attention	correction_only	64	0.041414
+views_all_same_view_only	conv + attention	correction_only	80	0.0426486
+views_all_same_view_only	conv + attention	correction_only	96	0.0429301
+views_all_same_view_only	conv + attention	correction_only	112	0.0376783
+views_all_same_view_only	conv + attention	correction_only	128	0.0408374
+views_all_same_view_only	conv + attention	correction_only	144	0.0407772
+views_all_same_view_only	conv + attention	correction_only	160	0.0376617
+views_all_same_view_only	conv + attention	correction_only	176	0.0400569
+views_all_same_view_only	conv + attention	correction_only	192	0.0399082
+views_all_same_view_only	conv + attention	correction_only	208	0.0400816
+views_all_same_view_only	conv + attention	correction_only	224	0.0386286
+views_all_same_view_only	conv + attention	correction_only	240	0.0401643
+views_all_same_view_only	U-Net	gap_closed_crop_oracle	0	-14.4593
+views_all_same_view_only	U-Net	gap_closed_crop_oracle	16	-14.432
+views_all_same_view_only	U-Net	gap_closed_crop_oracle	32	-14.4395
+views_all_same_view_only	U-Net	gap_closed_crop_oracle	48	-14.5096
+views_all_same_view_only	U-Net	gap_closed_crop_oracle	64	-14.4554
+views_all_same_view_only	U-Net	gap_closed_crop_oracle	80	-14.6043
+views_all_same_view_only	U-Net	gap_closed_crop_oracle	96	-13.9122
+views_all_same_view_only	U-Net	gap_closed_crop_oracle	112	-13.6398
+views_all_same_view_only	U-Net	gap_closed_crop_oracle	128	-14.4494
+views_all_same_view_only	U-Net	gap_closed_crop_oracle	144	-14.4405
+views_all_same_view_only	U-Net	gap_closed_crop_oracle	160	-14.4921
+views_all_same_view_only	U-Net	gap_closed_crop_oracle	176	-14.6296
+views_all_same_view_only	U-Net	gap_closed_crop_oracle	192	-13.5309
+views_all_same_view_only	U-Net	gap_closed_crop_oracle	208	-14.5409
+views_all_same_view_only	U-Net	gap_closed_crop_oracle	224	-14.4115
+views_all_same_view_only	U-Net	gap_closed_crop_oracle	240	-14.5283
+views_all_same_view_only	U-Net	correction_only	0	nan
+views_all_same_view_only	U-Net	correction_only	16	nan
+views_all_same_view_only	U-Net	correction_only	32	nan
+views_all_same_view_only	U-Net	correction_only	48	nan
+views_all_same_view_only	U-Net	correction_only	64	nan
+views_all_same_view_only	U-Net	correction_only	80	nan
+views_all_same_view_only	U-Net	correction_only	96	nan
+views_all_same_view_only	U-Net	correction_only	112	nan
+views_all_same_view_only	U-Net	correction_only	128	nan
+views_all_same_view_only	U-Net	correction_only	144	nan
+views_all_same_view_only	U-Net	correction_only	160	nan
+views_all_same_view_only	U-Net	correction_only	176	nan
+views_all_same_view_only	U-Net	correction_only	192	nan
+views_all_same_view_only	U-Net	correction_only	208	nan
+views_all_same_view_only	U-Net	correction_only	224	nan
+views_all_same_view_only	U-Net	correction_only	240	nan
+two_step_native	conv autoencoder	gap_closed_crop_oracle	0	-0.108813
+two_step_native	conv autoencoder	gap_closed_crop_oracle	16	-0.117017
+two_step_native	conv autoencoder	gap_closed_crop_oracle	32	-0.11234
+two_step_native	conv autoencoder	gap_closed_crop_oracle	48	-0.113769
+two_step_native	conv autoencoder	gap_closed_crop_oracle	64	-0.116847
+two_step_native	conv autoencoder	gap_closed_crop_oracle	80	-0.118763
+two_step_native	conv autoencoder	gap_closed_crop_oracle	96	-0.108579
+two_step_native	conv autoencoder	gap_closed_crop_oracle	112	-0.121503
+two_step_native	conv autoencoder	gap_closed_crop_oracle	128	-0.115438
+two_step_native	conv autoencoder	gap_closed_crop_oracle	144	-0.109777
+two_step_native	conv autoencoder	gap_closed_crop_oracle	160	-0.110123
+two_step_native	conv autoencoder	gap_closed_crop_oracle	176	-0.119211
+two_step_native	conv autoencoder	gap_closed_crop_oracle	192	-0.126958
+two_step_native	conv autoencoder	gap_closed_crop_oracle	208	-0.119307
+two_step_native	conv autoencoder	gap_closed_crop_oracle	224	-0.112715
+two_step_native	conv autoencoder	gap_closed_crop_oracle	240	-0.11401
+two_step_native	conv autoencoder	correction_only	0	0.0155866
+two_step_native	conv autoencoder	correction_only	16	0.0140677
+two_step_native	conv autoencoder	correction_only	32	0.0267562
+two_step_native	conv autoencoder	correction_only	48	0.0207836
+two_step_native	conv autoencoder	correction_only	64	0.0173646
+two_step_native	conv autoencoder	correction_only	80	0.0201278
+two_step_native	conv autoencoder	correction_only	96	0.0146453
+two_step_native	conv autoencoder	correction_only	112	0.0116936
+two_step_native	conv autoencoder	correction_only	128	0.0208187
+two_step_native	conv autoencoder	correction_only	144	0.0186435
+two_step_native	conv autoencoder	correction_only	160	0.0154004
+two_step_native	conv autoencoder	correction_only	176	0.0158984
+two_step_native	conv autoencoder	correction_only	192	0.0132043
+two_step_native	conv autoencoder	correction_only	208	0.0170626
+two_step_native	conv autoencoder	correction_only	224	0.014864
+two_step_native	conv autoencoder	correction_only	240	0.0171509
+two_step_native	conv + attention	gap_closed_crop_oracle	0	-0.058035
+two_step_native	conv + attention	gap_closed_crop_oracle	16	-0.0613696
+two_step_native	conv + attention	gap_closed_crop_oracle	32	-0.058867
+two_step_native	conv + attention	gap_closed_crop_oracle	48	-0.0589074
+two_step_native	conv + attention	gap_closed_crop_oracle	64	-0.0587018
+two_step_native	conv + attention	gap_closed_crop_oracle	80	-0.0618658
+two_step_native	conv + attention	gap_closed_crop_oracle	96	-0.0608276
+two_step_native	conv + attention	gap_closed_crop_oracle	112	-0.0589131
+two_step_native	conv + attention	gap_closed_crop_oracle	128	-0.0581754
+two_step_native	conv + attention	gap_closed_crop_oracle	144	-0.0571719
+two_step_native	conv + attention	gap_closed_crop_oracle	160	-0.0556421
+two_step_native	conv + attention	gap_closed_crop_oracle	176	-0.0615065
+two_step_native	conv + attention	gap_closed_crop_oracle	192	-0.0599523
+two_step_native	conv + attention	gap_closed_crop_oracle	208	-0.062537
+two_step_native	conv + attention	gap_closed_crop_oracle	224	-0.0584557
+two_step_native	conv + attention	gap_closed_crop_oracle	240	-0.0588466
+two_step_native	conv + attention	correction_only	0	0.108212
+two_step_native	conv + attention	correction_only	16	0.108917
+two_step_native	conv + attention	correction_only	32	0.103999
+two_step_native	conv + attention	correction_only	48	0.0990765
+two_step_native	conv + attention	correction_only	64	0.108442
+two_step_native	conv + attention	correction_only	80	0.108606
+two_step_native	conv + attention	correction_only	96	0.0939821
+two_step_native	conv + attention	correction_only	112	0.108972
+two_step_native	conv + attention	correction_only	128	0.103977
+two_step_native	conv + attention	correction_only	144	0.107108
+two_step_native	conv + attention	correction_only	160	0.105847
+two_step_native	conv + attention	correction_only	176	0.107575
+two_step_native	conv + attention	correction_only	192	0.108419
+two_step_native	conv + attention	correction_only	208	0.106325
+two_step_native	conv + attention	correction_only	224	0.10805
+two_step_native	conv + attention	correction_only	240	0.108513
+two_step_native	U-Net	gap_closed_crop_oracle	0	-0.0662128
+two_step_native	U-Net	gap_closed_crop_oracle	16	-0.0663332
+two_step_native	U-Net	gap_closed_crop_oracle	32	-0.0630977
+two_step_native	U-Net	gap_closed_crop_oracle	48	-0.0616983
+two_step_native	U-Net	gap_closed_crop_oracle	64	-0.0633585
+two_step_native	U-Net	gap_closed_crop_oracle	80	-0.0632991
+two_step_native	U-Net	gap_closed_crop_oracle	96	-0.06519
+two_step_native	U-Net	gap_closed_crop_oracle	112	-0.0679956
+two_step_native	U-Net	gap_closed_crop_oracle	128	-0.0632857
+two_step_native	U-Net	gap_closed_crop_oracle	144	-0.0631063
+two_step_native	U-Net	gap_closed_crop_oracle	160	-0.0641233
+two_step_native	U-Net	gap_closed_crop_oracle	176	-0.064905
+two_step_native	U-Net	gap_closed_crop_oracle	192	-0.0666148
+two_step_native	U-Net	gap_closed_crop_oracle	208	-0.0628477
+two_step_native	U-Net	gap_closed_crop_oracle	224	-0.0651506
+two_step_native	U-Net	gap_closed_crop_oracle	240	-0.0636546
+two_step_native	U-Net	correction_only	0	-0.234982
+two_step_native	U-Net	correction_only	16	-0.23439
+two_step_native	U-Net	correction_only	32	-0.228074
+two_step_native	U-Net	correction_only	48	-0.228984
+two_step_native	U-Net	correction_only	64	-0.229508
+two_step_native	U-Net	correction_only	80	-0.230328
+two_step_native	U-Net	correction_only	96	-0.239164
+two_step_native	U-Net	correction_only	112	-0.241706
+two_step_native	U-Net	correction_only	128	-0.230049
+two_step_native	U-Net	correction_only	144	-0.230561
+two_step_native	U-Net	correction_only	160	-0.231596
+two_step_native	U-Net	correction_only	176	-0.230961
+two_step_native	U-Net	correction_only	192	-0.242122
+two_step_native	U-Net	correction_only	208	-0.230376
+two_step_native	U-Net	correction_only	224	-0.232886
+two_step_native	U-Net	correction_only	240	-0.230059
+two_step_fixed	conv autoencoder	gap_closed_crop_oracle	0	-0.0846568
+two_step_fixed	conv autoencoder	gap_closed_crop_oracle	16	-0.0886939
+two_step_fixed	conv autoencoder	gap_closed_crop_oracle	32	-0.0861538
+two_step_fixed	conv autoencoder	gap_closed_crop_oracle	48	-0.0860868
+two_step_fixed	conv autoencoder	gap_closed_crop_oracle	64	-0.0854926
+two_step_fixed	conv autoencoder	gap_closed_crop_oracle	80	-0.0884286
+two_step_fixed	conv autoencoder	gap_closed_crop_oracle	96	-0.0842399
+two_step_fixed	conv autoencoder	gap_closed_crop_oracle	112	-0.0858182
+two_step_fixed	conv autoencoder	gap_closed_crop_oracle	128	-0.0835287
+two_step_fixed	conv autoencoder	gap_closed_crop_oracle	144	-0.0799489
+two_step_fixed	conv autoencoder	gap_closed_crop_oracle	160	-0.0837624
+two_step_fixed	conv autoencoder	gap_closed_crop_oracle	176	-0.0879241
+two_step_fixed	conv autoencoder	gap_closed_crop_oracle	192	-0.0780353
+two_step_fixed	conv autoencoder	gap_closed_crop_oracle	208	-0.0894528
+two_step_fixed	conv autoencoder	gap_closed_crop_oracle	224	-0.0860979
+two_step_fixed	conv autoencoder	gap_closed_crop_oracle	240	-0.0862878
+two_step_fixed	conv autoencoder	correction_only	0	0.117443
+two_step_fixed	conv autoencoder	correction_only	16	0.116411
+two_step_fixed	conv autoencoder	correction_only	32	0.117083
+two_step_fixed	conv autoencoder	correction_only	48	0.115253
+two_step_fixed	conv autoencoder	correction_only	64	0.115422
+two_step_fixed	conv autoencoder	correction_only	80	0.114469
+two_step_fixed	conv autoencoder	correction_only	96	0.116228
+two_step_fixed	conv autoencoder	correction_only	112	0.117629
+two_step_fixed	conv autoencoder	correction_only	128	0.116907
+two_step_fixed	conv autoencoder	correction_only	144	0.116406
+two_step_fixed	conv autoencoder	correction_only	160	0.115571
+two_step_fixed	conv autoencoder	correction_only	176	0.115361
+two_step_fixed	conv autoencoder	correction_only	192	0.115938
+two_step_fixed	conv autoencoder	correction_only	208	0.115151
+two_step_fixed	conv autoencoder	correction_only	224	0.116493
+two_step_fixed	conv autoencoder	correction_only	240	0.116119
+two_step_fixed	conv + attention	gap_closed_crop_oracle	0	-0.0538396
+two_step_fixed	conv + attention	gap_closed_crop_oracle	16	-0.0570074
+two_step_fixed	conv + attention	gap_closed_crop_oracle	32	-0.0558972
+two_step_fixed	conv + attention	gap_closed_crop_oracle	48	-0.0560852
+two_step_fixed	conv + attention	gap_closed_crop_oracle	64	-0.0546123
+two_step_fixed	conv + attention	gap_closed_crop_oracle	80	-0.0585493
+two_step_fixed	conv + attention	gap_closed_crop_oracle	96	-0.0563586
+two_step_fixed	conv + attention	gap_closed_crop_oracle	112	-0.0520686
+two_step_fixed	conv + attention	gap_closed_crop_oracle	128	-0.0541654
+two_step_fixed	conv + attention	gap_closed_crop_oracle	144	-0.0524667
+two_step_fixed	conv + attention	gap_closed_crop_oracle	160	-0.05311
+two_step_fixed	conv + attention	gap_closed_crop_oracle	176	-0.0576178
+two_step_fixed	conv + attention	gap_closed_crop_oracle	192	-0.0535802
+two_step_fixed	conv + attention	gap_closed_crop_oracle	208	-0.0597047
+two_step_fixed	conv + attention	gap_closed_crop_oracle	224	-0.0546509
+two_step_fixed	conv + attention	gap_closed_crop_oracle	240	-0.056415
+two_step_fixed	conv + attention	correction_only	0	0.140677
+two_step_fixed	conv + attention	correction_only	16	0.14236
+two_step_fixed	conv + attention	correction_only	32	0.142035
+two_step_fixed	conv + attention	correction_only	48	0.138675
+two_step_fixed	conv + attention	correction_only	64	0.142145
+two_step_fixed	conv + attention	correction_only	80	0.142923
+two_step_fixed	conv + attention	correction_only	96	0.129134
+two_step_fixed	conv + attention	correction_only	112	0.143757
+two_step_fixed	conv + attention	correction_only	128	0.142307
+two_step_fixed	conv + attention	correction_only	144	0.141676
+two_step_fixed	conv + attention	correction_only	160	0.140149
+two_step_fixed	conv + attention	correction_only	176	0.141627
+two_step_fixed	conv + attention	correction_only	192	0.143385
+two_step_fixed	conv + attention	correction_only	208	0.140821
+two_step_fixed	conv + attention	correction_only	224	0.141892
+two_step_fixed	conv + attention	correction_only	240	0.142095
+two_step_fixed	U-Net	gap_closed_crop_oracle	0	0.127256
+two_step_fixed	U-Net	gap_closed_crop_oracle	16	0.126784
+two_step_fixed	U-Net	gap_closed_crop_oracle	32	0.127539
+two_step_fixed	U-Net	gap_closed_crop_oracle	48	0.128736
+two_step_fixed	U-Net	gap_closed_crop_oracle	64	0.130376
+two_step_fixed	U-Net	gap_closed_crop_oracle	80	0.127286
+two_step_fixed	U-Net	gap_closed_crop_oracle	96	0.128518
+two_step_fixed	U-Net	gap_closed_crop_oracle	112	0.131378
+two_step_fixed	U-Net	gap_closed_crop_oracle	128	0.129751
+two_step_fixed	U-Net	gap_closed_crop_oracle	144	0.129206
+two_step_fixed	U-Net	gap_closed_crop_oracle	160	0.128987
+two_step_fixed	U-Net	gap_closed_crop_oracle	176	0.126524
+two_step_fixed	U-Net	gap_closed_crop_oracle	192	0.132399
+two_step_fixed	U-Net	gap_closed_crop_oracle	208	0.127884
+two_step_fixed	U-Net	gap_closed_crop_oracle	224	0.127916
+two_step_fixed	U-Net	gap_closed_crop_oracle	240	0.126824
+two_step_fixed	U-Net	correction_only	0	0.0607348
+two_step_fixed	U-Net	correction_only	16	0.0615739
+two_step_fixed	U-Net	correction_only	32	0.055784
+two_step_fixed	U-Net	correction_only	48	0.0623969
+two_step_fixed	U-Net	correction_only	64	0.064623
+two_step_fixed	U-Net	correction_only	80	0.0637224
+two_step_fixed	U-Net	correction_only	96	0.0280171
+two_step_fixed	U-Net	correction_only	112	0.0560182
+two_step_fixed	U-Net	correction_only	128	0.0632489
+two_step_fixed	U-Net	correction_only	144	0.0621801
+two_step_fixed	U-Net	correction_only	160	0.0617958
+two_step_fixed	U-Net	correction_only	176	0.0632978
+two_step_fixed	U-Net	correction_only	192	0.0548472
+two_step_fixed	U-Net	correction_only	208	0.0627396
+two_step_fixed	U-Net	correction_only	224	0.0621097
+two_step_fixed	U-Net	correction_only	240	0.0633805
+input_depth_fixed	conv autoencoder	gap_closed_crop_oracle	0	-0.00626932
+input_depth_fixed	conv autoencoder	gap_closed_crop_oracle	16	-0.00799495
+input_depth_fixed	conv autoencoder	gap_closed_crop_oracle	32	-0.0067223
+input_depth_fixed	conv autoencoder	gap_closed_crop_oracle	48	-0.00755441
+input_depth_fixed	conv autoencoder	gap_closed_crop_oracle	64	-0.00702391
+input_depth_fixed	conv autoencoder	gap_closed_crop_oracle	80	-0.00777511
+input_depth_fixed	conv autoencoder	gap_closed_crop_oracle	96	-0.000886128
+input_depth_fixed	conv autoencoder	gap_closed_crop_oracle	112	-0.00976854
+input_depth_fixed	conv autoencoder	gap_closed_crop_oracle	128	-0.00726659
+input_depth_fixed	conv autoencoder	gap_closed_crop_oracle	144	-0.0080481
+input_depth_fixed	conv autoencoder	gap_closed_crop_oracle	160	-0.00671221
+input_depth_fixed	conv autoencoder	gap_closed_crop_oracle	176	-0.00808402
+input_depth_fixed	conv autoencoder	gap_closed_crop_oracle	192	-0.00610942
+input_depth_fixed	conv autoencoder	gap_closed_crop_oracle	208	-0.0085436
+input_depth_fixed	conv autoencoder	gap_closed_crop_oracle	224	-0.00625403
+input_depth_fixed	conv autoencoder	gap_closed_crop_oracle	240	-0.00792381
+input_depth_fixed	conv autoencoder	correction_only	0	0.0363825
+input_depth_fixed	conv autoencoder	correction_only	16	0.0355972
+input_depth_fixed	conv autoencoder	correction_only	32	0.0437039
+input_depth_fixed	conv autoencoder	correction_only	48	0.0392311
+input_depth_fixed	conv autoencoder	correction_only	64	0.038693
+input_depth_fixed	conv autoencoder	correction_only	80	0.0375937
+input_depth_fixed	conv autoencoder	correction_only	96	0.0495805
+input_depth_fixed	conv autoencoder	correction_only	112	0.0359265
+input_depth_fixed	conv autoencoder	correction_only	128	0.0385584
+input_depth_fixed	conv autoencoder	correction_only	144	0.0392056
+input_depth_fixed	conv autoencoder	correction_only	160	0.0359132
+input_depth_fixed	conv autoencoder	correction_only	176	0.0373001
+input_depth_fixed	conv autoencoder	correction_only	192	0.033168
+input_depth_fixed	conv autoencoder	correction_only	208	0.0376108
+input_depth_fixed	conv autoencoder	correction_only	224	0.0357406
+input_depth_fixed	conv autoencoder	correction_only	240	0.0387068
+input_depth_fixed	conv + attention	gap_closed_crop_oracle	0	0.0509504
+input_depth_fixed	conv + attention	gap_closed_crop_oracle	16	0.0491427
+input_depth_fixed	conv + attention	gap_closed_crop_oracle	32	0.0510964
+input_depth_fixed	conv + attention	gap_closed_crop_oracle	48	0.0496448
+input_depth_fixed	conv + attention	gap_closed_crop_oracle	64	0.048987
+input_depth_fixed	conv + attention	gap_closed_crop_oracle	80	0.0495947
+input_depth_fixed	conv + attention	gap_closed_crop_oracle	96	0.0542285
+input_depth_fixed	conv + attention	gap_closed_crop_oracle	112	0.0480616
+input_depth_fixed	conv + attention	gap_closed_crop_oracle	128	0.0481964
+input_depth_fixed	conv + attention	gap_closed_crop_oracle	144	0.0487118
+input_depth_fixed	conv + attention	gap_closed_crop_oracle	160	0.0506922
+input_depth_fixed	conv + attention	gap_closed_crop_oracle	176	0.0490696
+input_depth_fixed	conv + attention	gap_closed_crop_oracle	192	0.0447657
+input_depth_fixed	conv + attention	gap_closed_crop_oracle	208	0.0486428
+input_depth_fixed	conv + attention	gap_closed_crop_oracle	224	0.0500937
+input_depth_fixed	conv + attention	gap_closed_crop_oracle	240	0.0493119
+input_depth_fixed	conv + attention	correction_only	0	0.00280134
+input_depth_fixed	conv + attention	correction_only	16	0.00227076
+input_depth_fixed	conv + attention	correction_only	32	0.0144415
+input_depth_fixed	conv + attention	correction_only	48	0.00911571
+input_depth_fixed	conv + attention	correction_only	64	0.00805431
+input_depth_fixed	conv + attention	correction_only	80	0.00786915
+input_depth_fixed	conv + attention	correction_only	96	0.0267496
+input_depth_fixed	conv + attention	correction_only	112	0.00238791
+input_depth_fixed	conv + attention	correction_only	128	0.00879979
+input_depth_fixed	conv + attention	correction_only	144	0.00762243
+input_depth_fixed	conv + attention	correction_only	160	0.00191333
+input_depth_fixed	conv + attention	correction_only	176	0.00599856
+input_depth_fixed	conv + attention	correction_only	192	0.00362115
+input_depth_fixed	conv + attention	correction_only	208	0.00610807
+input_depth_fixed	conv + attention	correction_only	224	0.00341322
+input_depth_fixed	conv + attention	correction_only	240	0.00710598
+input_depth_fixed	U-Net	gap_closed_crop_oracle	0	0.169231
+input_depth_fixed	U-Net	gap_closed_crop_oracle	16	0.165968
+input_depth_fixed	U-Net	gap_closed_crop_oracle	32	0.167084
+input_depth_fixed	U-Net	gap_closed_crop_oracle	48	0.164839
+input_depth_fixed	U-Net	gap_closed_crop_oracle	64	0.165907
+input_depth_fixed	U-Net	gap_closed_crop_oracle	80	0.164072
+input_depth_fixed	U-Net	gap_closed_crop_oracle	96	0.176508
+input_depth_fixed	U-Net	gap_closed_crop_oracle	112	0.174019
+input_depth_fixed	U-Net	gap_closed_crop_oracle	128	0.164663
+input_depth_fixed	U-Net	gap_closed_crop_oracle	144	0.164082
+input_depth_fixed	U-Net	gap_closed_crop_oracle	160	0.166737
+input_depth_fixed	U-Net	gap_closed_crop_oracle	176	0.163231
+input_depth_fixed	U-Net	gap_closed_crop_oracle	192	0.183144
+input_depth_fixed	U-Net	gap_closed_crop_oracle	208	0.16255
+input_depth_fixed	U-Net	gap_closed_crop_oracle	224	0.166578
+input_depth_fixed	U-Net	gap_closed_crop_oracle	240	0.164641
+input_depth_fixed	U-Net	correction_only	0	0.105433
+input_depth_fixed	U-Net	correction_only	16	0.103145
+input_depth_fixed	U-Net	correction_only	32	0.113719
+input_depth_fixed	U-Net	correction_only	48	0.11067
+input_depth_fixed	U-Net	correction_only	64	0.109643
+input_depth_fixed	U-Net	correction_only	80	0.110648
+input_depth_fixed	U-Net	correction_only	96	0.070256
+input_depth_fixed	U-Net	correction_only	112	0.0965358
+input_depth_fixed	U-Net	correction_only	128	0.109437
+input_depth_fixed	U-Net	correction_only	144	0.108501
+input_depth_fixed	U-Net	correction_only	160	0.104843
+input_depth_fixed	U-Net	correction_only	176	0.10639
+input_depth_fixed	U-Net	correction_only	192	0.0826566
+input_depth_fixed	U-Net	correction_only	208	0.106187
+input_depth_fixed	U-Net	correction_only	224	0.106042
+input_depth_fixed	U-Net	correction_only	240	0.108301
+average_input	conv autoencoder	gap_closed_crop_oracle	0	0.0302148
+average_input	conv autoencoder	gap_closed_crop_oracle	16	0.0270457
+average_input	conv autoencoder	gap_closed_crop_oracle	32	0.0256109
+average_input	conv autoencoder	gap_closed_crop_oracle	48	0.0258197
+average_input	conv autoencoder	gap_closed_crop_oracle	64	0.0270929
+average_input	conv autoencoder	gap_closed_crop_oracle	80	0.0258262
+average_input	conv autoencoder	gap_closed_crop_oracle	96	0.022441
+average_input	conv autoencoder	gap_closed_crop_oracle	112	0.022189
+average_input	conv autoencoder	gap_closed_crop_oracle	128	0.026575
+average_input	conv autoencoder	gap_closed_crop_oracle	144	0.0256662
+average_input	conv autoencoder	gap_closed_crop_oracle	160	0.0253087
+average_input	conv autoencoder	gap_closed_crop_oracle	176	0.0273746
+average_input	conv autoencoder	gap_closed_crop_oracle	192	0.0184951
+average_input	conv autoencoder	gap_closed_crop_oracle	208	0.0268329
+average_input	conv autoencoder	gap_closed_crop_oracle	224	0.0256563
+average_input	conv autoencoder	gap_closed_crop_oracle	240	0.0272151
+average_input	conv autoencoder	correction_only	0	0.0684302
+average_input	conv autoencoder	correction_only	16	0.0701915
+average_input	conv autoencoder	correction_only	32	0.0687767
+average_input	conv autoencoder	correction_only	48	0.069273
+average_input	conv autoencoder	correction_only	64	0.0708166
+average_input	conv autoencoder	correction_only	80	0.0696653
+average_input	conv autoencoder	correction_only	96	0.0822098
+average_input	conv autoencoder	correction_only	112	0.0714417
+average_input	conv autoencoder	correction_only	128	0.0708368
+average_input	conv autoencoder	correction_only	144	0.0712412
+average_input	conv autoencoder	correction_only	160	0.0694944
+average_input	conv autoencoder	correction_only	176	0.0706994
+average_input	conv autoencoder	correction_only	192	0.0707322
+average_input	conv autoencoder	correction_only	208	0.0704888
+average_input	conv autoencoder	correction_only	224	0.0699868
+average_input	conv autoencoder	correction_only	240	0.0703971
+average_input	conv + attention	gap_closed_crop_oracle	0	0.026562
+average_input	conv + attention	gap_closed_crop_oracle	16	0.0260206
+average_input	conv + attention	gap_closed_crop_oracle	32	0.0261589
+average_input	conv + attention	gap_closed_crop_oracle	48	0.0260343
+average_input	conv + attention	gap_closed_crop_oracle	64	0.0265836
+average_input	conv + attention	gap_closed_crop_oracle	80	0.026059
+average_input	conv + attention	gap_closed_crop_oracle	96	0.0197283
+average_input	conv + attention	gap_closed_crop_oracle	112	0.0200902
+average_input	conv + attention	gap_closed_crop_oracle	128	0.026044
+average_input	conv + attention	gap_closed_crop_oracle	144	0.0252492
+average_input	conv + attention	gap_closed_crop_oracle	160	0.0260711
+average_input	conv + attention	gap_closed_crop_oracle	176	0.0275937
+average_input	conv + attention	gap_closed_crop_oracle	192	0.0141871
+average_input	conv + attention	gap_closed_crop_oracle	208	0.0267408
+average_input	conv + attention	gap_closed_crop_oracle	224	0.0257997
+average_input	conv + attention	gap_closed_crop_oracle	240	0.0267427
+average_input	conv + attention	correction_only	0	0.0507688
+average_input	conv + attention	correction_only	16	0.0534524
+average_input	conv + attention	correction_only	32	0.0519154
+average_input	conv + attention	correction_only	48	0.0536457
+average_input	conv + attention	correction_only	64	0.054236
+average_input	conv + attention	correction_only	80	0.0532436
+average_input	conv + attention	correction_only	96	0.0632998
+average_input	conv + attention	correction_only	112	0.0535333
+average_input	conv + attention	correction_only	128	0.0546036
+average_input	conv + attention	correction_only	144	0.0543627
+average_input	conv + attention	correction_only	160	0.052349
+average_input	conv + attention	correction_only	176	0.0542255
+average_input	conv + attention	correction_only	192	0.0561154
+average_input	conv + attention	correction_only	208	0.0540585
+average_input	conv + attention	correction_only	224	0.0523443
+average_input	conv + attention	correction_only	240	0.0535463
+average_input	U-Net	gap_closed_crop_oracle	0	-0.0068682
+average_input	U-Net	gap_closed_crop_oracle	16	-0.00589032
+average_input	U-Net	gap_closed_crop_oracle	32	-0.00611761
+average_input	U-Net	gap_closed_crop_oracle	48	-0.00617818
+average_input	U-Net	gap_closed_crop_oracle	64	-0.00550525
+average_input	U-Net	gap_closed_crop_oracle	80	-0.00616674
+average_input	U-Net	gap_closed_crop_oracle	96	-0.00820338
+average_input	U-Net	gap_closed_crop_oracle	112	-0.0024924
+average_input	U-Net	gap_closed_crop_oracle	128	-0.00599074
+average_input	U-Net	gap_closed_crop_oracle	144	-0.00695994
+average_input	U-Net	gap_closed_crop_oracle	160	-0.00644504
+average_input	U-Net	gap_closed_crop_oracle	176	-0.00511125
+average_input	U-Net	gap_closed_crop_oracle	192	-0.00761833
+average_input	U-Net	gap_closed_crop_oracle	208	-0.00555814
+average_input	U-Net	gap_closed_crop_oracle	224	-0.00567232
+average_input	U-Net	gap_closed_crop_oracle	240	-0.00639075
+average_input	U-Net	correction_only	0	0.0836678
+average_input	U-Net	correction_only	16	0.0828767
+average_input	U-Net	correction_only	32	0.0824114
+average_input	U-Net	correction_only	48	0.0788394
+average_input	U-Net	correction_only	64	0.080913
+average_input	U-Net	correction_only	80	0.0792665
+average_input	U-Net	correction_only	96	0.060533
+average_input	U-Net	correction_only	112	0.0858043
+average_input	U-Net	correction_only	128	0.0810042
+average_input	U-Net	correction_only	144	0.0824486
+average_input	U-Net	correction_only	160	0.081293
+average_input	U-Net	correction_only	176	0.0824345
+average_input	U-Net	correction_only	192	0.0858586
+average_input	U-Net	correction_only	208	0.0810114
+average_input	U-Net	correction_only	224	0.0843018
+average_input	U-Net	correction_only	240	0.0825262
+loss_impute_x4	conv autoencoder	gap_closed_crop_oracle	0	-0.0348647
+loss_impute_x4	conv autoencoder	gap_closed_crop_oracle	16	-0.0399043
+loss_impute_x4	conv autoencoder	gap_closed_crop_oracle	32	-0.0378699
+loss_impute_x4	conv autoencoder	gap_closed_crop_oracle	48	-0.0392602
+loss_impute_x4	conv autoencoder	gap_closed_crop_oracle	64	-0.0381802
+loss_impute_x4	conv autoencoder	gap_closed_crop_oracle	80	-0.0399699
+loss_impute_x4	conv autoencoder	gap_closed_crop_oracle	96	-0.0309181
+loss_impute_x4	conv autoencoder	gap_closed_crop_oracle	112	-0.0366981
+loss_impute_x4	conv autoencoder	gap_closed_crop_oracle	128	-0.0392348
+loss_impute_x4	conv autoencoder	gap_closed_crop_oracle	144	-0.0392929
+loss_impute_x4	conv autoencoder	gap_closed_crop_oracle	160	-0.0378834
+loss_impute_x4	conv autoencoder	gap_closed_crop_oracle	176	-0.0398666
+loss_impute_x4	conv autoencoder	gap_closed_crop_oracle	192	-0.030238
+loss_impute_x4	conv autoencoder	gap_closed_crop_oracle	208	-0.0407205
+loss_impute_x4	conv autoencoder	gap_closed_crop_oracle	224	-0.03751
+loss_impute_x4	conv autoencoder	gap_closed_crop_oracle	240	-0.0397385
+loss_impute_x4	conv autoencoder	correction_only	0	0.058181
+loss_impute_x4	conv autoencoder	correction_only	16	0.0587229
+loss_impute_x4	conv autoencoder	correction_only	32	0.0623564
+loss_impute_x4	conv autoencoder	correction_only	48	0.0598913
+loss_impute_x4	conv autoencoder	correction_only	64	0.0586513
+loss_impute_x4	conv autoencoder	correction_only	80	0.0585567
+loss_impute_x4	conv autoencoder	correction_only	96	0.0724076
+loss_impute_x4	conv autoencoder	correction_only	112	0.0587753
+loss_impute_x4	conv autoencoder	correction_only	128	0.0597736
+loss_impute_x4	conv autoencoder	correction_only	144	0.0603667
+loss_impute_x4	conv autoencoder	correction_only	160	0.0580788
+loss_impute_x4	conv autoencoder	correction_only	176	0.0583946
+loss_impute_x4	conv autoencoder	correction_only	192	0.0585151
+loss_impute_x4	conv autoencoder	correction_only	208	0.058669
+loss_impute_x4	conv autoencoder	correction_only	224	0.0589478
+loss_impute_x4	conv autoencoder	correction_only	240	0.0593152
+loss_impute_x4	conv + attention	gap_closed_crop_oracle	0	0.00401269
+loss_impute_x4	conv + attention	gap_closed_crop_oracle	16	-0.00129089
+loss_impute_x4	conv + attention	gap_closed_crop_oracle	32	-0.000890787
+loss_impute_x4	conv + attention	gap_closed_crop_oracle	48	-0.00307089
+loss_impute_x4	conv + attention	gap_closed_crop_oracle	64	-0.000993382
+loss_impute_x4	conv + attention	gap_closed_crop_oracle	80	-0.00285066
+loss_impute_x4	conv + attention	gap_closed_crop_oracle	96	0.00977229
+loss_impute_x4	conv + attention	gap_closed_crop_oracle	112	0.0054847
+loss_impute_x4	conv + attention	gap_closed_crop_oracle	128	-0.00284884
+loss_impute_x4	conv + attention	gap_closed_crop_oracle	144	-0.00290211
+loss_impute_x4	conv + attention	gap_closed_crop_oracle	160	-0.00104756
+loss_impute_x4	conv + attention	gap_closed_crop_oracle	176	-0.00239069
+loss_impute_x4	conv + attention	gap_closed_crop_oracle	192	0.00909783
+loss_impute_x4	conv + attention	gap_closed_crop_oracle	208	-0.00363415
+loss_impute_x4	conv + attention	gap_closed_crop_oracle	224	-8.56684e-05
+loss_impute_x4	conv + attention	gap_closed_crop_oracle	240	-0.00272653
+loss_impute_x4	conv + attention	correction_only	0	0.0991633
+loss_impute_x4	conv + attention	correction_only	16	0.101219
+loss_impute_x4	conv + attention	correction_only	32	0.105206
+loss_impute_x4	conv + attention	correction_only	48	0.101992
+loss_impute_x4	conv + attention	correction_only	64	0.101807
+loss_impute_x4	conv + attention	correction_only	80	0.102892
+loss_impute_x4	conv + attention	correction_only	96	0.100306
+loss_impute_x4	conv + attention	correction_only	112	0.101541
+loss_impute_x4	conv + attention	correction_only	128	0.10294
+loss_impute_x4	conv + attention	correction_only	144	0.101039
+loss_impute_x4	conv + attention	correction_only	160	0.0989969
+loss_impute_x4	conv + attention	correction_only	176	0.100929
+loss_impute_x4	conv + attention	correction_only	192	0.101828
+loss_impute_x4	conv + attention	correction_only	208	0.100286
+loss_impute_x4	conv + attention	correction_only	224	0.100422
+loss_impute_x4	conv + attention	correction_only	240	0.101153
+loss_impute_x4	U-Net	gap_closed_crop_oracle	0	0.0251123
+loss_impute_x4	U-Net	gap_closed_crop_oracle	16	0.024719
+loss_impute_x4	U-Net	gap_closed_crop_oracle	32	0.0248623
+loss_impute_x4	U-Net	gap_closed_crop_oracle	48	0.0248593
+loss_impute_x4	U-Net	gap_closed_crop_oracle	64	0.0252278
+loss_impute_x4	U-Net	gap_closed_crop_oracle	80	0.0254919
+loss_impute_x4	U-Net	gap_closed_crop_oracle	96	0.0227564
+loss_impute_x4	U-Net	gap_closed_crop_oracle	112	0.0264298
+loss_impute_x4	U-Net	gap_closed_crop_oracle	128	0.0246992
+loss_impute_x4	U-Net	gap_closed_crop_oracle	144	0.024604
+loss_impute_x4	U-Net	gap_closed_crop_oracle	160	0.0254596
+loss_impute_x4	U-Net	gap_closed_crop_oracle	176	0.0255028
+loss_impute_x4	U-Net	gap_closed_crop_oracle	192	0.0241901
+loss_impute_x4	U-Net	gap_closed_crop_oracle	208	0.0253302
+loss_impute_x4	U-Net	gap_closed_crop_oracle	224	0.0253573
+loss_impute_x4	U-Net	gap_closed_crop_oracle	240	0.0251659
+loss_impute_x4	U-Net	correction_only	0	0.0524279
+loss_impute_x4	U-Net	correction_only	16	0.0522265
+loss_impute_x4	U-Net	correction_only	32	0.0533033
+loss_impute_x4	U-Net	correction_only	48	0.05244
+loss_impute_x4	U-Net	correction_only	64	0.0518802
+loss_impute_x4	U-Net	correction_only	80	0.0535305
+loss_impute_x4	U-Net	correction_only	96	0.0253212
+loss_impute_x4	U-Net	correction_only	112	0.0501834
+loss_impute_x4	U-Net	correction_only	128	0.0517746
+loss_impute_x4	U-Net	correction_only	144	0.0517855
+loss_impute_x4	U-Net	correction_only	160	0.0524073
+loss_impute_x4	U-Net	correction_only	176	0.0525647
+loss_impute_x4	U-Net	correction_only	192	0.0453443
+loss_impute_x4	U-Net	correction_only	208	0.0515821
+loss_impute_x4	U-Net	correction_only	224	0.0529115
+loss_impute_x4	U-Net	correction_only	240	0.0527194
+cov_numeric_only	conv autoencoder	gap_closed_crop_oracle	0	-0.0277564
+cov_numeric_only	conv autoencoder	gap_closed_crop_oracle	16	-0.0302083
+cov_numeric_only	conv autoencoder	gap_closed_crop_oracle	32	-0.0270367
+cov_numeric_only	conv autoencoder	gap_closed_crop_oracle	48	-0.0289757
+cov_numeric_only	conv autoencoder	gap_closed_crop_oracle	64	-0.0313549
+cov_numeric_only	conv autoencoder	gap_closed_crop_oracle	80	-0.0298018
+cov_numeric_only	conv autoencoder	gap_closed_crop_oracle	96	-0.0287439
+cov_numeric_only	conv autoencoder	gap_closed_crop_oracle	112	-0.0352557
+cov_numeric_only	conv autoencoder	gap_closed_crop_oracle	128	-0.0310886
+cov_numeric_only	conv autoencoder	gap_closed_crop_oracle	144	-0.0288629
+cov_numeric_only	conv autoencoder	gap_closed_crop_oracle	160	-0.0281625
+cov_numeric_only	conv autoencoder	gap_closed_crop_oracle	176	-0.0285444
+cov_numeric_only	conv autoencoder	gap_closed_crop_oracle	192	-0.0390647
+cov_numeric_only	conv autoencoder	gap_closed_crop_oracle	208	-0.0294029
+cov_numeric_only	conv autoencoder	gap_closed_crop_oracle	224	-0.0288722
+cov_numeric_only	conv autoencoder	gap_closed_crop_oracle	240	-0.0276204
+cov_numeric_only	conv autoencoder	correction_only	0	-0.00384043
+cov_numeric_only	conv autoencoder	correction_only	16	-0.00508223
+cov_numeric_only	conv autoencoder	correction_only	32	-0.00204283
+cov_numeric_only	conv autoencoder	correction_only	48	-0.00391788
+cov_numeric_only	conv autoencoder	correction_only	64	-0.00626805
+cov_numeric_only	conv autoencoder	correction_only	80	-0.00632223
+cov_numeric_only	conv autoencoder	correction_only	96	0.00524047
+cov_numeric_only	conv autoencoder	correction_only	112	-0.00364444
+cov_numeric_only	conv autoencoder	correction_only	128	-0.00552848
+cov_numeric_only	conv autoencoder	correction_only	144	-0.00406129
+cov_numeric_only	conv autoencoder	correction_only	160	-0.00371766
+cov_numeric_only	conv autoencoder	correction_only	176	-0.00546667
+cov_numeric_only	conv autoencoder	correction_only	192	-0.0022892
+cov_numeric_only	conv autoencoder	correction_only	208	-0.00529313
+cov_numeric_only	conv autoencoder	correction_only	224	-0.00514977
+cov_numeric_only	conv autoencoder	correction_only	240	-0.00510592
+cov_numeric_only	conv + attention	gap_closed_crop_oracle	0	-0.0476002
+cov_numeric_only	conv + attention	gap_closed_crop_oracle	16	-0.0484548
+cov_numeric_only	conv + attention	gap_closed_crop_oracle	32	-0.0454396
+cov_numeric_only	conv + attention	gap_closed_crop_oracle	48	-0.045918
+cov_numeric_only	conv + attention	gap_closed_crop_oracle	64	-0.0487536
+cov_numeric_only	conv + attention	gap_closed_crop_oracle	80	-0.0466958
+cov_numeric_only	conv + attention	gap_closed_crop_oracle	96	-0.0532788
+cov_numeric_only	conv + attention	gap_closed_crop_oracle	112	-0.0580428
+cov_numeric_only	conv + attention	gap_closed_crop_oracle	128	-0.0475746
+cov_numeric_only	conv + attention	gap_closed_crop_oracle	144	-0.0459181
+cov_numeric_only	conv + attention	gap_closed_crop_oracle	160	-0.0455836
+cov_numeric_only	conv + attention	gap_closed_crop_oracle	176	-0.046439
+cov_numeric_only	conv + attention	gap_closed_crop_oracle	192	-0.0645798
+cov_numeric_only	conv + attention	gap_closed_crop_oracle	208	-0.0462599
+cov_numeric_only	conv + attention	gap_closed_crop_oracle	224	-0.0461641
+cov_numeric_only	conv + attention	gap_closed_crop_oracle	240	-0.0454565
+cov_numeric_only	conv + attention	correction_only	0	-0.0652799
+cov_numeric_only	conv + attention	correction_only	16	-0.0658076
+cov_numeric_only	conv + attention	correction_only	32	-0.0578395
+cov_numeric_only	conv + attention	correction_only	48	-0.0585624
+cov_numeric_only	conv + attention	correction_only	64	-0.0639802
+cov_numeric_only	conv + attention	correction_only	80	-0.0631143
+cov_numeric_only	conv + attention	correction_only	96	-0.0475705
+cov_numeric_only	conv + attention	correction_only	112	-0.0676395
+cov_numeric_only	conv + attention	correction_only	128	-0.062191
+cov_numeric_only	conv + attention	correction_only	144	-0.0621498
+cov_numeric_only	conv + attention	correction_only	160	-0.0643264
+cov_numeric_only	conv + attention	correction_only	176	-0.0621334
+cov_numeric_only	conv + attention	correction_only	192	-0.0636938
+cov_numeric_only	conv + attention	correction_only	208	-0.0620583
+cov_numeric_only	conv + attention	correction_only	224	-0.0655073
+cov_numeric_only	conv + attention	correction_only	240	-0.0628609
+cov_numeric_only	U-Net	gap_closed_crop_oracle	0	-0.135456
+cov_numeric_only	U-Net	gap_closed_crop_oracle	16	-0.134012
+cov_numeric_only	U-Net	gap_closed_crop_oracle	32	-0.132954
+cov_numeric_only	U-Net	gap_closed_crop_oracle	48	-0.131153
+cov_numeric_only	U-Net	gap_closed_crop_oracle	64	-0.131671
+cov_numeric_only	U-Net	gap_closed_crop_oracle	80	-0.130779
+cov_numeric_only	U-Net	gap_closed_crop_oracle	96	-0.136305
+cov_numeric_only	U-Net	gap_closed_crop_oracle	112	-0.138143
+cov_numeric_only	U-Net	gap_closed_crop_oracle	128	-0.131555
+cov_numeric_only	U-Net	gap_closed_crop_oracle	144	-0.13126
+cov_numeric_only	U-Net	gap_closed_crop_oracle	160	-0.132256
+cov_numeric_only	U-Net	gap_closed_crop_oracle	176	-0.130553
+cov_numeric_only	U-Net	gap_closed_crop_oracle	192	-0.136644
+cov_numeric_only	U-Net	gap_closed_crop_oracle	208	-0.130315
+cov_numeric_only	U-Net	gap_closed_crop_oracle	224	-0.133551
+cov_numeric_only	U-Net	gap_closed_crop_oracle	240	-0.131497
+cov_numeric_only	U-Net	correction_only	0	-0.173131
+cov_numeric_only	U-Net	correction_only	16	-0.171566
+cov_numeric_only	U-Net	correction_only	32	-0.169981
+cov_numeric_only	U-Net	correction_only	48	-0.174598
+cov_numeric_only	U-Net	correction_only	64	-0.174494
+cov_numeric_only	U-Net	correction_only	80	-0.175392
+cov_numeric_only	U-Net	correction_only	96	-0.155766
+cov_numeric_only	U-Net	correction_only	112	-0.168311
+cov_numeric_only	U-Net	correction_only	128	-0.17408
+cov_numeric_only	U-Net	correction_only	144	-0.174271
+cov_numeric_only	U-Net	correction_only	160	-0.174451
+cov_numeric_only	U-Net	correction_only	176	-0.174826
+cov_numeric_only	U-Net	correction_only	192	-0.165461
+cov_numeric_only	U-Net	correction_only	208	-0.175261
+cov_numeric_only	U-Net	correction_only	224	-0.172751
+cov_numeric_only	U-Net	correction_only	240	-0.17463
+tf_local_ratio	conv autoencoder	gap_closed_crop_oracle	0	-0.13865
+tf_local_ratio	conv autoencoder	gap_closed_crop_oracle	16	-0.13984
+tf_local_ratio	conv autoencoder	gap_closed_crop_oracle	32	-0.141177
+tf_local_ratio	conv autoencoder	gap_closed_crop_oracle	48	-0.139927
+tf_local_ratio	conv autoencoder	gap_closed_crop_oracle	64	-0.136597
+tf_local_ratio	conv autoencoder	gap_closed_crop_oracle	80	-0.141652
+tf_local_ratio	conv autoencoder	gap_closed_crop_oracle	96	-0.129308
+tf_local_ratio	conv autoencoder	gap_closed_crop_oracle	112	-0.135897
+tf_local_ratio	conv autoencoder	gap_closed_crop_oracle	128	-0.136845
+tf_local_ratio	conv autoencoder	gap_closed_crop_oracle	144	-0.13753
+tf_local_ratio	conv autoencoder	gap_closed_crop_oracle	160	-0.137487
+tf_local_ratio	conv autoencoder	gap_closed_crop_oracle	176	-0.142074
+tf_local_ratio	conv autoencoder	gap_closed_crop_oracle	192	-0.121085
+tf_local_ratio	conv autoencoder	gap_closed_crop_oracle	208	-0.14084
+tf_local_ratio	conv autoencoder	gap_closed_crop_oracle	224	-0.139407
+tf_local_ratio	conv autoencoder	gap_closed_crop_oracle	240	-0.141638
+tf_local_ratio	conv autoencoder	correction_only	0	0.137426
+tf_local_ratio	conv autoencoder	correction_only	16	0.140266
+tf_local_ratio	conv autoencoder	correction_only	32	0.13152
+tf_local_ratio	conv autoencoder	correction_only	48	0.13498
+tf_local_ratio	conv autoencoder	correction_only	64	0.135877
+tf_local_ratio	conv autoencoder	correction_only	80	0.130861
+tf_local_ratio	conv autoencoder	correction_only	96	0.134569
+tf_local_ratio	conv autoencoder	correction_only	112	0.142682
+tf_local_ratio	conv autoencoder	correction_only	128	0.135052
+tf_local_ratio	conv autoencoder	correction_only	144	0.136447
+tf_local_ratio	conv autoencoder	correction_only	160	0.138749
+tf_local_ratio	conv autoencoder	correction_only	176	0.13746
+tf_local_ratio	conv autoencoder	correction_only	192	0.136469
+tf_local_ratio	conv autoencoder	correction_only	208	0.136465
+tf_local_ratio	conv autoencoder	correction_only	224	0.138677
+tf_local_ratio	conv autoencoder	correction_only	240	0.136868
+tf_local_ratio	conv + attention	gap_closed_crop_oracle	0	-0.0935304
+tf_local_ratio	conv + attention	gap_closed_crop_oracle	16	-0.094474
+tf_local_ratio	conv + attention	gap_closed_crop_oracle	32	-0.0970904
+tf_local_ratio	conv + attention	gap_closed_crop_oracle	48	-0.0954547
+tf_local_ratio	conv + attention	gap_closed_crop_oracle	64	-0.0930873
+tf_local_ratio	conv + attention	gap_closed_crop_oracle	80	-0.0958881
+tf_local_ratio	conv + attention	gap_closed_crop_oracle	96	-0.0859584
+tf_local_ratio	conv + attention	gap_closed_crop_oracle	112	-0.0918284
+tf_local_ratio	conv + attention	gap_closed_crop_oracle	128	-0.0943703
+tf_local_ratio	conv + attention	gap_closed_crop_oracle	144	-0.0948077
+tf_local_ratio	conv + attention	gap_closed_crop_oracle	160	-0.0931316
+tf_local_ratio	conv + attention	gap_closed_crop_oracle	176	-0.0955292
+tf_local_ratio	conv + attention	gap_closed_crop_oracle	192	-0.0821541
+tf_local_ratio	conv + attention	gap_closed_crop_oracle	208	-0.0949423
+tf_local_ratio	conv + attention	gap_closed_crop_oracle	224	-0.0953634
+tf_local_ratio	conv + attention	gap_closed_crop_oracle	240	-0.0966328
+tf_local_ratio	conv + attention	correction_only	0	0.126826
+tf_local_ratio	conv + attention	correction_only	16	0.128125
+tf_local_ratio	conv + attention	correction_only	32	0.122492
+tf_local_ratio	conv + attention	correction_only	48	0.125519
+tf_local_ratio	conv + attention	correction_only	64	0.125892
+tf_local_ratio	conv + attention	correction_only	80	0.122587
+tf_local_ratio	conv + attention	correction_only	96	0.12023
+tf_local_ratio	conv + attention	correction_only	112	0.128909
+tf_local_ratio	conv + attention	correction_only	128	0.126224
+tf_local_ratio	conv + attention	correction_only	144	0.126776
+tf_local_ratio	conv + attention	correction_only	160	0.127332
+tf_local_ratio	conv + attention	correction_only	176	0.12651
+tf_local_ratio	conv + attention	correction_only	192	0.125272
+tf_local_ratio	conv + attention	correction_only	208	0.125905
+tf_local_ratio	conv + attention	correction_only	224	0.126814
+tf_local_ratio	conv + attention	correction_only	240	0.126553
+tf_local_ratio	U-Net	gap_closed_crop_oracle	0	-0.114219
+tf_local_ratio	U-Net	gap_closed_crop_oracle	16	-0.117091
+tf_local_ratio	U-Net	gap_closed_crop_oracle	32	-0.115739
+tf_local_ratio	U-Net	gap_closed_crop_oracle	48	-0.112787
+tf_local_ratio	U-Net	gap_closed_crop_oracle	64	-0.110389
+tf_local_ratio	U-Net	gap_closed_crop_oracle	80	-0.114688
+tf_local_ratio	U-Net	gap_closed_crop_oracle	96	-0.106827
+tf_local_ratio	U-Net	gap_closed_crop_oracle	112	-0.108187
+tf_local_ratio	U-Net	gap_closed_crop_oracle	128	-0.112331
+tf_local_ratio	U-Net	gap_closed_crop_oracle	144	-0.111982
+tf_local_ratio	U-Net	gap_closed_crop_oracle	160	-0.112408
+tf_local_ratio	U-Net	gap_closed_crop_oracle	176	-0.114594
+tf_local_ratio	U-Net	gap_closed_crop_oracle	192	-0.0819669
+tf_local_ratio	U-Net	gap_closed_crop_oracle	208	-0.113185
+tf_local_ratio	U-Net	gap_closed_crop_oracle	224	-0.114224
+tf_local_ratio	U-Net	gap_closed_crop_oracle	240	-0.114839
+tf_local_ratio	U-Net	correction_only	0	0.255243
+tf_local_ratio	U-Net	correction_only	16	0.257331
+tf_local_ratio	U-Net	correction_only	32	0.257505
+tf_local_ratio	U-Net	correction_only	48	0.261876
+tf_local_ratio	U-Net	correction_only	64	0.258167
+tf_local_ratio	U-Net	correction_only	80	0.262127
+tf_local_ratio	U-Net	correction_only	96	0.144059
+tf_local_ratio	U-Net	correction_only	112	0.24743
+tf_local_ratio	U-Net	correction_only	128	0.25935
+tf_local_ratio	U-Net	correction_only	144	0.255692
+tf_local_ratio	U-Net	correction_only	160	0.260331
+tf_local_ratio	U-Net	correction_only	176	0.257295
+tf_local_ratio	U-Net	correction_only	192	0.227049
+tf_local_ratio	U-Net	correction_only	208	0.254772
+tf_local_ratio	U-Net	correction_only	224	0.257657
+tf_local_ratio	U-Net	correction_only	240	0.257125
+tf_quantile	conv autoencoder	gap_closed_crop_oracle	0	-0.138731
+tf_quantile	conv autoencoder	gap_closed_crop_oracle	16	-0.137301
+tf_quantile	conv autoencoder	gap_closed_crop_oracle	32	-0.137486
+tf_quantile	conv autoencoder	gap_closed_crop_oracle	48	-0.1352
+tf_quantile	conv autoencoder	gap_closed_crop_oracle	64	-0.134945
+tf_quantile	conv autoencoder	gap_closed_crop_oracle	80	-0.13737
+tf_quantile	conv autoencoder	gap_closed_crop_oracle	96	-0.131912
+tf_quantile	conv autoencoder	gap_closed_crop_oracle	112	-0.138198
+tf_quantile	conv autoencoder	gap_closed_crop_oracle	128	-0.133945
+tf_quantile	conv autoencoder	gap_closed_crop_oracle	144	-0.133503
+tf_quantile	conv autoencoder	gap_closed_crop_oracle	160	-0.134178
+tf_quantile	conv autoencoder	gap_closed_crop_oracle	176	-0.137328
+tf_quantile	conv autoencoder	gap_closed_crop_oracle	192	-0.125039
+tf_quantile	conv autoencoder	gap_closed_crop_oracle	208	-0.136815
+tf_quantile	conv autoencoder	gap_closed_crop_oracle	224	-0.136044
+tf_quantile	conv autoencoder	gap_closed_crop_oracle	240	-0.136438
+tf_quantile	conv autoencoder	correction_only	0	0.0849902
+tf_quantile	conv autoencoder	correction_only	16	0.0871203
+tf_quantile	conv autoencoder	correction_only	32	0.0868921
+tf_quantile	conv autoencoder	correction_only	48	0.0874469
+tf_quantile	conv autoencoder	correction_only	64	0.0854695
+tf_quantile	conv autoencoder	correction_only	80	0.0845288
+tf_quantile	conv autoencoder	correction_only	96	0.0839574
+tf_quantile	conv autoencoder	correction_only	112	0.0885972
+tf_quantile	conv autoencoder	correction_only	128	0.08659
+tf_quantile	conv autoencoder	correction_only	144	0.0849404
+tf_quantile	conv autoencoder	correction_only	160	0.0880759
+tf_quantile	conv autoencoder	correction_only	176	0.0864925
+tf_quantile	conv autoencoder	correction_only	192	0.0869172
+tf_quantile	conv autoencoder	correction_only	208	0.0858859
+tf_quantile	conv autoencoder	correction_only	224	0.0860407
+tf_quantile	conv autoencoder	correction_only	240	0.0857517
+tf_quantile	conv + attention	gap_closed_crop_oracle	0	-0.0758361
+tf_quantile	conv + attention	gap_closed_crop_oracle	16	-0.0782761
+tf_quantile	conv + attention	gap_closed_crop_oracle	32	-0.0776348
+tf_quantile	conv + attention	gap_closed_crop_oracle	48	-0.0768409
+tf_quantile	conv + attention	gap_closed_crop_oracle	64	-0.0760941
+tf_quantile	conv + attention	gap_closed_crop_oracle	80	-0.0770253
+tf_quantile	conv + attention	gap_closed_crop_oracle	96	-0.0746045
+tf_quantile	conv + attention	gap_closed_crop_oracle	112	-0.07913
+tf_quantile	conv + attention	gap_closed_crop_oracle	128	-0.0764548
+tf_quantile	conv + attention	gap_closed_crop_oracle	144	-0.0764734
+tf_quantile	conv + attention	gap_closed_crop_oracle	160	-0.0756209
+tf_quantile	conv + attention	gap_closed_crop_oracle	176	-0.0762856
+tf_quantile	conv + attention	gap_closed_crop_oracle	192	-0.0742631
+tf_quantile	conv + attention	gap_closed_crop_oracle	208	-0.0766702
+tf_quantile	conv + attention	gap_closed_crop_oracle	224	-0.0754503
+tf_quantile	conv + attention	gap_closed_crop_oracle	240	-0.0778688
+tf_quantile	conv + attention	correction_only	0	0.0385267
+tf_quantile	conv + attention	correction_only	16	0.0396285
+tf_quantile	conv + attention	correction_only	32	0.0388686
+tf_quantile	conv + attention	correction_only	48	0.0383766
+tf_quantile	conv + attention	correction_only	64	0.0387144
+tf_quantile	conv + attention	correction_only	80	0.0382073
+tf_quantile	conv + attention	correction_only	96	0.0331646
+tf_quantile	conv + attention	correction_only	112	0.0435175
+tf_quantile	conv + attention	correction_only	128	0.0395058
+tf_quantile	conv + attention	correction_only	144	0.0386832
+tf_quantile	conv + attention	correction_only	160	0.0395121
+tf_quantile	conv + attention	correction_only	176	0.0389437
+tf_quantile	conv + attention	correction_only	192	0.0406525
+tf_quantile	conv + attention	correction_only	208	0.0387987
+tf_quantile	conv + attention	correction_only	224	0.0381129
+tf_quantile	conv + attention	correction_only	240	0.0384733
+tf_quantile	U-Net	gap_closed_crop_oracle	0	-0.0841821
+tf_quantile	U-Net	gap_closed_crop_oracle	16	-0.0885804
+tf_quantile	U-Net	gap_closed_crop_oracle	32	-0.087141
+tf_quantile	U-Net	gap_closed_crop_oracle	48	-0.0854117
+tf_quantile	U-Net	gap_closed_crop_oracle	64	-0.0836132
+tf_quantile	U-Net	gap_closed_crop_oracle	80	-0.0872131
+tf_quantile	U-Net	gap_closed_crop_oracle	96	-0.0774805
+tf_quantile	U-Net	gap_closed_crop_oracle	112	-0.0785693
+tf_quantile	U-Net	gap_closed_crop_oracle	128	-0.0850837
+tf_quantile	U-Net	gap_closed_crop_oracle	144	-0.0845778
+tf_quantile	U-Net	gap_closed_crop_oracle	160	-0.085211
+tf_quantile	U-Net	gap_closed_crop_oracle	176	-0.0872333
+tf_quantile	U-Net	gap_closed_crop_oracle	192	-0.0537107
+tf_quantile	U-Net	gap_closed_crop_oracle	208	-0.0862475
+tf_quantile	U-Net	gap_closed_crop_oracle	224	-0.0864271
+tf_quantile	U-Net	gap_closed_crop_oracle	240	-0.0865795
+tf_quantile	U-Net	correction_only	0	0.243035
+tf_quantile	U-Net	correction_only	16	0.246844
+tf_quantile	U-Net	correction_only	32	0.244449
+tf_quantile	U-Net	correction_only	48	0.249576
+tf_quantile	U-Net	correction_only	64	0.244864
+tf_quantile	U-Net	correction_only	80	0.251915
+tf_quantile	U-Net	correction_only	96	0.127962
+tf_quantile	U-Net	correction_only	112	0.239503
+tf_quantile	U-Net	correction_only	128	0.246372
+tf_quantile	U-Net	correction_only	144	0.242573
+tf_quantile	U-Net	correction_only	160	0.24987
+tf_quantile	U-Net	correction_only	176	0.245055
+tf_quantile	U-Net	correction_only	192	0.216038
+tf_quantile	U-Net	correction_only	208	0.242598
+tf_quantile	U-Net	correction_only	224	0.246092
+tf_quantile	U-Net	correction_only	240	0.245265

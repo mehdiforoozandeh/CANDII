@@ -1,0 +1,8 @@
+assay	band	factor	variance_fraction	ci_low	ci_high	n_levels	estimable	note
+H3K36me3	fine	cell	1.01498e-09	7.45389e-10	1.28458e-09	19	1	
+H3K36me3	fine	experiment	1.54746e-08	4.73311e-09	2.62161e-08	26	1	
+H3K36me3	fine	replicate	0.00444572	0.00313417	0.00575728	23	1	
+H3K36me3	fine	library	2.62472e-12	2.35583e-12	2.89361e-12	42	1	
+H3K36me3	fine	lab	0.00193944	0	0.0496206	4	1	
+H3K36me3	fine	residual	0.993615	0.946352	1	84	1	REML (scipy L-BFGS-B, log variance components; mu and beta profiled); 20 cluster-bootstrap draws over 19 cells; layer uniform; 84 of 84 observations are pseudoreplicate halves
+H3K36me3	fine	log2_depth				84	0	every observation thinned to 3.84304e+06 reads before log1p; no depth slope fitted

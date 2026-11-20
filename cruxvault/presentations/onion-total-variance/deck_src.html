@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="prezit-arc" content="paper">
+<title>Peeling the Variance</title>
+
+<!--
+  Lab deck: how the law of total variance formulates the onion variance decomposition.
+  arc      paper arc: motivation -> method -> results -> discussion (prezit references/paper-arc.md)
+  anchor   none: no vault question covers the variance decomposition; study slug onion-total-variance
+  build    python build_deck.py  ->  index.html beside this file
+  numbers  every number comes from DATA, which build_deck.py reads from
+             presentations/onion-total-variance/sim_figures.json  (SIMULATED; simulate_figures.py)
+             results/t233/AUDIT.md, results/t234/AUDIT_TVg_seed0.md  (the audit, before and after)
+             results/t183/DATASET_EIC_V1.md, results/t183/rung_pairs.tsv, results/t185/SUBMITTED.md
+             INSTRUCTIONS/peeling_the_onion/onion total variance.md, long-horizon notepad.md
+           Typed: panel letters, and notation (subscripts in T_0, Z_6, mu^2) marked data-src="literal".
+           No real-data layer value and no model result appears: none exists yet.
+  notes    every slide carries speaker notes (press n).
+-->
+<script type="application/json" id="deck-sources">__SOURCES__</script>
+
+<style>
+  :root{
+    /* --- chrome ------------------------------------------------------- */
+    --paper:#faf9f7;
+    --ink:#1a1a1a;
+    --muted:#77736c;
+    --faint:#a6a29a;
+    --hair:#e6e3dd;
+    --accent:#b5462e;
+
+    /* --- semantic series colours -------------------------------------- */
+    /* One colour per arm, reused identically in chart, legend and bullets.
+       Rename the tokens to your arms; never colour by chart. */
+    --baseline:#8d8f98;
+    --arm-a:#3f7d7a;
+    --arm-b:#b5462e;
+
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--paper);color:var(--ink);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+    overflow:hidden;
+  }
+
+  #progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);
+    width:0;transition:width .5s ease;z-index:50}
+
+  #deck{position:fixed;inset:0}
+  .slide{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column;justify-content:center;
+    padding:5.5vh 8vw 8.5vh;   /* bottom pad clears the fixed foot / counter / nav */
+    opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .6s ease,visibility .6s ease;   /* fade only — no slide, no zoom */
+  }
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+
+  .wrap{width:100%;max-width:1160px;margin:0 auto}
+
+  /* --- typography ----------------------------------------------------- */
+  .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin-bottom:22px}
+  h1{font-family:var(--serif);font-weight:400;line-height:1.12;
+    font-size:clamp(30px,4.6vw,58px);letter-spacing:-.01em}
+  h2{font-weight:600;line-height:1.14;font-size:clamp(24px,3.4vw,42px);
+    letter-spacing:-.015em;margin-bottom:26px}
+  .lead{font-family:var(--serif);font-weight:400;line-height:1.32;
+    font-size:clamp(22px,2.9vw,36px);letter-spacing:-.005em}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;
+    margin-top:22px;max-width:56ch}
+  .note{color:var(--faint);font-size:13px;line-height:1.5;margin-top:26px}
+
+  ul.pts{list-style:none;margin-top:26px;max-width:70ch}
+  ul.pts li{position:relative;padding-left:26px;margin:14px 0;
+    font-size:clamp(15px,1.55vw,19px);line-height:1.5;color:#333}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.62em;
+    width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  .em{color:var(--accent);font-weight:600}
+
+  ul.pts.lg li{font-size:clamp(16px,1.65vw,21px);margin:11px 0}
+  ul.pts.cols{display:grid;grid-template-columns:1fr 1fr;gap:2px 48px;
+    max-width:none;margin-top:18px}
+  @media (max-width:900px){ul.pts.cols{grid-template-columns:1fr}}
+
+  /* numbers the vault owns render in tabular figures so a --refresh that
+     changes a digit does not reflow the sentence around it */
+  [data-src],[data-derived]{font-variant-numeric:tabular-nums;font-weight:600}
+
+  /* --- lineage chain -------------------------------------------------- */
+  .chain{display:flex;align-items:stretch;gap:0;margin-top:34px;flex-wrap:wrap}
+  .node{flex:1;min-width:180px;border:1px solid var(--hair);border-radius:10px;
+    padding:18px 20px;background:#fff}
+  .node .lab{font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);margin-bottom:8px}
+  .node .txt{font-size:15px;line-height:1.4;color:#2a2a2a}
+  .node.now{border-color:var(--accent);box-shadow:0 1px 0 var(--accent)}
+  .node.now .lab{color:var(--accent)}
+  .arrow{display:flex;align-items:center;padding:0 12px;color:var(--faint);font-size:20px}
+
+  /* --- method pipeline ------------------------------------------------ */
+  .pipe{display:flex;align-items:flex-start;gap:0;margin-top:22px;flex-wrap:wrap}
+  .step{flex:1;min-width:150px;padding:14px 16px;text-align:left}
+  .step .n{font-family:var(--serif);font-size:22px;color:var(--accent);line-height:1}
+  .step .t{font-size:14.5px;line-height:1.4;color:#2a2a2a;margin-top:8px}
+  .psep{color:var(--faint);font-size:18px;padding:24px 4px 0}
+
+  /* --- target callout ------------------------------------------------- */
+  .target{border-left:3px solid var(--accent);background:#fff;border-radius:0 8px 8px 0;
+    padding:16px 22px;margin-top:6px}
+  .target .tlab{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin-bottom:8px}
+  .target .ttxt{font-size:clamp(15px,1.55vw,19px);line-height:1.5;color:#333}
+  .target .ttxt b{color:var(--ink);font-weight:600}
+
+  .cols2{display:grid;grid-template-columns:1fr 1.05fr;gap:44px;margin-top:26px;
+    align-items:start}
+  @media (max-width:900px){.cols2{grid-template-columns:1fr}}
+  .blk .blab{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);font-weight:600;margin-bottom:14px}
+
+  /* --- chips: a short fixed list, when a table would be overkill ------ */
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{border:1px solid var(--hair);background:#fff;border-radius:8px;padding:10px 14px;line-height:1.2}
+  .chip .cn{font-size:15px;font-weight:600;color:var(--ink)}
+  .chip .cc{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:3px}
+
+  /* --- tables --------------------------------------------------------- */
+  table.dtable{border-collapse:collapse;width:100%;font-size:15px}
+  table.dtable th{font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--faint);font-weight:600;text-align:left;padding:0 14px 10px 0;
+    border-bottom:1px solid var(--hair)}
+  table.dtable td{padding:11px 14px 11px 0;border-bottom:1px solid var(--hair);
+    color:#333;line-height:1.35}
+  table.dtable td:first-child{font-weight:600;color:var(--ink);white-space:nowrap}
+  table.dtable td.num{font-variant-numeric:tabular-nums}
+  table.dtable td .role{color:var(--muted);font-size:13px}
+
+  /* --- chart ---------------------------------------------------------- */
+  .chartbox{margin:8px 0}
+  .fig{display:flex;justify-content:center}
+  /* Cap chart height so a tall figure can never crowd out its caption bullets.
+     A full-width chart + a legend + four two-line bullets + a footnote is the
+     ceiling for one slide — check the fit after every content edit. */
+  .fig svg{width:100%;height:auto;max-height:44vh;display:block}
+  .fig.wide svg{max-width:1160px}
+  .fig.mid svg{max-width:960px}
+  .legend{display:flex;gap:24px;flex-wrap:wrap;margin-top:10px;justify-content:center;
+    font-size:15px;color:var(--muted)}
+  .legend.big{font-size:16px;gap:30px}
+  .legend .item{display:flex;align-items:center;gap:9px}
+  .legend .sw{width:16px;height:16px;border-radius:3px;flex:none}
+
+  /* SVG text lives in viewBox units and gets scaled DOWN when the svg is placed
+     in a column — so everything here is sized for a projector, ~1.5x what looks
+     right on a laptop. Do not shrink these to taste. */
+  .axlbl{font:500 17px var(--sans);fill:#3a3a3a}
+  .ptitle{font:600 22px var(--sans);fill:#1a1a1a;letter-spacing:.02em}
+  .psub{font:400 14px var(--sans);fill:#8a8a8a}
+  .tick{font:400 15px var(--sans);fill:#9a9a9a}
+  .val{font:600 16px var(--sans)}
+  .cap{font:400 14px var(--sans);fill:#9a9a9a}
+  .grid{stroke:#ececea;stroke-width:1}
+  .axis{stroke:#cfccc6;stroke-width:1.2}
+  .zero{stroke:#bbb;stroke-width:1.6;stroke-dasharray:5 4}
+  .sep{stroke:#e6e3dd;stroke-width:1}
+  .barval{font:600 20px var(--sans)}
+  .mult{font:600 19px var(--sans);fill:#1a1a1a}
+  .xlab{font:600 22px var(--sans);fill:#1a1a1a}
+  .xsub{font:400 15px var(--sans);fill:#8a8a8a}
+  .ylab{font:500 18px var(--sans);fill:#8a8a8a}
+
+  /* --- chrome --------------------------------------------------------- */
+  .foot{position:fixed;bottom:20px;left:8vw;font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:8vw;font-size:12px;color:var(--faint);
+    font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:16px;right:calc(8vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:#fff;color:var(--muted);
+    width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;
+    transition:border-color .2s,color .2s}
+  .nav button:hover{border-color:var(--accent);color:var(--accent)}
+  .hint{margin-top:40px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;
+    border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:#fff}
+
+  /* --- speaker notes ---------------------------------------------------
+     Optional: an <aside class="notes"> inside a slide, written in <p> (an <li>
+     there counts toward the slide's 7 units). Hidden; `n` overlays the active
+     slide's notes; print puts them under each slide. A deck without notes is
+     unaffected. */
+  aside.notes{display:none}
+  body.shownotes .slide.active aside.notes{display:block;position:fixed;left:7vw;right:7vw;
+    bottom:58px;max-height:52vh;overflow:auto;background:#fff;border:1px solid var(--hair);
+    border-left:4px solid var(--accent);border-radius:10px;padding:16px 22px;font-size:16.5px;
+    line-height:1.55;color:#333;z-index:60;box-shadow:0 10px 40px rgba(0,0,0,.18)}
+  aside.notes::before{content:"Speaker notes · n to close";display:block;font-size:11px;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+  aside.notes p{margin:0 0 6px}
+
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint{display:none}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;
+      height:100vh;transition:none}
+    aside.notes{display:block;margin-top:18px;border-top:1px solid #bbb;padding-top:10px;
+      font-size:12.5px;line-height:1.5;color:#333}
+  }
+
+  /* --- paper arc ------------------------------------------------------ */
+  :root{--own:#3f7d7a;--eqc:#b5462e;--data:#3f7d7a;--model:#8d8f98;--noise:#a6a29a}
+  .kicker .sec{display:inline-block;background:var(--accent);color:#fff;padding:3px 9px;
+    border-radius:4px;margin-right:12px;letter-spacing:.14em}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:22px}
+  @media (max-width:900px){.cards{grid-template-columns:1fr}}
+  .card{border:1px solid var(--hair);border-top:3px solid var(--c,var(--accent));background:#fff;
+    border-radius:8px;padding:16px 18px}
+  .card .rl{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--c,var(--accent));
+    font-weight:700;margin-bottom:8px}
+  .card p{font-size:clamp(14px,1.4vw,17px);line-height:1.45;color:#333}
+  .panels{display:grid;grid-template-columns:1fr 1fr;gap:0}
+  .panels>div{padding:0 14px}
+  .panels .fig svg{max-height:40vh}
+  .panels>div+div{border-left:1px solid var(--hair)}
+  @media (max-width:900px){.panels{grid-template-columns:1fr}.panels>div+div{border-left:0;border-top:1px solid var(--hair)}}
+  table.dtable td.run{color:var(--own);font-weight:600}
+  table.dtable td.off{color:var(--faint)}
+  /* --- this deck ------------------------------------------------------ */
+  :root{
+    --t0:#8d8f98; --ct:#b5462e; --donor:#d08a2a; --exp:#6b5fa8; --bio:#3f7d7a;
+    --lib:#3f78b0; --seq:#7fb0a0; --samp:#c9c2b4; --cov:#2f6f4f; --model:#1a1a1a;
+    --ok:#3f7d7a; --bad:#b5462e; --kept:#d08a2a;
+  }
+  .eq{font-family:var(--serif);font-size:clamp(17px,1.9vw,24px);line-height:1.5;color:#222;
+    background:#fff;border:1px solid var(--hair);border-radius:8px;padding:12px 18px;margin:10px 0 6px}
+  .eq.sm{font-size:clamp(15px,1.55vw,19px);padding:8px 14px}
+  i.m{font-family:var(--serif);font-style:italic;font-variant-numeric:normal;font-weight:400}
+  table.dtable td.c{text-align:center;font-size:18px}
+  table.dtable td.c.on{color:var(--ink)}
+  table.dtable td.c.off{color:#d3cfc8}
+  table.dtable.tight td{padding:7px 12px 7px 0}
+  .cards.two{grid-template-columns:repeat(2,1fr)}
+  .cards.six{grid-template-columns:repeat(3,1fr);gap:14px}
+  .cards.six .card p{font-size:clamp(13px,1.25vw,15.5px)}
+  .chip.yes{border-color:var(--ok)} .chip.yes .cn{color:var(--ok)}
+  .chip.zero .cn{color:var(--muted)}
+  .stat{font-size:clamp(22px,2.6vw,34px);font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .stat small{font-size:.5em;color:var(--muted);font-weight:400}
+  .tag{display:inline-block;font-size:12px;border-radius:4px;padding:2px 8px;color:#fff}
+  .sim{display:inline-block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#fff;
+    background:#77736c;border-radius:4px;padding:2px 8px;margin-left:10px;vertical-align:middle}
+  .fig.tall svg{max-height:50vh}
+  #tabLadder td:last-child{white-space:nowrap}
+  #tabLadder td:first-child{white-space:normal}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- 1 · TITLE
+       job      the question as a headline; the scope in one line
+       source   onion total variance.md (identity section)
+       numbers  none
+       cut      the nav hint -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">peeling the onion · lab meeting</div>
+      <h1>Where does the variance of an epigenomic signal come from? One identity, the law of total variance, splits it into layers.</h1>
+      <p class="sub">This deck is about the formulation and its checks. Every number on the slides is either a design constant or comes from a simulation, and it is marked as such. No model has been trained yet, and the real-data layers are not collected yet.</p>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd> &nbsp;·&nbsp; <kbd>n</kbd> shows the speaker notes</p>
+      <aside class="notes"><p>The plan is to build the idea from a two-level example, then extend it to the full chain of nested factors, then show how replicate pairs measure each term, and what that means for a model's predicted variance.</p></aside>
+    </div>
+  </section>
+
+  <!-- 2 · MOTIVATION · the question
+       job      why the decomposition: the variance has nested sources, and a model must know which ones it can predict
+       source   peeling the onion.md (sources of variation, objectives)
+       numbers  none
+       cut      the third bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the question</div>
+      <h2>A count in one bin varies for nested reasons, from biology down to read sampling</h2>
+      <div class="cols2">
+        <div class="fig" id="figOnion"></div>
+        <div>
+          <ul class="pts">
+            <li><b>Imputation</b> must predict the biological layers from other assays of the cell.</li>
+            <li><b>Covariate correction</b> must remove what the lab and the processing add. Covariates are recorded settings such as depth and read length.</li>
+            <li><b>Calibrated uncertainty</b> must match the variance that the inputs cannot explain.</li>
+          </ul>
+          <p class="note">To score each goal fairly, we need the size of each layer, measured on the same scale.</p>
+        </div>
+      </div>
+      <aside class="notes"><p>The onion picture is the PI's framing: each ring is a source of variation, and the evaluation should peel the total variance into these rings. The three goals of the model map onto different rings.</p></aside>
+    </div>
+  </section>
+
+  <!-- 3 · METHOD · two levels
+       job      the law of total variance on the smallest example, drawn
+       source   simulate_figures.py two_level (SIMULATED)
+       numbers  DATA.sim.two_level (simulated)
+       cut      a second example -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the law of total variance in two levels<span class="sim">simulated</span></div>
+      <h2>Total variance = variance of the group means + mean variance inside a group</h2>
+      <div class="eq" id="eqTwo"></div>
+      <div class="chartbox fig wide" id="figTwo"></div>
+      <p class="note">Simulated: three cell types, <span id="tTwoN"></span> tracks each, one bin, Poisson counts. The identity holds exactly for any data with a finite variance (difference here: <span id="tTwoDiff"></span>).</p>
+      <aside class="notes"><p>Panel (a) shows the counts of one bin across tracks, grouped by cell type. The spread of the group means is the between-group term. The spread of the dots around their own group mean is the within-group term. Panel (b) shows that the two terms add up to the total. Inside a cell type the only source here is Poisson read sampling, so the within-group variance is close to the group mean.</p></aside>
+    </div>
+  </section>
+
+  <!-- 4 · METHOD · the chain
+       job      seven nested conditioning sets; apply the law once per step; the telescoping identity
+       source   onion total variance.md (identity); simulate_figures.py chain (SIMULATED)
+       numbers  DATA.sim.chain (simulated)
+       cut      the per-term values in the bar -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>seven nested factors<span class="sim">simulated bar</span></div>
+      <h2>Applied once per step of a chain of nested factors, the law splits the variance into eight terms</h2>
+      <div class="fig wide" id="figChainSets"></div>
+      <div class="eq sm" id="eqChain"></div>
+      <div class="chartbox fig wide" id="figChainBar"></div>
+      <aside class="notes"><p>Each set in the chain contains the one before it. The first term is the variance of the across-cell mean, which depends only on position and assay. Each middle term is the variance that one more factor adds on average. The last term is read sampling, which is Poisson given the rate.</p><p>The bar is the simulator of the audit, with its planted layer sizes. It is an illustration, not a measurement.</p></aside>
+    </div>
+  </section>
+
+  <!-- 5 · METHOD · sampling and depth
+       job      the sampling term is Poisson (T_s = E[Y]); layers scale with depth squared, sampling with depth
+       source   onion total variance.md (sampling term, dependence on depth); simulate_figures.py depth (SIMULATED)
+       numbers  DATA.sim.depth (simulated)
+       cut      the third bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the sampling term and depth<span class="sim">simulated</span></div>
+      <h2>Read sampling grows with depth, every other layer with depth squared, so pairs are compared at one depth</h2>
+      <div class="cols2">
+        <div class="chartbox fig" id="figDepth"></div>
+        <div>
+          <ul class="pts">
+            <li>Given every factor of the chain, reads are independent draws, so a bin's count is Poisson (variance equals mean): <i class="m">T<sub>s</sub></i> = E[Y].</li>
+            <li>Any variance beyond Poisson belongs to a layer, for example PCR duplicates in the library layer. It never belongs to <i class="m">T<sub>s</sub></i>.</li>
+            <li>The deeper track is binomially thinned (each read kept at random) to the shallower depth.</li>
+          </ul>
+        </div>
+      </div>
+      <aside class="notes"><p>Under a multiplicative rate model, doubling the depth doubles the sampling term and quadruples every layer term. A pair value is therefore defined only at one stated depth, and two rungs are compared only at one depth. Pseudoreplicate halves sit at half the depth of the pooled track.</p></aside>
+    </div>
+  </section>
+
+  <!-- 6 · METHOD · the replicate ladder (a true grid)
+       job      the experiment that measures each term: a pair that shares everything down to one level
+       source   long-horizon decisions.md D12; onion total variance.md rung-to-term map
+       numbers  none (notation only)
+       cut      the gloss of each rung -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the replicate ladder</div>
+      <h2>Each rung of the replicate ladder is a pair of measurements that shares the chain down to one level</h2>
+      <table class="dtable tight" id="tabLadder">
+        <thead><tr><th>rung (pair of)</th><th>cell type</th><th>donor</th><th>experiment</th><th>biol. replicate</th><th>library</th><th>seq. run</th><th>pair value</th></tr></thead>
+        <tbody>
+          <tr><td>pseudoreplicate (random halves of reads)</td><td class="c on">●</td><td class="c on">●</td><td class="c on">●</td><td class="c on">●</td><td class="c on">●</td><td class="c on">●</td><td><i class="m">T<sub>s</sub></i></td></tr>
+          <tr><td>sequencing (two runs of a library)</td><td class="c on">●</td><td class="c on">●</td><td class="c on">●</td><td class="c on">●</td><td class="c on">●</td><td class="c off">○</td><td><i class="m" data-src="literal">T<sub>6</sub> + T<sub>s</sub></i></td></tr>
+          <tr><td>technical (two libraries)</td><td class="c on">●</td><td class="c on">●</td><td class="c on">●</td><td class="c on">●</td><td class="c off">○</td><td class="c off">○</td><td><i class="m" data-src="literal">T<sub>5</sub> + T<sub>6</sub> + T<sub>s</sub></i></td></tr>
+          <tr><td>isogenic (biol. replicates, one donor)</td><td class="c on">●</td><td class="c on">●</td><td class="c on">●</td><td class="c off">○</td><td class="c off">○</td><td class="c off">○</td><td><i class="m" data-src="literal">T<sub>4</sub> + … + T<sub>s</sub></i></td></tr>
+          <tr><td>anisogenic (two donors, one experiment)</td><td class="c on">●</td><td class="c off">○</td><td class="c on">●</td><td class="c off">○</td><td class="c off">○</td><td class="c off">○</td><td><i class="m" data-src="literal">T<sub>2</sub> + T<sub>4</sub> + … + T<sub>s</sub></i></td></tr>
+          <tr><td>other experiment (lab, antibody lot, protocol)</td><td class="c on">●</td><td class="c on">●</td><td class="c off">○</td><td class="c off">○</td><td class="c off">○</td><td class="c off">○</td><td><i class="m" data-src="literal">T<sub>3</sub> + T<sub>4</sub> + … + T<sub>s</sub></i></td></tr>
+          <tr><td>other cell type</td><td class="c off">○</td><td class="c off">○</td><td class="c off">○</td><td class="c off">○</td><td class="c off">○</td><td class="c off">○</td><td><i class="m" data-src="literal">T<sub>1</sub> + … + T<sub>6</sub> + T<sub>s</sub></i></td></tr>
+        </tbody>
+      </table>
+      <p class="note">● shared by both members of the pair; ○ differs. Assay and position are always shared. Pseudoreplicate halves share every factor and differ only in which reads they drew.</p>
+      <aside class="notes"><p>These are the ENCODE replicate types, plus the pseudoreplicate, which is a processing construct: the reads of one track split at random into two halves. Each row is one kind of pair. The last column is the pair value, defined on the next slide.</p></aside>
+    </div>
+  </section>
+
+  <!-- 7 · METHOD · the pair value
+       job      half the mean squared difference of a pair equals the sum of the terms below its shared level
+       source   onion total variance.md (pair value); simulate_figures.py chain (SIMULATED)
+       numbers  DATA.sim.chain.pair_value, pair_value_simulated (simulated)
+       cut      the derivation's middle line -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the pair value<span class="sim">simulated chart</span></div>
+      <h2>Half the mean squared difference of a pair measures every term below the level the pair shares</h2>
+      <div class="eq sm" id="eqPV"></div>
+      <div class="chartbox fig wide" id="figStair"></div>
+      <div class="legend" id="legStair"></div>
+      <aside class="notes"><p>Two measurements that share a set of factors, and are otherwise independent draws of the same law, differ only by what lies below that set. The squared difference then averages to twice the conditional variance, so half of it is the expected conditional variance: the sum of the remaining terms.</p><p>The bars are the closed-form pair values of the simulator. The dots are the pair values computed directly from the simulated pairs. The halves rung sits at half depth, which is why it is shorter than the sampling term of the other bars.</p></aside>
+    </div>
+  </section>
+
+  <!-- 8 · METHOD · a layer is a difference
+       job      a layer = difference of consecutive pair values; donor and experiment are sibling layers
+       source   onion total variance.md (rung-to-term map); layers.py lower_terms (read, not quoted)
+       numbers  none
+       cut      the mixed-model cross-check -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>a layer is a difference</div>
+      <h2>A layer is the difference of two consecutive pair values; donor and experiment are siblings, not a chain</h2>
+      <div class="fig wide tall" id="figLayers"></div>
+      <p class="note">In ENCODE, donor and experiment are crossed factors (each combines with each), not nested: one experiment can hold several donors, and one donor can appear in several experiments. So each of the two is measured over the isogenic rung, and the cell-type layer over a pair that shares only the cell type, built as anisogenic + other experiment − isogenic. That construction is exact when donor and experiment add without interaction.</p>
+      <aside class="notes"><p>Up to the isogenic rung, the ladder is a chain, and each layer is the step from the rung below. Above it, a nested order would force us to put donor before experiment or the reverse, and with crossed factors either order is wrong. A crossed linear mixed model, which needs no order, serves as the cross-check.</p></aside>
+    </div>
+  </section>
+
+  <!-- 9 · METHOD · the graphical model
+       job      which arrows the covariates C, the target covariates C' and the model inputs stand for
+       source   onion total variance.md (graphical-model, model-variance)
+       numbers  none
+       cut      a second figure of the model's view -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the graphical model</div>
+      <h2>Biology and lab work set the rate of a bin; covariates and read sampling turn the rate into a count</h2>
+      <div class="fig wide tall" id="figDAG"></div>
+      <p class="note">An arrow means the child's effect on the bin's rate is drawn given its parents. The dotted link marks the crossed donor and experiment. The model sees its inputs S (for imputation, the other tracks of the cell and their covariates) and the target's covariates C′, and predicts the target's count.</p>
+      <aside class="notes"><p>The covariates sit outside the chain. Depth acts on read sampling. Read length, run type and pipeline settings act on which reads are counted. The variance that a change of covariates causes is a separate covariate layer, which the covariate-correction metric measures.</p></aside>
+    </div>
+  </section>
+
+  <!-- 10 · METHOD · the predicted variance and its two bounds
+       job      the NB predicted variance estimates E[Var(Y|S,C')]; it lies between two pair values; the calibration ratio per rung
+       source   onion total variance.md (model-variance); notepad ruling of 2026-11-12 on the ratio per rung
+       numbers  none (notation only)
+       cut      the reconstruction row -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>what the predicted variance should equal</div>
+      <h2>A calibrated predicted variance lies between the sampling term and the pair value of what the model knows</h2>
+      <div class="eq sm" id="eqBounds"></div>
+      <table class="dtable tight">
+        <thead><tr><th>target</th><th>what the inputs reveal</th><th>upper-bound rung</th></tr></thead>
+        <tbody>
+          <tr><td>imputed (missing assay)</td><td>the cell type</td><td>a pair that shares only the cell type: another experiment of the same cell line</td></tr>
+          <tr><td>reconstructed (own reads seen)</td><td>every level of the target</td><td>the halves: both bounds meet</td></tr>
+          <tr><td>covariate-corrected (half to half)</td><td>every level of the target</td><td>the target's halves: both bounds meet</td></tr>
+        </tbody>
+      </table>
+      <p class="note">The negative binomial (NB) predicted variance is <i class="m" data-src="literal">μ + μ<sup>2</sup>/n</i>: the <i class="m">μ</i> part is the Poisson sampling term, and the second part stands for the layers that the inputs do not determine. A model passes when the calibration ratio is at least one at the halves and at most one at the upper-bound rung.</p>
+      <aside class="notes"><p>Conditioning on more information never raises the expected conditional variance. So the variance that the model cannot remove is at least read sampling, and at most the pair value of the deepest level its inputs determine. The calibration ratio is the mean predicted variance over a rung's pair value, both at one depth and over the same bins. Neither bound alone means calibrated.</p></aside>
+    </div>
+  </section>
+
+  <!-- 11 · METHOD · explained fraction per layer
+       job      the share of one layer that a model's prediction difference captures; which layers an imputation model can fill
+       source   onion total variance.md (explained-per-layer); notepad ruling of 2026-11-12 on the explained fraction
+       numbers  none (notation only)
+       cut      the bias argument -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>explained fraction per layer</div>
+      <h2>The explained fraction of a layer is the share of that layer that the model's prediction difference captures</h2>
+      <div class="eq sm" id="eqEF"></div>
+      <div class="cols2">
+        <div class="blk"><div class="blab">An imputation model can fill</div>
+          <div class="chips"><div class="chip yes"><div class="cn">cell type</div><div class="cc">other-cell-type pairs</div></div><div class="chip yes"><div class="cn">experiment (lab)</div><div class="cc">other-experiment pairs</div></div></div></div>
+        <div class="blk"><div class="blab">Zero by construction</div>
+          <div class="chips"><div class="chip zero"><div class="cn">donor, biol. replicate, library, sequencing</div><div class="cc">both members get the same inputs</div></div></div></div>
+      </div>
+      <p class="note">The model predicts each member of a pair from that member's own inputs and covariates. Subtracting the lower rung removes read sampling and the lower layers from both the numerator and the denominator. It is reported beside the headline metrics and does not enter the selection rule.</p>
+      <aside class="notes"><p>This uses a covariance, not a squared prediction difference, because a model that does not see the members' own reads cannot covary with their read sampling. It is computed on imputed targets only. Two biological replicates of one experiment get the same inputs from an imputation model, so their prediction difference is zero, and so is the captured part.</p></aside>
+    </div>
+  </section>
+
+  <!-- 12 · METHOD · how the scorer computes it
+       job      the computation path in the code, in plain steps
+       source   tools/onion_eval/layers.py, metrics.py, score.py, error_budget.py (read; module docs)
+       numbers  the confidence level only (literal)
+       cut      the Haar band detail -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>how the scorer computes it</div>
+      <h2>The scorer computes every layer per cell at one depth, and every interval over cells</h2>
+      <div class="pipe">
+        <div class="step"><div class="n">a</div><div class="t">Thin both members binomially to one common depth per assay; halves enter at their own depth.</div></div>
+        <div class="psep">→</div>
+        <div class="step"><div class="n">b</div><div class="t">Take <span data-src="literal">log1p</span> (log of one plus the count) and the difference d; the pair value is half the variance of d.</div></div>
+        <div class="psep">→</div>
+        <div class="step"><div class="n">c</div><div class="t">Average pair values per cell; take each layer per cell over the cells that populate both rungs.</div></div>
+        <div class="psep">→</div>
+        <div class="step"><div class="n">d</div><div class="t"><span data-src="literal">95%</span> confidence interval from a bootstrap over cells; per assay, region stratum and scale band.</div></div>
+      </div>
+      <p class="note">The calibration ratio thins the prediction to each pair's depth, then divides the mean predicted variance by the pair value. The error budget keeps its exact identities: truth variance = explained + unexplained + noise. Caveat: the identity is exact on counts; on <span data-src="literal">log1p</span> it holds only at one fixed depth, and its sampling term is no longer E[Y].</p>
+      <aside class="notes"><p>The bootstrap resamples cells, because pairs within a cell are not independent. A layer row records the depth at which it was taken, so it is never set against a metric taken at another depth. The scale bands are an orthonormal Haar split, which keeps the variance additive across bands.</p></aside>
+    </div>
+  </section>
+
+  <!-- 13 · RESULTS · (a) the simulator checks the identity
+       job      one claim: on simulated counts the identity, the telescoping and the budget identities hold
+       claim    the closed-form total matches the simulated variance; the scorer's layers telescope exactly
+       source   results/t233/AUDIT.md (simulator row), results/t234/AUDIT_TVg_seed0.md (budget row), sim_figures.json (telescope)
+       numbers  DATA.ident, DATA.sim.telescope, DATA.budget_max
+       cut      a figure of the residuals -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(a) the identity on simulated counts<span class="sim">simulated</span></div>
+      <h2>On simulated counts the identity holds, and the scorer's layers add up exactly</h2>
+      <div class="cards">
+        <div class="card" style="--c:var(--ok)"><div class="rl">Closed-form total vs simulated variance</div><div class="stat" id="tId"></div><p id="tIdCi"></p></div>
+        <div class="card" style="--c:var(--ok)"><div class="rl">Layers telescope (scorer on simulated tables)</div><div class="stat" id="tTel"></div><p id="tTelTxt"></p></div>
+        <div class="card" style="--c:var(--ok)"><div class="rl">Error-budget identities</div><div class="stat" id="tBud"></div><p>Largest absolute difference between the two sides of each identity, at machine precision.</p></div>
+      </div>
+      <p class="note">The simulator draws the chain with planted layer sizes: every factor multiplies the rate by an independent gamma factor (squared coefficients of variation <span id="tCv2"></span>), <span id="tCells"></span> cells, <span id="tBins"></span> bins, a mean of <span id="tBase"></span> reads per bin.</p>
+      <aside class="notes"><p>The first card checks the simulator itself: its closed-form total lies inside the bootstrap interval of the simulated variance. The second card runs the real layer code on simulated tables and checks that the halves rung plus every increment equals the outermost pair value. The third card checks the error budget's algebraic identities.</p></aside>
+    </div>
+  </section>
+
+  <!-- 14 · RESULTS · (b) the audit
+       job      the audit of the scorer against the identity: the defects it found and what each became
+       claim    the audit found defects in a large share of its checks; after the fixes only the log1p noise-floor bias remains, kept and reported
+       source   results/t233/AUDIT.md, results/t234/AUDIT_TVg_seed0.md (FIXES.md for the status words)
+       numbers  DATA.defects, DATA.audit
+       cut      the per-row intervals -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(b) the audit of the scorer<span class="sim">simulated</span></div>
+      <h2 id="tAuditHead"></h2>
+      <table class="dtable tight" id="tabAudit"></table>
+      <p class="note">Bias = (estimated − planted) / planted, on simulated data with planted layers, seed zero. A row counts as a defect when the planted value lies outside the <span data-src="literal">95%</span> confidence interval and the bias exceeds its half width. Several planted values changed between the two audits, because the layer table moved to the pair-value scale.</p>
+      <aside class="notes"><p>The largest defect was the nested order: with crossed donor and experiment, the experiment layer came out negative. The PI ruled that the two are sibling layers, and the sibling estimates now recover the planted values. The two rows still flagged are the noise floor on the log scale at a few reads per bin. The PI decided to keep that estimator and report the simulated size of its bias for each target.</p></aside>
+    </div>
+  </section>
+
+  <!-- 15 · RESULTS · (c) the calibration ratio per rung
+       job      for a calibrated cell-type model, the ratio is far above one at the halves and near one only at the right rung
+       claim    a ratio of one at the halves does not mean calibrated; the upper-bound rung decides
+       source   results/t234/AUDIT_TVg_seed0.md (headline-7 rows)
+       numbers  DATA.h7
+       cut      the planted values -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(c) the calibration ratio per rung<span class="sim">simulated</span></div>
+      <h2>A perfectly calibrated cell-type model scores far above one at the halves, and about one only at the rung that shares what it knows</h2>
+      <div class="chartbox fig wide" id="figH7"></div>
+      <ul class="pts">
+        <li>At the halves the ratio is <span id="tH7pr"></span>: the halves give only the lower bound (read sampling).</li>
+        <li>At a pair that shares only the cell type it is <span id="tH7ct"></span>; at another experiment of a one-donor cell line, <span id="tH7one"></span>.</li>
+      </ul>
+      <aside class="notes"><p>The simulated model knows position and cell type exactly and predicts the true conditional distribution, so it is calibrated by construction. The ratio falls as the rung shares less. The halves row sits at half depth, so it is not on the same depth as the rungs below it. With two donors per cell type, another experiment also shares the donor, so the ratio there stays above one.</p></aside>
+    </div>
+  </section>
+
+  <!-- 16 · RESULTS · (d) explained fraction in simulation
+       job      the explained fraction recovers what a simulated model knows, layer by layer
+       claim    a model that knows the cell type gets about one on the cell-type layer and zero elsewhere
+       source   INSTRUCTIONS/peeling_the_onion/onion total variance.md (check by simulation)
+       numbers  DATA.ef
+       cut      seeds one and two -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(d) explained fraction per layer<span class="sim">simulated</span></div>
+      <h2>The explained fraction credits each simulated model with the layers it knows, and nothing else</h2>
+      <div class="chartbox fig wide" id="figEF"></div>
+      <ul class="pts">
+        <li>Knowing the experiment factor gives <span id="tEFexp"></span> on the experiment layer, a few percent below one: an other-experiment pair also shares the donor, and <span data-src="literal">log1p</span> does not separate the two exactly.</li>
+      </ul>
+      <aside class="notes"><p>Both simulated models predict from the true latent factors they are given. Donor gets zero in both, as it should. The intervals are confidence intervals from a bootstrap over cells.</p></aside>
+    </div>
+  </section>
+
+  <!-- 17 · DISCUSSION · assumptions and where they break
+       job      the assumptions under which each estimator is unbiased; where each breaks
+       source   onion total variance.md (assumptions)
+       numbers  none
+       cut      the scales section -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>assumptions and where they break</div>
+      <h2>Each estimate is unbiased only under six assumptions; crossed factors and the log scale break the simple story</h2>
+      <div class="cards six">
+        <div class="card"><div class="rl">Exchangeable pair</div><p>Members are independent and identically distributed given what they share. Breaks for a depth subset of a parent track, which shares reads.</p></div>
+        <div class="card"><div class="rl">Equal depth</div><p>Both members, both rungs, model and truth at one depth. The tools thin the deeper track.</p></div>
+        <div class="card" style="--c:var(--bad)"><div class="rl">Order of conditioning</div><p>Donor and experiment are crossed in ENCODE; hence sibling layers, and a cell-type layer exact only without interaction.</p></div>
+        <div class="card" style="--c:var(--bad)"><div class="rl">Scale</div><p>Exact on counts. On <span data-src="literal">log1p</span> it holds only at one depth, and the sampling term then depends on the bin's rate.</p></div>
+        <div class="card"><div class="rl">Same cells and positions</div><p>A difference over two cell sets mixes a layer with the variance between cell sets.</p></div>
+        <div class="card"><div class="rl">Factor one half</div><p>Half the mean squared difference equals the conditional variance only for an exchangeable pair at equal depth.</p></div>
+      </div>
+      <aside class="notes"><p>These are the limitations of the formulation. The two marked cards are where the simple onion picture fails: the factors are not a single chain, and the scorer works on a log scale where the identity is no longer additive across depths.</p></aside>
+    </div>
+  </section>
+
+  <!-- 18 · DISCUSSION · what exists on real data today, and what comes next
+       job      the inventory of real pairs per rung (counts only), the evaluation set, and the next steps; no layer value
+       source   results/t183/DATASET_EIC_V1.md, results/t183/rung_pairs.tsv, results/t185/SUBMITTED.md, long-horizon notepad.md (second experiments)
+       numbers  DATA.real (counts only)
+       cut      the per-assay breakdown -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>real data today, and what comes next</div>
+      <h2 id="tRealHead"></h2>
+      <div class="chartbox fig wide" id="figReal"></div>
+      <ul class="pts">
+        <li>Dataset version one: <span id="tTrain"></span> training and <span id="tVal"></span> validation tracks, <span id="tLines"></span> rung lines (<span id="tAssays"></span> assays × seven rungs). Evaluation set: <span id="tRep"></span> replicate pairs and <span id="tCorr"></span> correction pairs over <span id="tReg"></span> regions.</li>
+        <li><b>Done, not yet collected:</b> the variance-layer job on these tables finished on the cluster; no real-data layer appears here until its outputs are collected and checked.</li>
+        <li><b>Next:</b> ENCODE holds a second experiment for <span id="tSec"></span>; one per track, reprocessed with the same pipeline, will enter the evaluation set only, to populate the other-experiment rung. No model is trained yet, so no model ratio or explained fraction exists.</li>
+      </ul>
+      <aside class="notes"><p>The counts are pairs in the frozen tables, summed over assays. The sequencing and technical rungs need ENCODE runs and libraries that these tables do not hold. The other-experiment rung waits for the second experiments, which the PI ruled in for evaluation only, never for training.</p></aside>
+    </div>
+  </section>
+
+</div>
+
+<div class="foot">peeling the onion · the law of total variance</div>
+<div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+
+<script>
+/* Every number below comes from DATA, which build_deck.py embeds from the vault files.
+   Comparisons (bias, slopes, pass or fail, sums) are computed here, never typed. */
+const DATA = __DATA__;
+const S = DATA.sim;
+const put=(id,html)=>{const e=document.getElementById(id); if(e) e.innerHTML=html;};
+const f2=v=>v.toFixed(2), f3=v=>v.toFixed(3);
+const g3=v=>Number(v.toPrecision(3)).toString();
+const C={t0:'var(--t0)',ct:'var(--ct)',donor:'var(--donor)',exp:'var(--exp)',bio:'var(--bio)',lib:'var(--lib)',seq:'var(--seq)',samp:'var(--samp)',cov:'var(--cov)'};
+const TERMS=[['Z0','position and assay','t0','T<sub>0</sub>'],['cell_type','cell type','ct','T<sub>1</sub>'],['donor','donor','donor','T<sub>2</sub>'],
+  ['experiment','experiment','exp','T<sub>3</sub>'],['bio_rep','biol. replicate','bio','T<sub>4</sub>'],['library','library','lib','T<sub>5</sub>'],
+  ['sequencing','seq. run','seq','T<sub>6</sub>'],['sampling','read sampling','samp','T<sub>s</sub>']];
+const svg=(w,h,body)=>`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${body}</svg>`;
+const AR=`<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#9a958c"/></marker></defs>`;
+
+/* ---- equations (notation) ---- */
+put('eqTwo','Var(<i>Y</i>) &nbsp;=&nbsp; Var( E[<i>Y</i> | cell type] ) &nbsp;+&nbsp; E[ Var(<i>Y</i> | cell type) ] &nbsp;&nbsp;<span style="color:#77736c;font-size:.8em">between groups &nbsp;+&nbsp; within groups</span>');
+put('eqChain','Var(<i>Y</i>) = Var(E[<i>Y</i>|<i>Z</i><sub>0</sub>]) &nbsp;+&nbsp; Σ<sub><i>k</i>=1..6</sub> E[ Var( E[<i>Y</i>|<i>Z<sub>k</sub></i>] | <i>Z</i><sub><i>k</i>−1</sub> ) ] &nbsp;+&nbsp; E[ Var(<i>Y</i>|<i>Z</i><sub>6</sub>) ] &nbsp;=&nbsp; <i>T</i><sub>0</sub> + <i>T</i><sub>1</sub> + … + <i>T</i><sub>6</sub> + <i>T<sub>s</sub></i>');
+put('eqPV','Pair value: &nbsp;PV(<i>Z</i><sub><i>k</i>−1</sub>) = ½ E[(<i>Y</i> − <i>Y′</i>)<sup>2</sup>] = E[ Var(<i>Y</i> | <i>Z</i><sub><i>k</i>−1</sub>) ] = <i>T<sub>k</sub></i> + <i>T</i><sub><i>k</i>+1</sub> + … + <i>T</i><sub>6</sub> + <i>T<sub>s</sub></i> &nbsp;&nbsp;<span style="color:#77736c;font-size:.8em">for <i>Y</i>, <i>Y′</i> independent and identically distributed given <i>Z</i><sub><i>k</i>−1</sub>, at one depth</span>');
+put('eqBounds','<i>T<sub>s</sub></i> = PV(halves) &nbsp;≤&nbsp; E[ Var(<i>Y</i> | <i>S</i>, <i>C′</i>) ] &nbsp;≈&nbsp; mean(μ̂ + μ̂<sup>2</sup>/<i>n</i>) &nbsp;≤&nbsp; PV(<i>Z<sub>k*</sub></i>) &nbsp;&nbsp;&nbsp;&nbsp; calibration ratio &nbsp;ρ(rung) = mean(μ̂ + μ̂<sup>2</sup>/<i>n</i>) / PV<sub>rung</sub><br><span style="color:#77736c;font-size:.8em"><i>S</i>: the model\'s inputs; <i>C′</i>: the target\'s covariates; <i>Z<sub>k*</sub></i>: the deepest level that <i>S</i> and <i>C′</i> determine</span>');
+put('eqEF','EF<sub><i>k</i></sub> = captured part / layer term = [ <i>C<sub>r</sub></i> − Σ<sub><i>q</i></sub> <i>C<sub>q</sub></i> ] / [ PV<sub><i>r</i></sub> − Σ<sub><i>q</i></sub> PV<sub><i>q</i></sub> ], &nbsp; <i>C</i> = ½ mean(<i>d̂ d</i>), &nbsp; PV = ½ mean(<i>d</i><sup>2</sup>)<br><span style="color:#77736c;font-size:.8em"><i>d</i>: the pair\'s log1p difference; <i>d̂</i>: the model\'s predicted difference; <i>q</i>: the lower rungs that the layer subtracts</span>');
+
+/* ---- (slide 2) the onion ---- */
+(function(){
+  const rings=[['position and assay','t0'],['cell type','ct'],['donor','donor'],['experiment and lab','exp'],['biological replicate','bio'],['library','lib'],['sequencing run','seq'],['read sampling','samp']];
+  const cx=210, cy=240, W=760, H=480; let s='';
+  rings.forEach(([lab,c],i)=>{ const r=210-i*25; s+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${C[c]}" fill-opacity="${i==7?0.9:0.32}" stroke="#fff" stroke-width="2"/>`;
+    const y=48+i*55, xr=cx+r*Math.cos(-0.6+i*0.0), yr=cy;
+    s+=`<line x1="${cx+(r-12)*0.92}" y1="${cy-(r-12)*0.39}" x2="440" y2="${y-6}" stroke="#b5b0a6" stroke-width="1"/>`;
+    s+=`<rect x="440" y="${y-24}" width="20" height="20" rx="4" fill="${C[c]}"/><text x="470" y="${y-7}" class="xlab">${lab}</text>`; });
+  s+=`<text x="${cx}" y="${cy+6}" text-anchor="middle" class="xsub">count</text>`;
+  put('figOnion', svg(W,H,s));
+})();
+
+/* ---- (slide 3) two-level example ---- */
+(function(){
+  const T=S.two_level, names=Object.keys(T.values), cols=['ct','lib','exp'];
+  put('tTwoN', T.n_per_group); put('tTwoDiff', T.identity_abs_diff.toExponential(1));
+  const W=1160,H=330, L=70, pw=640, top=50, bot=280;
+  const ymax=Math.ceil(Math.max(...names.flatMap(n=>T.values[n]))/5)*5;
+  const yy=v=>bot-(bot-top)*v/ymax;
+  let s=`<text x="10" y="28" class="ptitle">(a) Counts of one bin, by cell type</text>`;
+  for(let t=0;t<=ymax;t+=10){ s+=`<line x1="${L}" x2="${L+pw}" y1="${yy(t)}" y2="${yy(t)}" class="grid"/><text x="${L-10}" y="${yy(t)+5}" text-anchor="end" class="tick">${t}</text>`; }
+  const all=names.flatMap(n=>T.values[n]); const gmean=all.reduce((a,b)=>a+b,0)/all.length;
+  s+=`<line x1="${L}" x2="${L+pw}" y1="${yy(gmean)}" y2="${yy(gmean)}" class="zero"/><text x="${L+pw}" y="${yy(gmean)-8}" text-anchor="end" class="psub">grand mean</text>`;
+  names.forEach((n,g)=>{ const x0=L+40+g*210; T.values[n].forEach((v,i)=>{ const jit=((i*37)%41)/41*120; s+=`<circle cx="${x0+jit}" cy="${yy(v)}" r="4" fill="${C[cols[g]]}" fill-opacity=".55"/>`; });
+    const m=T.group_mean[n]; s+=`<line x1="${x0-6}" x2="${x0+126}" y1="${yy(m)}" y2="${yy(m)}" stroke="${C[cols[g]]}" stroke-width="3"/>`;
+    s+=`<text x="${x0+60}" y="${bot+28}" text-anchor="middle" class="axlbl">${n}</text>`; });
+  s+=`<text transform="translate(22,${(top+bot)/2}) rotate(-90)" text-anchor="middle" class="ylab">reads in the bin</text>`;
+  /* (b) stacked bars */
+  const bx=820, bw=110, bmax=T.total, by=v=>bot-(bot-top-30)*v/bmax;
+  s+=`<line x1="780" y1="40" x2="780" y2="${bot+30}" class="sep"/><text x="800" y="28" class="ptitle">(b) The two terms add up</text>`;
+  s+=`<rect x="${bx}" y="${by(T.total)}" width="${bw}" height="${bot-by(T.total)}" fill="#8d8f98"/><text x="${bx+bw/2}" y="${by(T.total)-8}" text-anchor="middle" class="barval">${f2(T.total)}</text><text x="${bx+bw/2}" y="${bot+28}" text-anchor="middle" class="axlbl">total</text>`;
+  const b2=bx+150; s+=`<rect x="${b2}" y="${by(T.between)}" width="${bw}" height="${bot-by(T.between)}" fill="var(--ct)" fill-opacity=".75"/>`;
+  s+=`<rect x="${b2}" y="${by(T.between+T.within)}" width="${bw}" height="${by(T.between)-by(T.between+T.within)}" fill="var(--samp)"/>`;
+  s+=`<text x="${b2+bw/2}" y="${(by(T.between)+bot)/2+6}" text-anchor="middle" class="barval" fill="#fff">${f2(T.between)}</text>`;
+  s+=`<text x="${b2+bw/2}" y="${(by(T.between)+by(T.total))/2+6}" text-anchor="middle" class="val">${f2(T.within)}</text>`;
+  s+=`<text x="${b2+bw/2}" y="${bot+28}" text-anchor="middle" class="axlbl">between + within</text>`;
+  put('figTwo', svg(W,H+10,s));
+})();
+
+/* ---- (slide 4) chain sets and the stacked bar ---- */
+(function(){
+  const sets=[['Z<tspan baseline-shift="sub" font-size="13">0</tspan>','assay, position'],['Z<tspan baseline-shift="sub" font-size="13">1</tspan>','+ cell type'],['Z<tspan baseline-shift="sub" font-size="13">2</tspan>','+ donor'],['Z<tspan baseline-shift="sub" font-size="13">3</tspan>','+ experiment'],['Z<tspan baseline-shift="sub" font-size="13">4</tspan>','+ biol. replicate'],['Z<tspan baseline-shift="sub" font-size="13">5</tspan>','+ library'],['Z<tspan baseline-shift="sub" font-size="13">6</tspan>','+ sequencing run']];
+  const cols=['t0','ct','donor','exp','bio','lib','seq'];
+  let s=`<text x="10" y="24" class="ptitle">(a) The chain: each set contains the one before it</text>`;
+  sets.forEach(([z,t],i)=>{ const x=10+i*163; s+=`<rect x="${x}" y="40" width="150" height="64" rx="8" fill="#fff" stroke="${C[cols[i]]}" stroke-width="2.4"/>`;
+    s+=`<text x="${x+12}" y="66" class="xlab" font-style="italic">${z}</text><text x="${x+12}" y="92" class="xsub">${t}</text>`;
+    if(i<6) s+=`<text x="${x+152}" y="78" class="tick">⊂</text>`; });
+  put('figChainSets', svg(1160,112,s));
+  const ch=S.chain, tot=ch.total, W=1160, H=190, L=10, pw=1140; let x=L, j=0;
+  let b=`<text x="10" y="24" class="ptitle">(b) The eight terms of one simulated chain, on counts (total ${f2(tot)})</text>`;
+  TERMS.forEach(([k,lab,c,tt])=>{ const w=pw*ch.terms[k]/tot; b+=`<rect x="${x}" y="40" width="${w}" height="56" fill="${C[c]}" fill-opacity="${c==='samp'?1:.8}" stroke="#fff"/>`;
+    if(w>60) b+=`<text x="${x+w/2}" y="74" text-anchor="middle" class="val" fill="${c==='samp'||c==='seq'?'#1a1a1a':'#fff'}">${f2(ch.terms[k])}</text>`;
+    const yl=[122,142,162][j%3]; j++;
+    b+=`<line x1="${x+w/2}" y1="98" x2="${x+w/2}" y2="${yl-16}" stroke="#cfccc6"/>`;
+    b+=`<text x="${x+w/2}" y="${yl}" text-anchor="middle" class="cap"><tspan font-style="italic">${tt.replace(/<sub>(.*?)<\/sub>/,'<tspan baseline-shift="sub" font-size="11">$1</tspan>')}</tspan> ${lab}${w>60?'':' '+f2(ch.terms[k])}</text>`; x+=w; });
+  put('figChainBar', svg(W,H,b));
+})();
+
+/* ---- (slide 5) depth ---- */
+(function(){
+  const D=S.depth, ks=Object.keys(D).map(Number).sort((a,b)=>a-b);
+  const W=620,H=420,L=90,R=30,top=60,bot=350;
+  const lx=v=>L+(Math.log2(v)-Math.log2(ks[0]))/(Math.log2(ks[ks.length-1])-Math.log2(ks[0]))*(W-L-R);
+  const vals=ks.flatMap(k=>[D[String(k)].sampling,D[String(k)].layers]);
+  const lo=Math.floor(Math.log10(Math.min(...vals))), hi=Math.ceil(Math.log10(Math.max(...vals)));
+  const ly=v=>bot-(Math.log10(v)-lo)/(hi-lo)*(bot-top);
+  let s=`<text x="10" y="30" class="ptitle">Terms against depth (log–log)</text>`;
+  for(let e=lo;e<=hi;e++){ s+=`<line x1="${L}" x2="${W-R}" y1="${ly(10**e)}" y2="${ly(10**e)}" class="grid"/><text x="${L-10}" y="${ly(10**e)+5}" text-anchor="end" class="tick">${10**e}</text>`; }
+  ks.forEach(k=>{ s+=`<text x="${lx(k)}" y="${bot+26}" text-anchor="middle" class="tick">×${k}</text>`; });
+  const slope=key=>{const a=D[String(ks[0])][key], b=D[String(ks[ks.length-1])][key]; return Math.log(b/a)/Math.log(ks[ks.length-1]/ks[0]);};
+  [['layers','ct','sum of layers T₁…T₆'],['sampling','samp','read sampling T_s']].forEach(([key,c,lab])=>{
+    const pts=ks.map(k=>`${lx(k)},${ly(D[String(k)][key])}`).join(' ');
+    s+=`<polyline points="${pts}" fill="none" stroke="${C[c]}" stroke-width="3.4"/>`;
+    ks.forEach(k=>{ s+=`<circle cx="${lx(k)}" cy="${ly(D[String(k)][key])}" r="5" fill="${C[c]}"/>`; });
+    const kl=ks[ks.length-1]; s+=`<text x="${lx(kl)-8}" y="${ly(D[String(kl)][key])+(key==='layers'?-12:26)}" text-anchor="end" class="val" fill="${key==='sampling'?'#8a8272':'var(--ct)'}">${key==='layers'?'layers':'sampling'}: slope ${slope(key).toFixed(2)}</text>`; });
+  s+=`<text x="${(L+W-R)/2}" y="${H-12}" text-anchor="middle" class="ylab">depth, relative to the target</text>`;
+  put('figDepth', svg(W,H,s));
+})();
+
+/* ---- (slide 7) the stair of pair values ---- */
+const RUNG_LAB={pseudoreplicate:'halves',sequencing:'sequencing',technical:'technical',isogenic:'isogenic',anisogenic:'anisogenic',other_experiment:'other experiment',other_cell_type:'other cell type'};
+(function(){
+  const ch=S.chain, P=ch.pair_value, Q=ch.pair_value_simulated, t=ch.terms;
+  const order=['pseudoreplicate','sequencing','technical','isogenic','anisogenic','other_experiment','other_cell_type'];
+  const segs={pseudoreplicate:[['samp',P.pseudoreplicate]],
+    sequencing:[['samp',t.sampling],['seq',t.sequencing]],
+    technical:[['samp',t.sampling],['seq',t.sequencing],['lib',t.library]],
+    isogenic:[['samp',t.sampling],['seq',t.sequencing],['lib',t.library],['bio',t.bio_rep]],
+    anisogenic:[['samp',t.sampling],['seq',t.sequencing],['lib',t.library],['bio',t.bio_rep],['donor',P.anisogenic-P.isogenic]],
+    other_experiment:[['samp',t.sampling],['seq',t.sequencing],['lib',t.library],['bio',t.bio_rep],['exp',P.other_experiment-P.isogenic]],
+    other_cell_type:[['samp',t.sampling],['seq',t.sequencing],['lib',t.library],['bio',t.bio_rep],['donor',P.anisogenic-P.isogenic],['exp',P.other_experiment-P.isogenic],['ct',P.other_cell_type-(P.anisogenic+P.other_experiment-P.isogenic)]]};
+  const W=1160,H=360,L=80,top=40,bot=300, ymax=Math.ceil(P.other_cell_type/5)*5, yy=v=>bot-(bot-top)*v/ymax, bw=104, gap=(W-L-20)/order.length;
+  let s=`<text x="${L}" y="24" class="ptitle">Pair value per rung, on counts: closed form (bars) and simulated pairs (dots)</text>`;
+  for(let v=0;v<=ymax;v+=5){ s+=`<line x1="${L}" x2="${W-20}" y1="${yy(v)}" y2="${yy(v)}" class="grid"/><text x="${L-10}" y="${yy(v)+5}" text-anchor="end" class="tick">${v}</text>`; }
+  order.forEach((r,i)=>{ const x=L+i*gap+(gap-bw)/2; let acc=0;
+    segs[r].forEach(([c,v])=>{ s+=`<rect x="${x}" y="${yy(acc+v)}" width="${bw}" height="${yy(acc)-yy(acc+v)}" fill="${C[c]}" fill-opacity="${c==='samp'?1:.8}" stroke="#fff"/>`; acc+=v; });
+    s+=`<circle cx="${x+bw/2}" cy="${yy(Q[r])}" r="7" fill="#1a1a1a" stroke="#fff" stroke-width="2"/>`;
+    s+=`<text x="${x+bw/2}" y="${yy(P[r])-14}" text-anchor="middle" class="val">${f2(P[r])}</text>`;
+    s+=`<text x="${x+bw/2}" y="${bot+26}" text-anchor="middle" class="axlbl">${RUNG_LAB[r]}</text>`; });
+  s+=`<text transform="translate(24,${(top+bot)/2}) rotate(-90)" text-anchor="middle" class="ylab">pair value (reads²)</text>`;
+  put('figStair', svg(W,H,s));
+  put('legStair', TERMS.slice(1).map(([k,lab,c])=>`<span class="item"><span class="sw" style="background:${C[c]}"></span>${lab}</span>`).join('')+`<span class="item"><span class="sw" style="background:#1a1a1a;border-radius:50%"></span>simulated pairs</span>`);
+})();
+
+/* ---- (slide 8) layers as differences ---- */
+(function(){
+  const nodes={pseudoreplicate:[90,330],sequencing:[290,330],technical:[490,330],isogenic:[690,330],anisogenic:[880,200],other_experiment:[880,460],only_ct:[1010,330],other_cell_type:[1010,90]};
+  const lab={...RUNG_LAB, only_ct:'shares only cell type'};
+  let s=AR+`<text x="10" y="28" class="ptitle">Which pair value each layer subtracts</text>`;
+  const edge=(a,b,txt,c,dash)=>{ const [x1,y1]=nodes[a],[x2,y2]=nodes[b]; const dx=x2-x1,dy=y2-y1,L=Math.hypot(dx,dy),ux=dx/L,uy=dy/L;
+    s+=`<line x1="${x1+ux*78}" y1="${y1+uy*30}" x2="${x2-ux*78}" y2="${y2-uy*30}" stroke="${c}" stroke-width="3" ${dash?'stroke-dasharray="6 5"':''} marker-end="url(#ar)"/>`;
+    if(txt){ const horiz=Math.abs(dy)<1, vert=Math.abs(dx)<1;
+      s+= horiz ? `<text x="${(x1+x2)/2}" y="${y1-44}" text-anchor="middle" class="val" fill="${c}">${txt}</text>`
+        : vert ? `<text x="${x1+14}" y="${(y1+y2)/2+6}" class="val" fill="${c}">${txt}</text>`
+        : `<text x="${(x1+x2)/2-14}" y="${(y1+y2)/2+(dy<0?-10:22)}" text-anchor="end" class="val" fill="${c}">${txt}</text>`; } };
+  edge('pseudoreplicate','sequencing','sequencing layer',C.seq);
+  edge('sequencing','technical','library layer',C.lib);
+  edge('technical','isogenic','biol. replicate layer',C.bio);
+  edge('isogenic','anisogenic','donor layer',C.donor);
+  edge('isogenic','other_experiment','experiment layer',C.exp);
+  edge('anisogenic','only_ct','',  '#9a958c',true); edge('other_experiment','only_ct','','#9a958c',true);
+  edge('only_ct','other_cell_type','cell-type layer',C.ct);
+  Object.entries(nodes).forEach(([k,[x,y]])=>{ const virt=k==='only_ct'; s+=`<rect x="${x-78}" y="${y-28}" width="156" height="56" rx="10" fill="${virt?'#f3f1ec':'#fff'}" stroke="${virt?'#9a958c':'#cfccc6'}" stroke-width="1.6" ${virt?'stroke-dasharray="5 4"':''}/>`;
+    s+=`<text x="${x}" y="${y+6}" text-anchor="middle" class="axlbl">${lab[k]}</text>`; });
+  s+=`<text x="1010" y="392" text-anchor="middle" class="cap">anisogenic + other exp. − isogenic</text>`;
+  s+=`<text x="90" y="392" text-anchor="middle" class="cap">its own pair value: read sampling</text>`;
+  put('figLayers', svg(1160,500,s));
+})();
+
+/* ---- (slide 9) graphical model ---- */
+(function(){
+  const N={pos:[120,70,'position','t0'],assay:[330,70,'assay','t0'],ct:[225,170,'cell type','ct'],donor:[110,280,'donor','donor'],exp:[340,280,'experiment and lab','exp'],
+    bio:[225,385,'biol. replicate','bio'],lib:[480,385,'library','lib'],seq:[700,385,'sequencing run','seq'],samp:[900,385,'read sampling','samp'],
+    cov:[900,170,'covariates C, C′','cov'],count:[900,500,'observed count Y','model']};
+  let s=AR;
+  const e=(a,b,dash,col)=>{ const [x1,y1]=N[a],[x2,y2]=N[b]; const dx=x2-x1,dy=y2-y1,L=Math.hypot(dx,dy),ux=dx/L,uy=dy/L; const r=Math.abs(ux)>0.8?82:28;
+    s+=`<line x1="${x1+ux*r}" y1="${y1+uy*28}" x2="${x2-ux*r}" y2="${y2-uy*28}" stroke="${col||'#9a958c'}" stroke-width="2.4" ${dash?'stroke-dasharray="6 5"':''} ${dash?'':'marker-end="url(#ar)"'}/>`; };
+  [['pos','ct'],['assay','ct'],['ct','donor'],['ct','exp'],['donor','bio'],['exp','bio'],['bio','lib'],['lib','seq'],['seq','samp'],['samp','count']].forEach(([a,b])=>e(a,b));
+  e('donor','exp',true); e('cov','samp',false,C.cov);
+  s+=`<path d="M 980 190 C 1060 260, 1060 430, 990 492" fill="none" stroke="${C.cov}" stroke-width="2.4" marker-end="url(#ar)"/>`;
+  s+=`<text x="225" y="300" text-anchor="middle" class="psub">crossed</text>`;
+  Object.values(N).forEach(([x,y,lab,c])=>{ s+=`<rect x="${x-82}" y="${y-26}" width="164" height="52" rx="10" fill="#fff" stroke="${c==='model'?'#1a1a1a':C[c]}" stroke-width="2.4"/><text x="${x}" y="${y+6}" text-anchor="middle" class="axlbl">${lab}</text>`; });
+  s+=`<text x="1070" y="300" class="cap" text-anchor="middle">depth</text><text x="1070" y="320" class="cap" text-anchor="middle">read length,</text><text x="1070" y="340" class="cap" text-anchor="middle">run type, pipeline</text>`;
+  s+=`<text x="30" y="560" class="psub">Rings of the onion, outside in: position and assay → cell type → donor and experiment (crossed) → biological replicate → library → sequencing run → read sampling.</text>`;
+  put('figDAG', svg(1160,580,s));
+})();
+
+/* ---- (slide 13) identity checks ---- */
+(function(){
+  const I=DATA.ident; put('tId', `${f2(I.total)} <small>vs</small> ${f2(I.est)}`);
+  put('tIdCi', `Closed-form total of the planted terms against the variance of the simulated counts; <span data-src="literal">95%</span> confidence interval ${f2(I.lo)} to ${f2(I.hi)} ${I.total>=I.lo&&I.total<=I.hi?'holds':'does not hold'} the closed form.`);
+  const t=S.telescope.check[0]; put('tTel', t.abs_diff===0 ? 'difference: exactly 0' : `|difference| = ${t.abs_diff.toExponential(1)}`);
+  put('tTelTxt', `Halves rung plus every increment (${f3(t.sum_of_increments)}) against the outermost pair value (${f3(t.outermost_variance)}), log1p at one depth; rule check ${t.chain_ok?'passed':'failed'}.`);
+  put('tBud', DATA.budget_max.toExponential(1));
+  const cv=S.chain.cv2; put('tCv2', ['cell_type','donor','experiment','bio_rep','library','sequencing'].map(k=>`${k.replace('_',' ').replace('bio rep','biological replicate')} ${cv[k]}`).join(', '));
+  put('tCells', S.chain.n_cells); put('tBins', S.chain.n_bins.toLocaleString('en-US')); put('tBase', S.chain.base_mean_reads);
+})();
+
+/* ---- (slide 14) audit table ---- */
+(function(){
+  const A=DATA.audit;
+  put('tAuditHead', `The audit flagged ${A.defects_before} of ${A.rows_before} checks; after the fixes ${A.defects_after} of ${A.rows_after} remain, both the noise floor on the log scale`);
+  const pct=r=>{ if(r.est===null||!isFinite(r.est)) return 'refused (no common cells)'; if(Math.abs(r.planted)<1e-6) return `${g3(r.est)} vs ${r.planted===0?'0':'≈0'} (planted)`; const b=100*(r.est-r.planted)/r.planted; return (b>0?'+':b<0?'−':'')+Math.abs(b).toFixed(0)+'%'; };
+  const col=s=>s.startsWith('fixed')||s.startsWith('redefined')||s.startsWith('depth')?'var(--ok)':'var(--kept)';
+  let h='<thead><tr><th>defect found by the audit</th><th>bias before</th><th>bias after</th><th>what changed</th></tr></thead><tbody>';
+  DATA.defects.forEach(d=>{ h+=`<tr><td>${d.name}</td><td class="num" style="color:var(--bad);font-weight:600">${pct(d.b)}</td><td class="num" style="color:${d.a.defect?'var(--kept)':'var(--ok)'};font-weight:600">${pct(d.a)}${d.a.defect?' · still flagged':''}</td><td style="color:${col(d.status)}">${d.status}</td></tr>`; });
+  put('tabAudit', h+'</tbody>');
+})();
+
+/* ---- (slide 15) calibration ratio forest ---- */
+(function(){
+  const R=DATA.h7, W=1160, Lg=360, Rm=60, top=50, rowh=36, H=top+R.length*rowh+50, xmin=0, xmax=Math.ceil(Math.max(...R.map(r=>r.hi))*2)/2;
+  const xx=v=>Lg+(v-xmin)/(xmax-xmin)*(W-Lg-Rm);
+  let s=`<text x="10" y="28" class="ptitle">Calibration ratio of a calibrated cell-type model, per rung (bootstrap 95% CI over cells)</text>`;
+  for(let t=0;t<=xmax;t+=0.5){ s+=`<line x1="${xx(t)}" x2="${xx(t)}" y1="${top-6}" y2="${H-40}" class="grid"/><text x="${xx(t)}" y="${H-16}" text-anchor="middle" class="tick">${t}</text>`; }
+  s+=`<line x1="${xx(1)}" x2="${xx(1)}" y1="${top-14}" y2="${H-40}" class="zero"/><text x="${xx(1)+8}" y="${top-18}" class="psub">ratio = 1</text>`;
+  R.forEach((r,i)=>{ const y=top+i*rowh+rowh/2; const key=i===0?'var(--samp)':(r.lab.startsWith('shares only')||r.lab.includes('one donor'))?'var(--ok)':'var(--t0)';
+    const strong=i===0||r.lab.startsWith('shares only')||r.lab.includes('one donor');
+    s+=`<text x="${Lg-16}" y="${y+6}" text-anchor="end" class="axlbl" ${strong?'font-weight="700"':''}>${r.lab}</text>`;
+    s+=`<line x1="${xx(r.lo)}" x2="${xx(r.hi)}" y1="${y}" y2="${y}" stroke="${key==='var(--samp)'?'#8a8272':key}" stroke-width="4" stroke-linecap="round"/><circle cx="${xx(r.v)}" cy="${y}" r="6" fill="${key==='var(--samp)'?'#8a8272':key}"/>`;
+    s+=`<text x="${xx(r.hi)+12}" y="${y+6}" class="val" fill="#333">${f3(r.v)}</text>`; });
+  put('figH7', svg(W,H,s));
+  const g=l=>R.find(r=>r.lab===l);
+  const pr=R[0], ct=g('shares only the cell type'), one=g('other experiment, one donor');
+  put('tH7pr', `${f3(pr.v)} (${f3(pr.lo)} to ${f3(pr.hi)}), ${pr.lo>=1?'which passes the lower-bound check (at least one)':'which fails the lower-bound check'}`);
+  const inc=r=>r.lo<=1&&r.hi>=1?'its confidence interval includes one':'its confidence interval excludes one';
+  put('tH7ct', `${f3(ct.v)} (${f3(ct.lo)} to ${f3(ct.hi)}; ${inc(ct)})`);
+  put('tH7one', `${f3(one.v)} (${f3(one.lo)} to ${f3(one.hi)}; ${inc(one)}), so the model passes both bounds there`);
+})();
+
+/* ---- (slide 16) explained fraction ---- */
+(function(){
+  const E=DATA.ef, W=1160, Lg=300, Rm=60, top=60, H=300;
+  const rows=[['cell type',E.ct.cell,E.ctx.cell,'ct'],['experiment',[E.ct.exp,E.ct.exp,E.ct.exp],E.ctx.exp,'exp'],['donor',[E.ct.donor,E.ct.donor,E.ct.donor],[E.ctx.donor,E.ctx.donor,E.ctx.donor],'donor']];
+  const xmin=-0.1, xmax=1.2, xx=v=>Lg+(v-xmin)/(xmax-xmin)*(W-Lg-Rm), rowh=(H-top-50)/rows.length;
+  let s=`<text x="10" y="28" class="ptitle">Explained fraction per layer, two simulated models (seed zero)</text>`;
+  [0,0.25,0.5,0.75,1].forEach(t=>{ s+=`<line x1="${xx(t)}" x2="${xx(t)}" y1="${top-8}" y2="${H-44}" class="grid"/><text x="${xx(t)}" y="${H-20}" text-anchor="middle" class="tick">${t}</text>`; });
+  s+=`<line x1="${xx(1)}" x2="${xx(1)}" y1="${top-12}" y2="${H-44}" class="zero"/>`;
+  rows.forEach(([lab,a,b,c],i)=>{ const y=top+i*rowh+rowh/2;
+    s+=`<text x="${Lg-16}" y="${y+6}" text-anchor="end" class="axlbl">${lab} layer</text>`;
+    [[a,-11,'#8d8f98','knows cell type'],[b,11,C[c],'knows cell type and experiment']].forEach(([v,dy,col])=>{
+      s+=`<line x1="${xx(v[1])}" x2="${xx(v[2])}" y1="${y+dy}" y2="${y+dy}" stroke="${col}" stroke-width="4" stroke-linecap="round"/><circle cx="${xx(v[0])}" cy="${y+dy}" r="6" fill="${col}"/><text x="${Math.max(xx(v[2]),xx(v[0]))+12}" y="${y+dy+5}" class="val" fill="#333">${f3(v[0])}</text>`; }); });
+  s+=`<circle cx="${Lg+10}" cy="${H-6}" r="6" fill="#8d8f98"/><text x="${Lg+22}" y="${H-1}" class="cap">model that knows the cell type</text><circle cx="${Lg+330}" cy="${H-6}" r="6" fill="var(--exp)"/><text x="${Lg+342}" y="${H-1}" class="cap">model that also knows the experiment (coloured by layer)</text>`;
+  put('figEF', svg(W,H+6,s));
+  const x=E.ctx.exp; put('tEFexp', `${f3(x[0])} (${f3(x[1])} to ${f3(x[2])})`);
+})();
+
+/* ---- (slide 18) real data: pairs per rung ---- */
+(function(){
+  const R=DATA.real, order=['pseudoreplicate','sequencing','technical','isogenic','anisogenic','other_experiment','other_cell_type'];
+  const W=1160,H=250,L=90,top=40,bot=200, ymax=Math.max(...order.map(r=>R.pairs[r])), yy=v=>bot-(bot-top)*v/ymax, gap=(W-L-20)/order.length, bw=110;
+  let s=`<text x="10" y="26" class="ptitle">Replicate pairs per rung in the frozen tables, summed over assays (counts only; no layer values)</text>`;
+  order.forEach((r,i)=>{ const x=L+i*gap+(gap-bw)/2, v=R.pairs[r];
+    s+= v>0 ? `<rect x="${x}" y="${yy(v)}" width="${bw}" height="${bot-yy(v)}" fill="var(--t0)"/>` : `<rect x="${x}" y="${bot-3}" width="${bw}" height="3" fill="var(--bad)"/>`;
+    s+=`<text x="${x+bw/2}" y="${(v>0?yy(v):bot)-10}" text-anchor="middle" class="val" fill="${v>0?'#333':'var(--bad)'}">${v.toLocaleString('en-US')}${v===0?' · empty':''}</text>`;
+    s+=`<text x="${x+bw/2}" y="${bot+26}" text-anchor="middle" class="axlbl">${RUNG_LAB[r]}</text>`; });
+  put('figReal', svg(W,H,s));
+  put('tTrain', `${R.train[0]} of ${R.train[1]}`); put('tVal', `${R.val[0]} of ${R.val[1]}`);
+  put('tLines', R.rung_lines); put('tAssays', R.n_assays);
+  put('tRep', R.rep_pairs.toLocaleString('en-US')); put('tCorr', R.corr_pairs.toLocaleString('en-US')); put('tReg', R.regions);
+  put('tSec', `${R.second_exp[0]} of the ${R.second_exp[1]} non-control tracks`);
+  const W2=['no','one','two','three','four','five','six','seven'], ne=order.filter(r=>R.pairs[r]===0).length;
+  put('tRealHead', `On the first frozen dataset ${W2[ne]} of the seven rungs have no pairs yet; the real-data layers are computed and await the collect`);
+})();
+
+/* navigation and speaker notes — as in the prezit template */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length; let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){
+  cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+}
+const next=()=>show(cur+1), prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;
+document.getElementById('prev').onclick=prev;
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='Home'){show(0);}
+  else if(e.key==='End'){show(tot-1);}
+  else if(e.key==='n'||e.key==='N'){e.preventDefault();document.body.classList.toggle('shownotes');}
+  else if(e.key==='Escape'){document.body.classList.remove('shownotes');}
+});
+show(0);
+</script>
+</body>
+</html>

@@ -23,6 +23,7 @@ and denoising on cell types it has never seen. `README.md` is the five-minute ve
 | what `candi.bench` and `candi.monitor` measure, the keys they write, quoting rules | `EVAL.md` |
 | every open question, hypothesis, task and result | `cruxvault/` |
 | what Max (PI) is doing — scan it before you start any task, so we do not duplicate his work | Fir, read-only: `/project/def-maxwl/maxwl/epi_imputation/notes_mirror/` — start at `notes/project_state.md`, then the newest `sprints/*/report.html` |
+| Nibi `/scratch` quota | soft quota is 20 TB (PI, 2026-11-17). If a write there fails with "Disk quota exceeded", report it to the PI; never delete to make room |
 
 Where a doc and the code disagree, **the code is right and the doc is the bug.**
 
@@ -110,8 +111,7 @@ a dropped node (`crux park h7`). Recording, settling and parking are yours; **me
 - `cruxvault/results/<task-id>/` holds the small evidence pulled down from the cluster. A folder
   is tracked once converted: `bash runall.sh` reruns it (no arguments, skip-if-exists),
   `MANIFEST.tsv` hashes every output (big files stay on the cluster), no file is over 1 MB, and
-  `.gitignore` gets one `!` line. Once a finding cites it, it is frozen; a redo is a new task.
-  Unconverted folders stay untracked. The contract: `AGENTS.md` §4.11.
+  `.gitignore` gets one `!` line. Once a finding cites it, it is frozen; a redo is a new task. Unconverted folders stay untracked. The contract: `AGENTS.md` §4.11.
 
 Only the literature wiki was inherited from the old vault. No old hypothesis was migrated. Routine lint is `crux validate --check=tree,tasks`; the full wiki lint needs a local `raw/`.
 

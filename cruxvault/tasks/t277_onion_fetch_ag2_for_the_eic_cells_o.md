@@ -1,0 +1,41 @@
+---
+id: t277
+type: task
+title: "Onion: Fetch AG2 for the EIC cells on the eval regions"
+category: data-acquisition
+parent: t152
+blocked_by: t273, t268, t271, t276, t185
+refs: 
+hypothesis_refs: 
+status: done
+created: "2026-11-12T18:39:34"
+updated: "2026-11-18T23:23:12"
+---
+
+# t277 — Onion: Fetch AG2 for the EIC cells on the eval regions
+
+Refs:: _(none)_
+
+## Why
+
+PI task of 2026-11-13 (AlphaGenome 2 as a competitor): fetches only the AG2 predictions that the comparison needs
+
+## Decisions and runs
+
+- The fetch itself was done under t284 (8,960 calls on the evaluation regions) and the validation pack under t308; this task stays open until the foreman decides whether it is superseded.
+
+## Close-out note (2026-11-18)
+
+Ran as chunk AGxf (t284): 8,960 calls on the regions file, all OK (results/t284/FETCH.md).
+
+## Output
+
+<!-- required before `done`, and the engine checks it resolves. Either form:
+     - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
+- [AlphaGenome 2 fetch on the regions file](results/t284/FETCH.md)
+
+## Evidence
+
+_(experiments only: what this run showed, in prose. The structured fact is
+`hypothesis_refs` in the frontmatter; this is the narrative beside it, and the
+engine never parses it.)_

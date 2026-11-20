@@ -1,0 +1,285 @@
+{
+ "chain": {
+  "base_mean_reads": 3.0,
+  "cv2": {
+   "bio_rep": 0.08,
+   "cell_type": 0.5,
+   "donor": 0.15,
+   "experiment": 0.1,
+   "library": 0.05,
+   "sequencing": 0.02
+  },
+  "n_bins": 16384,
+  "n_cells": 6,
+  "pair_value": {
+   "anisogenic": 10.44822869829536,
+   "isogenic": 7.073423144856986,
+   "other_cell_type": 19.31135439419413,
+   "other_experiment": 9.425560348768585,
+   "pseudoreplicate": 1.5097808583297123,
+   "sequencing": 3.6063729062912904,
+   "technical": 5.003542405414782
+  },
+  "pair_value_simulated": {
+   "anisogenic": 10.292411804199219,
+   "isogenic": 7.047733306884766,
+   "other_cell_type": 19.0692138671875,
+   "other_experiment": 9.516832987467447,
+   "pseudoreplicate": 1.4942455291748047,
+   "sequencing": 3.5663839975992837,
+   "technical": 4.943491617838542
+  },
+  "realized_sum": 23.4702310237781,
+  "simulated_total": 23.468840542402987,
+  "terms": {
+   "Z0": 4.5178250329752,
+   "bio_rep": 2.0698807394422043,
+   "cell_type": 6.817788996845205,
+   "donor": 3.068005048580342,
+   "experiment": 2.3521372039115955,
+   "library": 1.3971694991234882,
+   "sampling": 3.0195617166594246,
+   "sequencing": 0.586811189631865
+  },
+  "total": 23.829179427169333
+ },
+ "depth": {
+  "0.25": {
+   "layers": 1.0182370423459188,
+   "sampling": 0.7548904291648562
+  },
+  "0.5": {
+   "layers": 4.072948169383675,
+   "sampling": 1.5097808583297123
+  },
+  "1": {
+   "layers": 16.2917926775347,
+   "sampling": 3.0195617166594246
+  },
+  "2": {
+   "layers": 65.1671707101388,
+   "sampling": 6.039123433318849
+  },
+  "4": {
+   "layers": 260.6686828405552,
+   "sampling": 12.078246866637699
+  }
+ },
+ "note": "SIMULATED: every value in this file comes from a simulation (seed 0); none is real data.",
+ "seed": 0,
+ "telescope": {
+  "check": [
+   {
+    "abs_diff": 0.0,
+    "chain_ok": true,
+    "group": "A|0|all|all",
+    "innermost": "pseudoreplicate",
+    "ok": true,
+    "outermost": "other_cell_type",
+    "outermost_variance": 0.3876161339065873,
+    "sum_of_increments": 0.3876161339065873
+   }
+  ],
+  "rows": {
+   "anisogenic": {
+    "depth": "5000000.0",
+    "increment": 0.03733409454753555,
+    "increment_over": "isogenic",
+    "layer": "donor",
+    "variance": 0.24932061835130834
+   },
+   "isogenic": {
+    "depth": "5000000.0",
+    "increment": 0.020410397335441557,
+    "increment_over": "technical",
+    "layer": "biological_replicate",
+    "variance": 0.21198652380377278
+   },
+   "other_cell_type": {
+    "depth": "5000000.0",
+    "increment": 0.1131526603236247,
+    "increment_over": "anisogenic+other_experiment-isogenic",
+    "layer": "cell_type",
+    "variance": 0.3876161339065873
+   },
+   "other_experiment": {
+    "depth": "5000000.0",
+    "increment": 0.02514285523165427,
+    "increment_over": "isogenic",
+    "layer": "experiment",
+    "variance": 0.23712937903542705
+   },
+   "pseudoreplicate": {
+    "depth": "5000000.0",
+    "increment": 0.17329627039104167,
+    "increment_over": "",
+    "layer": "sampling",
+    "variance": 0.17329627039104167
+   },
+   "sequencing": {
+    "depth": "5000000.0",
+    "increment": 0.004856389871394917,
+    "increment_over": "pseudoreplicate",
+    "layer": "sequencing",
+    "variance": 0.1781526602624366
+   },
+   "technical": {
+    "depth": "5000000.0",
+    "increment": 0.013423466205894624,
+    "increment_over": "sequencing",
+    "layer": "library",
+    "variance": 0.1915761264683312
+   }
+  }
+ },
+ "two_level": {
+  "between": 44.83388888888888,
+  "group_mean": {
+   "cell type A": 4.2,
+   "cell type B": 10.4,
+   "cell type C": 20.45
+  },
+  "group_var": {
+   "cell type A": 3.9099999999999993,
+   "cell type B": 9.540000000000001,
+   "cell type C": 28.6975
+  },
+  "identity_abs_diff": 1.2434497875801753e-14,
+  "n_per_group": 40,
+  "planted_rate": {
+   "cell type A": 4.0,
+   "cell type B": 10.0,
+   "cell type C": 20.0
+  },
+  "total": 58.88305555555556,
+  "values": {
+   "cell type A": [
+    2,
+    0,
+    7,
+    3,
+    4,
+    4,
+    6,
+    6,
+    4,
+    3,
+    4,
+    3,
+    1,
+    2,
+    5,
+    5,
+    8,
+    5,
+    2,
+    8,
+    6,
+    2,
+    1,
+    5,
+    5,
+    3,
+    5,
+    7,
+    2,
+    3,
+    3,
+    4,
+    6,
+    6,
+    8,
+    5,
+    4,
+    2,
+    5,
+    4
+   ],
+   "cell type B": [
+    10,
+    6,
+    5,
+    14,
+    15,
+    15,
+    4,
+    14,
+    10,
+    12,
+    12,
+    10,
+    5,
+    7,
+    13,
+    13,
+    9,
+    10,
+    14,
+    13,
+    13,
+    9,
+    10,
+    9,
+    6,
+    14,
+    10,
+    15,
+    8,
+    11,
+    9,
+    10,
+    9,
+    6,
+    15,
+    11,
+    10,
+    6,
+    13,
+    11
+   ],
+   "cell type C": [
+    23,
+    21,
+    27,
+    23,
+    15,
+    18,
+    29,
+    20,
+    15,
+    24,
+    16,
+    23,
+    21,
+    16,
+    28,
+    21,
+    14,
+    18,
+    25,
+    20,
+    12,
+    21,
+    35,
+    19,
+    16,
+    22,
+    12,
+    20,
+    9,
+    29,
+    25,
+    18,
+    25,
+    25,
+    25,
+    23,
+    19,
+    16,
+    13,
+    17
+   ]
+  },
+  "within": 14.049166666666666
+ }
+}

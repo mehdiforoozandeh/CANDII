@@ -1,0 +1,26 @@
+[
+ {
+  "dump": "conv_ae_s0_heldin",
+  "median_frac_within_10pct": 0.4272420406341553,
+  "median_of_median_ratio": 0.9677040579692906,
+  "method": "/project/6014832/mforooz/ONION/runs_fir/rung2_base_heldout/seed0",
+  "n_cells_compared": 24,
+  "n_chip_targets": 41,
+  "n_compared": 41,
+  "n_within_10pct_median": 35,
+  "path": "/project/6014832/mforooz/ONION/e2/tracks/rung2_base_heldout/seed0/leave_one_assay_out",
+  "regime": "leave_one_assay_out"
+ },
+ {
+  "dump": "conv_ae_s0_hidden",
+  "median_frac_within_10pct": 0.4238361120223999,
+  "median_of_median_ratio": 0.9188682230270029,
+  "method": "/project/6014832/mforooz/ONION/runs_fir/rung2_base_heldout/seed0",
+  "n_cells_compared": 9,
+  "n_chip_targets": 20,
+  "n_compared": 20,
+  "n_within_10pct_median": 15,
+  "path": "/project/6014832/mforooz/ONION/e2/tracks/rung2_base_heldout/seed0/accessibility_only",
+  "regime": "accessibility_only"
+ }
+]

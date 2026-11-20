@@ -1,0 +1,59 @@
+measure	set	n	min	q1	median	q3	max	mean
+share_promoters	pair16	16	0.00140381	0.00270081	0.00430298	0.00534058	0.0100098	0.00424957
+share_promoters	eval256	256	0	0.00114441	0.00354004	0.00691223	0.0407715	0.00540543
+share_promoters	candidates	6724	0	0.000915527	0.003479	0.00701904	0.0539551	0.00510358
+share_promoters	genome_chr_all_bins							0.00479032
+share_enhancers	pair16	16	0.0648804	0.152512	0.192108	0.278168	0.440369	0.213692
+share_enhancers	eval256	256	0.0158081	0.0939026	0.164856	0.239014	0.440369	0.175766
+share_enhancers	candidates	6724	0	0.0949097	0.165955	0.244202	0.56311	0.177127
+share_enhancers	genome_chr_all_bins							0.163905
+share_gene_bodies	pair16	16	0	0.286911	0.41571	0.653824	1	0.433414
+share_gene_bodies	eval256	256	0	0.149475	0.442108	0.69841	1	0.441096
+share_gene_bodies	candidates	6724	0	0.0800018	0.455231	0.71228	1	0.436706
+share_gene_bodies	genome_chr_all_bins							0.404698
+share_heterochromatin	pair16	16	0.00415039	0.02742	0.0410461	0.0904694	0.198181	0.0583038
+share_heterochromatin	eval256	256	0	0.0319061	0.0522461	0.0842133	0.684265	0.0704219
+share_heterochromatin	candidates	6724	0	0.0283203	0.0513306	0.0835571	0.942627	0.0721786
+share_heterochromatin	genome_chr_all_bins							0.0696166
+mappability_mean_decile	pair16	16	4.13965	4.64038	5.25464	5.73108	6.02295	5.22702
+mappability_mean_decile	eval256	256	0	4.33521	5.01733	5.47803	6.61182	4.78173
+mappability_mean_decile	candidates	6724	0	4.21912	5.02637	5.4834	6.89404	4.75009
+count_enrichment_median	pair16	16	0.613161	0.852022	0.994095	1.23633	1.70711	1.0484
+count_enrichment_median	eval256	256	0.122374	0.683909	0.916028	1.14064	2.13308	0.941449
+count_enrichment_median	candidates	6724	0.0355201	0.685835	0.921316	1.16735	2.32611	0.948177
+high_bin_enrichment_median	pair16	16	0.315458	0.690865	0.995326	1.32231	2.40048	1.07624
+high_bin_enrichment_median	eval256	256	0.0163235	0.471021	0.805891	1.17741	2.57036	0.884655
+high_bin_enrichment_median	candidates	6724	0.00448581	0.460927	0.816011	1.20711	3.40476	0.89273
+high_bin_enrichment_max	pair16	16	1.28682	1.79047	3.48402	4.82311	7.36038	3.58664
+high_bin_enrichment_max	eval256	256	0.351202	1.74864	2.73761	3.98429	10.1985	3.02751
+high_bin_enrichment_max	candidates	6724	0.16013	1.80063	2.77529	4.05836	13.0275	3.14102
+high_bin_enrichment_accessibility_dnase	pair16	16	0.58163	0.787557	1.03823	1.44529	2.43837	1.20231
+high_bin_enrichment_accessibility_dnase	eval256	256	0.0351535	0.666518	0.95913	1.27691	2.69483	1.02338
+high_bin_enrichment_accessibility_dnase	candidates	6724	0.00878836	0.66472	0.932366	1.26792	4.10257	1
+high_bin_enrichment_broad_histone	pair16	16	0.175613	0.601525	0.900594	1.18409	2.57874	0.93891
+high_bin_enrichment_broad_histone	eval256	256	0.00994523	0.338421	0.74858	1.11192	2.57874	0.812611
+high_bin_enrichment_broad_histone	candidates	6724	0.00142633	0.332803	0.75915	1.18771	4.4336	0.836858
+high_bin_enrichment_narrow_histone	pair16	16	0.315458	0.705715	1.09092	1.40021	3.09925	1.16694
+high_bin_enrichment_narrow_histone	eval256	256	0.0217341	0.47864	0.815767	1.25718	3.09925	0.935798
+high_bin_enrichment_narrow_histone	candidates	6724	0.00448581	0.482473	0.818937	1.26358	3.93765	0.935038
+count_enrichment_percentile_among_candidates	pair16	16	18.4563	42.2479	58.2689	79.7851	97.7543	58.5617
+count_enrichment_percentile_among_candidates	eval256	256	0.267698	24.8178	49.472	72.6242	99.8959	49.2278
+count_enrichment_percentile_among_candidates	candidates	6724	0	24.9963	49.9926	74.9888	99.9851	49.9924
+n_blocks_high_bin_enrichment_max_below_0.1	pair16	16						0
+n_blocks_count_enrichment_median_below_0.1	pair16	16						0
+n_blocks_high_bin_enrichment_max_below_0.1	eval256	256						0
+n_blocks_count_enrichment_median_below_0.1	eval256	256						0
+n_blocks_high_bin_enrichment_max_below_0.1	candidates	6724						0
+n_blocks_count_enrichment_median_below_0.1	candidates	6724						13
+n_blocks_high_bin_enrichment_max_below_0.25	pair16	16						0
+n_blocks_count_enrichment_median_below_0.25	pair16	16						0
+n_blocks_high_bin_enrichment_max_below_0.25	eval256	256						0
+n_blocks_count_enrichment_median_below_0.25	eval256	256						2
+n_blocks_high_bin_enrichment_max_below_0.25	candidates	6724						1
+n_blocks_count_enrichment_median_below_0.25	candidates	6724						42
+n_blocks_high_bin_enrichment_max_below_0.5	pair16	16						0
+n_blocks_count_enrichment_median_below_0.5	pair16	16						0
+n_blocks_high_bin_enrichment_max_below_0.5	eval256	256						2
+n_blocks_count_enrichment_median_below_0.5	eval256	256						15
+n_blocks_high_bin_enrichment_max_below_0.5	candidates	6724						13
+n_blocks_count_enrichment_median_below_0.5	candidates	6724						476

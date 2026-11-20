@@ -1,0 +1,59 @@
+{
+  "_about": "Run-log facts that the close-out deck (build_deck.py) and report (build_story.py) show. Copied by hand from INSTRUCTIONS/peeling_the_onion/run_state/plan.md (snapshot of commit 1c6640c, 2026-11-18). The foreman edits the values here when the run log changes, then rebuilds both and runs both verify steps (DECK.md, Rebuild). Values are strings exactly as the run log writes them.",
+  "archive": {
+    "tars_ok": "23",
+    "tars_all": "23",
+    "gib": "3,990",
+    "entries": "76,017"
+  },
+  "scratch": {
+    "before_gib": "4,324",
+    "after_archive_gib": "1,740",
+    "soft_quota_gib": "1,024",
+    "after_work_folder_gib": "635"
+  },
+  "qc_fill": {
+    "records_whole": "1,287",
+    "records_pr1": "275",
+    "ok": "1,093",
+    "no_read_set": "190",
+    "refused": "4"
+  },
+  "bp_store": {
+    "views_recounted": "412",
+    "points_independent": "13222",
+    "points_store": "13222",
+    "bins_differing": "0",
+    "measurements": "412",
+    "pairs": "73",
+    "verify_job": "27692994",
+    "variance_job": "27693041",
+    "verify_state": "running",
+    "variance_state": "completed"
+  },
+  "rescoring": {
+    "submitted_day": "2026-11-17",
+    "submitted_utc": "23:22",
+    "run_seeds": "62",
+    "jobs": "558",
+    "predict_hours_per_round": "6.3",
+    "cap_active_run_seeds": "12",
+    "status_day": "2026-11-18",
+    "status_utc": "09:45",
+    "active": "12",
+    "scored": "16",
+    "fir_rate_factor": "10",
+    "unet_limit_h": "6",
+    "unet_limit_reach_pct": "90 to 96",
+    "unet_new_limit_h": "12",
+    "fir_jobs": "4535347 to 4535923",
+    "read_dir": "results/rescoring_p256/read_20261119T0850Z",
+    "read_table": "results/rescoring_p256/arm_summary_p256_sv.tsv",
+    "read_as_of": "2026-11-19 08:50 U C",
+    "scored_p256": "62",
+    "planned_p256": "62",
+    "arms_complete": "21",
+    "rules_decided": "6",
+    "rules": "6"
+  }
+}

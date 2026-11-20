@@ -1,0 +1,18 @@
+# (Written by Claude for Max 2026-11-13; revised after notes/review_lead_2026-11-13.md) R2's error budget before and after sprint 10 (R2 seed 1, 282 targets; fractions of each target's variance; normalized error 0.665; primary setting, in which the model is given the biosample's ChIP-seq control). value = the point used in the figure; low, high = the range where estimators, matchings or subsets disagree. The parts come from different subsets: the noise floor from sprint 07 (ENCODE replicates for 180 targets, pseudoreplicate transfer for 54, assay medians for 48); the replicate level parts from 377 per-replicate tracks; the experiment-specific and reproduced level parts from 176 targets with a second experiment (value = midpoint of two estimators); the systematic non-level part from 103 targets with a second experiment from another lab (range: same-lab ladder 0.024 to the other estimator's 0.066); not reproduced and reachable from sprint 09 (176 targets). Sources: sprint 09 section 3 (row "before"); notes/ladder.md, output/ladder/split.tsv, fu_results.tsv, triangulate.tsv; notes/syscac.md, output/syscac/review_checks.tsv; sprint 09 output/residual.
+row	order	segment	value	low	high	category	label
+before	1	level	0.110	0.110	0.110	level	level error
+before	2	shared	0.027	0.027	0.027	shared	shared error
+before	3	noise_floor	0.282	0.282	0.282	noise	noise floor (a replicate does not reproduce it)
+before	4	not_reproduced	0.143	0.126	0.160	unexplained_notrep	not reproduced by a second experiment
+before	5	reachable	0.097	0.080	0.120	unexplained_reach	reproduced by a second experiment, missed by R2
+before	6	added	0.005	0.005	0.005	unexplained_added	added by the model
+after	1	noise_floor	0.282	0.282	0.282	unpredictable	noise floor
+after	2	level_replicate	0.013	0.007	0.024	unpredictable	level: differs between replicates at matched covariates and depth
+after	3	level_matched	0.011	0.011	0.011	covariate	level: differs between replicates, gone when covariates and depth match
+after	4	level_experiment	0.030	0.024	0.037	experiment	level: specific to the experiment
+after	5	nonlevel_systematic	0.051	0.024	0.066	experiment	non-level, systematic: follows GC content and peak shape
+after	6	nonlevel_other	0.092	0.060	0.136	experiment	non-level, other: not reproduced by a second experiment
+after	7	level_reproduced	0.056	0.050	0.063	reproducible	level: reproduced by a second experiment
+after	8	shared	0.027	0.027	0.027	reproducible	shared error
+after	9	reachable	0.097	0.080	0.120	reproducible	non-level: reproduced by a second experiment, missed by R2
+after	10	added	0.005	0.005	0.005	reproducible	added by the model

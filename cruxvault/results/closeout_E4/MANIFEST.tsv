@@ -1,0 +1,4 @@
+path	bytes	sha256	where
+diag_H3K36me3_fine.json	3072	8cd661cdefcbfe5c9262fd377b01341375c5b29cdd094a4de6fa0598ecea20a4	git
+diag_moments.json	1561	49dde4e7e2dcbc953b55b3b93720a4fc9b584bc2f3409fcd454d3e2e6eb1c95e	git
+diag_same_pairs.json	3880	68493ffdc82ec485af9f7a6d261344ae4b9c2be000927c229a372278f1e83465	git

@@ -1,0 +1,11 @@
+arm	keys changed	comparison incumbent	d14_condition_1	needs	group	simpler_than_base	joins_design	status
+tf_log1p	count_transform=log1p	incumbent	false		count transform	null	yes	write
+tf_asinh	count_transform=asinh	incumbent	false		count transform	null	yes	write
+tf_anscombe	count_transform=anscombe	incumbent	false		count transform	null	yes	write
+tf_pearson	count_transform=pearson	incumbent	false		count transform	null	yes	write
+tf_local_ratio	count_transform=local_ratio	incumbent	false		count transform	null	yes	write
+tf_quantile	count_transform=quantile	incumbent	false		count transform	null	yes	write
+tf_raw	count_transform=raw	incumbent	false		count transform	true	yes	write
+tf_soft_clip	count_transform=soft_clip	incumbent	false		count transform	null	yes	write
+offset_eps0.1	offset_eps=0.1	incumbent	false		count transform	null	yes	write
+offset_eps0.01	offset_eps=0.01	incumbent	false		count transform	null	yes	write

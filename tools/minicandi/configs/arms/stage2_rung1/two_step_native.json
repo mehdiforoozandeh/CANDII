@@ -1,0 +1,21 @@
+{
+ "rung": 1,
+ "context_bins": 1024,
+ "covariate_injection": "film",
+ "mask_mode": "drop",
+ "dna": "own",
+ "scramble_covariates": false,
+ "scramble_all": false,
+ "count_transform": "offset",
+ "qc_on_input": false,
+ "two_step": true,
+ "base_depth": "native",
+ "average_input": false,
+ "control_input": true,
+ "predict_control": true,
+ "param_budget": 1000000,
+ "windows_seen": 80000,
+ "lr": 0.001,
+ "batch_size": 8,
+ "simpler_than_base": false
+}

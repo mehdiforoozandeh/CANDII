@@ -1,0 +1,22 @@
+arm	seed	state	composite	imputation_raw	correction_raw	uncertainty_raw	imputation_clipped	correction_clipped	uncertainty_clipped	copy_leak_pass	same_view_copy_gain_flag	composite_version	correction_gap_closed_halfread_superseded	correction_gap_closed_oracle_no_nodedup_side	correction_numerator	correction_denominator
+rung4_base	0	done	0.430593	0.448022	0.285452	0.540874	0.448022	0.285452	0.540874	True	True	2	2.77477	0.519097	0.0675773	0.224619
+rung4_base	1	done	0.460289	0.434664	0.330755	0.641072	0.434664	0.330755	0.641072	True	True	2	3.36732	0.544709	0.0775505	0.224619
+rung4_base	2	done	0.442326	0.436279	0.278873	0.617871	0.436279	0.278873	0.617871	True	True	2	2.793	0.491705	0.0661196	0.224619
+rung4_base_heldout	0	queued								None	None					
+rung4_base_heldout	1	queued								None	None					
+rung4_base_heldout	2	queued								None	None					
+rung4_hard_offset	0	done	0.250926	0.409325	0.185054	-0.182416	0.409325	0.185054	0	True	True	2	1.75974	0.445398	0.0436687	0.224619
+rung4_hard_offset	1	done	0.269737	0.403959	0.271031	-0.141991	0.403959	0.271031	0	True	True	2	2.79731	0.565822	0.0631824	0.224619
+rung4_hard_offset	2	done	0.259543	0.405958	0.197455	0.028801	0.405958	0.197455	0.028801	True	True	2	1.88557	0.519174	0.0475054	0.224619
+rung4_hide_depth_input	0	done	0.387045	0.390602	0.157367	0.609609	0.390602	0.157367	0.609609	True	True	2	1.65945	0.623607	0.0403593	0.224619
+rung4_hide_depth_input	1	done	0.381693	0.401769	0.244036	0.479198	0.401769	0.244036	0.479198	True	True	2	2.41907	0.591562	0.0582886	0.224619
+rung4_hide_depth_input	2	done	0.377851	0.410944	0.244086	0.445431	0.410944	0.244086	0.445431	True	True	2	2.24083	0.587405	0.0577404	0.224619
+rung4_hide_depth_output	0	running								None	None					
+rung4_hide_depth_output	1	running								None	None					
+rung4_hide_depth_output	2	done	0.461613	0.430455	0.341775	0.643768	0.430455	0.341775	0.643768	True	True	2	3.46694	0.522062	0.0790712	0.224619
+rung4_scrambled_covariates	0	done	0.467787	0.41219	0.387805	0.658965	0.41219	0.387805	0.658965	True	True	2	4.28744	0.366731	0.0838998	0.224619
+rung4_scrambled_covariates	1	done	0.46706	0.415552	0.409764	0.627374	0.415552	0.409764	0.627374	True	True	2	4.52074	0.447837	0.0895909	0.224619
+rung4_scrambled_covariates	2	done	0.450327	0.403911	0.401578	0.591908	0.403911	0.401578	0.591908	True	True	2	4.41018	0.445213	0.0888265	0.224619
+rung4_windows160k	0	queued								None	None					
+rung4_windows160k	1	queued								None	None					
+rung4_windows160k	2	queued								None	None					

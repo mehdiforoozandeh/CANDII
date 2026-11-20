@@ -1,0 +1,382 @@
+"""miniCANDI covariates: the row encoder (tables -> raw vectors) and the network embedding.
+
+`covariates.json` (one per tables directory; pinned interface B, layout defined here):
+
+  {"schema": 1,
+   "meta_columns": [the 11 META_COLUMNS, in order],      # checked when present
+   "qc_columns":   [the 7 QC_COLUMNS, in order],          # checked when present
+   "vocab": {"pipeline": [...], "pipeline_version": [...], "lab": [...], "platform": [...],
+             "antibody": [...], "donor": [...]}}
+
+A categorical value's id is 1 + its index in the vocabulary; an unknown or empty value has id 0.
+
+Vectors hold RAW values: log2_depth = log2(depth_reads x depth_scale), 0/1 flags, read length in
+bp, MAPQ threshold, categorical ids as floats. An empty numeric or flag cell (run_type, dedup
+included) is written as the column's fixed centre (so it standardises to 0).
+`CovariateEmbedding` standardises the numeric columns with fixed constants (no fitted state, so a checkpoint never depends on a fit) and embeds each
+categorical column through its own `nn.Embedding`.
+
+Component arms (pinned interface E, chunk A3). `covariate_embedding = numeric_only` builds the
+embedding with `numeric_only=True` (every categorical id is read as 0). `covariate_dropout = p`
+is applied by `model_covariates(..., dropout=p)` in training mode only: it marks a dropped track's
+rows of the ENCODER copies of C and C' with NaN, and an embedding built with `null_vector=True`
+maps such a row to one learned null vector. The copies whose column 0 the count transform and the
+NB head read are never touched.
+
+D6: read-derived QC (`QC_COLUMNS`) goes into C only when `qc_on_input` is set, never into C'.
+`c_out` therefore has exactly K_META columns, always.
+
+Absent QC (close-out item A4). Most rows have no value in some QC column (FRiP in every row; NRF
+and PBC in every view other than base and nodedup). An empty QC cell is written as `QC_ABSENT`, a
+value no QC metric takes, and the embedding built with the QC columns reads each QC column as a
+pair (standardised value, 1 = present) with the value set to 0 where the cell is absent. So "absent"
+and "a typical value" are two different inputs. The metadata columns keep the centre rule above.
+
+Standardisation follows `tools/t118/ladder/encoding.py` in spirit (z-scores, unknown -> neutral);
+its column set is the testbed's, not interface B's, so it is not imported.
+"""
+from __future__ import annotations
+
+import json
+import math
+import sys
+from pathlib import Path
+
+import numpy as np
+import torch
+from torch import nn
+
+_TOOLS = Path(__file__).resolve().parents[1]
+if str(_TOOLS) not in sys.path:
+    sys.path.insert(0, str(_TOOLS))
+
+from minicandi.contract import K_META, K_QC, META_COLUMNS, QC_COLUMNS  # noqa: E402
+
+#: categorical column -> the measurements.tsv field it reads
+CATEGORICAL = {"pipeline_id": "pipeline", "pipeline_version_id": "pipeline_version",
+               "lab_id": "lab", "platform_id": "platform", "antibody_id": "antibody",
+               "donor_id": "donor"}
+#: fixed (centre, scale) per numeric column; centre is also the value of an empty cell
+NUMERIC = {"log2_depth": (24.0, 2.0), "run_type_pe": (0.5, 0.5), "read_length": (75.0, 50.0),
+           "dedup_on": (0.5, 0.5), "mapq_threshold": (20.0, 15.0),
+           "nsc": (1.1, 0.3), "rsc": (1.0, 0.5), "nrf": (0.8, 0.2), "pbc1": (0.8, 0.2),
+           "pbc2": (14.0, 15.0), "frip": (0.2, 0.15), "frag_len": (200.0, 100.0)}
+#: A4: nsc was (1.1, 0.1) and pbc2 (5.0, 5.0) before; on the 1,122 / 729 training rows with a value
+#: (eic_v1_2 + the 2026-11-13 fill records) their 90th percentiles sat at z = 7.8 and 8.0 and their
+#: maxima at z = 40 and 47 (nsc median 1.09, p90 1.88; pbc2 median 13.6, p90 45). Only qc_on_input
+#: runs read these columns, and none existed. A standardised QC value is clipped to +-QC_Z_CLIP.
+QC_Z_CLIP = 5.0
+#: A4: raw value of an empty QC cell (no QC metric is negative; pbc2 = -1 is already written empty)
+QC_ABSENT = -9999.0
+#: rows in every categorical embedding table; ids at or above it map to 0 (unknown)
+CAT_TABLE = 1024
+#: the `numeric_per_value` arm: discrete numeric column -> multiplier of its id (id = round(m x v))
+PER_VALUE = {"run_type_pe": 2.0, "read_length": 1.0, "dedup_on": 2.0, "mapq_threshold": 1.0}
+#: rows in every per-value table; ids outside 0..PV_TABLE-1 map to 0
+PV_TABLE = 256
+_TRUE = {"1", "true", "yes", "on", "t", "y"}
+_PE = {"paired-ended", "paired-end", "paired", "pe", "1"}
+
+
+def load_covariates_json(path) -> dict:
+    spec = json.loads(Path(path).read_text(encoding="utf-8"))
+    if "meta_columns" in spec and tuple(spec["meta_columns"]) != META_COLUMNS:
+        raise ValueError(f"{path}: meta_columns {spec['meta_columns']} != {list(META_COLUMNS)}")
+    if "qc_columns" in spec and tuple(spec["qc_columns"]) != QC_COLUMNS:
+        raise ValueError(f"{path}: qc_columns {spec['qc_columns']} != {list(QC_COLUMNS)}")
+    spec.setdefault("vocab", {})
+    return spec
+
+
+def _num(v, col: str) -> float:
+    if v is None or str(v).strip() == "":
+        return NUMERIC[col][0]
+    return float(v)
+
+
+def _flag(v, true_set, col: str) -> float:
+    """0/1 flag; an empty cell is the column centre (0.5), as for numeric columns."""
+    t = "" if v is None else str(v).strip().lower()
+    if t == "":
+        return NUMERIC[col][0]
+    return 1.0 if t in true_set else 0.0
+
+
+class CovariateEncoder:
+    """measurements.tsv row (dict of str) -> raw float32 vectors for C and C'."""
+
+    def __init__(self, spec: dict):
+        self.spec = spec
+        self.ids = {field: {v: i + 1 for i, v in enumerate(spec.get("vocab", {}).get(field, []))}
+                    for field in CATEGORICAL.values()}
+
+    def cat_id(self, field: str, value) -> int:
+        i = self.ids.get(field, {}).get("" if value is None else str(value), 0)
+        return i if i < CAT_TABLE else 0
+
+    def meta(self, row: dict, depth_scale: float = 1.0) -> np.ndarray:
+        """float32[K_META]. `depth_scale` rescales the depth (0.5 for a pseudoreplicate half)."""
+        d = row.get("depth_reads", "")
+        if str(d).strip() == "":
+            log2_depth = NUMERIC["log2_depth"][0]
+        else:
+            log2_depth = math.log2(max(float(d), 1.0) * float(depth_scale))
+        v = [log2_depth,
+             _flag(row.get("run_type"), _PE, "run_type_pe"),
+             _num(row.get("read_length"), "read_length"),
+             _flag(row.get("dedup"), _TRUE, "dedup_on"),
+             _num(row.get("mapq_threshold"), "mapq_threshold")]
+        v += [float(self.cat_id(field, row.get(field))) for field in CATEGORICAL.values()]
+        out = np.asarray(v, dtype=np.float32)
+        assert out.shape == (K_META,)
+        return out
+
+    def qc(self, row: dict) -> np.ndarray:
+        """float32[K_QC]; an empty cell is `QC_ABSENT` (A4), never the column centre."""
+        return np.asarray([QC_ABSENT if str(row.get(c) or "").strip() == "" else float(row[c])
+                           for c in QC_COLUMNS], dtype=np.float32)
+
+    def c_in(self, row: dict, qc_on_input: bool = False, depth_scale: float = 1.0) -> np.ndarray:
+        m = self.meta(row, depth_scale)
+        return np.concatenate([m, self.qc(row)]) if qc_on_input else m
+
+    def c_out(self, row: dict, depth_scale: float = 1.0) -> np.ndarray:
+        """C' — metadata only, by construction (D6)."""
+        return self.meta(row, depth_scale)
+
+
+class CovariateEmbedding(nn.Module):
+    """raw covariates [..., K] (K = 11 or 18) -> [..., d_out].
+
+    Numeric columns are standardised with the fixed `NUMERIC` constants; each categorical column
+    has its own `nn.Embedding(CAT_TABLE, d_cat)`; the concatenation goes through a 2-layer MLP.
+    `per_value=True` (the `numeric_per_value` arm) reads the `PER_VALUE` columns through one
+    `nn.Embedding(PV_TABLE, d_cat)` each, id = round(multiplier x raw value), in place of a
+    standardised scalar; log2 depth and the QC columns stay scalars.
+    With the QC columns (k_in = K_META + K_QC) each QC column also gives a presence feature
+    (1 = a value, 0 = `QC_ABSENT`), an absent value enters as a standardised 0, and a present one
+    is clipped to +-QC_Z_CLIP (A4). The
+    metadata-only build (k_in = K_META) is unchanged.
+    The scrambled-covariates control is applied by the caller (`model_covariates`), not here.
+    """
+
+    def __init__(self, k_in: int, d_out: int, d_cat: int = 8, hidden: int = 64, *,
+                 numeric_only: bool = False, null_vector: bool = False, per_value: bool = False):
+        super().__init__()
+        self.numeric_only = bool(numeric_only)
+        if k_in not in (K_META, K_META + K_QC):
+            raise ValueError(f"k_in {k_in}; want {K_META} or {K_META + K_QC}")
+        cols = list(META_COLUMNS) + (list(QC_COLUMNS) if k_in > K_META else [])
+        self.k_in = k_in
+        pv = PER_VALUE if per_value else {}
+        self.num_idx = [i for i, c in enumerate(cols) if c in NUMERIC and c not in pv]
+        self.pv_idx = [i for i, c in enumerate(cols) if c in pv]
+        self.cat_idx = [i for i, c in enumerate(cols) if c in CATEGORICAL]
+        self.register_buffer("centre", torch.tensor([NUMERIC[cols[i]][0] for i in self.num_idx]))
+        self.register_buffer("scale", torch.tensor([NUMERIC[cols[i]][1] for i in self.num_idx]))
+        self.tables = nn.ModuleList(nn.Embedding(CAT_TABLE, d_cat) for _ in self.cat_idx)
+        if self.pv_idx:   # only for the per-value arm, so a default build keeps today's state_dict
+            self.register_buffer("pv_mult", torch.tensor([pv[cols[i]] for i in self.pv_idx]))
+            self.pv_tables = nn.ModuleList(nn.Embedding(PV_TABLE, d_cat) for _ in self.pv_idx)
+        #: A4: positions in `num_idx` of the QC columns (empty for the metadata-only build)
+        self.qc_pos = [j for j, i in enumerate(self.num_idx) if cols[i] in QC_COLUMNS]
+        n_feat = (len(self.num_idx) + len(self.qc_pos)
+                  + d_cat * (len(self.pv_idx) + len(self.cat_idx)))
+        self.mlp = nn.Sequential(nn.Linear(n_feat, hidden), nn.GELU(), nn.Linear(hidden, d_out))
+        # created only for the covariate-dropout arm, so a default build keeps today's state_dict
+        self.null = nn.Parameter(torch.zeros(d_out)) if null_vector else None
+
+    def forward(self, c: torch.Tensor) -> torch.Tensor:
+        if c.shape[-1] != self.k_in:
+            raise ValueError(f"covariates have K = {c.shape[-1]}, embedding built for {self.k_in}")
+        c = c.float()
+        dropped = None
+        if self.null is not None:
+            dropped = torch.isnan(c).any(dim=-1)
+            c = torch.where(torch.isnan(c), torch.zeros_like(c), c)
+        elif torch.isnan(c).any():
+            raise ValueError("covariate rows are NaN (covariate dropout) but this embedding was "
+                             "built without null_vector=True")
+        num = (c[..., self.num_idx] - self.centre) / self.scale
+        feats = [num]
+        if self.qc_pos:                      # A4: absent QC -> value 0 and presence 0
+            q = c[..., self.num_idx][..., self.qc_pos]
+            present = q != QC_ABSENT
+            num = num.clone()
+            num[..., self.qc_pos] = torch.where(present,
+                                                num[..., self.qc_pos].clamp(-QC_Z_CLIP, QC_Z_CLIP),
+                                                torch.zeros_like(q))
+            feats = [num, present.to(num.dtype)]
+        for j, i in enumerate(self.pv_idx):
+            ids = (c[..., i] * self.pv_mult[j]).round().long()
+            ids = torch.where((ids >= 0) & (ids < PV_TABLE), ids, torch.zeros_like(ids))
+            feats.append(self.pv_tables[j](ids))
+        for j, i in enumerate(self.cat_idx):
+            ids = c[..., i].round().long()
+            ids = torch.where((ids >= 0) & (ids < CAT_TABLE), ids, torch.zeros_like(ids))
+            if self.numeric_only:
+                ids = torch.zeros_like(ids)
+            feats.append(self.tables[j](ids))
+        e = self.mlp(torch.cat(feats, dim=-1))
+        if dropped is not None:
+            e = torch.where(dropped[..., None], self.null.to(e.dtype), e)
+        return e
+
+
+def scramble_covariates(c: torch.Tensor, avail: torch.Tensor, generator=None) -> torch.Tensor:
+    """The scrambled-covariates control: permute covariate rows across the windows of a batch.
+
+    c [B, A, K], avail [B, A]. Each track's rows are permuted among the windows where that track
+    is present, so a covariate vector stays a real one but no longer belongs to its counts.
+    """
+    out = c.clone()
+    for a in range(c.shape[1]):
+        idx = torch.nonzero(avail[:, a], as_tuple=False).flatten()
+        if idx.numel() > 1:
+            perm = idx[torch.randperm(idx.numel(), generator=generator)]
+            out[idx, a] = c[perm, a]
+    return out
+
+
+SCRAMBLE_SEED = 0
+
+
+def scramble_mode(cfg: dict) -> str:
+    """`all` (scramble_all), `covariates` (scramble_covariates) or `none`."""
+    if cfg.get("scramble_all"):
+        return "all"
+    return "covariates" if cfg.get("scramble_covariates") else "none"
+
+
+def drop_covariates(c_in: torch.Tensor, c_out: torch.Tensor, p: float) -> tuple:
+    """The covariate-dropout arm: one draw per (window, track) from the global torch RNG; a dropped
+    track's rows of C and C' become NaN (read by `CovariateEmbedding(null_vector=True)` as the
+    learned null vector). Returns new tensors; the inputs are not modified."""
+    drop = torch.rand(c_in.shape[:2], device=c_in.device) < p                 # [B, A]
+    nan = torch.tensor(float("nan"), device=c_in.device)
+    return (torch.where(drop[..., None], nan.to(c_in.dtype), c_in),
+            torch.where(drop[..., None], nan.to(c_out.dtype), c_out))
+
+
+def hide_depth(c: torch.Tensor, avail: torch.Tensor) -> torch.Tensor:
+    """The hard-offset arm: column 0 (log2 depth) of every available track's row set to the fixed
+    centre NUMERIC["log2_depth"][0] = 24 (= components.REF_LOG2_DEPTH, so the embedding reads a
+    standardised 0 and the count transform a size factor of 1). Unavailable rows (0) are kept."""
+    out = c.clone()
+    out[..., 0] = torch.where(avail.bool(), torch.full_like(c[..., 0], NUMERIC["log2_depth"][0]),
+                              c[..., 0])
+    return out
+
+
+#: A12: config key of the per-field drop switch (list of META_COLUMNS / QC_COLUMNS names)
+DROP_FIELDS_KEY = "covariate_drop_fields"
+
+
+def neutral_value(col: str) -> float:
+    """A12: the raw value that carries no information for one column: the fixed centre of a numeric
+    or flag column (it standardises to 0), id 0 (unknown) of a categorical column, and
+    `QC_ABSENT` of a QC column (A4: a dropped QC field reads as absent, not as a typical value)."""
+    if col in CATEGORICAL:
+        return 0.0
+    if col in QC_COLUMNS:
+        return QC_ABSENT
+    if col in NUMERIC:
+        return float(NUMERIC[col][0])
+    raise ValueError(f"unknown covariate column {col!r}")
+
+
+def drop_field_indices(cfg: dict) -> tuple | None:
+    """A12: (c_in indices, c_out indices) of `covariate_drop_fields`, or None when the key is absent
+    or empty (the default: today's behavior). META columns sit at the same index in C and C'; a QC
+    column is in C only and needs `qc_on_input`. Unknown or repeated names are a ValueError.
+    With `two_step` the switch acts on both legs: registry.build_model builds the inner rung
+    without the wrapper keys and two_step.TwoStep runs that inner model twice, so leg 1 (C' =
+    the base covariates c_leg1) and leg 2 (C = c_leg1, C' = the target's) both pass through the
+    rung's `model_covariates` and read the field's neutral value."""
+    # the literal (== DROP_FIELDS_KEY) lets train.check_config_keys see the key (it scans for string keys)
+    names = (cfg or {}).get("covariate_drop_fields") or []
+    if not names:
+        return None
+    if isinstance(names, str) or len(set(names)) != len(names):
+        raise ValueError(f"{DROP_FIELDS_KEY} {names!r}: want a list of distinct column names")
+    cols_in = list(META_COLUMNS) + (list(QC_COLUMNS) if cfg.get("qc_on_input") else [])
+    bad = [n for n in names if n not in cols_in]
+    if bad:
+        raise ValueError(f"{DROP_FIELDS_KEY}: {bad} not in the columns of C {cols_in}")
+    return (tuple(cols_in.index(n) for n in names),
+            tuple(META_COLUMNS.index(n) for n in names if n in META_COLUMNS))
+
+
+def drop_fields(c: torch.Tensor, avail: torch.Tensor, idx: tuple, k_cols: tuple) -> torch.Tensor:
+    """A12: columns `idx` of every available track's row set to `neutral_value` (unavailable rows
+    are kept, as in `hide_depth`). `k_cols` names the columns of `c` in order. A new tensor."""
+    out = c.clone()
+    a = avail.bool()
+    for i in idx:
+        v = torch.full_like(c[..., i], neutral_value(k_cols[i]))
+        out[..., i] = torch.where(a, v, c[..., i])
+    return out
+
+
+def model_covariates(batch: dict, mode: str, training: bool, dropout: float = 0.0,
+                     hide_depth_covariate: bool | str = False, drop: tuple | None = None) -> tuple:
+    """(c_in, c_out) for the covariate encoders and (c_in_t, c_out_t) whose column 0 is the depth
+    the count transform and the NB head use.
+
+    `hide_depth_covariate` (config key, default false; the `hard_offset` arm, rung 4 only): after
+    any scramble and before any dropout, column 0 of c_in, c_out and c_in_t becomes a constant
+    (`hide_depth`), so neither covariate encoder nor the input count transform reads depth; only
+    c_out_t keeps the true target depth, which enters the NB mean through the offset add-back
+    alone. The raw input counts still carry depth implicitly (their level scales with depth);
+    the arm hides the depth covariate, not the counts. False returns today's tensors.
+    Two string values hide one encoder path only, with c_in_t and c_out_t kept true (PI ruling
+    49): `"output"` hides column 0 of c_out alone (the `hide_depth_output` arm); `"input"` hides
+    column 0 of c_in alone (the `hide_depth_input` arm). Any other value is a ValueError.
+
+    `covariates`: every covariate column the encoders read (depth included) is permuted across the
+    windows of the batch (`scramble_covariates`); the transform keeps each track's true depth, so
+    the arm measures use of the covariates beyond the depth offset. `all`: the transform reads the
+    same scrambled depth. Every rung calls this once per forward; neither the dataset nor the train
+    loop scrambles. Eval mode draws from a generator seeded with SCRAMBLE_SEED; training mode from
+    the global torch RNG.
+
+    `dropout` (config `covariate_dropout`, default 0): in training mode only, after any scramble,
+    each track's rows of the two encoder copies are dropped with this probability
+    (`drop_covariates`); the two transform copies are never dropped, so the depth offset is kept.
+    At 0, or in eval mode, nothing is drawn and the outputs are today's.
+
+    `drop` (A12; config `covariate_drop_fields` through `drop_field_indices`, default None): in
+    training AND eval mode, after any scramble and hide-depth and before any dropout, the listed
+    columns of the two ENCODER copies (C and C') become their `neutral_value` on available rows;
+    the two transform copies are never changed, so dropping `log2_depth` removes depth from the
+    covariate encoders and keeps the count transform and the NB depth offset. None returns today's
+    tensors (no clone, no op).
+    """
+    if not (isinstance(hide_depth_covariate, bool) or hide_depth_covariate in ("output", "input")):
+        raise ValueError(f"hide_depth_covariate {hide_depth_covariate!r}; want false, true, "
+                         f"\"output\" or \"input\"")
+    c_in, c_out = batch["c_in"], batch["c_out"]
+    if mode == "none":
+        e_in, e_out, t_in, t_out = c_in, c_out, c_in, c_out
+    else:
+        gen = None if training else torch.Generator().manual_seed(SCRAMBLE_SEED)
+        s_in = scramble_covariates(c_in.cpu(), batch["x_avail"].cpu(), gen).to(c_in.device)
+        s_out = scramble_covariates(c_out.cpu(), batch["y_avail"].cpu(), gen).to(c_out.device)
+        if mode == "all":
+            e_in, e_out, t_in, t_out = s_in, s_out, s_in, s_out
+        else:
+            e_in, e_out, t_in, t_out = s_in, s_out, c_in, c_out
+    if hide_depth_covariate in (True, "input"):
+        e_in = hide_depth(e_in, batch["x_avail"])
+    if hide_depth_covariate in (True, "output"):
+        e_out = hide_depth(e_out, batch["y_avail"])
+    if hide_depth_covariate is True:
+        t_in = hide_depth(t_in, batch["x_avail"])
+    if drop is not None:
+        idx_in, idx_out = drop
+        cols_in = tuple(META_COLUMNS) + tuple(QC_COLUMNS)
+        e_in = drop_fields(e_in, batch["x_avail"], idx_in, cols_in)
+        e_out = drop_fields(e_out, batch["y_avail"], idx_out, tuple(META_COLUMNS))
+    if training and dropout > 0:
+        e_in, e_out = drop_covariates(e_in, e_out, float(dropout))
+    return e_in, e_out, t_in, t_out

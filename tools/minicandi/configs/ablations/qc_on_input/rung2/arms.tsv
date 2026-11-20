@@ -1,0 +1,2 @@
+arm	keys changed	comparison	needs	group	joins_design
+qc_on_input	qc_on_input=true;qc_table=/project/def-maxwl/mforooz/ONION/CO-A4/tables/eic_v1_2_qc.tsv;qc_table_pr1=/project/def-maxwl/mforooz/ONION/CO-A4/tables/eic_v1_2_qc_pr1.tsv	eic_v1_2_rung2_base_heldout (metadata only; config = final/rung2/reference_equal.json)	qc_table, qc_table_pr1 (submit_qc_on_input.sh MODE=fill, then MODE=collect)	covariate vector (D6)	yes if beyond the seed range on composite or correction on 2+ architectures

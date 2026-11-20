@@ -1,0 +1,1200 @@
+%% storify source: the close-out report of the "peeling the onion" run.
+%% Edit THIS file. Run `python3 build_story.py` to write report.tex, then
+%% `latexmk -pdf report.tex`. Never edit report.tex by hand: the build overwrites it.
+%%
+%% numbers   every measured number is a macro that the build defines in the data slot.
+%% typed     \lit{} constants (design constants, names that hold digits, dates):
+%%           3 seeds, 80,000 windows, 16 / 256 / 8 / 32 regions, 25 bp, 25.6 kb, 1,024 bins,
+%%           36 tracks, 36 / 50 bp crops, 11 columns, 2^24 and 2^23 reads, U(0.2, 0.8),
+%%           0.25 bin mask, 10^-3 learning rate, 0 and 1 (metric scale ends),
+%%           0.5 / 0.25 / 0.25 composite weights, version 3, 95% (interval level),
+%%           1.5 (seed-range ratio), 5 Mb (shift control), 4 (loss weight), 1/1/1 weights,
+%%           10% (lambda tolerance), 500 bp tiles, -log10 p >= 2, seed 0, 21 arm folders,
+%%           24 hours, AlphaGenome 2, condition numbers 1 to 6, criterion numbers 1 to 4,
+%%           H3K36me3, eic_v1, eic_v1_2, dates 2026-11-10 to 2026-11-20, 1 bp,
+%%           the estimability rule (5 pairs from 3 cells), decision numbers 1 to 9.
+%% VERSION 2 (2026-11-18): the replicate ladder, the second-experiment layers, the side
+%%           deliverables, the rescoring status and the PI decisions of 2026-11-17.
+%% VERSION 3 (2026-11-18): the replicate ladder is two-sided (version 2 called the one-sided
+%%           form two-sided); the run-log facts come from run_status.json, not the run log.
+%%
+%% RESCORING (version 5). Every sentence about the 256-region rescoring is a macro (\rescore...,
+%% \ds...Conf, \ds...Status) that build_story.py takes from verdicts.json of the read folder named by
+%% run_status.json rescoring.read_dir. tools/onion_eval/apply_rescoring_rules.py <table> writes that
+%% folder and rebuilds this report; no rescoring sentence is typed here.
+\documentclass[pdflatex,sn-mathphys-num]{sn-jnl}
+
+% crux-sources: {"INSTRUCTIONS/peeling_the_onion/closeout/PI decisions 2026-11-17.md": "741889fc857bcffa9eb27eca5e1a07dce02abc2fe36fb2a3e7f0f6cf147f9c80", "INSTRUCTIONS/peeling_the_onion/closeout/closeout D2 second experiments and cross-lab pairs.md": "1b19e8c643110cd040275c06811619c405e383d75c109c3b1a76262b298f0cb1", "INSTRUCTIONS/peeling_the_onion/closeout/final 24 hours plan.md": "6d9c595297f429b5cb0736c37b08ee0beff9bea8290342c6c82457034c646139", "INSTRUCTIONS/peeling_the_onion/closeout/ready queue for scaling.md": "2119bdc7dda357aa5f0899435e4e3b6a38a96673aee3fbdcbe594b2b2355f15a", "INSTRUCTIONS/peeling_the_onion/closeout/settled miniCANDI design.md": "7b9b64fdfd389fcfc2b90e01f7faed24b9413eea95fc9df7fb01abe68d00b0d3", "INSTRUCTIONS/peeling_the_onion/long-horizon notepad.md": "f147195102f902bc154978f53de17028d2804c29cc46e4e6c09c1a94e70908d9", "presentations/onion-closeout-2026-11-18-report/build_story.py": "e068d4523910d173bd0041459faa892efc18396f5be2df530a11ab8a08758334", "presentations/onion-closeout-2026-11-18-report/report_src.tex": "9f9760f1cb93de6606c24c378e91206ff9fc8c626067b8bb242d16bae0cd3b1c", "presentations/onion-closeout-2026-11-18/run_status.json": "65796ea0eb7bb353fa65d5b9f53fe17e768a8e5292e4dce2c208dbc8c72892e5", "results/ablations_closeout/arm_summary_p16_sv_2026-11-17.tsv": "c113180fa3dfb061e6660cd170100da2e99121059abc5fbba9ebdc55453f0b1a", "results/closeout_A3/WHERE_VIEWS.md": "8c1744bf1b3a8c1bc4b28a1c2dcd947f0577afdb512ddfbb0d79956a53856453", "results/closeout_A4/qc_tables_2026-11-18/coverage.txt": "a3a1830805ecdd132c253293eea2595259a106051582e63facf5bc8a8d953ee9", "results/closeout_A7/variance_2026-11-18/VARIANCE_READ.md": "d1281375e9b489c6dac0284156e9443e76b247715aa6f72ebdb17ae608382034", "results/closeout_A7/variance_2026-11-18/scale_variance.tsv": "a40e5f015c23d1ea4c6328a48edfacea86f043fe0e4ce99de8dc55fed79fde5c", "results/closeout_D1/D1_RESULT.md": "7327b1cdc3d64c96e0cf1e1e1274b6f5200096f03bb9ba35550bc65ca202343a", "results/closeout_D2/D2_PREP.md": "7136a86eb110bf5888426e8ea142316586235cdb2b28352e9b26c01c2a53b979", "results/closeout_D2/layers_2026-11-18/layers.tsv": "b1cef169b17583f2289d57e3d47b8ef64b9c36c9f02a1e58724721bb61975085", "results/closeout_D4/summary.txt": "b6ba65fba30054987fb03c81e4551706980bfd114e3dcb37d7680f61d3f4228f", "results/closeout_E2/E2_RESULTS.md": "30338d1b1b000a63ceba2edffd08394447d4fce553475a8d7e0c2e0afba04ec1", "results/closeout_E2/FORMULA_EXTENSION.md": "c7b7a9d6cb9af8ab90a549782982c43eebe6f4280e88c3524e871be20efbae67", "results/closeout_E4/E4_MIXED_DIAG.md": "90ec0e4c16477aeec82bc2873c44041ae682efea650ab9cdf6741767e86fcd17", "results/closeout_E4/E4_SMOKE.md": "9a2bc37380b0044a9686253aef914fc0304579914eb6d15d0743e54c7b5d275d", "results/closeout_E4/ladder_2026-11-18/pair_values.tsv.gz": "16c100990d3a6ce48d09e585adc690a7b019af19eee30543bacc64cb13a4a400", "results/closeout_E4/ladder_two_sided_2026-11-18/COMPARE.md": "bdc6cec758989efb4da5e9685fe7c32a903eb0b2c50800660bef3dd47abe4249", "results/closeout_E4/ladder_two_sided_2026-11-18/one_sided/ladder.tsv": "a39e9b99d321a341b04c0d104a4ee66f143e0f47a27142fb6ccae7f08c94f3c1", "results/closeout_E4/ladder_two_sided_2026-11-18/two_sided/ladder.md": "28b62dce86c69e7c6af27f2da5f6be5aa8299b36c37b2a4e9854d8bd6e20148d", "results/closeout_E4/ladder_two_sided_2026-11-18/two_sided/ladder.tsv": "14de5cd82b9ca0fc75e44a2d45d9fb05f4399e34c5efa80a0fb5538a1751a10d", "results/final_round/FINAL_ROUND_EQUAL.md": "43d88b2f2751719d8e0daa39166d997bd42ac4838bd93f0b8ead2f0130db36f7", "results/oracle_floor/ORACLE_FLOOR.md": "c8ff4fa84db1a8e1cb145babc5dd5f3a0566fe3cda9ce2dc2f798b6a16961172", "results/region_sampling_checks/PAIR_REGIONS_V3.md": "7e9fb1ca3f27764b8f845d426da94096bb067891fe6af945e991a97b528cb4a0", "results/region_sampling_checks/REGION_CHECKS.md": "a7a45cfb5938df3a8b30e3edf5dd56fa2095461b4422c92ffb44d3ff36e4e019", "results/region_sampling_checks/check_v3.tsv": "5f269bb5081104b03735fecf5f86f1b2420d46291bd47f2ee0efee7894669947", "results/rescoring_p256/arm_summary_p256_sv.tsv": "60ba54f57b9940206b9e6627d55e1a9953fcbf15c50c6b217be6087434a0cfaf", "results/rescoring_p256/read_20261119T0850Z/verdicts.json": "b15613193221280f6e740c9326239c380df70d34920cfa1dae0ea0cb1e65d6db", "results/t170/withheld_design.md": "238d90b01e92f0805b46e0508430792b7d57d6004c41e2ff6d359ceace970aee", "results/t183/DATASET_EIC_V1.md": "4ae2e52ec6f949ebc523c27a271f712e75c49794b0b83f312b91a3eea8dec464", "results/t185/SUBMITTED.md": "ab413ac44825a8276d15155c11a58d738d6923b49325b9d79980843008aa4b4c", "results/t305/LAYERS_REAL.md": "e6bdc2363538da2c986d8e03fac9deb4f0b9f8d8175275ebe2cf68033921d69e", "results/t308/AG2_VS_BASELINES.md": "ebb77d04fdc59270506c2197460e505e197bb8da08c3c8b7397e0e8b9b1e5cf1"}
+
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,calc,fit}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepgfplotslibrary{groupplots}
+\usepackage{pgfplotstable}
+\usepackage{url}
+\geometry{textwidth=15.5cm,textheight=23cm,centering}
+
+% A design constant or a name with digits, typed in prose. It renders its argument.
+\newcommand{\lit}[1]{#1}
+% The PI's mark for prose drafted by an agent. Identity by default.
+% To colour it: \renewcommand{\cl}[1]{{\color{teal}#1}}
+\newcommand{\cl}[1]{#1}
+% Column headers that span two or three columns.
+\newcommand{\mcthree}[1]{\multicolumn{3}{c}{#1}}
+\newcommand{\mctwo}[1]{\multicolumn{2}{c}{#1}}
+
+\definecolor{mAE}{HTML}{3F7D7A}
+\definecolor{mAT}{HTML}{C08A2E}
+\definecolor{mUN}{HTML}{B5462E}
+\definecolor{mgray}{HTML}{6B6B6B}
+
+\newcommand{\TabAblFull}{\multicolumn{7}{l}{\textit{Inputs, outputs and depth}} \\
+ChIP control removed as input & \ensuremath{-}0.024 & \ensuremath{-}0.026$^{\dagger}$ & \ensuremath{-}0.019 & \ensuremath{+}0.021 & \ensuremath{+}0.020 & \ensuremath{-}0.024 \\
+ChIP control not predicted & \ensuremath{-}0.007 & \ensuremath{-}0.021$^{\dagger}$ & \ensuremath{+}0.004 & \ensuremath{+}0.052 & \ensuremath{+}0.003 & \ensuremath{+}0.011 \\
+average baseline as input & \ensuremath{+}0.018 & \ensuremath{+}0.004 & \ensuremath{+}0.034$^{\dagger}$ & \ensuremath{-}0.039 & \ensuremath{-}0.041 & \ensuremath{+}0.001 \\
+two-step, native base depth & \ensuremath{-}0.020 & \ensuremath{-}0.021$^{\dagger}$ & \ensuremath{+}0.019 & \ensuremath{-}0.142 & \ensuremath{-}0.082 & \ensuremath{-}0.307 \\
+two-step, fixed base depth & \ensuremath{-}0.039$^{\dagger}$ & \ensuremath{-}0.030$^{\dagger}$ & \ensuremath{+}0.019 & \ensuremath{-}0.033 & \ensuremath{-}0.098 & \ensuremath{-}0.165$^{\dagger}$ \\
+fixed input depth & \ensuremath{-}0.019$^{a}$ & \ensuremath{-}0.011 & \ensuremath{-}0.028$^{\dagger}$ & \ensuremath{-}0.105$^{a}$ & \ensuremath{+}0.012 & \ensuremath{-}0.020 \\
+\multicolumn{7}{l}{\textit{DNA}} \\
+DNA off & \ensuremath{-}0.013 & \ensuremath{-}0.018$^{\dagger}$ & \ensuremath{-}0.020 & \ensuremath{+}0.067 & \ensuremath{-}0.100 & \ensuremath{+}0.017 \\
+language-model DNA embeddings & \ensuremath{+}0.008 & 0.000 & \ensuremath{+}0.012 & \ensuremath{+}0.001 & \ensuremath{-}0.023 & \ensuremath{+}0.033 \\
+DNA shifted by 5 Mb (control) & \ensuremath{-}0.016 & \ensuremath{-}0.020$^{\dagger}$ & \ensuremath{-}0.014 & \ensuremath{-}0.010 & \ensuremath{-}0.023 & 0.000 \\
+DNA fusion by FiLM & \ensuremath{+}0.011 & \ensuremath{+}0.011 & \ensuremath{-}0.003 & \ensuremath{+}0.026 & \ensuremath{-}0.035 & \ensuremath{-}0.024 \\
+DNA late join & \ensuremath{+}0.001 & \ensuremath{-}0.027$^{\ddagger}$ & -- & \ensuremath{+}0.048 & \ensuremath{-}0.046 & -- \\
+DNA cross-attention & -- & \ensuremath{-}0.012$^{\dagger}$ & \ensuremath{+}0.008 & -- & \ensuremath{-}0.020 & \ensuremath{+}0.020 \\
+DNA early join at the stem & -- & -- & \ensuremath{-}0.001 & -- & -- & \ensuremath{-}0.053 \\
+\multicolumn{7}{l}{\textit{Covariates and masking}} \\
+scrambled covariates (control) & \ensuremath{+}0.010 & \ensuremath{+}0.001 & \ensuremath{-}0.017 & \ensuremath{-}0.058 & \ensuremath{-}0.028 & \ensuremath{+}0.014 \\
+numeric covariates only & \ensuremath{+}0.011 & \ensuremath{-}0.012 & \ensuremath{+}0.003 & \ensuremath{+}0.085 & \ensuremath{+}0.003 & \ensuremath{+}0.003 \\
+covariate dropout & \ensuremath{+}0.004 & \ensuremath{-}0.004 & \ensuremath{-}0.003 & \ensuremath{+}0.020 & \ensuremath{-}0.089 & \ensuremath{+}0.022 \\
+per-value numeric codes & \ensuremath{+}0.011 & \ensuremath{-}0.005 & \ensuremath{-}0.006 & \ensuremath{+}0.013 & \ensuremath{-}0.003 & \ensuremath{+}0.049 \\
+injection by adaLN-zero & \ensuremath{-}0.005 & \ensuremath{-}0.009 & \ensuremath{+}0.011 & \ensuremath{-}0.004 & \ensuremath{-}0.020 & \ensuremath{+}0.043 \\
+injection by concatenation & \ensuremath{+}0.002 & \ensuremath{+}0.002 & \ensuremath{-}0.015 & \ensuremath{-}0.064 & \ensuremath{-}0.053 & \ensuremath{+}0.019 \\
+injection as tokens & -- & \ensuremath{-}0.010 & \ensuremath{-}0.049$^{\ddagger}$ & -- & \ensuremath{-}0.146 & \ensuremath{+}0.010 \\
+hidden bins dropped, no token & \ensuremath{+}0.006 & \ensuremath{+}0.005 & \ensuremath{-}0.006 & \ensuremath{-}0.028 & \ensuremath{-}0.025 & \ensuremath{-}0.019 \\
+\multicolumn{7}{l}{\textit{Losses}} \\
+imputation weight 4 & \ensuremath{+}0.028 & \ensuremath{+}0.039$^{\ddagger}$ & \ensuremath{+}0.007 & \ensuremath{-}0.077 & \ensuremath{+}0.057 & \ensuremath{-}0.039 \\
+bin-equal weighting & \ensuremath{-}0.025 & \ensuremath{-}0.030$^{\dagger}$ & \ensuremath{+}0.002 & \ensuremath{-}0.078 & \ensuremath{+}0.049 & \ensuremath{+}0.040 \\
+Poisson mean, detached size & \ensuremath{-}0.011 & \ensuremath{-}0.007 & \ensuremath{-}0.002 & \ensuremath{-}0.080 & \ensuremath{-}0.016 & \ensuremath{+}0.025 \\
+NB CRPS loss & \ensuremath{-}0.015 & \ensuremath{-}0.017 & \ensuremath{-}0.007 & \ensuremath{-}0.096 & \ensuremath{-}0.029 & \ensuremath{-}0.015 \\
+\multicolumn{7}{l}{\textit{Training views (reference: all views)}} \\
+base view only & \ensuremath{+}0.009 & \ensuremath{+}0.006 & \ensuremath{+}0.016 & \ensuremath{+}0.008 & \ensuremath{+}0.033 & \ensuremath{+}0.011 \\
+base + depth thinning & \ensuremath{-}0.008 & \ensuremath{-}0.008 & \ensuremath{+}0.004 & \ensuremath{-}0.026 & \ensuremath{-}0.024 & \ensuremath{+}0.049 \\
+base + read-level views & \ensuremath{+}0.026 & \ensuremath{+}0.001 & \ensuremath{+}0.007$^{a}$ & \ensuremath{-}0.023 & \ensuremath{-}0.012 & \ensuremath{-}0.103$^{a}$ \\
+base + alignment-level views & \ensuremath{-}0.043$^{\dagger}$ & \ensuremath{-}0.064$^{\ddagger}$ & \ensuremath{+}0.003$^{a}$ & \ensuremath{-}0.019 & \ensuremath{-}0.002 & \ensuremath{+}0.042$^{a}$ \\
+all views, same-view pairs only & \ensuremath{+}0.031$^{\dagger}$ & \ensuremath{+}0.032$^{\dagger}$ & \ensuremath{+}0.001 & \ensuremath{-}0.055 & \ensuremath{+}0.003 & \ensuremath{-}0.028 \\
+\multicolumn{7}{l}{\textit{Count transforms (reference: offset, pseudocount 1)}} \\
+log1p & \ensuremath{-}0.010 & \ensuremath{-}0.016$^{\dagger}$ & \ensuremath{+}0.021 & \ensuremath{-}0.059 & \ensuremath{+}0.019 & \ensuremath{-}0.082 \\
+asinh & \ensuremath{-}0.013 & \ensuremath{-}0.018 & \ensuremath{+}0.017 & \ensuremath{-}0.077 & \ensuremath{-}0.026 & \ensuremath{-}0.041 \\
+Pearson residuals & \ensuremath{-}0.003 & \ensuremath{-}0.020$^{\dagger}$ & \ensuremath{+}0.018 & \ensuremath{-}0.046 & \ensuremath{-}0.018 & \ensuremath{+}0.009 \\
+local ratio & \ensuremath{-}0.113$^{\ddagger}$ & \ensuremath{-}0.112$^{\ddagger}$ & \ensuremath{-}0.089$^{\ddagger}$ & \ensuremath{-}0.065 & \ensuremath{+}0.014 & \ensuremath{+}0.023 \\
+per-window quantile & \ensuremath{-}0.095$^{\ddagger}$ & \ensuremath{-}0.082$^{\ddagger}$ & \ensuremath{-}0.054$^{\ddagger}$ & \ensuremath{+}0.004 & \ensuremath{-}0.143 & \ensuremath{-}0.100 \\
+raw counts & \ensuremath{+}0.004 & \ensuremath{+}0.002 & \ensuremath{+}0.005 & \ensuremath{-}0.077 & \ensuremath{-}0.066 & \ensuremath{-}0.018 \\
+soft clip & \ensuremath{+}0.007 & \ensuremath{-}0.010 & \ensuremath{+}0.012 & \ensuremath{-}0.058 & \ensuremath{+}0.013 & \ensuremath{-}0.011 \\
+offset, pseudocount 0.1 & \ensuremath{-}0.025 & \ensuremath{-}0.025$^{\ddagger}$ & \ensuremath{+}0.010 & \ensuremath{+}0.021 & \ensuremath{+}0.025 & \ensuremath{-}0.012 \\
+offset, pseudocount 0.01 & \ensuremath{-}0.017 & \ensuremath{-}0.032$^{\ddagger}$ & \ensuremath{+}0.009 & \ensuremath{+}0.012 & \ensuremath{+}0.035 & \ensuremath{+}0.011 \\}
+\newcommand{\TabAblPairs}{\multicolumn{10}{l}{\textit{Inputs, outputs and depth}} \\
+ChIP control removed as input & \ensuremath{-}0.015 & \ensuremath{-}0.004 & \ensuremath{+}0.015 & \ensuremath{+}0.003 & \ensuremath{-}0.014 & \ensuremath{+}0.051 & \ensuremath{-}0.011 & \ensuremath{-}0.009 & \ensuremath{-}0.012 \\
+ChIP control not predicted & \ensuremath{-}0.004 & \ensuremath{-}0.009 & \ensuremath{+}0.038 & \ensuremath{-}0.036 & \ensuremath{-}0.032 & \ensuremath{+}0.031 & \ensuremath{+}0.008 & \ensuremath{-}0.012 & \ensuremath{+}0.014$^{\dagger}$ \\
+average baseline as input & \ensuremath{+}0.026 & \ensuremath{+}0.025 & \ensuremath{-}0.006 & \ensuremath{+}0.071$^{\ddagger}$ & \ensuremath{+}0.054 & \ensuremath{+}0.081 & \ensuremath{+}0.006 & \ensuremath{-}0.002 & \ensuremath{+}0.016 \\
+two-step, native base depth & \ensuremath{-}0.115$^{\dagger}$ & \ensuremath{-}0.059$^{\dagger}$ & \ensuremath{-}0.064 & \ensuremath{+}0.017 & \ensuremath{+}0.106$^{\ddagger}$ & \ensuremath{-}0.233$^{\dagger}$ & \ensuremath{-}0.074$^{\dagger}$ & \ensuremath{-}0.046 & \ensuremath{-}0.083$^{\dagger}$ \\
+two-step, fixed base depth & \ensuremath{-}0.085$^{\ddagger}$ & \ensuremath{-}0.055$^{\dagger}$ & \ensuremath{+}0.129$^{\dagger}$ & \ensuremath{+}0.116$^{\ddagger}$ & \ensuremath{+}0.141$^{\ddagger}$ & \ensuremath{+}0.060 & \ensuremath{-}0.049 & \ensuremath{-}0.053$^{\dagger}$ & 0.000 \\
+fixed input depth & \ensuremath{-}0.007$^{a}$ & \ensuremath{+}0.049$^{\dagger}$ & \ensuremath{+}0.168$^{\ddagger}$ & \ensuremath{+}0.038$^{a}$ & \ensuremath{+}0.007 & \ensuremath{+}0.104 & \ensuremath{-}0.037$^{a}$ & \ensuremath{+}0.010 & \ensuremath{+}0.023$^{\ddagger}$ \\
+\multicolumn{10}{l}{\textit{DNA}} \\
+DNA off & \ensuremath{+}0.020 & \ensuremath{+}0.019 & \ensuremath{+}0.016 & \ensuremath{-}0.054$^{\ddagger}$ & \ensuremath{-}0.052 & \ensuremath{-}0.032 & \ensuremath{+}0.015 & \ensuremath{-}0.029 & \ensuremath{-}0.002 \\
+language-model DNA embeddings & \ensuremath{+}0.004 & \ensuremath{+}0.019 & 0.000 & \ensuremath{+}0.046 & \ensuremath{+}0.044 & \ensuremath{+}0.053 & \ensuremath{+}0.006 & \ensuremath{-}0.001 & \ensuremath{+}0.014 \\
+DNA shifted by 5 Mb (control) & \ensuremath{+}0.021 & \ensuremath{+}0.007 & \ensuremath{-}0.004 & \ensuremath{-}0.058$^{\dagger}$ & \ensuremath{-}0.067$^{\dagger}$ & \ensuremath{-}0.029 & \ensuremath{-}0.005 & \ensuremath{-}0.014 & \ensuremath{-}0.008 \\
+DNA fusion by FiLM & \ensuremath{+}0.005 & \ensuremath{-}0.003 & \ensuremath{+}0.007 & \ensuremath{-}0.022 & \ensuremath{-}0.029 & \ensuremath{-}0.029 & \ensuremath{+}0.013 & \ensuremath{-}0.004 & \ensuremath{-}0.005 \\
+DNA late join & \ensuremath{+}0.016 & \ensuremath{+}0.008 & -- & \ensuremath{-}0.037$^{\dagger}$ & \ensuremath{-}0.057$^{\dagger}$ & -- & \ensuremath{+}0.016 & \ensuremath{-}0.023 & -- \\
+DNA cross-attention & -- & \ensuremath{-}0.003 & \ensuremath{-}0.008 & -- & \ensuremath{-}0.050$^{\dagger}$ & \ensuremath{-}0.036 & -- & \ensuremath{-}0.012 & \ensuremath{+}0.007 \\
+DNA early join at the stem & -- & -- & \ensuremath{+}0.009 & -- & -- & \ensuremath{-}0.008 & -- & -- & \ensuremath{-}0.011 \\
+\multicolumn{10}{l}{\textit{Covariates and masking}} \\
+scrambled covariates (control) & \ensuremath{-}0.052$^{\dagger}$ & \ensuremath{-}0.004 & \ensuremath{-}0.075 & \ensuremath{-}0.164$^{\ddagger}$ & \ensuremath{-}0.198$^{\ddagger}$ & \ensuremath{-}0.212$^{\dagger}$ & \ensuremath{-}0.023 & \ensuremath{-}0.008 & \ensuremath{-}0.024 \\
+numeric covariates only & \ensuremath{-}0.030 & \ensuremath{-}0.049 & \ensuremath{-}0.133$^{\dagger}$ & \ensuremath{-}0.004 & \ensuremath{-}0.062 & \ensuremath{-}0.172 & \ensuremath{+}0.019 & \ensuremath{-}0.018 & \ensuremath{-}0.031 \\
+covariate dropout & 0.000 & \ensuremath{+}0.014 & \ensuremath{+}0.013 & \ensuremath{-}0.022 & \ensuremath{-}0.008 & \ensuremath{+}0.056 & \ensuremath{+}0.007 & \ensuremath{-}0.021 & \ensuremath{+}0.007 \\
+per-value numeric codes & \ensuremath{+}0.001 & \ensuremath{+}0.002 & \ensuremath{-}0.065 & \ensuremath{-}0.017 & \ensuremath{+}0.015 & \ensuremath{-}0.037 & \ensuremath{+}0.009 & \ensuremath{-}0.003 & \ensuremath{-}0.007 \\
+injection by adaLN-zero & \ensuremath{+}0.008 & \ensuremath{+}0.024 & \ensuremath{+}0.006 & \ensuremath{-}0.047 & \ensuremath{-}0.044$^{\dagger}$ & \ensuremath{+}0.038 & \ensuremath{-}0.001 & \ensuremath{-}0.003 & \ensuremath{+}0.018 \\
+injection by concatenation & \ensuremath{-}0.015 & \ensuremath{+}0.050$^{\dagger}$ & \ensuremath{+}0.034 & \ensuremath{+}0.030$^{\dagger}$ & \ensuremath{+}0.001 & \ensuremath{+}0.040 & \ensuremath{-}0.019 & 0.000 & \ensuremath{+}0.006 \\
+injection as tokens & -- & \ensuremath{+}0.029 & \ensuremath{+}0.003 & -- & \ensuremath{-}0.014 & \ensuremath{+}0.184$^{\dagger}$ & -- & \ensuremath{-}0.034 & \ensuremath{-}0.021$^{\dagger}$ \\
+hidden bins dropped, no token & \ensuremath{+}0.020 & \ensuremath{+}0.011 & \ensuremath{+}0.040 & \ensuremath{-}0.024 & \ensuremath{-}0.014 & \ensuremath{+}0.009 & \ensuremath{+}0.001 & \ensuremath{-}0.001 & \ensuremath{+}0.002 \\
+\multicolumn{10}{l}{\textit{Losses}} \\
+imputation weight 4 & \ensuremath{-}0.038$^{\dagger}$ & 0.000 & \ensuremath{+}0.025 & \ensuremath{+}0.060$^{\dagger}$ & \ensuremath{+}0.101$^{\ddagger}$ & \ensuremath{+}0.051 & \ensuremath{-}0.015 & \ensuremath{+}0.034 & 0.000 \\
+bin-equal weighting & \ensuremath{-}0.020 & \ensuremath{+}0.008 & \ensuremath{+}0.014 & \ensuremath{-}0.040 & \ensuremath{-}0.010 & \ensuremath{+}0.053 & \ensuremath{-}0.037 & \ensuremath{-}0.001 & \ensuremath{+}0.015$^{\dagger}$ \\
+Poisson mean, detached size & \ensuremath{+}0.002 & \ensuremath{+}0.024 & \ensuremath{+}0.002 & \ensuremath{+}0.018 & \ensuremath{-}0.014 & \ensuremath{+}0.061 & \ensuremath{-}0.025 & \ensuremath{-}0.002 & \ensuremath{+}0.006 \\
+NB CRPS loss & \ensuremath{+}0.006 & \ensuremath{+}0.053$^{\dagger}$ & \ensuremath{-}0.009 & \ensuremath{-}0.039 & \ensuremath{-}0.033 & \ensuremath{+}0.035 & \ensuremath{-}0.030 & \ensuremath{-}0.003 & \ensuremath{-}0.009 \\
+\multicolumn{10}{l}{\textit{Training views (reference: all views)}} \\
+base view only & \ensuremath{+}0.014 & \ensuremath{+}0.003 & \ensuremath{+}0.046 & \ensuremath{-}0.289$^{\ddagger}$ & \ensuremath{-}0.270$^{\ddagger}$ & \ensuremath{-}0.249$^{\dagger}$ & \ensuremath{+}0.010 & \ensuremath{+}0.012 & \ensuremath{+}0.022 \\
+base + depth thinning & \ensuremath{-}0.007 & \ensuremath{-}0.015 & \ensuremath{-}0.002 & \ensuremath{-}0.198$^{\ddagger}$ & \ensuremath{-}0.192$^{\ddagger}$ & \ensuremath{-}0.400$^{\ddagger}$ & \ensuremath{-}0.013 & \ensuremath{-}0.014 & \ensuremath{+}0.014 \\
+base + read-level views & \ensuremath{+}0.011 & \ensuremath{+}0.012 & \ensuremath{+}0.047$^{a}$ & \ensuremath{-}0.071$^{\ddagger}$ & \ensuremath{-}0.028 & \ensuremath{+}0.070$^{a}$ & \ensuremath{+}0.010 & 0.000 & \ensuremath{-}0.010$^{a}$ \\
+base + alignment-level views & \ensuremath{-}0.102$^{\ddagger}$ & \ensuremath{-}0.078$^{\ddagger}$ & \ensuremath{+}0.011$^{a}$ & \ensuremath{-}0.212$^{\ddagger}$ & \ensuremath{-}0.222$^{\ddagger}$ & \ensuremath{-}0.271$^{\ddagger}$$^{a}$ & \ensuremath{-}0.052$^{\dagger}$ & \ensuremath{-}0.052 & \ensuremath{+}0.015$^{a}$ \\
+all views, same-view pairs only & \ensuremath{+}0.012 & \ensuremath{+}0.010 & \ensuremath{-}14.349 & \ensuremath{-}0.036 & \ensuremath{+}0.040 & -- & \ensuremath{+}0.005 & \ensuremath{+}0.019 & \ensuremath{-}0.133$^{\ddagger}$ \\
+\multicolumn{10}{l}{\textit{Count transforms (reference: offset, pseudocount 1)}} \\
+log1p & \ensuremath{-}0.010 & 0.000 & \ensuremath{+}0.070 & \ensuremath{-}0.025 & \ensuremath{-}0.019 & \ensuremath{+}0.029 & \ensuremath{-}0.023 & \ensuremath{-}0.003 & \ensuremath{+}0.008 \\
+asinh & \ensuremath{-}0.004 & \ensuremath{-}0.013 & \ensuremath{+}0.067 & \ensuremath{-}0.043 & \ensuremath{-}0.017 & \ensuremath{+}0.015 & \ensuremath{-}0.027 & \ensuremath{-}0.019 & \ensuremath{+}0.015$^{\dagger}$ \\
+Pearson residuals & \ensuremath{+}0.009 & \ensuremath{+}0.006 & \ensuremath{+}0.078$^{\dagger}$ & \ensuremath{-}0.016 & \ensuremath{+}0.020 & \ensuremath{+}0.024 & \ensuremath{-}0.011 & \ensuremath{-}0.013 & \ensuremath{+}0.031$^{\dagger}$ \\
+local ratio & \ensuremath{-}0.138$^{\ddagger}$ & \ensuremath{-}0.094$^{\ddagger}$ & \ensuremath{-}0.111$^{\dagger}$ & \ensuremath{+}0.137$^{\ddagger}$ & \ensuremath{+}0.126$^{\ddagger}$ & \ensuremath{+}0.250$^{\dagger}$ & \ensuremath{-}0.107$^{\ddagger}$ & \ensuremath{-}0.076$^{\dagger}$ & \ensuremath{-}0.067$^{\ddagger}$ \\
+per-window quantile & \ensuremath{-}0.135$^{\ddagger}$ & \ensuremath{-}0.077$^{\dagger}$ & \ensuremath{-}0.083$^{\dagger}$ & \ensuremath{+}0.086$^{\dagger}$ & \ensuremath{+}0.039 & \ensuremath{+}0.238$^{\dagger}$ & \ensuremath{-}0.081$^{\dagger}$ & \ensuremath{-}0.096$^{\dagger}$ & \ensuremath{-}0.073$^{\ddagger}$ \\
+raw counts & \ensuremath{-}0.012 & \ensuremath{-}0.002 & \ensuremath{-}0.012 & \ensuremath{-}0.021$^{\dagger}$ & \ensuremath{+}0.012 & \ensuremath{+}0.051 & \ensuremath{-}0.020 & \ensuremath{-}0.016 & \ensuremath{-}0.005 \\
+soft clip & \ensuremath{+}0.016 & \ensuremath{+}0.005 & \ensuremath{+}0.052 & \ensuremath{-}0.045 & \ensuremath{-}0.055 & \ensuremath{-}0.239 & \ensuremath{-}0.007 & 0.000 & \ensuremath{+}0.016$^{\dagger}$ \\
+offset, pseudocount 0.1 & \ensuremath{-}0.031 & \ensuremath{-}0.002 & \ensuremath{+}0.039 & \ensuremath{+}0.015 & \ensuremath{-}0.056$^{\dagger}$ & \ensuremath{-}0.017 & \ensuremath{-}0.015 & \ensuremath{-}0.007 & \ensuremath{+}0.012 \\
+offset, pseudocount 0.01 & \ensuremath{-}0.015 & \ensuremath{+}0.001 & \ensuremath{+}0.047 & \ensuremath{-}0.019 & \ensuremath{-}0.030 & \ensuremath{-}0.092 & \ensuremath{-}0.009 & \ensuremath{-}0.007 & \ensuremath{+}0.019 \\}
+\newcommand{\TabCheck}{8 & fail & fail & pass & fail & pass & fail & fail \\
+16 & fail & fail & pass & fail & pass & fail & fail \\
+32 & fail & fail & pass & fail & pass & pass & fail \\}
+\newcommand{\TabDecisions}{1 & Where the 256-region rescoring of the 7 decisive arms runs & Nibi, in the close-out window & Starts when Nibi scratch is writable; about 6 scorings at one time; the Fir copies stay queued, and cancelling them is the PI's \\
+2 & Second-experiment layers and baselines & Run now on Nibi & Submitted on Nibi; the layers are done \\
+3 & Lab effect in the cross-lab analysis & Report lab together with donor, as one effect & The pure lab effect is not reported as a headline \\
+4 & The 17 unbuilt DNase-seq second-experiment rows & Drop them & The add-on stays at 71 experiments; DNase-seq has no second-experiment pairs \\
+5 & Replicate ladder definition & Two-sided subtraction, with the check on common cell types & Earlier ladder numbers are not comparable; reports state the change \\
+6 & Resolution study design & Full design, next session & 75 runs, about 2,340 CPU-hours (ready queue entry 9) \\
+7 & QC-on-input arm & Accept the design as built (presence flags, leak guards) & 3 models, 3 seeds, about 404 CPU-hours, next session \\
+8 & Mix-and-match round & Gate first (about 474), then the round for the switches that pass (at most about 5,390) & Next session \\
+9 & Minimum covariate set & One model (the one that mix-and-match selects), leave-one-field-out, groups and the removal curve & 3,008 (conv autoencoder), 3,298 (conv + attention) or 5,060 (U-Net) CPU-hours, next session \\}
+\newcommand{\TabFormula}{ChIP-seq Pearson, all targets & 0.831 & 0.921 \\
+ChIP-seq Pearson, table fragment length & 0.887 & 0.944 \\
+ChIP-seq Pearson, estimated fragment length & 0.830 & 0.918 \\
+ChIP-seq slope & 0.749 & 0.962 \\
+ChIP-seq peak-tile recall & 0.957 & 0.758 \\
+ChIP-seq peak-tile precision & 0.421 & 0.853 \\
+ChIP-seq peak-tile F1 & 0.573 & 0.782 \\
+DNase-seq Pearson & 0.943 & 0.994 \\
+DNase-seq peak-tile F1 & 0.379 & 0.857 \\}
+\newcommand{\TabLadder}{DNase-seq (depth defect) & read sampling & 33 (17) & \ensuremath{1.56\times10^{-4}} [\ensuremath{1.53\times10^{-4}}, \ensuremath{1.59\times10^{-4}}] & 100.3\% (16) \\
+DNase-seq (depth defect) & biological replicate & 8 (8) & \ensuremath{-1.72\times10^{-6}} [\ensuremath{-4.25\times10^{-6}}, \ensuremath{8.18\times10^{-7}}] & \ensuremath{-}1.2\% (7) \\
+DNase-seq (depth defect) & cell type & 28 (7) & \ensuremath{1.97\times10^{-6}} [\ensuremath{-3.32\times10^{-6}}, \ensuremath{7.27\times10^{-6}}] & 1.3\% (7) \\
+broad marks & read sampling & 262 (27) & 0.0463 [0.0413, 0.0512] & 95.1\% (100) \\
+broad marks & biological replicate & 76 (17) & \ensuremath{5.32\times10^{-4}} [\ensuremath{2.49\times10^{-4}}, \ensuremath{8.15\times10^{-4}}] & 1.3\% (65) \\
+broad marks & cell type & 355 (16) & 0.0027 [0.0015, 0.0040] & 6.3\% (62) \\
+narrow marks & read sampling & 391 (37) & 0.0262 [0.0228, 0.0296] & 87.5\% (137) \\
+narrow marks & biological replicate & 119 (24) & \ensuremath{5.82\times10^{-4}} [\ensuremath{2.94\times10^{-4}}, \ensuremath{8.69\times10^{-4}}] & 1.8\% (91) \\
+narrow marks & cell type & 445 (23) & 0.0035 [0.0020, 0.0051] & 12.0\% (90) \\}
+\newcommand{\TabLadderForms}{broad marks & cell type & 0.0036 [\ensuremath{6.76\times10^{-4}}, 0.0065] (522, 17) & 0.0027 [0.0015, 0.0040] (355, 16) & \ensuremath{-}24\% \\
+broad marks & lab with donor & \ensuremath{-}0.0033 [\ensuremath{-}0.0118, 0.0053] (10, 4) & not estimable (10 pairs left) &  \\
+narrow marks & cell type & 0.0041 [0.0012, 0.0071] (670, 23) & 0.0035 [0.0020, 0.0051] (445, 23) & \ensuremath{-}14\% \\
+narrow marks & repeat with donor & \ensuremath{2.62\times10^{-4}} [\ensuremath{-}0.0016, 0.0021] (5, 3) & not estimable (5 pairs left) &  \\}
+\newcommand{\TabQueue}{1 & QC-on-input collect & Nibi & 0.5 \\
+2 & 1 bp recount & Nibi & about 18 (cap 336) \\
+3 & Replicate ladder: layers and report & Nibi & about 6 (13 at most) + 0.5 \\
+4 & Second experiments: layers and baselines & Nibi & about 130 (236 at most) \\
+5 & 256-region rescoring of the 7 decisive arms & Nibi & 2,225 \\
+6 & eic\_v1\_2 256-region references and its 9 base scorings & Fir & 95.1 + 322.2 = 417.3 \\
+7 & Box-spread signal rescoring of the 9 base runs & Fir, then Nibi & about 434 (+ 96 at most) \\
+8 & Scoring of the 12 matched-compute runs & Fir & 322.2 + Perceiver IO (not measured) \\
+9 & Resolution: tables, variance, arms & Nibi & 8 + 50 + 330 (reduced) \\
+10 & Mix-and-match gate, then round & Fir (gate), Fir or Nibi (round) & 474 + 5,390 (Nibi) or 5,308 (Fir) \\
+11 & QC-on-input arm & Fir & 404.4 \\
+12 & Learned cell-type embedding & Fir & 728.6 \\
+13 & Second experiments: models & Fir & 144 (252) + 144 (252) \\
+14 & Minimum covariate set & Fir & 1,927 to 17,901 \\
+15 & Data set with DNase-seq & Nibi & about 5,000 (10,752 at most) + 64 + 123 \\
+16 & Blind build, batch 1 & Nibi & about 22,700 \\
+17 & Final model and EIC board row & Fir & not built \\
+18 & RNA-seq input & Fir or Nibi & not built \\
+19 & Pointwise MLP under the corrected composite & Fir CPU or Nibi GPU & not built \\
+20 & DNase-seq layers rerun without the 15,201-read track & Nibi & about 6 (layers stage) \\
+21 & Fresh code kit before the next cluster ladder report & Nibi & 0 \\
+22 & Resolution eval set and verification of the 1 bp tables & Nibi & not measured (27692994 has a 16 h limit on 8 CPUs) \\}
+\newcommand{\TabRefs}{conv autoencoder & 0.382 (0.028) & 0.718 (0.012) & 0.631 (0.178) & 0.528 (0.045) & 0.690 (0.019) \\
+conv + attention & 0.387 (0.012) & 0.673 (0.031) & 0.652 (0.157) & 0.525 (0.048) & 0.659 (0.043) \\
+U-Net & 0.432 (0.023) & 0.507 (0.071) & 0.610 (0.108) & 0.495 (0.010) & 0.318 (0.127) \\}
+\newcommand{\TabRescore}{scrambled covariates & conv autoencoder & \ensuremath{-}0.052$^{\dagger}$ & \ensuremath{-}0.164$^{\ddagger}$ & \ensuremath{-}0.055$^{\dagger}$ & \ensuremath{-}0.195$^{\ddagger}$ \\
+scrambled covariates & conv + attention & \ensuremath{-}0.004 & \ensuremath{-}0.198$^{\ddagger}$ & \ensuremath{-}0.026$^{\dagger}$ & \ensuremath{-}0.230$^{\ddagger}$ \\
+scrambled covariates & U-Net & \ensuremath{-}0.075 & \ensuremath{-}0.212$^{\dagger}$ & \ensuremath{-}0.070 & \ensuremath{-}0.242$^{\dagger}$ \\
+base view only & conv autoencoder & \ensuremath{+}0.014 & \ensuremath{-}0.289$^{\ddagger}$ & \ensuremath{+}0.002 & \ensuremath{-}0.341$^{\ddagger}$ \\
+base view only & conv + attention & \ensuremath{+}0.003 & \ensuremath{-}0.270$^{\ddagger}$ & \ensuremath{-}0.012 & \ensuremath{-}0.315$^{\ddagger}$ \\
+base view only & U-Net & \ensuremath{+}0.046 & \ensuremath{-}0.249$^{\dagger}$ & \ensuremath{+}0.039 & \ensuremath{-}0.262$^{\ddagger}$ \\
+two-step, native & conv autoencoder & \ensuremath{-}0.115$^{\dagger}$ & \ensuremath{+}0.017 & \ensuremath{-}0.133$^{\dagger}$ & \ensuremath{+}0.013 \\
+two-step, native & conv + attention & \ensuremath{-}0.059$^{\dagger}$ & \ensuremath{+}0.106$^{\ddagger}$ & \ensuremath{-}0.081$^{\ddagger}$ & \ensuremath{+}0.127$^{\ddagger}$ \\
+two-step, native & U-Net & \ensuremath{-}0.064 & \ensuremath{-}0.233$^{\dagger}$ & \ensuremath{-}0.077 & \ensuremath{-}0.262$^{\dagger}$ \\
+two-step, fixed & conv autoencoder & \ensuremath{-}0.085$^{\ddagger}$ & \ensuremath{+}0.116$^{\ddagger}$ & \ensuremath{-}0.094$^{\ddagger}$ & \ensuremath{+}0.128$^{\ddagger}$ \\
+two-step, fixed & conv + attention & \ensuremath{-}0.055$^{\dagger}$ & \ensuremath{+}0.141$^{\ddagger}$ & \ensuremath{-}0.077$^{\ddagger}$ & \ensuremath{+}0.163$^{\ddagger}$ \\
+two-step, fixed & U-Net & \ensuremath{+}0.129$^{\dagger}$ & \ensuremath{+}0.060 & \ensuremath{+}0.117$^{\dagger}$ & \ensuremath{+}0.062 \\
+fixed input depth & conv autoencoder & \ensuremath{-}0.007$^{a}$ & \ensuremath{+}0.038$^{a}$ & \ensuremath{-}0.003$^{a}$ & \ensuremath{+}0.047$^{a}$ \\
+fixed input depth & conv + attention & \ensuremath{+}0.049$^{\dagger}$ & \ensuremath{+}0.007 & \ensuremath{+}0.039$^{\dagger}$ & \ensuremath{+}0.028 \\
+fixed input depth & U-Net & \ensuremath{+}0.168$^{\ddagger}$ & \ensuremath{+}0.104 & \ensuremath{+}0.166$^{\ddagger}$ & \ensuremath{+}0.112 \\
+average input & conv autoencoder & \ensuremath{+}0.026 & \ensuremath{+}0.071$^{\ddagger}$ & \ensuremath{+}0.031 & \ensuremath{+}0.098$^{\ddagger}$ \\
+average input & conv + attention & \ensuremath{+}0.025 & \ensuremath{+}0.054 & \ensuremath{+}0.018 & \ensuremath{+}0.083$^{\dagger}$ \\
+average input & U-Net & \ensuremath{-}0.006 & \ensuremath{+}0.081 & \ensuremath{-}0.007 & \ensuremath{+}0.105 \\
+imputation weight 4 & conv autoencoder & \ensuremath{-}0.038$^{\dagger}$ & \ensuremath{+}0.060$^{\dagger}$ & \ensuremath{-}0.050$^{\ddagger}$ & \ensuremath{+}0.077$^{\dagger}$ \\
+imputation weight 4 & conv + attention & 0.000 & \ensuremath{+}0.101$^{\ddagger}$ & \ensuremath{-}0.013 & \ensuremath{+}0.124$^{\ddagger}$ \\
+imputation weight 4 & U-Net & \ensuremath{+}0.025 & \ensuremath{+}0.051 & \ensuremath{+}0.021 & \ensuremath{+}0.051 \\}
+\newcommand{\TabTwoFiftySix}{conv autoencoder & 0.714 (0.015) & 0.651 (0.002) \\
+conv + attention & 0.685 (0.026) & 0.616 (0.046) \\
+U-Net & 0.504 (0.066) & 0.282 (0.129) \\
+U-Net, DNA-only skips & 0.715 (0.056) & 0.684 (0.033) \\}
+\newcommand{\abTrainPct}{98.6}
+\newcommand{\agFair}{0.438}
+\newcommand{\agFloor}{0.333}
+\newcommand{\agPosAvg}{0.222}
+\newcommand{\anscCor}{\ensuremath{-}1.067}
+\newcommand{\anscImp}{0.000}
+\newcommand{\arcEntries}{76{,}017}
+\newcommand{\arcGib}{3{,}990}
+\newcommand{\arcTars}{23}
+\newcommand{\blindAbRows}{72}
+\newcommand{\blindAlloc}{83{,}370}
+\newcommand{\blindNewAb}{48}
+\newcommand{\blindNewCost}{94{,}300}
+\newcommand{\blindOldCost}{14{,}920}
+\newcommand{\blindRows}{721}
+\newcommand{\bpMeas}{412}
+\newcommand{\bpPairs}{73}
+\newcommand{\bpPts}{13{,}222}
+\newcommand{\bpPtsStore}{13{,}222}
+\newcommand{\bpVerifyJob}{27692994}
+\newcommand{\bpViews}{412}
+\newcommand{\bvBrN}{19}
+\newcommand{\bvBrNp}{15}
+\newcommand{\bvBrPct}{7}
+\newcommand{\bvBrPctFine}{0.1}
+\newcommand{\bvBrRaw}{0.927}
+\newcommand{\bvBrRawStep}{0.033}
+\newcommand{\bvBrRep}{0.0011}
+\newcommand{\bvBrRepHi}{0.0083}
+\newcommand{\bvBrRepLo}{0.0001}
+\newcommand{\bvBrRepStep}{0.0022}
+\newcommand{\bvCtlPred}{\ensuremath{-}0.0092}
+\newcommand{\bvCtlPs}{\ensuremath{-}0.0092}
+\newcommand{\bvDnId}{ENCSR080PZL}
+\newcommand{\bvDnRaw}{0.903}
+\newcommand{\bvDnReads}{43{,}584{,}083}
+\newcommand{\bvNoise}{0.960}
+\newcommand{\bvNrN}{22}
+\newcommand{\bvNrNp}{14}
+\newcommand{\bvNrPct}{13}
+\newcommand{\bvNrPctFine}{0.1}
+\newcommand{\bvNrRaw}{0.901}
+\newcommand{\bvNrRawStep}{0.035}
+\newcommand{\bvNrRep}{0.0009}
+\newcommand{\bvNrRepHi}{0.0027}
+\newcommand{\bvNrRepLo}{\ensuremath{-}0.0004}
+\newcommand{\bvNrRepStep}{0.0047}
+\newcommand{\bvPsHi}{\ensuremath{-}0.0058}
+\newcommand{\bvPsLo}{\ensuremath{-}0.0441}
+\newcommand{\bvPsN}{138}
+\newcommand{\bvPsNeg}{138}
+\newcommand{\bvRows}{2{,}208}
+\newcommand{\compAeUnAll}{0.033}
+\newcommand{\compAeUnBar}{0.043}
+\newcommand{\compAxial}{0.498}
+\newcommand{\compAxialR}{0.031}
+\newcommand{\compPerc}{0.335}
+\newcommand{\compPercR}{0.088}
+\newcommand{\compSkipDna}{0.533}
+\newcommand{\compSkipDnaR}{0.029}
+\newcommand{\compTunAE}{0.496}
+\newcommand{\compTunAER}{0.028}
+\newcommand{\compTunAT}{0.510}
+\newcommand{\compTunATR}{0.044}
+\newcommand{\compTunUN}{0.511}
+\newcommand{\compTunUNR}{0.028}
+\newcommand{\condFourN}{8}
+\newcommand{\condFourP}{7}
+\newcommand{\condOneN}{36}
+\newcommand{\condOneP}{22}
+\newcommand{\condSixN}{10}
+\newcommand{\condSixP}{9}
+\newcommand{\condTwoShare}{33}
+\newcommand{\corrOnlyAEsixteen}{0.651}
+\newcommand{\costAE}{30.0}
+\newcommand{\costAT}{25.4}
+\newcommand{\costUN}{52}
+\newcommand{\dTwoBarUN}{0.142}
+\newcommand{\dTwoBrAll}{\ensuremath{-}0.0004}
+\newcommand{\dTwoBrAllC}{10}
+\newcommand{\dTwoBrAllHi}{0.0058}
+\newcommand{\dTwoBrAllLo}{\ensuremath{-}0.0066}
+\newcommand{\dTwoBrAllN}{30}
+\newcommand{\dTwoBrAllTech}{21}
+\newcommand{\dTwoBrLd}{\ensuremath{-}0.0002}
+\newcommand{\dTwoBrLdC}{4}
+\newcommand{\dTwoBrLdHi}{0.0111}
+\newcommand{\dTwoBrLdLo}{\ensuremath{-}0.0116}
+\newcommand{\dTwoBrLdN}{13}
+\newcommand{\dTwoBrLdTech}{11}
+\newcommand{\dTwoDropped}{17}
+\newcommand{\dTwoKept}{71}
+\newcommand{\dTwoMarginUN}{0.124}
+\newcommand{\dTwoNrAll}{\ensuremath{-}0.0098}
+\newcommand{\dTwoNrAllC}{15}
+\newcommand{\dTwoNrAllHi}{0.0012}
+\newcommand{\dTwoNrAllLo}{\ensuremath{-}0.0208}
+\newcommand{\dTwoNrAllN}{31}
+\newcommand{\dTwoNrAllTech}{13}
+\newcommand{\dTwoNrLd}{\ensuremath{-}0.0188}
+\newcommand{\dTwoNrLdC}{4}
+\newcommand{\dTwoNrLdHi}{0.0054}
+\newcommand{\dTwoNrLdLo}{\ensuremath{-}0.0430}
+\newcommand{\dTwoNrLdN}{6}
+\newcommand{\dTwoNrLdTech}{6}
+\newcommand{\dTwoSmall}{4}
+\newcommand{\dUnAeCorTwoFS}{\ensuremath{-}0.210}
+\newcommand{\dsAvgConf}{weak}
+\newcommand{\dsAvgStatus}{provisional (U-Net pool)}
+\newcommand{\dsCovConf}{strong (use, 256 regions); weak (field set)}
+\newcommand{\dsCovStatus}{value by PI ruling; use for correction settled}
+\newcommand{\dsDepthConf}{weak}
+\newcommand{\dsDepthStatus}{provisional (mix round)}
+\newcommand{\dsLossConf}{weak}
+\newcommand{\dsLossStatus}{provisional (weight 4 in the pool)}
+\newcommand{\dsTwostepConf}{moderate}
+\newcommand{\dsTwostepStatus}{settled off (256 regions)}
+\newcommand{\dsViewsConf}{strong (256 regions)}
+\newcommand{\dsViewsStatus}{settled (256 regions)}
+\newcommand{\eAvgImpUN}{\ensuremath{+}0.034}
+\newcommand{\eAvgImpUNBar}{0.023}
+\newcommand{\eAvgImpUNVal}{0.466}
+\newcommand{\eAvgImpUNValR}{0.011}
+\newcommand{\eBaCorAE}{\ensuremath{-}0.102}
+\newcommand{\eBaCorAEBar}{0.025}
+\newcommand{\eBaCorAEVal}{0.615}
+\newcommand{\eBaCorAEValR}{0.025}
+\newcommand{\eBaCorAT}{\ensuremath{-}0.078}
+\newcommand{\eBaCorATBar}{0.031}
+\newcommand{\eBaCorATVal}{0.595}
+\newcommand{\eBaCorATValR}{0.029}
+\newcommand{\eBaImpAE}{\ensuremath{-}0.043}
+\newcommand{\eBaImpAEBar}{0.032}
+\newcommand{\eBaImpAEVal}{0.340}
+\newcommand{\eBaImpAEValR}{0.032}
+\newcommand{\eBaImpAT}{\ensuremath{-}0.064}
+\newcommand{\eBaImpATBar}{0.012}
+\newcommand{\eBaImpATVal}{0.323}
+\newcommand{\eBaImpATValR}{0.009}
+\newcommand{\eBdCoAE}{\ensuremath{-}0.198}
+\newcommand{\eBdCoAEBar}{0.019}
+\newcommand{\eBdCoAEVal}{0.492}
+\newcommand{\eBdCoAEValR}{0.012}
+\newcommand{\eBdCoUN}{\ensuremath{-}0.400}
+\newcommand{\eBdCoUNBar}{0.166}
+\newcommand{\eBdCoUNVal}{\ensuremath{-}0.082}
+\newcommand{\eBdCoUNValR}{0.166}
+\newcommand{\eBoCoAE}{\ensuremath{-}0.289}
+\newcommand{\eBoCoAEBar}{0.061}
+\newcommand{\eBoCoAEVal}{0.402}
+\newcommand{\eBoCoAEValR}{0.061}
+\newcommand{\eBoCoAT}{\ensuremath{-}0.270}
+\newcommand{\eBoCoATBar}{0.078}
+\newcommand{\eBoCoATVal}{0.390}
+\newcommand{\eBoCoATValR}{0.078}
+\newcommand{\eBoCoUN}{\ensuremath{-}0.249}
+\newcommand{\eBoCoUNBar}{0.127}
+\newcommand{\eBoCoUNVal}{0.069}
+\newcommand{\eBoCoUNValR}{0.051}
+\newcommand{\eBoCompAE}{\ensuremath{+}0.010}
+\newcommand{\eBoCompAEBar}{0.045}
+\newcommand{\eBoCompAEVal}{0.538}
+\newcommand{\eBoCompAEValR}{0.023}
+\newcommand{\eBoCompAT}{\ensuremath{+}0.012}
+\newcommand{\eBoCompATBar}{0.048}
+\newcommand{\eBoCompATVal}{0.537}
+\newcommand{\eBoCompATValR}{0.041}
+\newcommand{\eBoCompUN}{\ensuremath{+}0.022}
+\newcommand{\eBoCompUNBar}{0.039}
+\newcommand{\eBoCompUNVal}{0.517}
+\newcommand{\eBoCompUNValR}{0.039}
+\newcommand{\eConcCorAT}{\ensuremath{+}0.050}
+\newcommand{\eConcCorATBar}{0.031}
+\newcommand{\eConcCorATVal}{0.723}
+\newcommand{\eConcCorATValR}{0.024}
+\newcommand{\eCrpsCorAT}{\ensuremath{+}0.053}
+\newcommand{\eCrpsCorATBar}{0.031}
+\newcommand{\eCrpsCorATVal}{0.726}
+\newcommand{\eCrpsCorATValR}{0.015}
+\newcommand{\eCtlImpAT}{\ensuremath{-}0.026}
+\newcommand{\eCtlImpATBar}{0.021}
+\newcommand{\eCtlImpATVal}{0.360}
+\newcommand{\eCtlImpATValR}{0.021}
+\newcommand{\eDnaOffImpAT}{\ensuremath{-}0.018}
+\newcommand{\eDnaOffImpATBar}{0.012}
+\newcommand{\eDnaOffImpATVal}{0.369}
+\newcommand{\eDnaOffImpATValR}{0.012}
+\newcommand{\eFixCompUN}{\ensuremath{+}0.023}
+\newcommand{\eFixCompUNBar}{0.010}
+\newcommand{\eFixCompUNVal}{0.518}
+\newcommand{\eFixCompUNValR}{0.010}
+\newcommand{\eFixCorUN}{\ensuremath{+}0.168}
+\newcommand{\eFixCorUNBar}{0.071}
+\newcommand{\eFixCorUNVal}{0.675}
+\newcommand{\eFixCorUNValR}{0.013}
+\newcommand{\eFixImpUN}{\ensuremath{-}0.028}
+\newcommand{\eFixImpUNBar}{0.023}
+\newcommand{\eFixImpUNVal}{0.404}
+\newcommand{\eFixImpUNValR}{0.010}
+\newcommand{\eLrImpAE}{\ensuremath{-}0.113}
+\newcommand{\eLrImpAEBar}{0.028}
+\newcommand{\eLrImpAEVal}{0.269}
+\newcommand{\eLrImpAEValR}{0.012}
+\newcommand{\eLrImpAT}{\ensuremath{-}0.112}
+\newcommand{\eLrImpATBar}{0.021}
+\newcommand{\eLrImpATVal}{0.275}
+\newcommand{\eLrImpATValR}{0.021}
+\newcommand{\eLrImpUN}{\ensuremath{-}0.089}
+\newcommand{\eLrImpUNBar}{0.023}
+\newcommand{\eLrImpUNVal}{0.343}
+\newcommand{\eLrImpUNValR}{0.006}
+\newcommand{\eNatCorAE}{\ensuremath{-}0.115}
+\newcommand{\eNatCorAEBar}{0.085}
+\newcommand{\eNatCorAEVal}{0.602}
+\newcommand{\eNatCorAEValR}{0.085}
+\newcommand{\eNatCorAT}{\ensuremath{-}0.059}
+\newcommand{\eNatCorATBar}{0.033}
+\newcommand{\eNatCorATVal}{0.614}
+\newcommand{\eNatCorATValR}{0.033}
+\newcommand{\eNumCorUN}{\ensuremath{-}0.133}
+\newcommand{\eNumCorUNBar}{0.071}
+\newcommand{\eNumCorUNVal}{0.374}
+\newcommand{\eNumCorUNValR}{0.057}
+\newcommand{\ePearCompUN}{\ensuremath{+}0.031}
+\newcommand{\ePearCompUNBar}{0.023}
+\newcommand{\ePearCompUNVal}{0.526}
+\newcommand{\ePearCompUNValR}{0.023}
+\newcommand{\eQuImpAE}{\ensuremath{-}0.095}
+\newcommand{\eQuImpAEBar}{0.028}
+\newcommand{\eQuImpAEVal}{0.287}
+\newcommand{\eQuImpAEValR}{0.004}
+\newcommand{\eQuImpAT}{\ensuremath{-}0.082}
+\newcommand{\eQuImpATBar}{0.012}
+\newcommand{\eQuImpATVal}{0.305}
+\newcommand{\eQuImpATValR}{0.004}
+\newcommand{\eQuImpUN}{\ensuremath{-}0.054}
+\newcommand{\eQuImpUNBar}{0.023}
+\newcommand{\eQuImpUNVal}{0.378}
+\newcommand{\eQuImpUNValR}{0.023}
+\newcommand{\eScrCoAE}{\ensuremath{-}0.164}
+\newcommand{\eScrCoAEBar}{0.044}
+\newcommand{\eScrCoAEVal}{0.526}
+\newcommand{\eScrCoAEValR}{0.044}
+\newcommand{\eScrCoAT}{\ensuremath{-}0.198}
+\newcommand{\eScrCoATBar}{0.063}
+\newcommand{\eScrCoATVal}{0.462}
+\newcommand{\eScrCoATValR}{0.063}
+\newcommand{\eScrCoUN}{\ensuremath{-}0.212}
+\newcommand{\eScrCoUNBar}{0.127}
+\newcommand{\eScrCoUNVal}{0.106}
+\newcommand{\eScrCoUNValR}{0.045}
+\newcommand{\eScrImpAE}{\ensuremath{+}0.010}
+\newcommand{\eScrImpAEBar}{0.028}
+\newcommand{\eScrImpAEVal}{0.392}
+\newcommand{\eScrImpAEValR}{0.003}
+\newcommand{\eShiftImpAT}{\ensuremath{-}0.020}
+\newcommand{\eShiftImpATBar}{0.015}
+\newcommand{\eShiftImpATVal}{0.367}
+\newcommand{\eShiftImpATValR}{0.015}
+\newcommand{\eSvCompUN}{\ensuremath{-}0.133}
+\newcommand{\eSvCompUNBar}{0.058}
+\newcommand{\eSvCompUNVal}{0.362}
+\newcommand{\eSvCompUNValR}{0.058}
+\newcommand{\eSvImpAE}{\ensuremath{+}0.031}
+\newcommand{\eSvImpAEBar}{0.028}
+\newcommand{\eSvImpAEVal}{0.413}
+\newcommand{\eSvImpAEValR}{0.010}
+\newcommand{\eSvImpAT}{\ensuremath{+}0.032}
+\newcommand{\eSvImpATBar}{0.021}
+\newcommand{\eSvImpATVal}{0.419}
+\newcommand{\eSvImpATValR}{0.021}
+\newcommand{\eTokImpUN}{\ensuremath{-}0.049}
+\newcommand{\eTokImpUNBar}{0.023}
+\newcommand{\eTokImpUNVal}{0.383}
+\newcommand{\eTokImpUNValR}{0.014}
+\newcommand{\eTwoCounts}{0.331}
+\newcommand{\eTwoNAssays}{8}
+\newcommand{\eTwoRspecCounts}{0.263}
+\newcommand{\eTwoRspecPc}{0.267}
+\newcommand{\eTwoSigExp}{0.178}
+\newcommand{\eTwoSigPc}{0.143}
+\newcommand{\eTwoSigPlug}{0.164}
+\newcommand{\eWfourImpAT}{\ensuremath{+}0.039}
+\newcommand{\eWfourImpATBar}{0.017}
+\newcommand{\eWfourImpATVal}{0.426}
+\newcommand{\eWfourImpATValR}{0.017}
+\newcommand{\firQueued}{570}
+\newcommand{\inCoN}{12}
+\newcommand{\inCoP}{6}
+\newcommand{\inCorN}{12}
+\newcommand{\inCorP}{10}
+\newcommand{\labDonorBroad}{13}
+\newcommand{\labDonorBroadCells}{4}
+\newcommand{\labDonorNarrow}{6}
+\newcommand{\ladAtacC}{4}
+\newcommand{\ladAtacN}{4}
+\newcommand{\ladBrCt}{6.3\%}
+\newcommand{\ladBrCtLeft}{167}
+\newcommand{\ladBrOeAll}{30}
+\newcommand{\ladBrRep}{1.3\%}
+\newcommand{\ladBrSamp}{95.1\%}
+\newcommand{\ladBrSampV}{0.0463}
+\newcommand{\ladCcN}{195}
+\newcommand{\ladCcOk}{167}
+\newcommand{\ladDnCell}{C23}
+\newcommand{\ladDnCt}{1.3\%}
+\newcommand{\ladDnCtLeft}{51}
+\newcommand{\ladDnDepth}{15{,}201}
+\newcommand{\ladDnNext}{13{,}300{,}584}
+\newcommand{\ladDnRep}{\ensuremath{-}1.2\%}
+\newcommand{\ladDnSamp}{100.3\%}
+\newcommand{\ladDnSampV}{\ensuremath{1.56\times10^{-4}}}
+\newcommand{\ladKeptBrOne}{0.0012}
+\newcommand{\ladLabDonor}{\ensuremath{-}0.0027}
+\newcommand{\ladNrCt}{12.0\%}
+\newcommand{\ladNrCtLeft}{225}
+\newcommand{\ladNrOeAll}{31}
+\newcommand{\ladNrRep}{1.8\%}
+\newcommand{\ladNrSamp}{87.5\%}
+\newcommand{\ladNrSampV}{0.0262}
+\newcommand{\ladOneSided}{23}
+\newcommand{\ladPairs}{383}
+\newcommand{\ladSamp}{0.04092}
+\newcommand{\ladSampT}{0.0409}
+\newcommand{\ladTele}{0}
+\newcommand{\ladTeleN}{75}
+\newcommand{\lamHidden}{0.919}
+\newcommand{\lamHiddenK}{15}
+\newcommand{\lamHiddenN}{20}
+\newcommand{\lamVisible}{0.968}
+\newcommand{\lamVisibleK}{35}
+\newcommand{\lamVisibleN}{41}
+\newcommand{\minPairs}{5}
+\newcommand{\mixCost}{5{,}390}
+\newcommand{\mixGate}{474}
+\newcommand{\mixOldCost}{6{,}100}
+\newcommand{\mnAlign}{0.018}
+\newcommand{\mnAlignR}{0.071}
+\newcommand{\mnAll}{0.272}
+\newcommand{\mnComp}{0.052}
+\newcommand{\mnCor}{0.207}
+\newcommand{\nArmRows}{39}
+\newcommand{\nBoot}{2{,}000}
+\newcommand{\nCalDn}{1}
+\newcommand{\nCalDnTwo}{0}
+\newcommand{\nCalUp}{0}
+\newcommand{\nCalUpTwo}{0}
+\newcommand{\nCandBlocks}{6{,}724}
+\newcommand{\nCells}{112}
+\newcommand{\nCellsCal}{112}
+\newcommand{\nCleanCells}{6}
+\newcommand{\nCleanPairs}{18}
+\newcommand{\nClusters}{245}
+\newcommand{\nCompDn}{12}
+\newcommand{\nCompDnTwo}{4}
+\newcommand{\nCompUp}{6}
+\newcommand{\nCompUpTwo}{1}
+\newcommand{\nCorDn}{15}
+\newcommand{\nCorDnTwo}{6}
+\newcommand{\nCorOnlyDn}{23}
+\newcommand{\nCorOnlyDnTwo}{12}
+\newcommand{\nCorOnlyUp}{13}
+\newcommand{\nCorOnlyUpTwo}{7}
+\newcommand{\nCorUp}{6}
+\newcommand{\nCorUpTwo}{1}
+\newcommand{\nCorrPairs}{1{,}480}
+\newcommand{\nCtPairs}{2{,}911}
+\newcommand{\nDecisions}{9}
+\newcommand{\nDesignRows}{31}
+\newcommand{\nDupPairs}{84}
+\newcommand{\nFormChip}{41}
+\newcommand{\nFormTargets}{42}
+\newcommand{\nHalfPairs}{778}
+\newcommand{\nImpDn}{24}
+\newcommand{\nImpDnTwo}{11}
+\newcommand{\nImpUp}{4}
+\newcommand{\nImpUpTwo}{1}
+\newcommand{\nIsoPairs}{219}
+\newcommand{\nItems}{63}
+\newcommand{\nItemsAcc}{20}
+\newcommand{\nItemsLoao}{43}
+\newcommand{\nMnPairs}{84}
+\newcommand{\nNeverTrained}{102}
+\newcommand{\nPairsAll}{15{,}123}
+\newcommand{\nRegionBins}{16{,}384}
+\newcommand{\nRegions}{256}
+\newcommand{\nResample}{5{,}000}
+\newcommand{\nRows}{2{,}740}
+\newcommand{\nRowsBlind}{7}
+\newcommand{\nRowsTrain}{2{,}328}
+\newcommand{\nRowsVal}{334}
+\newcommand{\nRunsAE}{20}
+\newcommand{\nRunsAT}{21}
+\newcommand{\nRunsUN}{21}
+\newcommand{\nSecond}{71}
+\newcommand{\nSecondOther}{35}
+\newcommand{\nSecondSame}{36}
+\newcommand{\nSecondVal}{13}
+\newcommand{\nVariants}{4}
+\newcommand{\nWithheldCombos}{18}
+\newcommand{\nibiQuota}{1{,}024}
+\newcommand{\nibiUsed}{1{,}740}
+\newcommand{\nibiWork}{1{,}105}
+\newcommand{\oldCheckCost}{1{,}430}
+\newcommand{\oldScoreCost}{23}
+\newcommand{\paCal}{0.168}
+\newcommand{\paComp}{0.197}
+\newcommand{\paCor}{0.383}
+\newcommand{\paImp}{0.119}
+\newcommand{\pairLowPct}{18}
+\newcommand{\pairPct}{58}
+\newcommand{\piQuoteData}{you recommend + provide info. we'll work on it next session}
+\newcommand{\piQuoteScale}{scaling is next session's task. the task for this session is to provide the necessary information and prototype minicandi for a more informed and confident scaling in the next session}
+\newcommand{\pureLabPooled}{16}
+\newcommand{\qcFrag}{2{,}337}
+\newcommand{\qcFragPct}{87.8}
+\newcommand{\qcFrip}{0}
+\newcommand{\qcFripPct}{0.0}
+\newcommand{\qcNoRead}{190}
+\newcommand{\qcNrf}{1{,}006}
+\newcommand{\qcNrfPct}{37.8}
+\newcommand{\qcNsc}{2{,}370}
+\newcommand{\qcNscPct}{89.0}
+\newcommand{\qcOk}{1{,}093}
+\newcommand{\qcPrOne}{275}
+\newcommand{\qcRefused}{4}
+\newcommand{\qcRows}{2{,}662}
+\newcommand{\qcWhole}{1{,}287}
+\newcommand{\refAECal}{0.631}
+\newcommand{\refAECalR}{0.178}
+\newcommand{\refAEComp}{0.528}
+\newcommand{\refAECompR}{0.045}
+\newcommand{\refAECor}{0.718}
+\newcommand{\refAECorOnly}{0.690}
+\newcommand{\refAECorOnlyR}{0.019}
+\newcommand{\refAECorR}{0.012}
+\newcommand{\refAEImp}{0.382}
+\newcommand{\refAEImpR}{0.028}
+\newcommand{\refATCal}{0.652}
+\newcommand{\refATCalR}{0.157}
+\newcommand{\refATComp}{0.525}
+\newcommand{\refATCompR}{0.048}
+\newcommand{\refATCor}{0.673}
+\newcommand{\refATCorOnly}{0.659}
+\newcommand{\refATCorOnlyR}{0.043}
+\newcommand{\refATCorR}{0.031}
+\newcommand{\refATImp}{0.387}
+\newcommand{\refATImpR}{0.012}
+\newcommand{\refUNCal}{0.610}
+\newcommand{\refUNCalR}{0.108}
+\newcommand{\refUNComp}{0.495}
+\newcommand{\refUNCompR}{0.010}
+\newcommand{\refUNCor}{0.507}
+\newcommand{\refUNCorOnly}{0.318}
+\newcommand{\refUNCorOnlyR}{0.127}
+\newcommand{\refUNCorR}{0.071}
+\newcommand{\refUNImp}{0.432}
+\newcommand{\refUNImpR}{0.023}
+\newcommand{\regNinetySix}{0.238}
+\newcommand{\regNinetySixTo}{0.128}
+\newcommand{\repHi}{6}
+\newcommand{\repLo}{0.1}
+\newcommand{\rescoreAblNote}{On 256 regions, rule 2.1 is decided: The models use covariates for same-view correction (settled, strong). The other effects of this paragraph rest on 16 regions and are not settled (Section~\ref{sec:rescore}).}
+\newcommand{\rescoreAbstract}{The pre-written check of 16 against 256 regions failed, so correction effects need the 256-region rescoring of the decisive arms. At 2026-11-19 08:50 U C it had scored 62 of 62 run-seeds and decided 6 of 6 pre-written rules: rule 2.1, covariates used for correction: the models use covariates for same-view correction (settled, strong); rule 2.2, training views: all counterfactual views stay in training (settled, strong); rule 2.3, two-step routing: two-step routing stays off (settled); rule 2.4, fixed input depth: u-Net: the trade-off holds (correction on crop pairs up, imputation down, both beyond the seed range); the switch stays in the U-Net pool by PI ruling, and the native-depth score of run 2.7 decides whether it can be deployed; rule 2.5, average baseline input: the average baseline input stays in the U-Net pool (qualify line); rule 2.6, imputation loss weight 4: imputation weight 4 stays in the conv + attention pool (qualify line).}
+\newcommand{\rescoreAsOf}{2026-11-19 08:50 U C}
+\newcommand{\rescoreConclDesign}{three architectures tie with a trade-off between imputation and correction, the count input with a depth offset is settled, the 256-region rescoring updated row 8 by rule 2.1: the models use covariates for same-view correction (settled, strong); row 23 by rule 2.2: all counterfactual views stay in training (settled, strong); row 24 by rule 2.3: two-step routing stays off (settled); row 25 by rule 2.4: u-Net: the trade-off holds (correction on crop pairs up, imputation down, both beyond the seed range); the switch stays in the U-Net pool by PI ruling, and the native-depth score of run 2.7 decides whether it can be deployed; row 13 by rule 2.5: the average baseline input stays in the U-Net pool (qualify line); row 20 by rule 2.6: imputation weight 4 stays in the conv + attention pool (qualify line).}
+\newcommand{\rescoreConclEval}{the screening tier failed its check, so the correction terms need 256 regions; the rescoring has scored 62 of 62 run-seeds and decided 6 of 6 rules}
+\newcommand{\rescoreCost}{2{,}225}
+\newcommand{\rescoreCritFour}{The 256-region rescoring updated row 8 by rule 2.1: the models use covariates for same-view correction (settled, strong); row 23 by rule 2.2: all counterfactual views stay in training (settled, strong); row 24 by rule 2.3: two-step routing stays off (settled); row 25 by rule 2.4: u-Net: the trade-off holds (correction on crop pairs up, imputation down, both beyond the seed range); the switch stays in the U-Net pool by PI ruling, and the native-depth score of run 2.7 decides whether it can be deployed; row 13 by rule 2.5: the average baseline input stays in the U-Net pool (qualify line); row 20 by rule 2.6: imputation weight 4 stays in the conv + attention pool (qualify line). Many rows are provisional; the choice of architecture is the PI's.}
+\newcommand{\rescoreCritThree}{Metrics, selection rule and scorers are defined and pass their tests, and the replicate ladder ran on the real data. The 16-region screening tier failed its check, so correction terms need 256 regions; the rescoring has scored 62 of 62 run-seeds and decided 6 of 6 rules.}
+\newcommand{\rescoreDiscuss}{The third reading is settled on 256 regions by rule 2.2.}
+\newcommand{\rescoreRead}{Rule 2.1 (covariates used for correction). The models use covariates for same-view correction (settled, strong). Scrambled covariates lower the correction-only term beyond the seed range on the conv autoencoder, the conv + attention and the U-Net, and beyond twice the range on the conv autoencoder and the conv + attention. Recorded separately: the correction on crop pairs is lower beyond the seed range on the conv autoencoder and the conv + attention (on the 16 regions: the conv autoencoder). Correction-only term, scrambled covariates minus base: conv autoencoder \ensuremath{-}0.195 (seed range 0.046, beyond twice the seed range); conv + attention \ensuremath{-}0.230 (seed range 0.081, beyond twice the seed range); U-Net \ensuremath{-}0.242 (seed range 0.129, beyond the seed range). Correction on crop pairs: conv autoencoder \ensuremath{-}0.055 (seed range 0.047, beyond the seed range); conv + attention \ensuremath{-}0.0261 (seed range 0.0258, beyond the seed range); U-Net \ensuremath{-}0.070 (seed range 0.084, within the seed range). Rule 2.2 (training views). All counterfactual views stay in training (settled, strong). Base view only lowers the correction-only term beyond the seed range on the conv autoencoder, the conv + attention and the U-Net and beyond twice the range on the conv autoencoder, the conv + attention and the U-Net. Correction-only term, base view only minus all views: conv autoencoder \ensuremath{-}0.341 (seed range 0.067, beyond twice the seed range); conv + attention \ensuremath{-}0.315 (seed range 0.104, beyond twice the seed range); U-Net \ensuremath{-}0.262 (seed range 0.129, beyond twice the seed range). Composite: conv autoencoder +0.007 (seed range 0.043, within the seed range); conv + attention +0.008 (seed range 0.048, within the seed range); U-Net +0.020 (seed range 0.039, within the seed range). Rule 2.3 (two-step routing). Two-step routing stays off (settled). No arm raises the composite by more than twice the seed range with no goal lower by twice its range. The U-Net trade-off is recorded: with a fixed base depth, correction on crop pairs is up beyond the seed range (+0.117) and calibration moves \ensuremath{-}0.165; off stays. Two-step routing, native base depth, composite: conv autoencoder \ensuremath{-}0.079 (seed range 0.043, beyond the seed range); conv + attention \ensuremath{-}0.051 (seed range 0.056, within the seed range); U-Net \ensuremath{-}0.087 (seed range 0.060, beyond the seed range). Two-step routing, fixed base depth, composite: conv autoencoder \ensuremath{-}0.051 (seed range 0.065, within the seed range); conv + attention \ensuremath{-}0.058 (seed range 0.048, beyond the seed range); U-Net \ensuremath{-}0.003 (seed range 0.048, within the seed range). U-Net, fixed base depth: correction on crop pairs +0.117 (seed range 0.066, beyond the seed range); calibration \ensuremath{-}0.165 (seed range 0.119, beyond the seed range). Rule 2.4 (fixed input depth). U-Net: the trade-off holds (correction on crop pairs up, imputation down, both beyond the seed range); the switch stays in the U-Net pool by PI ruling, and the native-depth score of run 2.7 decides whether it can be deployed. Conv + attention: the qualify line keeps the switch in the conv + attention pool. The conv autoencoder (2 seeds) is reported only. No fixed-depth value enters the recipe from these scores alone. Conv autoencoder: correction on crop pairs \ensuremath{-}0.003 (seed range 0.047, within the seed range); imputation \ensuremath{-}0.019 (seed range 0.028, within the seed range). Conv + attention: correction on crop pairs +0.039 (seed range 0.026, beyond the seed range); imputation \ensuremath{-}0.011 (seed range 0.012, within the seed range). U-Net: correction on crop pairs +0.166 (seed range 0.066, beyond twice the seed range); imputation \ensuremath{-}0.028 (seed range 0.023, beyond the seed range). Rule 2.5 (average baseline input). The average baseline input stays in the U-Net pool (qualify line). The conv autoencoder correction-only term is up beyond the seed range again (+0.098); it is recorded, and the value stays off on the conv models. Correction-only term: conv autoencoder +0.098 (seed range 0.034, beyond twice the seed range); conv + attention +0.083 (seed range 0.048, beyond the seed range); U-Net +0.105 (seed range 0.129, within the seed range). Correction on crop pairs: conv autoencoder +0.031 (seed range 0.054, within the seed range); conv + attention +0.018 (seed range 0.044, within the seed range); U-Net \ensuremath{-}0.007 (seed range 0.066, within the seed range). Rule 2.6 (imputation loss weight 4). Imputation weight 4 stays in the conv + attention pool (qualify line). The weights stay 1 / 1 / 1 unless run 2.7 picks weight 4. The cost on the conv autoencoder is confirmed: correction on crop pairs \ensuremath{-}0.050 (seed range 0.021); weight 4 is not in its pool. Correction on crop pairs: conv autoencoder \ensuremath{-}0.050 (seed range 0.021, beyond twice the seed range); conv + attention \ensuremath{-}0.013 (seed range 0.042, within the seed range); U-Net +0.021 (seed range 0.068, within the seed range). Imputation: conv autoencoder +0.0276 (seed range 0.0284, within the seed range); conv + attention +0.039 (seed range 0.017, beyond twice the seed range); U-Net +0.007 (seed range 0.025, within the seed range).}
+\newcommand{\rescoreSeeds}{62}
+\newcommand{\rescoreStatus}{Scores as of 2026-11-19 08:50 U C: 62 of 62 run-seeds scored on all regions; 21 of 21 arms are complete. The scoring runs on Nibi since 2026-11-17, 23:22 UTC. One scoring needs about 6.3 hours there, about 10 times the Fir rate, because the jobs wait on input and output. U-Net prediction parts reach their 6-hour limit at 90 to 96\% and are resubmitted with a 12-hour limit (the store resumes). The same jobs wait in the Fir queue (jobs 4535347 to 4535923); the PI cancels them after the Nibi scores are on disk.}
+\newcommand{\rsCap}{12}
+\newcommand{\rsDay}{2026-11-17}
+\newcommand{\rsHours}{6.3}
+\newcommand{\rsN}{62}
+\newcommand{\rsNow}{09:45}
+\newcommand{\rsNowDay}{2026-11-18}
+\newcommand{\rsRounds}{6}
+\newcommand{\rsScored}{16}
+\newcommand{\rsStart}{23:22}
+\newcommand{\rsTotal}{38}
+\newcommand{\sampHi}{97}
+\newcommand{\sampLo}{76}
+\newcommand{\scAfter}{635}
+\newcommand{\scBefore}{4{,}324}
+\newcommand{\scMid}{1{,}740}
+\newcommand{\skipCor}{0.715}
+\newcommand{\skipCorR}{0.056}
+\newcommand{\skipImp}{0.380}
+\newcommand{\smokeOtherN}{35}
+\newcommand{\smokeOtherOut}{16}
+\newcommand{\smokeOut}{20}
+\newcommand{\smokeSameN}{36}
+\newcommand{\smokeSameOut}{4}
+\newcommand{\smokeValN}{13}
+\newcommand{\smokeValOut}{3}
+\newcommand{\tallyFir}{18{,}767}
+\newcommand{\tallyNibi}{52{,}830}
+\newcommand{\tallyTotal}{71{,}597}
+\newcommand{\testsFailed}{1}
+\newcommand{\testsPassed}{555}
+\newcommand{\testsSkipped}{3}
+\newcommand{\thinAll}{0.614}
+\newcommand{\thinBase}{0.127}
+\newcommand{\thinWithHi}{0.621}
+\newcommand{\thinWithLo}{0.551}
+\newcommand{\thinWithoutHi}{0.445}
+\newcommand{\unCorTwoFS}{0.504}
+\pgfplotstableread{
+y label cs ca clo chi os oa olo ohi
+0 {conv autoencoder, seed 0} 0.726 0.721 0.701 0.740 0.680 0.650 0.630 0.671
+1 {conv autoencoder, seed 1} 0.714 0.714 0.692 0.734 0.699 0.652 0.633 0.672
+2 {conv autoencoder, seed 2} 0.714 0.706 0.684 0.727 0.692 0.650 0.632 0.668
+3 {conv + attention, seed 0} 0.670 0.682 0.662 0.700 0.638 0.595 0.573 0.618
+4 {conv + attention, seed 1} 0.659 0.673 0.650 0.694 0.682 0.641 0.621 0.660
+5 {conv + attention, seed 2} 0.690 0.699 0.677 0.719 0.658 0.612 0.593 0.634
+6 {U-Net, seed 0} 0.547 0.540 0.534 0.546 0.320 0.280 0.238 0.324
+7 {U-Net, seed 1} 0.475 0.474 0.469 0.479 0.254 0.219 0.177 0.263
+8 {U-Net, seed 2} 0.500 0.497 0.493 0.501 0.380 0.348 0.310 0.387
+9 {U-Net, DNA-only skips, seed 0} 0.700 0.688 0.662 0.713 0.709 0.700 0.682 0.719
+10 {U-Net, DNA-only skips, seed 1} 0.763 0.744 0.722 0.766 0.688 0.685 0.667 0.702
+11 {U-Net, DNA-only skips, seed 2} 0.737 0.713 0.689 0.737 0.672 0.667 0.645 0.690
+}\tblRegion
+\pgfplotstableread{
+y label dAE bAE dAT bAT dUN bUN
+0 {base only} -0.289 0.061 -0.270 0.078 -0.249 0.127
+1 {base + depth} -0.198 0.019 -0.192 0.055 -0.400 0.166
+2 {base + read-level} -0.071 0.019 -0.028 0.043 0.070 0.127
+3 {base + alignment} -0.212 0.033 -0.222 0.067 -0.271 0.127
+4 {same-view pairs only} -0.036 0.113 0.040 0.062 nan nan
+}\tblViewsCo
+\pgfplotstableread{
+y label dAE bAE dAT bAT dUN bUN
+0 {base only} 0.009 0.028 0.006 0.012 0.016 0.023
+1 {base + depth} -0.008 0.028 -0.008 0.027 0.004 0.023
+2 {base + read-level} 0.026 0.028 0.001 0.014 0.007 0.023
+3 {base + alignment} -0.043 0.032 -0.064 0.012 0.003 0.028
+4 {same-view pairs only} 0.031 0.028 0.032 0.021 0.001 0.023
+}\tblViewsImp
+
+\raggedbottom
+\renewcommand{\topfraction}{0.9}\renewcommand{\bottomfraction}{0.8}\renewcommand{\textfraction}{0.07}\renewcommand{\floatpagefraction}{0.75}
+\setcounter{topnumber}{3}\setcounter{bottomnumber}{2}\setcounter{totalnumber}{5}
+
+\begin{document}
+
+\title[Peeling the onion: close-out]{Peeling the onion: augmented EIC data, a defined objective and evaluation, and a provisional miniCANDI design}
+
+\author{\fnm{Mehdi} \sur{Foroozandeh}}
+\affil{\orgname{Libbrecht lab, Simon Fraser University. Close-out report, private draft of \lit{2026-11-18}}}
+
+\abstract{\cl{We report the close-out of a run whose aim was to separate the sources of variance in epigenomic count data and to settle a small model, miniCANDI, before scaling. We rebuilt the ENCODE Imputation Challenge data from reads with designed processing views, defined a Negative Binomial training objective, and scored three architectures and \nArmRows{} single-switch ablations with \lit{3} seeds each. No architecture won: the U-Net led on imputation and the two convolutional models led on correction, and on \lit{256} regions the composite of the U-Net was lower than that of the conv autoencoder by \compAeUnAll{}, inside the selection bar of \compAeUnBar{}. Training on the base view only removed most of the correction-only term on all three models (for example \eBoCoAE{}, seed range \eBoCoAEBar{}), but this term was scored on \lit{16} regions. \rescoreAbstract{}}}
+
+\keywords{epigenome imputation, Negative Binomial, counterfactual views, ablation, ENCODE Imputation Challenge}
+
+\maketitle
+
+\noindent\cl{\textit{Note.} An AI agent (Claude) drafted all text of this report from the files of the run. The PI has not edited it. Every number is read by the build script from a result file and checked against the hash of that file.}
+
+\section{Motivation and background}\label{sec:motivation}
+
+\subsection{The question}
+
+\cl{An epigenomic track is a count of sequencing reads per genomic bin for one assay in one cell type. Its variance has several sources: the biology of the cell, the experiment that produced it (lab, antibody, donor), the processing of the reads (depth, read length, duplicate removal), and the random sampling of reads. The run, called ``peeling the onion'', had three goals for a model: impute a track that was never measured (imputation), turn a track processed one way into the same track processed another way (covariate correction), and give a calibrated predictive distribution (uncertainty). miniCANDI is a model of about one million parameters that predicts a Negative Binomial (NB) distribution, i.e. a count distribution with a mean and a size parameter, per assay and \lit{25}~bp bin. It is the small prototype of the full model.}
+
+\cl{On \lit{2026-11-16} the PI set four success criteria: (\lit{1}) the augmented EIC data with counterfactual views; (\lit{2}) a well-defined training objective; (\lit{3}) a well-defined and tested evaluation; (\lit{4}) a settled and tested miniCANDI design, ready for scaling in the next session. The PI also ordered that this report show whether and where the counterfactual views help. This report answers each criterion with ``delivered'', ``partial'' or ``not delivered'' (Table~\ref{tab:criteria}).}
+
+\begin{table}[!htbp]
+\caption{\cl{The four success criteria and their state at the end of the run.}}\label{tab:criteria}
+\footnotesize
+\begin{tabular}{p{3.3cm}p{1.5cm}p{7.4cm}}
+\toprule
+criterion & state & evidence and gap \\
+\midrule
+\lit{1}. Augmented EIC data with counterfactual views & partial & Built: the rebuilt tables with designed views and read halves, the covariate fill (lab, antibody, donor), the add-on of second experiments, the QC side tables and the \lit{1}~bp region store. Not built: the blind tracks (\blindRows{} rows), and the table version with DNase-seq in the correction term. \\
+\lit{2}. Training objective & delivered & One document gives every loss term, weight, mask and default with its code line. Open choices are marked; each names the run that closes it. \\
+\lit{3}. Evaluation, defined and tested & partial & Metrics, selection rule and scorers are defined and pass their tests, and the replicate ladder ran on the real data. \rescoreCritThree{} \\
+\lit{4}. Settled miniCANDI design & partial & A design table with \nDesignRows{} rows gives a value, the evidence and a status for each choice. \rescoreCritFour{} \\
+\botrule
+\end{tabular}
+\end{table}
+
+\subsection{What was known before the close-out}
+
+\cl{Three results of the first iterations frame the close-out. First, the variance layers: at \lit{25}~bp the sampling layer, i.e. the difference between two random halves of the reads of one experiment, was \sampLo{}\% to \sampHi{}\% of the variance per assay, and the replicate layer above it was only \repLo{}\% to \repHi{}\%. These came from \nHalfPairs{} half pairs, \nIsoPairs{} replicate pairs and \nCtPairs{} cell-type pairs. Second, the training-free baselines: the position average, i.e. the mean of the training cells at each position scaled to the target depth, is the reference that a model must beat. Third, an external model, AlphaGenome~\lit{2}, scored \agFair{} on a recalibrated specific correlation on the tracks it never trained on, against \agPosAvg{} for the position average and \agFloor{} for two read halves of the same track. What was missing was a fixed design: which architecture, which inputs, which loss and which training data, each with evidence that survives the seed noise.}
+
+\cl{The question of the close-out is therefore: which miniCANDI design choices does the evidence support, and with what confidence, when the data, the objective and the evaluation are fixed?}
+
+\section{Methods}\label{sec:methods}
+
+\subsection{Data and counterfactual views}
+
+\cl{The data set is the ENCODE Imputation Challenge (EIC), rebuilt from the reads of each published experiment with the standard ENCODE pipeline of its assay. The tables hold \nRows{} measurements: \nRowsTrain{} training, \nRowsVal{} validation and \nRowsBlind{} blind rows. A view is one way to process the reads of a track. The base view pools all reads. The designed views are single-end reads, reads cropped to \lit{36} and \lit{50}~bp, depth thinned to one half, one quarter and one eighth, no duplicate removal, and no mapping-quality filter. Every view has two pseudoreplicate halves, i.e. a random split of its reads into two disjoint halves. The tables list \nPairsAll{} pairs; \nNeverTrained{} of them are designed validation pairs whose combination of views training never samples (\nWithheldCombos{} directed combinations are withheld). The covariate fill added lab, antibody and donor to every row; antibody covers \abTrainPct{}\% of the ChIP-seq training rows. The corrected version (\lit{eic\_v1\_2}) is the default for new training, and every ablation below ran on the first version (\lit{eic\_v1}).}
+
+\subsection{Model and training objective}
+
+\cl{The model reads a window of \lit{1,024} bins (\lit{25.6}~kb) from one cell. Each of \lit{36} tracks is given, hidden or absent. The inputs are the counts of the given tracks, the DNA sequence, and a covariate vector C per input track with \lit{11} columns (log depth, run type, read length, duplicate removal, mapping-quality threshold, pipeline, pipeline version, lab, platform, antibody, donor). The output covariates C$'$ describe the experiment that the model must predict. FiLM layers, i.e. a learned scaling and shift of the features, inject the covariates. Fig.~\ref{fig:design} shows the design.}
+
+\cl{The output per track and bin is an NB with mean $\mu = s \cdot \lit{2}^{\eta}$, where $s$ is the depth of the target relative to \lit{$2^{24}$} reads and $\eta$ is a depth-free log rate. The loss is the NB negative log-likelihood, averaged over three kinds of target: a hidden track (imputation), another view of a given track (correction), and hidden bins of the same view (denoising, i.e. same-view reconstruction). The three kinds have weight \lit{1} each. Each training track is hidden with a probability drawn from $U(\lit{0.2}, \lit{0.8})$; half of the given tracks get a same-view target and half a different-view target; in a same-view target, each bin is hidden with probability \lit{0.25}, and only hidden bins count, so the model cannot copy its input. Training uses AdamW at learning rate \lit{$10^{-3}$} for \lit{80,000} windows. The objective document lists each default that no run tested.}
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}[box/.style={draw, rounded corners, align=center, font=\footnotesize,
+    minimum height=0.8cm, inner sep=3pt}, >={Stealth[length=2mm]}]
+  \node[box, text width=3.0cm] (data) {EIC tracks rebuilt from reads\\ base view + designed views\\ each with two read halves};
+  \node[box, text width=2.6cm, right=0.6cm of data] (in) {inputs: counts, DNA,\\ covariates C;\\ requested C$'$};
+  \node[box, text width=2.5cm, right=0.6cm of in] (net) {conv autoencoder\\ conv + attention\\ U-Net};
+  \node[box, text width=2.0cm, right=0.6cm of net] (nb) {NB per track\\ and bin:\\ mean, size};
+  \draw[->] (data) -- (in);
+  \draw[->] (in) -- (net);
+  \draw[->] (net) -- (nb);
+  \node[box, text width=3.0cm, below=1.0cm of in, xshift=-0.6cm] (imp) {imputation and\\ calibration:\\ all regions};
+  \node[box, text width=3.2cm, right=0.5cm of imp] (cor) {correction terms:\\ screening on a subset,\\ settled on all regions};
+  \node[box, text width=3.0cm, right=0.5cm of cor] (sel) {composite and\\ selection rule\\ (twice the seed range)};
+  \draw[->] (nb.south) |- ($(imp.north)+(0,0.4)$) -- (imp.north);
+  \draw[->] (nb.south) |- ($(cor.north)+(0,0.4)$) -- (cor.north);
+  \draw[->] (imp.east) -- (cor.west);
+  \draw[->] (cor) -- (sel);
+\end{tikzpicture}
+\caption{\cl{Design of the close-out. Every ablation changes one switch of a base recipe and trains with the same data, windows and seeds. All arms are scored on the same validation tracks. Imputation and calibration always use all regions; the correction terms use a subset of regions in the screening tier.}}\label{fig:design}
+\end{figure}
+
+\subsection{Metrics}
+
+\cl{Each goal has one lead term on a scale where \lit{0} is a simple reference and \lit{1} is an ideal.}
+\begin{itemize}
+\item \cl{\textit{Imputation:} the share of the cell-type-specific variance recovered above the noise floor, $\lit{1} - (E - N)/(V - N)$, with $E$ the specific error, $V$ the specific variance of the truth and $N$ the pseudoreplicate noise floor. It is scored on \nItems{} validation items (\nItemsLoao{} with every other assay of the cell as input, \nItemsAcc{} with only an accessibility track as input).}
+\item \cl{\textit{Correction:} the gap closed against depth-only scaling, $(c_{\text{depth}} - c_{\text{model}})/(c_{\text{depth}} - c_{\text{oracle}})$, where $c$ is the continuous ranked probability score (CRPS), i.e. the error of a full predictive distribution, and the oracle is the expected CRPS of the true sampling distribution of the target. It uses the \nCleanPairs{} never-trained crop pairs in \nCleanCells{} cells where neither side keeps duplicates; the other \nDupPairs{} pairs can share DNA fragments between source and target.}
+\item \cl{\textit{Correction-only term:} the share of the covariate cost that the model closes, measured against its own same-view score. It is \lit{1} for a model that ignores its input, so it is read together with the correction term and is not in the composite.}
+\item \cl{\textit{Calibration:} $\lit{1} - \text{PIT}_{\text{model}}/\text{PIT}_{\text{marginal}}$, where PIT is the mean gap between the probability integral transform curve and the diagonal, and the marginal is one constant NB per assay.}
+\end{itemize}
+\cl{The composite (version~\lit{3}) is $\lit{0.5}$ imputation $+ \lit{0.25}$ correction $+ \lit{0.25}$ calibration, each term clipped to $[\lit{0}, \lit{1}]$. This report quotes no raw CRPS value; every correction number is a ratio of CRPS differences, so the split of CRPS into its oracle-scaled and scale-error parts does not apply.}
+
+\subsection{The selection rule and the seed range}
+
+\cl{Each arm trains with \lit{3} seeds. The seed range is the maximum minus the minimum over the seeds. For an arm and its reference, the bar is the larger of the two seed ranges. An effect is ``beyond'' when the difference of means is larger than the bar; otherwise no claim is made. The selection rule, which was fixed before any run, adopts an arm only when its composite rises by more than twice the bar and no goal falls by more than twice its own bar; otherwise the simpler arm stays. With \lit{3} seeds the seed range is a rough estimate of the noise, and no correction for many comparisons is applied.}
+
+\subsection{Region sampling and the two tiers}
+
+\cl{The evaluation set has \nRegions{} regions of \nRegionBins{} bins, drawn at random from the genome mask. Imputation and calibration use all of them. A correction pair needs one prediction pass per region, so the screening tier scores pairs on \lit{16} evenly spaced regions. A check was written before any model score existed: \lit{16} regions become a settled tier only if six conditions hold on twelve runs (the three base recipes and the U-Net with DNA-only skip connections, \lit{3} seeds each). The conditions compare each subset value with a \lit{95}\% region-bootstrap interval of its \lit{256}-region value (\nBoot{} draws), the seed ranges, the selection-rule result and the rank order of the arms.}
+
+\subsection{The ablations}
+
+\cl{Sixteen ablations, i.e. groups of single-switch arms, ran on the conv autoencoder, conv + attention and the U-Net with \lit{3} seeds and \lit{80,000} windows each (\nArmRows{} arms, \nCells{} arm--model cells). They cover the ChIP control as input and output, an average-signal input, two-step routing through the base view, a fixed input depth, the DNA input and its fusion, the covariate embedding, injection and a scrambled-covariate control, the mask mode, four losses, the training views and nine count transforms. Each arm keeps the parameter budget within one percent of its base, except a few DNA-fusion and covariate-code arms.}
+
+\section{Results and discussion}\label{sec:results}
+
+\subsection{Three base models: a tie with a trade-off}
+
+\cl{Table~\ref{tab:refs} gives the three base recipes. On the composite they are within the selection bar of each other. The U-Net recovers the most specific variance (\refUNImp{}, seed range \refUNImpR{}, against \refAEImp{} (\refAEImpR{}) for the conv autoencoder and \refATImp{} (\refATImpR{}) for conv + attention). The two convolutional models close the most correction gap (\refAECor{} (\refAECorR{}) and \refATCor{} (\refATCorR{}) against \refUNCor{} (\refUNCorR{})). All three are far above the position average (imputation \paImp{}, correction \paCor{}, calibration \paCal{}, composite \paComp{}). The axial transformer (composite \compAxial{}, range \compAxialR{}) and Perceiver IO (\compPerc{}, range \compPercR{}) were left out of the close-out by PI ruling.}
+
+\cl{The trade-off survives on all \lit{256} regions (Table~\ref{tab:twofiftysix}): the U-Net closes less correction gap than the conv autoencoder by \dUnAeCorTwoFS{}, beyond its seed range, and the selection rule calls every one of the four comparisons a tie (U-Net below the conv autoencoder by \compAeUnAll{} against a bar of \compAeUnBar{}). A U-Net whose skip connections carry DNA features only moves to the profile of the convolutional models: correction \skipCor{} (\skipCorR{}) against \unCorTwoFS{}, and imputation \skipImp{} against \refUNImp{}. The count skips of the U-Net therefore buy imputation and cost correction. The tuned recipes of the last tuning round (composites \compTunAE{} (\compTunAER{}), \compTunAT{} (\compTunATR{}), \compTunUN{} (\compTunUNR{})) did not beat their bases beyond the seed range, and no architecture had converged at \lit{80,000} windows.}
+
+\begin{table}[!htbp]
+\caption{\cl{Base recipes on the screening tier. Mean (seed range) over \lit{3} seeds, \lit{80,000} windows. Imputation and calibration use all \lit{256} regions; correction, correction-only and the composite use \lit{16} pair regions.}}\label{tab:refs}
+\footnotesize
+\begin{tabular}{lccccc}
+\toprule
+model & imputation & correction & calibration & composite & correction-only \\
+\midrule
+\TabRefs
+\botrule
+\end{tabular}
+\end{table}
+
+\begin{table}[!htbp]
+\caption{\cl{Correction terms on all \lit{256} regions for the four arms of the region check. Mean (seed range) over \lit{3} seeds.}}\label{tab:twofiftysix}
+\footnotesize
+\begin{tabular}{lcc}
+\toprule
+arm & correction (crop pairs) & correction-only \\
+\midrule
+\TabTwoFiftySix
+\botrule
+\end{tabular}
+\end{table}
+
+\subsection{The ablations}
+
+\cl{Tables~\ref{tab:ablfull} and~\ref{tab:ablpairs} give every arm as arm minus base. Table~\ref{tab:ablfull} holds the two terms that are scored on all \lit{256} regions; Table~\ref{tab:ablpairs} holds the terms that rest on the \lit{16} pair regions and are screening results only. Over the \nCells{} arm--model cells, imputation fell beyond the bar in \nImpDn{} cells (\nImpDnTwo{} by more than twice the bar) and rose beyond it in \nImpUp{} (\nImpUpTwo{} by twice). The composite rose beyond the bar in \nCompUp{} cells and by twice the bar in \nCompUpTwo{}. Calibration moved beyond the bar in only \nCalDn{} cell, because its seed ranges are wide (\refUNCalR{} to \refAECalR{} for the bases).}
+
+\cl{Four results are clear on the \lit{256}-region imputation term. First, the depth-removing count transforms hurt all three models by more than twice the bar: local ratio \eLrImpAE{}, \eLrImpAT{} and \eLrImpUN{}, per-window quantile \eQuImpAE{}, \eQuImpAT{} and \eQuImpUN{}. So the input must keep the depth scale. Second, covariates injected as tokens lowered U-Net imputation by \eTokImpUN{} (bar \eTokImpUNBar{}). Third, the ChIP control as an input and the DNA input help conv + attention only: removing the control gave \eCtlImpAT{} (bar \eCtlImpATBar{}), removing DNA \eDnaOffImpAT{} (bar \eDnaOffImpATBar{}), and DNA shifted by \lit{5}~Mb, a control for a misaligned sequence, \eShiftImpAT{} (bar \eShiftImpATBar{}). Fourth, the gains are single-model: the average-signal input raised U-Net imputation by \eAvgImpUN{} (bar \eAvgImpUNBar{}) and an imputation loss weight of \lit{4} raised conv + attention imputation by \eWfourImpAT{} (bar \eWfourImpATBar{}).}
+
+\cl{Many arms are nulls on all three models: language-model DNA embeddings, adaLN-zero injection, covariate dropout, per-value numeric codes, the Poisson-mean loss and the drop mask mode moved no lead term beyond the bar. By the selection rule a null keeps the simpler or the incumbent value. The Anscombe transform is void: its output link has zero gradient at the zero-initialized head, so the mean never trained (imputation \anscImp{} on every seed). It is left out of the tables and needs a fix before a retrain.}
+
+\cl{On the screening terms, the U-Net with a fixed input depth, i.e. every input thinned to \lit{$2^{23}$} reads, gained correction \eFixCorUN{} (bar \eFixCorUNBar{}) and composite \eFixCompUN{} (bar \eFixCompUNBar{}), but lost imputation \eFixImpUN{} (bar \eFixImpUNBar{}, a \lit{256}-region term). The PI noted that a fixed input depth can be unrealistic at deployment. Two-step routing through the base view at native depth lowered correction on both convolutional models (\eNatCorAE{}, bar \eNatCorAEBar{}; \eNatCorAT{}, bar \eNatCorATBar{}) and doubles the compute per window. Training with scrambled covariates lowered the correction-only term on all three models (\eScrCoAE{}, \eScrCoAT{}, \eScrCoUN{}; bars \eScrCoAEBar{}, \eScrCoATBar{}, \eScrCoUNBar{}), so the models use the covariates to correct a track. \rescoreAblNote{}}
+
+\begin{table}[!htbp]
+\caption{\cl{Ablations: terms scored on all \lit{256} regions. Arm minus base, per model (AE conv autoencoder, AT conv + attention, UN U-Net). $^{\dagger}$ beyond the bar (the larger seed range of arm and base); $^{\ddagger}$ beyond twice the bar; $^{a}$ two seeds; -- not run. Base values in Table~\ref{tab:refs}.}}\label{tab:ablfull}
+\scriptsize
+\begin{tabular}{lcccccc}
+\toprule
+ & \mcthree{imputation} & \mcthree{calibration} \\
+arm & AE & AT & UN & AE & AT & UN \\
+\midrule
+\TabAblFull
+\botrule
+\end{tabular}
+\end{table}
+
+\begin{table}[!htbp]
+\caption{\cl{Ablations: terms that use the \lit{16} pair regions (screening only). Arm minus base; marks as in Table~\ref{tab:ablfull}. The same-view-only U-Net arm has a raw correction value far below \lit{0} on two seeds, so its difference is not interpretable.}}\label{tab:ablpairs}
+\tiny
+\setlength{\tabcolsep}{2.6pt}
+\begin{tabular}{lccccccccc}
+\toprule
+ & \mcthree{correction (crop pairs)} & \mcthree{correction-only} & \mcthree{composite} \\
+arm & AE & AT & UN & AE & AT & UN & AE & AT & UN \\
+\midrule
+\TabAblPairs
+\botrule
+\end{tabular}
+\end{table}
+
+\subsection{Whether and where the counterfactual views help}
+
+\cl{The PI asked whether the designed processing views help, and where. Fig.~\ref{fig:views} gives the answer per model. On the composite, training on the base view only is within the bar on all three models (\eBoCompAE{}, \eBoCompAT{}, \eBoCompUN{}; bars \eBoCompAEBar{}, \eBoCompATBar{}, \eBoCompUNBar{}). The composite cannot show a view effect, because its correction term uses only crop pairs, and no view arm moved them on the U-Net.}
+
+\cl{The views help in three places. First, the correction-only term collapses without them on all three models: base view only gave \eBoCoAE{}, \eBoCoAT{} and \eBoCoUN{} (bars \eBoCoAEBar{}, \eBoCoATBar{}, \eBoCoUNBar{}), and adding the depth views alone did not restore it (\eBdCoAE{} on the conv autoencoder). Second, on the U-Net the depth-thinning views help on their own pairs: the two arms with depth views scored \thinWithLo{} to \thinWithHi{} on the thinning pairs in every seed, and every seed without them scored at most \thinWithoutHi{} (all views \thinAll{}, base only \thinBase{} with a very wide range). Third, models trained with all views keep imputation; the views do not cost imputation on any model.}
+
+\cl{The views hurt in one place. Adding only the alignment-level views (no duplicate removal, no mapping-quality filter) lowered imputation on both convolutional models (\eBaImpAE{} and \eBaImpAT{}; bars \eBaImpAEBar{}, \eBaImpATBar{}) and correction (\eBaCorAE{}, \eBaCorAT{}). On the U-Net this arm scored \mnAlign{} (\mnAlignR{}) on the \nMnPairs{} pairs that mix the mapping-quality and duplicate knobs, against \mnAll{} for all views. A same-view-only arm raised imputation on the convolutional models (\eSvImpAE{}, \eSvImpAT{}) but broke the U-Net composite (\eSvCompUN{}, bar \eSvCompUNBar{}). The reading: the views are needed for the correction-only term and for depth correction, and the alignment-level views are harmful when trained without the others. The correction-only evidence is a \lit{16}-region screening result; it is one of the decisive arms of the rescoring.}
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=2 by 1, horizontal sep=0.6cm, yticklabels at=edge left},
+    width=0.47\linewidth, height=5.0cm, ytick=data, y dir=reverse,
+    yticklabels from table={\tblViewsCo}{label}, yticklabel style={font=\scriptsize},
+    xticklabel style={font=\scriptsize}, xlabel style={font=\footnotesize},
+    title style={font=\footnotesize}, enlarge y limits=0.12,
+    extra x ticks={0}, extra x tick labels={}, extra x tick style={grid=major, grid style={gray}},
+    unbounded coords=discard]
+\nextgroupplot[title={(a) correction-only, \lit{16} regions}, xlabel={arm minus all views}]
+  \addplot[only marks, mark=*, mark size=1.6pt, color=mAE, error bars/.cd, x dir=both, x explicit]
+    table[x=dAE, y expr=\thisrow{y}-0.2, x error=bAE]{\tblViewsCo};
+  \addplot[only marks, mark=square*, mark size=1.6pt, color=mAT, error bars/.cd, x dir=both, x explicit]
+    table[x=dAT, y=y, x error=bAT]{\tblViewsCo};
+  \addplot[only marks, mark=triangle*, mark size=2pt, color=mUN, error bars/.cd, x dir=both, x explicit]
+    table[x=dUN, y expr=\thisrow{y}+0.2, x error=bUN]{\tblViewsCo};
+\nextgroupplot[title={(b) imputation, \lit{256} regions}, xlabel={arm minus all views},
+    legend style={font=\scriptsize, at={(-0.1,-0.40)}, anchor=north, legend columns=3}]
+  \addplot[only marks, mark=*, mark size=1.6pt, color=mAE, error bars/.cd, x dir=both, x explicit]
+    table[x=dAE, y expr=\thisrow{y}-0.2, x error=bAE]{\tblViewsImp};
+  \addplot[only marks, mark=square*, mark size=1.6pt, color=mAT, error bars/.cd, x dir=both, x explicit]
+    table[x=dAT, y=y, x error=bAT]{\tblViewsImp};
+  \addplot[only marks, mark=triangle*, mark size=2pt, color=mUN, error bars/.cd, x dir=both, x explicit]
+    table[x=dUN, y expr=\thisrow{y}+0.2, x error=bUN]{\tblViewsImp};
+  \legend{conv autoencoder, conv + attention, U-Net}
+\end{groupplot}
+\end{tikzpicture}
+\caption{\cl{Training views against the all-views reference. Each point is arm minus reference; the error bar is $\pm$ the bar (the larger seed range of arm and reference), so a bar that does not cross \lit{0} is an effect beyond the seed range. (a) The correction-only term falls on all three models without the processing views. (b) Imputation falls only with the alignment-level views on the convolutional models. The U-Net same-view-only correction-only value is undefined and is not drawn.}}\label{fig:views}
+\end{figure}
+
+\subsection{The check of \lit{16} against \lit{256} pair regions failed}
+
+\cl{The check ran on twelve runs with \nBoot{} region-bootstrap draws over \nClusters{} clusters. No size of \lit{8}, \lit{16} or \lit{32} regions passed all six conditions (Table~\ref{tab:check}). At \lit{16} regions, \condOneP{} of \condOneN{} subset values fell inside the \lit{95}\% interval of their \lit{256}-region value (condition~\lit{1}), only \condTwoShare{}\% of the per-assay cells did (condition~\lit{2}), \condFourP{} of \condFourN{} seed ranges stayed within \lit{1.5} times their \lit{256}-region value (condition~\lit{4}), and \condSixP{} of \condSixN{} rank orders kept their sign (condition~\lit{6}). The selection-rule result held for all four comparisons (condition~\lit{3}).}
+
+\cl{Fig.~\ref{fig:region} shows the failure per run and seed. For the crop-pair correction term \inCorP{} of \inCorN{} run-seeds were inside the interval, but for the correction-only term only \inCoP{} of \inCoN{} were: on the two convolutional models the \lit{16}-region value was higher than the \lit{256}-region interval on every seed. So the pre-written rule applies: correction terms are scored on all \lit{256} regions from now on, and every \lit{16}-region correction effect in this report is a screening result.}
+
+\cl{The \lit{16} regions are not ``dead'' regions. Their median signal is at the \pairPct{}th percentile of all \nCandBlocks{} candidate blocks, and the poorest is at the \pairLowPct{}th. A bootstrap of the \lit{16} regions found that every ablation effect beyond the seed range kept its sign in at least \lit{95}\% of \nResample{} resamples. One region carries much weight: without it the U-Net correction-only effect of the quantile transform falls from \regNinetySix{} to \regNinetySixTo{}. The two checks answer different questions. The bootstrap says the effects hold for regions like the \lit{16}; the failed check says the \lit{16} do not reproduce the \lit{256}-region values.}
+
+\begin{table}[!htbp]
+\caption{\cl{The pre-written check of the pair regions: pass or fail per condition and size. A size passes only when all six conditions pass.}}\label{tab:check}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lccccccc}
+\toprule
+regions & (\lit{1}) interval & (\lit{2}) per assay & (\lit{3}) rule result & (\lit{4}) seed range & (\lit{5}) variance ratio & (\lit{6}) rank & all \\
+\midrule
+\TabCheck
+\botrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=2 by 1, horizontal sep=0.6cm, yticklabels at=edge left},
+    width=0.47\linewidth, height=5.6cm, ytick=data, y dir=reverse,
+    yticklabels from table={\tblRegion}{label}, yticklabel style={font=\tiny},
+    xticklabel style={font=\scriptsize}, xlabel style={font=\footnotesize},
+    title style={font=\footnotesize}, enlarge y limits=0.04]
+\nextgroupplot[title={(a) correction, crop pairs}, xlabel={term value}]
+  \addplot[only marks, mark=none, color=mgray, error bars/.cd, x dir=both, x explicit]
+    table[x=ca, y=y, x error plus expr=\thisrow{chi}-\thisrow{ca}, x error minus expr=\thisrow{ca}-\thisrow{clo}]{\tblRegion};
+  \addplot[only marks, mark=*, mark size=1.4pt, color=mUN] table[x=cs, y=y]{\tblRegion};
+\nextgroupplot[title={(b) correction-only}, xlabel={term value}]
+  \addplot[only marks, mark=none, color=mgray, error bars/.cd, x dir=both, x explicit]
+    table[x=oa, y=y, x error plus expr=\thisrow{ohi}-\thisrow{oa}, x error minus expr=\thisrow{oa}-\thisrow{olo}]{\tblRegion};
+  \addplot[only marks, mark=*, mark size=1.4pt, color=mUN] table[x=os, y=y]{\tblRegion};
+\end{groupplot}
+\end{tikzpicture}
+\caption{\cl{Value on \lit{16} pair regions (red dot) against the \lit{256}-region value (gray dot) and its \lit{95}\% region-bootstrap interval (gray bar), per run and seed. A dot outside its bar fails condition~\lit{1}. (a) The crop-pair correction term is mostly inside. (b) The correction-only term of the convolutional models is above the interval on every seed.}}\label{fig:region}
+\end{figure}
+
+\subsection{The \lit{256}-region rescoring of the decisive arms}\label{sec:rescore}
+
+%% RESCORING-PARAGRAPH START (macros from the rescoring read; see the header)
+\cl{Seven decisive arms (\lit{21} arm folders, \rescoreSeeds{} run-seeds) are scored on all \lit{256} regions so that the correction effects of the ablations can settle: the scrambled covariates, base view only, two-step at native and at fixed base depth, fixed input depth, the average-signal input, and imputation weight \lit{4}. The cost is \rescoreCost{} allocated CPU-hours (\nRunsAE{} conv autoencoder run-seeds at \costAE{}, \nRunsAT{} conv + attention at \costAT{}, \nRunsUN{} U-Net at about \costUN{} each). The settled-design document states, before any result, the rule that each arm's \lit{256}-region effect applies; a rule is decided only when every arm it names has its planned seeds, and an arm that is not finished gives no number. \textit{Status.} \rescoreStatus{}}
+
+\cl{\rescoreRead{}}
+%% RESCORING-PARAGRAPH END
+
+%% RESCORING-TABLE START (the 256-region columns fill themselves from the build hook)
+\begin{table}[!htbp]
+\caption{\cl{The seven decisive arms: effects on the two correction terms, arm minus base. The \lit{16}-region columns are screening results; the \lit{256}-region columns are the rescoring, scores as of \rescoreAsOf{}. ``Not finished'' marks an arm with fewer seeds than planned. Marks as in Table~\ref{tab:ablfull}.}}\label{tab:rescore}
+\scriptsize
+\begin{tabular}{llcccc}
+\toprule
+ & & \mctwo{\lit{16} regions} & \mctwo{\lit{256} regions} \\
+arm & model & correction & correction-only & correction & correction-only \\
+\midrule
+\TabRescore
+\botrule
+\end{tabular}
+\end{table}
+%% RESCORING-TABLE END
+
+\subsection{Signal p-value and peaks from the predicted distribution}
+
+\cl{The EIC scores a signal track, i.e. the $-\log_{\lit{10}}$ p-value of the \lit{MACS2} peak caller, not counts. We derive this track from the predicted NB after training. The first formula used the count in each bin alone (the in-bin pileup). It has a known flaw: it does not spread a read to the bins that its fragment covers, so the pileup is too spiky, it overstates the counting noise of a pileup built from a predicted NB, and it over-calls peaks. On the observed counts of \nFormTargets{} validation targets (\nFormChip{} ChIP-seq) we tested \nVariants{} pileup variants against the pipeline's own track (Table~\ref{tab:formula}). The box-spread variant, i.e. each count spread over a centred box of the fragment length, raised the agreement and the peak precision, and the PI adopted it. It is a fitted choice among \nVariants{} variants, not a derivation; the strand and the base-pair position are lost at binning, so no formula on \lit{25}~bp counts can reproduce the pipeline exactly.}
+
+\cl{Only one run-seed has a signal-space score, and it used the flawed in-bin formula: the conv autoencoder, seed \lit{0}, recovered \eTwoSigExp{} of the specific variance in signal space against \eTwoCounts{} in counts (mean over \eTwoNAssays{} assays), and \eTwoSigPc{} when the control was also predicted. These values carry the flaw and have no seed range. The predicted control was close to the observed one: the median ratio was \lamVisible{} when the control was an input (\lamVisibleK{} of \lamVisibleN{} targets within \lit{10}\%) and \lamHidden{} when it was hidden (\lamHiddenK{} of \lamHiddenN{}). The rescoring of the base runs with the box spread is queued.}
+
+\begin{table}[!htbp]
+\caption{\cl{Signal formula on observed counts against the pipeline track: median over targets. Peaks are \lit{500}~bp tiles at $-\log_{\lit{10}} p \ge \lit{2}$.}}\label{tab:formula}
+\footnotesize
+\begin{tabular}{lcc}
+\toprule
+measure & in-bin pileup (superseded) & box spread (adopted) \\
+\midrule
+\TabFormula
+\botrule
+\end{tabular}
+\end{table}
+
+\subsection{Second experiments, lab and donor}
+
+\cl{A second experiment is another ENCODE experiment of the same cell and assay. The add-on tables append \nSecond{} such rows (\nSecondOther{} from another lab, \nSecondSame{} from the same lab), with \nSecondVal{} validation targets; the leak checks passed with every count at zero. The PI decided two points on \lit{2026-11-17}. First, lab is reported together with donor as one effect, because a pair with another lab and the same donor comes from only two cells in every assay class. Second, the \dTwoDropped{} unbuilt DNase-seq second-experiment rows are dropped, so the add-on stays at \dTwoKept{} experiments.}
+
+\cl{The variance layers of these pairs ran on the real data (pair value as in the ladder; rows pooled by assay class; \lit{95}\% cluster-bootstrap intervals). Over the biological replicate, all second-experiment pairs of broad histone marks gave \dTwoBrAll{} [\dTwoBrAllLo{}, \dTwoBrAllHi{}] (\dTwoBrAllN{} pairs, \dTwoBrAllC{} cells), and lab with donor gave \dTwoBrLd{} [\dTwoBrLdLo{}, \dTwoBrLdHi{}] (\dTwoBrLdN{} pairs, \dTwoBrLdC{} cells). For narrow histone marks the values were \dTwoNrAll{} [\dTwoNrAllLo{}, \dTwoNrAllHi{}] (\dTwoNrAllN{} pairs, \dTwoNrAllC{} cells) and \dTwoNrLd{} [\dTwoNrLdLo{}, \dTwoNrLdHi{}] (\dTwoNrLdN{} pairs, \dTwoNrLdC{} cells). Every interval includes zero, so these pairs resolve no variance of lab with donor beyond a biological replicate. In \dTwoBrLdTech{} of the \dTwoBrLdN{} broad lab-with-donor pairs the two sides also differ in run type, read length or platform. The accessibility classes have at most \dTwoSmall{} pairs. These pooled rows use other cells than the rung below, and they subtract the replicate value of the first experiment only (the one-sided form). The two-sided ladder below has no value for these pairs, because no second experiment has a biological replicate pair. No model ran on these pairs.}
+
+\subsection{The replicate ladder}
+
+\cl{The replicate ladder splits the pair value $\lit{0.5}\,E[(Y-Y')^{\lit{2}}]$ of two tracks, i.e. the expected squared difference of their log counts at a common depth, into nested layers. Each rung adds one difference to the rung below it: read sampling (two read halves of one library), a biological replicate, a second experiment, and another cell type. The increment of a rung is assay-matched: on each cell and assay with pairs of both rungs, the pair value of the rung minus that of the rung below, then a mean over assays and cells. A rung is estimable with at least \minPairs{} matched pairs from \lit{3} cells.}
+
+\cl{By PI decision of \lit{2026-11-17} the ladder subtracts two-sided. A pair of two different experiments (another cell type, or a second experiment) holds the replicate variance of both experiments, so it subtracts the mean of the two replicate values, i.e. the biological-replicate pair values of the experiment of each side. A pair whose second experiment has no replicate pair leaves the matched set. The bootstrap resamples all cells jointly: a drawn cell counts wherever it appears, as first or second side, and the replicate values are recomputed inside each draw. Version \lit{2} of this report used the one-sided form (the replicate value of the first side only) and called it two-sided; earlier ladder numbers, also the smoke run on \lit{H3K36me3}, are one-sided. Table~\ref{tab:ladderforms} shows both forms once. The two-sided cell-type increment is lower than the one-sided value in broad and narrow marks. Most of the drop comes from the pairs that leave (\ladBrCtLeft{} broad and \ladNrCtLeft{} narrow cell-type pairs). On the pairs that stay, the one-sided form gives a lower broad value (\ladKeptBrOne{}), so the one-sided form is not an upper value in general. The check on common cell types replaces the telescoping check: the sampling, replicate and cell-type increments, recomputed on the cells that all three rungs hold, stay inside the interval of their own row in \ladCcOk{} of \ladCcN{} groups of assay class, region set and signal band; every failure is a DNase-seq group.}
+
+\cl{Table~\ref{tab:ladder} gives every estimable two-sided rung. Read sampling holds most of the cell-type pair value: \ladBrSamp{} in broad marks and \ladNrSamp{} in narrow marks. The biological replicate adds \ladBrRep{} and \ladNrRep{}, and the cell type adds \ladBrCt{} and \ladNrCt{}. No rung between the replicate and the cell type is estimable: all \ladBrOeAll{} broad and \ladNrOeAll{} narrow second-experiment pairs leave the matched set, because no second experiment has a biological replicate pair of its own. The DNase-seq rows are not interpretable. Every DNase-seq pair is thinned to a common depth of \ladDnDepth{} reads, which one second experiment (cell \ladDnCell{}) sets as the shallowest side of any DNase-seq pair; the next shallowest side of a DNase-seq pair has \ladDnNext{} reads. At this depth the DNase-seq read-sampling value is \ladDnSampV{}, against \ladBrSampV{} and \ladNrSampV{} for broad and narrow marks. A rerun of the layers stage without that track is open. ATAC-seq has no estimable rung (\ladAtacN{} read-half pairs from \ladAtacC{} cells). The sequencing and library rungs are empty, because the per-library and per-lane units were never built, and no pair in the challenge data holds two donors inside one experiment. The crossed mixed model did not run: it needs a noise level per library first.}
+
+\begin{table}[!htbp]
+\caption{\cl{The replicate ladder, two-sided and assay-matched, all regions and signal bands. Increment over the rung below (pair value of log counts) with its \lit{95}\% cluster-bootstrap interval; share of the cell-type pair value on the same cells and assays (number of those units). The DNase-seq rows are at a common depth that one shallow track sets; do not interpret them.}}\label{tab:ladder}
+\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{llccc}
+\toprule
+assay class & rung & pairs (cells) & increment [\lit{95}\% interval] & share (units) \\
+\midrule
+\TabLadder
+\botrule
+\end{tabular}
+\end{table}
+
+\begin{table}[!htbp]
+\caption{\cl{The one-sided form (version \lit{2}) against the two-sided form (now), all regions and signal bands: increment [\lit{95}\% interval] (pairs, cells), and the relative change. A two-sided row that is not estimable gives the number of pairs whose second experiment has no replicate pair.}}\label{tab:ladderforms}
+\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{llccc}
+\toprule
+assay class & rung & one-sided & two-sided & change \\
+\midrule
+\TabLadderForms
+\botrule
+\end{tabular}
+\end{table}
+
+\subsection{The settled design}
+
+\cl{Table~\ref{tab:design} condenses the settled-design document. ``Settled'' means that no planned run can change the value or that the PI fixed it; ``provisional'' means that a named run can change it. The design tests gave \testsPassed{} passed, \testsSkipped{} skipped and \testsFailed{} failed. The failure was a configuration-key guard that would stop every run of the covariate-set search; a later commit on the run branch fixed it.}
+
+\cl{Every model beats the position average by more than twice its seed range on imputation and calibration. On the \lit{16}-region correction term both convolutional models do too, and the U-Net does not: its margin is \dTwoMarginUN{} against twice its seed range, \dTwoBarUN{}.}
+
+\begin{table}[!htbp]
+\caption{\cl{The settled miniCANDI design, condensed. Confidence and status are the agent's reading of the evidence; the rows of rules \lit{2.1} to \lit{2.6} follow the rescoring read.}}\label{tab:design}
+\scriptsize
+\begin{tabular}{p{2.8cm}p{4.3cm}p{2.0cm}p{2.9cm}}
+\toprule
+choice & value & confidence & status \\
+\midrule
+architecture & conv autoencoder, conv + attention and U-Net carried forward; tie with a trade-off & moderate & settled tie; the pick is the PI's \\
+count input & offset, $\log_{\lit{2}}((y+\lit{1})/s)$ & strong against local ratio and quantile & settled \\
+covariate injection & FiLM & moderate & settled; concatenation open on conv + attention \\
+covariate set & \lit{11} metadata columns, no QC columns & \dsCovConf{} & \dsCovStatus{} \\
+mask mode & learned token (drop is equal) & moderate null & settled \\
+ChIP control & input and output & weak; output by ruling & settled \\
+DNA & own tower, early join & weak & settled \\
+loss & NB negative log-likelihood, weights \lit{1}/\lit{1}/\lit{1} & \dsLossConf{} & \dsLossStatus{} \\
+training views & all views & \dsViewsConf{} & \dsViewsStatus{} \\
+two-step routing & off & \dsTwostepConf{} & \dsTwostepStatus{} \\
+input depth & native & \dsDepthConf{} & \dsDepthStatus{} \\
+average-signal input & off & \dsAvgConf{} & \dsAvgStatus{} \\
+resolution, context & \lit{25}~bp, \lit{1,024} bins & by ruling & settled for this run \\
+training length & \lit{80,000} windows & weak (no model converged) & provisional \\
+QC on input, cell embedding & off, none & not tested & provisional \\
+\botrule
+\end{tabular}
+\end{table}
+
+\subsection{Discussion}
+
+\cl{The data and the evaluation are the solid part of the close-out. The rebuilt tables separate processing variance from biology by design, every view has read halves, and the scorer passed exact validity checks on its references. The design part is weaker. Most effects that are large enough to show beyond the seed range are on the imputation term or on correction terms that rest on \lit{16} regions, and most single gains hold on one model only. With \lit{3} seeds, ranges as wide as \refAECalR{} on calibration hide effects of that size, and the many comparisons of the tables make a few false ``beyond'' marks likely.}
+
+\cl{Three readings carry over to scaling with moderate confidence. First, the input must keep the depth scale: every depth-removing transform hurt imputation on all three models, and an earlier arm that hid the depth covariate cut the U-Net composite. Second, the architecture choice is a choice between goals: the count skips of the U-Net raise imputation and lower correction. Third, the counterfactual views are needed for the correction-only term and for depth correction, and they cost no imputation when all views train together. \rescoreDiscuss{}}
+
+\cl{Several numbers told to the PI during the run were later corrected. The cost of one \lit{256}-region scoring was first quoted as \oldScoreCost{} CPU-hours; the measured cost is \costAE{} to about \costUN{}. The cost of the rescoring rose from \oldCheckCost{} to \rescoreCost{} CPU-hours, the blind build from \blindOldCost{} CPU-hours used to about \blindNewCost{} allocated, and the mix-and-match round fell from \mixOldCost{} to \mixCost{}. The composite changed definition twice; every composite in this report is version~\lit{3}.}
+
+\subsection{Data deliverables of the last night}
+
+\cl{The QC side tables hold read-derived quality metrics per row. The fill wrote \qcWhole{} records for the base pass and \qcPrOne{} for the read halves (\qcOk{} ok, \qcNoRead{} without a read set, \qcRefused{} refused). Over the \qcRows{} training and validation rows, NSC and RSC are filled for \qcNsc{} (\qcNscPct{}\%), the fragment length for \qcFrag{} (\qcFragPct{}\%), and NRF, \lit{PBC1} and \lit{PBC2} for \qcNrf{} (\qcNrfPct{}\%), because they exist only for the base and no-duplicate-removal views. FRiP is filled for \qcFrip{} rows, because this pass calls no peaks. The \lit{1}~bp region store holds \bpViews{} recounted views; an independent count matched \bpPts{} of \bpPtsStore{} points, and the table build, which refuses a view without a passed read-set check, wrote \bpMeas{} measurements and \bpPairs{} pairs. Its verification (Nibi job \bpVerifyJob{}) still runs; the variance by bin size has finished (Section~\ref{sec:binvar}). Before any removal, four scratch folders went to tape as \arcTars{} tar files (\arcGib{} GiB), each compared with scratch. The removals took Nibi scratch from \scBefore{} to \scMid{} and then to \scAfter{} GiB, under the soft quota, and writes resumed.}
+
+\subsection{Variance by bin size on the \lit{1}~bp store}\label{sec:binvar}
+
+\cl{For a bin size $b$, the law of total variance splits the variance of the base-by-base read counts into a part inside blocks of $b$ bases (below $b$) and a part between blocks. We give the share below $b$ (\lit{256} evaluation regions, validation tracks), raw and from the covariance of two biological replicates, in which read-sampling noise cancels; pure noise gives $\lit{1}-\lit{1}/b$, i.e.\ \bvNoise{} below \lit{25}~bp. Below \lit{25}~bp lie \bvBrRaw{} (broad marks, \bvBrN{} tracks) and \bvNrRaw{} (narrow marks, \bvNrN{} tracks); replicates reproduce \bvBrRep{} (\bvBrNp{} pairs; assays \bvBrRepLo{} to \bvBrRepHi{}) and \bvNrRep{} (\bvNrNp{} pairs; \bvNrRepLo{} to \bvNrRepHi{}). So a finer bin adds noise, not signal. From \lit{25} to \lit{125}~bp the raw share grows by \bvBrRawStep{} and \bvNrRawStep{} and the replicate share by \bvBrRepStep{} and \bvNrRepStep{}, so \bvBrPct{}\% and \bvNrPct{}\% of the added variance is reproducible (\bvBrPctFine{}\% and \bvNrPctFine{}\% below \lit{25}~bp). A coarser bin thus starts to lose signal. DNase-seq has one track (\bvDnId{}, \bvDnReads{} reads; raw \bvDnRaw{}) and no replicate pair, so accessibility is not answered; the DNase-seq track with very few reads is not in the store. Rows rest on one to three cells, at each track's depth. All \bvPsNeg{} of \bvPsN{} read-half rows are below zero (\bvPsLo{} to \bvPsHi{}): duplicate removal leaves at most one read per base and strand, so two halves of one read set exclude each other (control \bvCtlPs{} below \lit{5}~bp; predicted \bvCtlPred{}). Read halves are therefore not used. Per-assay rows and intervals are in the evidence note (\lit{\path{results/closeout_A7/variance_2026-11-18/VARIANCE_READ.md}}).}
+
+
+\subsection{What did not run, and why}
+
+\cl{Three limits stopped work in the last two days. First, Fir entered a planned outage on \lit{2026-11-17} that lasts to about \lit{2026-11-20}; \firQueued{} jobs wait in its queue, among them the twelve matched-compute trainings and the Fir copies of the rescoring. Second, Nibi scratch refused every write until the last night: use was \nibiUsed{} GiB against a soft quota of \nibiQuota{} GiB, and the work folder of \nibiWork{} GiB could leave only after the QC fill and the recount that read it. Third, the PI gave the run \lit{24} hours to close, so no new training round started. The run used \tallyTotal{} allocated CPU-hours from \lit{2026-11-10} to \lit{2026-11-17} (Fir \tallyFir{}, Nibi \tallyNibi{}). Not run: the mix-and-match round, the minimum covariate set, the learned cell-type embedding, QC metrics on the input, RNA-seq input, the resolution arms, the pointwise model under the corrected composite, the blind build and the final model.}
+
+\begin{table}[!htbp]
+\caption{\cl{The ready queue for the next session, from the ready-queue document. Cost in allocated CPU-hours.}}\label{tab:queue}
+\tiny
+\begin{tabular}{rp{6.2cm}p{2.6cm}p{3.6cm}}
+\toprule
+order & entry & cluster & CPU-hours \\
+\midrule
+\TabQueue
+\botrule
+\end{tabular}
+\end{table}
+
+\subsection{Decisions taken and decisions moved}
+
+\cl{On \lit{2026-11-17} the PI took \nDecisions{} decisions, one at a time (Table~\ref{tab:decisions}). Decisions \lit{1} to \lit{5} act in this window; decisions \lit{6} to \lit{9} fix the scope and budget of runs in the next session. The PI moved two decisions to the next session: the architecture that goes to scaling, and the data version of the final model. The PI's words: ``\piQuoteScale{}''; on the data version, ``\piQuoteData{}''. The settled-design document informs both and recommends, as the agent's intent, carrying the conv autoencoder and the U-Net into the first scaling step, with the choice after the mix-and-match round, and building the table version that makes DNase-seq scorable for correction before the final model trains.}
+
+\begin{table}[!htbp]
+\caption{\cl{The PI decisions of \lit{2026-11-17}, from the decision record. Costs are allocated CPU-hours.}}\label{tab:decisions}
+\tiny
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{rp{3.6cm}p{4.4cm}p{5.6cm}}
+\toprule
+ & decision & PI choice & consequence \\
+\midrule
+\TabDecisions
+\botrule
+\end{tabular}
+\end{table}
+
+\section{Conclusion}\label{sec:conclusion}
+
+\cl{The data criterion is partial: the tables, views, halves, covariates and second experiments exist, and the blind build does not. The objective criterion is delivered. The evaluation criterion is partial: the metrics and the scorer are defined and tested, and the replicate ladder shows that read sampling holds most of the cell-type pair value; but \rescoreConclEval{}. The design criterion is partial: \rescoreConclDesign{}}
+
+\cl{The main limitations are the \lit{16}-region correction terms, \lit{3} seeds per arm, models that had not converged at \lit{80,000} windows, and ablations on the first table version.}
+
+\cl{The next session starts from the ready queue (Table~\ref{tab:queue}): the rescoring settles every correction effect, the mix-and-match round (\mixCost{} CPU-hours plus a gate of \mixGate{}) tests whether gains combine, and the final model gives the EIC board row.}
+
+
+\end{document}

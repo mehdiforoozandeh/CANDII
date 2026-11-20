@@ -1,0 +1,32 @@
+{
+ "rung": 2,
+ "context_bins": 1024,
+ "covariate_injection": "film",
+ "mask_mode": "token",
+ "dna": "own",
+ "scramble_covariates": false,
+ "scramble_all": false,
+ "count_transform": "offset",
+ "qc_on_input": false,
+ "two_step": true,
+ "base_depth": "fixed",
+ "average_input": false,
+ "control_input": true,
+ "predict_control": true,
+ "param_budget": 1000000.0,
+ "windows_seen": 80000,
+ "lr": 0.001,
+ "batch_size": 8,
+ "simpler_than_base": false,
+ "heldout_loss": {
+  "batches": 16,
+  "every": 20
+ },
+ "base_ref_log2_depth": {
+  "accessibility_dnase": 24.5,
+  "accessibility_atac": 25.0,
+  "broad_histone": 24.0,
+  "narrow_histone": 23.5,
+  "control": 23.5
+ }
+}

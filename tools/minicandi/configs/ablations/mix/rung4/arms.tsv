@@ -1,0 +1,8 @@
+arm	run_name	switches	n_switches	keys_changed	native_depth_scoring	design
+avg	mix_unet_avg	average_input	1	average_h5,average_input	no	full
+pearson	mix_unet_pearson	pearson	1	count_transform	no	full
+fixdepth	mix_unet_fixdepth	fixed_depth	1	input_depth	yes	full
+avg-pearson	mix_unet_avg-pearson	average_input,pearson	2	average_h5,average_input,count_transform	no	full
+avg-fixdepth	mix_unet_avg-fixdepth	average_input,fixed_depth	2	average_h5,average_input,input_depth	yes	full
+pearson-fixdepth	mix_unet_pearson-fixdepth	pearson,fixed_depth	2	count_transform,input_depth	yes	full
+avg-pearson-fixdepth	mix_unet_avg-pearson-fixdepth	average_input,pearson,fixed_depth	3	average_h5,average_input,count_transform,input_depth	yes	full

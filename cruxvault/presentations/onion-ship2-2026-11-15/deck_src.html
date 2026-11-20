@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="prezit-arc" content="paper">
+<title>Onion Shipment Two</title>
+
+<!--
+  Shipment 2 of the peeling-the-onion run (2026-11-15; due 18:00 UTC).
+  arc      paper arc: scope -> recap of the task and the three goal terms -> the new scale of gap closed (Methods)
+           -> Results: the ladder (three slides), the rung-1 wiring checks, the rung-4 arms, the hard offset,
+           training-region selection, the AlphaGenome 2 board, the eta view of the variance layers
+           -> first Discussion -> what is not done and iteration 2 (prezit references/paper-arc.md)
+  anchor   the vault has no single onion question above the others; see DECK.md for the nodes this deck covers
+  build    python build_deck.py  ->  index.html beside this file
+  numbers  every number comes from DATA, which build_deck.py reads from the vault files it lists;
+           result dirs: results/metrics_screening/ (and sh2_refresh/), results/oracle_floor/, results/t308/,
+           results/eta_space/, results/t309/sources.md; the speaker notes of each slide name its files.
+           Typed design constants: chart axis ranges, panel letters, rung order and plain names of arms,
+           shipment, ruling and model-version numbers marked data-src="literal".
+  notes    every slide carries speaker notes (press n). All prose is drafted by Claude for the PI's review.
+-->
+<script type="application/json" id="deck-sources">__SOURCES__</script>
+
+<style>
+  :root{
+    --paper:#f7f7f4; --card:#ffffff; --ink:#1b1d1f; --ink2:#36393d; --muted:#6c6f73; --faint:#9a9c9f;
+    --hair:#e2e3df; --grid:#ececea; --accent:#2f6f8f;
+    --samp:#c8b88f; --rep:#4f9a8a; --ct:#b5543a;
+    --mnb:#8a8d92; --pa:#2f6f8f; --dos:#d9822b; --flr:#6b4fa0; --mdl:#3f8a5c;
+    --p256:#5c6f9e; --p16:#d9822b; --fit:#a7a9ad; --gen:#e6e6e1;
+    --ok:#3f8a5c; --wait:#c99a2e; --bad:#b5543a;
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --disp:"Space Grotesk","Inter",-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+    --paper:#141618; --card:#1d2023; --ink:#eceae6; --ink2:#d2d0cb; --muted:#a3a29d; --faint:#7d7d79;
+    --hair:#33373b; --grid:#2a2d30; --accent:#6fb3d2;
+    --samp:#a8996f; --rep:#5fb3a1; --ct:#d77657;
+    --mnb:#a3a6ab; --pa:#6fb3d2; --dos:#f0a050; --flr:#a58bd8; --mdl:#62b182;
+    --p256:#8496c8; --p16:#f0a050; --fit:#6d7075; --gen:#2c3034;
+    --ok:#62b182; --wait:#d9b04a; --bad:#d77657; color-scheme:dark }}
+  :root[data-theme="dark"]{
+    --paper:#141618; --card:#1d2023; --ink:#eceae6; --ink2:#d2d0cb; --muted:#a3a29d; --faint:#7d7d79;
+    --hair:#33373b; --grid:#2a2d30; --accent:#6fb3d2;
+    --samp:#a8996f; --rep:#5fb3a1; --ct:#d77657;
+    --mnb:#a3a6ab; --pa:#6fb3d2; --dos:#f0a050; --flr:#a58bd8; --mdl:#62b182;
+    --p256:#8496c8; --p16:#f0a050; --fit:#6d7075; --gen:#2c3034;
+    --ok:#62b182; --wait:#d9b04a; --bad:#d77657; color-scheme:dark }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;overflow:hidden}
+  #progress{position:fixed;top:0;left:0;height:3px;background:var(--accent);width:0;transition:width .5s ease;z-index:50}
+  #deck{position:fixed;inset:0}
+  .slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+    padding:4vh 6vw 8.5vh;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .5s ease,visibility .5s ease}
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+  .wrap{width:100%;max-width:1200px;margin:0 auto}
+  .kicker{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:14px}
+  .kicker .sec{display:inline-block;background:var(--accent);color:var(--paper);padding:3px 9px;border-radius:4px;margin-right:12px;letter-spacing:.14em}
+  h1{font-family:var(--disp);font-weight:600;line-height:1.1;font-size:clamp(30px,4.2vw,54px);letter-spacing:-.015em;text-wrap:balance}
+  h2{font-family:var(--disp);font-weight:600;line-height:1.16;font-size:clamp(20px,2.4vw,32px);letter-spacing:-.01em;margin-bottom:12px;text-wrap:balance;max-width:62ch}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;margin-top:18px;max-width:66ch}
+  .note{color:var(--muted);font-size:13.5px;line-height:1.5;margin-top:10px;max-width:120ch}
+  ul.pts{list-style:none;margin-top:8px;display:grid;gap:7px}
+  ul.pts li{position:relative;padding-left:22px;font-size:clamp(13.5px,1.3vw,17px);line-height:1.42;color:var(--ink2)}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.6em;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  ul.pts.cols{grid-template-columns:1fr 1fr;column-gap:40px}
+  [data-src],[data-derived],.v{font-variant-numeric:tabular-nums;font-weight:600}
+  .tag{display:inline-block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;border-radius:4px;padding:1px 7px;border:1px solid currentColor;font-weight:700;vertical-align:1px}
+  .tag.p{color:var(--wait)} .tag.n{color:var(--bad)} .tag.m{color:var(--ok)}
+  .fig{display:flex;justify-content:center}
+  .fig svg{width:100%;height:auto;max-height:47vh;display:block}
+  .fig.tall svg{max-height:53vh}
+  .fig.short svg{max-height:38vh}
+  .legend{display:flex;gap:22px;flex-wrap:wrap;margin-top:4px;justify-content:center;font-size:14.5px;color:var(--muted)}
+  .legend .item{display:flex;align-items:center;gap:8px}
+  .legend .sw{width:15px;height:15px;border-radius:3px;flex:none}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:8px}
+  .card{border:1px solid var(--hair);border-top:3px solid var(--c,var(--accent));background:var(--card);border-radius:8px;padding:14px 16px;min-width:0}
+  .card .rl{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--c,var(--accent));font-weight:700;margin-bottom:6px}
+  .card .big{font-family:var(--disp);font-size:clamp(20px,2.2vw,30px);font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .card p{font-size:clamp(13px,1.2vw,15.5px);line-height:1.45;color:var(--ink2);margin-top:5px}
+  .ptitle{font:600 20px var(--sans);fill:var(--ink)}
+  .axlbl{font:500 16px var(--sans);fill:var(--ink2)}
+  .lbl{font:500 15px var(--sans);fill:var(--ink2)}
+  .small{font:400 13.5px var(--sans);fill:var(--muted)}
+  .tick{font:400 14px var(--sans);fill:var(--faint)}
+  .val{font:600 15.5px var(--sans);fill:var(--ink)}
+  .big{font:600 26px var(--disp);fill:var(--ink)}
+  .panel{font:700 20px var(--sans);fill:var(--accent)}
+  .gridl{stroke:var(--grid);stroke-width:1}
+  .axis{stroke:var(--faint);stroke-width:1.2}
+  .sepl{stroke:var(--hair);stroke-width:1.5}
+  .foot{position:fixed;bottom:20px;left:6vw;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:6vw;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:15px;right:calc(6vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:var(--card);color:var(--muted);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px}
+  .nav button:hover,.nav button:focus-visible{border-color:var(--accent);color:var(--accent);outline:none}
+  .hint{margin-top:30px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:var(--card)}
+  .banner{display:inline-block;border:2px solid var(--wait);color:var(--wait);font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:13px;padding:4px 12px;border-radius:6px;margin-bottom:10px}
+  aside.notes{display:none}
+  body.shownotes .slide.active aside.notes{display:block;position:fixed;left:6vw;right:6vw;bottom:58px;max-height:52vh;overflow:auto;
+    background:var(--card);border:1px solid var(--hair);border-left:4px solid var(--accent);border-radius:10px;padding:16px 22px;
+    font-size:16px;line-height:1.55;color:var(--ink2);z-index:60;box-shadow:0 10px 40px rgba(0,0,0,.25)}
+  aside.notes::before{content:"Speaker notes · n to close";display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+  aside.notes p{margin:0 0 6px}
+  aside.notes p.srcs{font-size:13px;color:var(--muted);font-family:ui-monospace,Menlo,monospace}
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint{display:none}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;height:100vh;transition:none}
+    aside.notes{display:block;margin-top:14px;border-top:1px solid var(--hair);padding-top:8px;font-size:12px}
+  }
+  @media (max-width:760px){
+    .slide{justify-content:flex-start;overflow-y:auto;padding:24px max(16px,env(safe-area-inset-right,0px)) 80px max(16px,env(safe-area-inset-left,0px))}
+    .cards,ul.pts.cols{grid-template-columns:1fr}
+    .foot{display:none}
+  }
+</style>
+<style>
+  :root{ --r1:#8a6d3b; --r2:#2f6f8f; --r3:#4f9a8a; --r4:#b5543a; --r5:#6b4fa0; --r6:#8a8d92; --base:#36393d; --arm:#d9822b; }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){ --r1:#c9a56a; --r2:#6fb3d2; --r3:#5fb3a1; --r4:#d77657; --r5:#a58bd8; --r6:#a3a6ab; --base:#d2d0cb; --arm:#f0a050 }}
+  :root[data-theme="dark"]{ --r1:#c9a56a; --r2:#6fb3d2; --r3:#5fb3a1; --r4:#d77657; --r5:#a58bd8; --r6:#a3a6ab; --base:#d2d0cb; --arm:#f0a050 }
+  .split{display:grid;grid-template-columns:1fr 2.2fr;gap:28px;align-items:center}
+  .split ul.pts li{font-size:clamp(12.5px,1.15vw,15.5px)}
+  @media (max-width:760px){.split{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- 1 · TITLE
+       job      what shipment 2 answers, and its tier
+       source   run_state/WHERE_WE_ARE.md; sh2_refresh/run_time.txt, scored_list.txt, checks_tb2.tsv
+       numbers  DATA.n_scored, DATA.built
+       cut      the run history -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">peeling the onion · shipment <span data-src="literal">2</span> for the PI</div>
+      <h1>The model results on screening scores, and a first Discussion</h1>
+      <p class="sub" id="tTitle"></p>
+      <div class="fig short" id="figScope"></div>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd> &nbsp;·&nbsp; <kbd>n</kbd> shows the speaker notes and the source files of each slide</p>
+      <aside class="notes"><p>Shipment two fills the model sections of the paper note. Every model score here is a screening score: the imputation items use all evaluation regions, and the pair tests use one region in sixteen. No selection is settled from a screening score. All slide text is drafted by Claude for your review.</p><p class="srcs" data-s="title"></p></aside>
+    </div>
+  </section>
+
+  <!-- 2 · RECAP
+       job      the task and the three headline metrics in plain words; the composite
+       source   results/t309/sources.md (weights); scores_ladder.md (definitions)
+       numbers  DATA.w
+       cut      the seven-metric list (shipment 1) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Recap</span>the task and the three headline metrics</div>
+      <h2>One model imputes a missing assay, corrects a track to other processing settings, and states how sure it is</h2>
+      <div class="cards">
+        <div class="card" style="--c:var(--pa)"><div class="rl">Imputation</div>
+          <p><b>Specific variance recovered above noise</b>: the share of the cell-type-specific variance of a held-out track that the prediction explains, after the read-sampling noise of the truth (the noise floor) is removed. Zero: no cell-type signal. One: all that is recoverable.</p></div>
+        <div class="card" style="--c:var(--dos)"><div class="rl">Covariate correction</div>
+          <p><b>Gap closed</b>: where the model's correction error (CRPS, the error of a whole predictive distribution) sits between depth-only scaling (zero) and the oracle floor (one), on pairs of processing settings that training never sees.</p></div>
+        <div class="card" style="--c:var(--flr)"><div class="rl">Calibrated uncertainty</div>
+          <p><b>Uncertainty term</b>: one minus the model's PIT deviation over that of the marginal negative binomial (NB). PIT is the predicted cumulative probability at the observed count. Zero: as calibrated as one constant NB per track. Below zero: worse.</p></div>
+      </div>
+      <p class="note" id="tComposite"></p>
+      <aside class="notes"><p>The three terms are the lead metrics of the three goals. Each is a macro average over the scorable assays. Each model value is a mean over training seeds, with the seed range, that is, the maximum minus the minimum over seeds. A difference counts when it is larger than the larger seed range of its two arms; the selection rule asks for more than twice that range on the composite.</p><p class="srcs" data-s="recap"></p></aside>
+    </div>
+  </section>
+
+  <!-- 3 · THE NEW SCALE OF GAP CLOSED
+       job      ruling 47 in one picture: the old and the new scale, with the same methods placed on both
+       source   results/oracle_floor/ORACLE_FLOOR.md; sh2_refresh/ladder_tb2.tsv
+       numbers  DATA.ladder.rows (gap closed, both scales), DATA.nn
+       cut      the per-assay ratios (in ORACLE_FLOOR.md) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Methods</span>the new scale of gap closed (PI ruling <span data-src="literal">47</span>)</div>
+      <h2>With the oracle floor as the top of the scale, every model lands between depth-only scaling and one</h2>
+      <div class="fig" id="figScale"></div>
+      <ul class="pts" id="tScale"></ul>
+      <aside class="notes"><p>The old top of the scale was the half-against-half floor: it predicts the second read half from the first one, so it carries one half's sampling noise, and smooth predictors went past it. The oracle floor is half the mean absolute difference of the target's two read halves; no predictor that sees only the source can expect to beat it on clean pairs. On pairs where one side keeps duplicate reads, source and target can share DNA fragments, so the oracle is not a strict bound there. The composite uses the all-pairs value; the clean-pair value is reported beside it.</p><p class="srcs" data-s="scale"></p></aside>
+    </div>
+  </section>
+
+  <!-- 4 · LADDER (a): the three headline terms
+       job      six architectures on the three goal terms, with seed points
+       source   scores_ladder.md; sh2_refresh/ladder_tb2.tsv, table_runs.tsv
+       numbers  DATA.ladder
+       cut      correction CRPS (its split is not in the tables) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(a) the ladder of six architectures, three goal terms</div>
+      <h2>Every architecture beats the position average; rungs two and three lead correction and rung four leads imputation</h2>
+      <div class="fig" id="figLadder"></div>
+      <ul class="pts" id="tLadder"></ul>
+      <aside class="notes"><p>The ladder holds six architectures of about one million parameters, each trained on the same number of windows: pointwise, convolutional autoencoder, convolutional autoencoder with attention, U-Net, axial, and Perceiver. Each dot is one training seed; the bar is the seed mean. The dashed line is the training-free reference: the position average on the first two panels, and the marginal negative binomial at zero on the third.</p><p class="srcs" data-s="ladder"></p></aside>
+    </div>
+  </section>
+
+  <!-- 5 · LADDER (b): composite and compute
+       job      composite per rung against the selection rule; compute per run
+       source   scores_ladder.md; sh2_refresh/ladder_tb2.tsv, runjson_rungs.tsv
+       numbers  DATA.ladder.rows composite_v2, DATA.compute
+       cut      wall time (CPU and GPU runs are not comparable) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(b) the ladder: composite and compute</div>
+      <h2 id="tCompHead"></h2>
+      <div class="fig" id="figComp"></div>
+      <ul class="pts" id="tComp"></ul>
+      <aside class="notes"><p>Panel a: the composite per seed. The composite weighs imputation by one half and correction and uncertainty by one quarter each, after each term is clipped to the range from zero to one. Panel b: the training compute that each run recorded, in floating-point operations, on a log scale. The pointwise rung ran on a GPU and the context rungs on CPUs, so wall time is not compared.</p><p class="srcs" data-s="compute"></p></aside>
+    </div>
+  </section>
+
+  <!-- 6 · LADDER (c): the trade between the goals
+       job      no rung leads both imputation and correction
+       source   sh2_refresh/ladder_tb2.tsv
+       numbers  DATA.ladder.rows (specific variance, gap closed per seed)
+       cut      the clean-pair column (slide 8) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(c) the ladder: imputation against correction</div>
+      <h2>No architecture leads both goals: rung four buys imputation with correction</h2>
+      <div class="fig tall" id="figTrade"></div>
+      <ul class="pts" id="tTrade"></ul>
+      <aside class="notes"><p>Each point is one seed of one rung, placed by its imputation term and its correction term. Up and to the right is better on both. Why the U-Net trades one goal for the other is an open question in the notebook; it decides which rungs the ablations of iteration two take.</p><p class="srcs" data-s="ladder"></p></aside>
+    </div>
+  </section>
+
+  <!-- 7 · RUNG-1 ARMS
+       job      what each rung-1 arm removes, and its paired effect against the seed range
+       source   scores_rung1_arms.md; sh2_refresh/rung1_arms_tb2.tsv, table_runs.tsv
+       numbers  DATA.r1
+       cut      the four arms that wait in the queue (slide 14) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(d) the wiring checks of the pointwise rung</div>
+      <h2>No wiring change moves the pointwise rung's composite beyond the seed range; scrambling the covariates costs imputation</h2>
+      <div class="fig" id="figR1"></div>
+      <ul class="pts cols" id="tR1Arms"></ul>
+      <aside class="notes"><p>Each row is one arm minus the base, per training seed, with the same seed on both sides. Dots are the seeds, the diamond is the mean, and the grey band is plus and minus the larger seed range of the two arms. A diamond outside the band exceeds the seed range. An arm with one seed has no range and is not judged. Switching off the DNA input changes nothing measurable at this rung, which sees one bin at a time.</p><p class="srcs" data-s="r1"></p></aside>
+    </div>
+  </section>
+
+  <!-- 8 · RUNG-4 ARMS
+       job      the three rung-4 arms on five terms, including the clean-pair gap closed
+       source   scores_rung4_arms.md; sh2_refresh/rung4_arms_tb2.tsv, table_runs.tsv, table_region.tsv
+       numbers  DATA.r4
+       cut      the superseded half-read column -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(e) the rung-4 arms</div>
+      <h2>At rung four, scrambling the covariates raises gap closed on all pairs and lowers it on the clean pairs; hiding depth costs calibration</h2>
+      <div class="fig" id="figR4"></div>
+      <ul class="pts" id="tR4"></ul>
+      <aside class="notes"><p>Same layout as the previous slide, one column per goal term. Clean pairs are the headline pairs where neither side keeps duplicate reads; on the other pairs, source and target can share DNA fragments. The two gap-closed columns average over different sets of assays, so they are not a strict split of each other.</p><p class="srcs" data-s="r4"></p></aside>
+    </div>
+  </section>
+
+  <!-- 9 · HARD OFFSET
+       job      where the composite loss of the hard-offset arm comes from
+       source   scores_rung4_arms.md; sh2_refresh/rung4_arms_tb2.tsv, table_runs.tsv; results/t309/sources.md
+       numbers  DATA.r4.rung4_hard_offset, DATA.w
+       cut      the per-assay PIT curves (not pulled) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(f) depth hidden from the network (the hard offset, PI ruling <span data-src="literal">48</span>)</div>
+      <h2 id="tHoHead"></h2>
+      <div class="fig" id="figHO"></div>
+      <ul class="pts" id="tHO"></ul>
+      <aside class="notes"><p>In both arms the predicted mean is the depth times two to the power eta, where eta is the network's depth-free log rate. The hard-offset arm only removes log depth from the covariates that the network reads. Panel a: the uncertainty term per seed. Panel b: the composite difference split into the three weighted, clipped terms. Why calibration collapses is an open question in the notebook; the first suspect is the predicted negative binomial size, which may need depth.</p><p class="srcs" data-s="ho"></p></aside>
+    </div>
+  </section>
+
+  <!-- 10 · SELECTION
+       job      training-region selection rules against uniform tiling at a limited budget
+       source   scores_selection_arms.md; sh2_refresh/selection_arms_tb2.tsv, table_region.tsv
+       numbers  DATA.sel
+       cut      the narrow-mark split (not read) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(g) training-region selection at a limited budget</div>
+      <h2>No selection rule beats uniform tiling; two lose on the composite, through the uncertainty term</h2>
+      <div class="fig" id="figSel"></div>
+      <ul class="pts" id="tSel"></ul>
+      <aside class="notes"><p>Each arm trains rung four on the same small budget of windows, drawn by one rule: a tilt toward high candidate cis-regulatory element density or high signal variance, with or without a loss weight that keeps the objective unbiased; k-center, which spreads windows out; or a draw from a fixed set of territories, the control for k-center. The reference is uniform tiling.</p><p class="srcs" data-s="sel"></p></aside>
+    </div>
+  </section>
+
+  <!-- 11 · ALPHAGENOME 2 BOARD
+       job      AlphaGenome 2 against the training-free baselines on the fair tracks; no model row yet
+       source   results/t308/AG2_VS_BASELINES.md
+       numbers  DATA.ag
+       cut      the trained-on set (not evidence about imputation) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(h) AlphaGenome <span data-src="literal">2</span> on the tracks that neither it nor we trained on</div>
+      <h2 id="tAgHead"></h2>
+      <div class="fig" id="figAG"></div>
+      <ul class="pts" id="tAG"></ul>
+      <aside class="notes"><p>The metric is the recalibrated specificity correlation in the challenge's signal space: the correlation with the truth after both lose the training mean, with a per-track monotone recalibration. The noise floor compares two read halves at half depth each, so it is not a ceiling for a prediction. Our model has no row yet; it needs its predictions turned into the signal space.</p><p class="srcs" data-s="ag2"></p></aside>
+    </div>
+  </section>
+
+  <!-- 12 · ETA VIEW
+       job      what the depth-free eta view changed in the variance layers
+       source   results/eta_space/depth_invariance.tsv, LAYERS_ETA.md, THEORY.md
+       numbers  DATA.eta, DATA.inv
+       cut      the per-stratum table; the control check (in LAYERS_ETA.md) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(i) the variance layers in the depth-free eta space</div>
+      <h2>Above read sampling, the layers do not change with depth in eta space; on log counts they do</h2>
+      <div class="fig" id="figEta"></div>
+      <ul class="pts" id="tEta"></ul>
+      <aside class="notes"><p>Eta is the log of the rate per read: the mean count is the depth times the exponent of eta. In that space read sampling is a known term that can be subtracted, and every layer above it, replicate and cell type, is free of depth. Each line thins every pair to a half and a quarter of the common depth. On log counts the cell-type share falls as depth falls, because the sampling layer grows; in eta space the cell-type layer stays flat.</p><p class="srcs" data-s="eta"></p></aside>
+    </div>
+  </section>
+
+  <!-- 13 · DISCUSSION
+       job      five first statements, each with its evidence and its limit
+       source   scores_ladder.md, scores_rung4_arms.md, scores_selection_arms.md, eta_space/LAYERS_ETA.md
+       numbers  restated from earlier slides
+       cut      any recommendation -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>first draft, on screening scores</div>
+      <h2>Five first statements, each with its evidence and its limit</h2>
+      <ul class="pts" id="tDisc"></ul>
+      <aside class="notes"><p>These are readings, not verdicts: every model score is a screening score, and no selection is settled from it. Each statement names the measurement that would change it.</p><p class="srcs" data-s="disc"></p></aside>
+    </div>
+  </section>
+
+  <!-- 14 · NOT DONE AND NEXT
+       job      what is missing from shipment 2, and what iteration 2 does
+       source   run_state/WHERE_WE_ARE.md; sh2_refresh/table_runs.tsv, table_region.tsv; results/t308/AG2_VS_BASELINES.md
+       numbers  DATA.pending, DATA.sch
+       cut      job ids -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Next</span>what is not done, and iteration <span data-src="literal">2</span></div>
+      <h2 id="tNextHead"></h2>
+      <div class="cards" id="cardsNext"></div>
+      <aside class="notes"><p>Iteration two checks whether the screening set ranks models as the full set does, before any selection is settled. The arms that wait need no new code.</p><p class="srcs" data-s="next"></p></aside>
+    </div>
+  </section>
+
+</div>
+
+<div class="foot">peeling the onion · shipment two</div>
+<div class="nav"><button id="prev" aria-label="previous slide">&larr;</button><button id="next" aria-label="next slide">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+
+<script>
+/* Every number below comes from DATA, which build_deck.py embeds from the vault files.
+   Sums, differences and ranges are computed here, never typed. */
+const DATA = __DATA__;
+const put=(id,h)=>{const e=document.getElementById(id); if(e) e.innerHTML=h;};
+const svg=(w,h,b)=>`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet" role="img">${b}</svg>`;
+const f2=v=>Number(v).toFixed(2), f3=v=>Number(v).toFixed(3), sg=v=>(v>=0?'+':'−')+Math.abs(v).toFixed(3);
+const V=x=>`<span class="v">${x}</span>`;
+const L=DATA.ladder, RW=L.rows, W8=DATA.w;
+const RUNGS=['rung1_base','rung2_base','rung3_base','rung4_base','rung5_base','rung6_base'];
+const RNAME={rung1_base:'1 pointwise',rung2_base:'2 conv. autoencoder',rung3_base:'3 conv. + attention',rung4_base:'4 U-Net',rung5_base:'5 axial',rung6_base:'6 Perceiver'};
+const RCOL=k=>`var(--r${k[4]})`;
+const MN={specific_variance_recovered:'specific variance',gap_closed_oracle:'gap closed, all',gap_closed_oracle_no_nodedup_side:'gap closed, clean',composite_v2:'composite',unc:'uncertainty term'};
+const PA='baseline position_average';
+const m=(row,met)=>RW[row][met];
+const ex=(d,s)=>Math.abs(d)>s;
+document.querySelectorAll('p.srcs').forEach(e=>{e.textContent='Sources: '+(DATA.src[e.dataset.s]||[]).join('; ');});
+
+/* ---- (1) title ---- */
+(function(){
+  put('tTitle',`Screening scores of ${V(DATA.n_scored)} scored training runs (tables built ${DATA.built}), composite version <span data-src="literal">2</span>. Shipment <span data-src="literal">1</span> gave the data, the evaluation and the model-free results.`);
+  const W=1160,H=150; let s='';
+  const secs=[['Methods','model ladder, arms',1],['Results','ladder',1],['Results','wiring checks',1],['Results','rung-4 arms, hard offset',1],['Results','region selection',1],['Results','AlphaGenome 2 board',1],['Results','eta view of layers',1],['Discussion','first draft',1]];
+  const cw=W/secs.length;
+  secs.forEach(([hd,sub],i)=>{ const x=i*cw+4;
+    s+=`<rect x="${x}" y="20" width="${cw-8}" height="80" rx="8" fill="var(--accent)" fill-opacity="0.16" stroke="var(--accent)" stroke-width="2"/>`;
+    s+=`<text x="${x+(cw-8)/2}" y="52" text-anchor="middle" class="lbl" style="font-weight:600">${hd}</text><text x="${x+(cw-8)/2}" y="76" text-anchor="middle" class="small">${sub}</text>`; });
+  s+=`<text x="4" y="130" class="small">paper order, left to right; every model score is a screening score</text>`;
+  put('figScope', svg(W,H,s));
+})();
+
+/* ---- (2) recap ---- */
+put('tComposite',`Composite = ${V(W8[0])} × imputation + ${V(W8[1])} × correction + ${V(W8[2])} × uncertainty, each term clipped to the range from zero to one first. Each model value is a mean over three training seeds; its seed range is the maximum minus the minimum over seeds, and a difference counts when it exceeds the larger seed range of its two arms. The rest of the deck uses these three terms and the composite; the correction CRPS itself appears nowhere without its oracle-scaled and scale-error split, so it is left out.`);
+
+/* ---- (3) scale ---- */
+(function(){
+  const W=1160,H=330; let s='';
+  const pts=[['depth-only scaling','baseline depth_only_scaling','dos'],['half-against-half floor','baseline pseudoreplicate_floor','flr'],['position average','baseline position_average','pa'],['pointwise rung','rung1_base','r1'],['conv. autoencoder rung','rung2_base','r2']];
+  const axis=(y,lo,hi,met,title,top)=>{ const x0=60,x1=W-40, X=v=>x0+(v-lo)/(hi-lo)*(x1-x0);
+    s+=`<text x="${x0}" y="${y-62}" class="ptitle">${title}</text>`;
+    s+=`<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" class="axis"/>`;
+    for(let t=Math.ceil(lo);t<=hi+1e-9;t+=(hi-lo>3?1:0.25)){ s+=`<line x1="${X(t)}" y1="${y-5}" x2="${X(t)}" y2="${y+5}" class="axis"/><text x="${X(t)}" y="${y+24}" text-anchor="middle" class="tick">${(+t).toFixed(hi-lo>3?0:2)}</text>`; }
+    s+=`<rect x="${X(0)}" y="${y-8}" width="${X(1)-X(0)}" height="16" fill="var(--accent)" fill-opacity="0.12"/>`;
+    s+=`<text x="${X(1)}" y="${y+44}" text-anchor="middle" class="small" style="font-weight:600">one = ${top}</text>`;
+    pts.forEach(([n,row,c],i)=>{ const v=m(row,met).mean; s+=`<circle cx="${X(v)}" cy="${y}" r="8" fill="var(--${c})"/>`;
+      s+=`<text x="${X(v)}" y="${y-(i%2?36:22)}" text-anchor="middle" class="small" style="fill:var(--${c});font-weight:600">${n} ${f2(v)}</text>`; });
+    return X; };
+  axis(110,-0.5,7,'gap_closed_halfread_superseded','(a) old scale, superseded: the half-against-half floor is one','half-against-half floor');
+  const X=axis(265,-0.35,1.1,'gap_closed_oracle','(b) new scale, composite version 2: the oracle floor is one','oracle floor');
+  s+=`<text x="${X(m('baseline marginal_nb','gap_closed_oracle').mean)}" y="${265+44}" text-anchor="middle" class="small">marginal NB ${f2(m('baseline marginal_nb','gap_closed_oracle').mean)}</text>`;
+  put('figScale', svg(W,H,s));
+  const nn=DATA.nn;
+  put('tScale',`<li>Gap closed = (CRPS of depth-only scaling − CRPS of the method) / (CRPS of depth-only scaling − oracle floor); zero is depth-only scaling. On the old scale the position average scored ${V(f2(m(PA,'gap_closed_halfread_superseded').mean))} and the pointwise rung ${V(f2(m('rung1_base','gap_closed_halfread_superseded').mean))}; on the new scale ${V(f3(m(PA,'gap_closed_oracle').mean))} and ${V(f3(m('rung1_base','gap_closed_oracle').mean))}, and the old floor itself ${V(f3(m('baseline pseudoreplicate_floor','gap_closed_oracle').mean))}.</li><li>All headline pairs: ${V(nn[0])} pairs from ${V(nn[1])} cells. Clean pairs, where neither side keeps duplicate reads and the oracle is a strict bound: ${V(nn[2])} pairs, ${V(nn[3])} cells, ${V(nn[4])} of ${V(nn[5])} assays.</li>`);
+})();
+
+/* ---- strip plot helper: per-seed dots and a mean bar per row ---- */
+function strip(s,x0,y0,w,h,rows,lo,hi,title,ref,refLabel,fmtT){
+  const Y=v=>y0+h-(v-lo)/(hi-lo)*h, cw=w/rows.length;
+  s+=`<text x="${x0}" y="${y0-14}" class="lbl" style="font-weight:600;font-size:17px">${title}</text>`;
+  const st=(hi-lo)>0.65?0.2:0.1; for(let t=lo;t<=hi+1e-9;t+=st){ s+=`<line x1="${x0}" y1="${Y(t)}" x2="${x0+w}" y2="${Y(t)}" class="gridl"/><text x="${x0-8}" y="${Y(t)+5}" text-anchor="end" class="tick">${(fmtT||f2)(t)}</text>`; }
+  if(ref!==null){ s+=`<line x1="${x0}" y1="${Y(ref)}" x2="${x0+w}" y2="${Y(ref)}" stroke="var(--muted)" stroke-dasharray="6 4" stroke-width="1.6"/><text x="${x0+4}" y="${Y(ref)+(Y(ref)+18>y0+h-2?-8:18)}" class="small">${refLabel} ${f3(ref)}</text>`; }
+  rows.forEach((r,i)=>{ const cx=x0+cw*(i+0.5);
+    s+=`<line x1="${cx-cw*0.3}" y1="${Y(r.mean)}" x2="${cx+cw*0.3}" y2="${Y(r.mean)}" stroke="${r.c}" stroke-width="4"/>`;
+    r.v.forEach((v,j)=>{ s+=`<circle cx="${cx+(j-1)*9}" cy="${Y(v)}" r="5.5" fill="${r.c}" fill-opacity="0.75"/>`; });
+    s+=`<text x="${cx}" y="${y0+h+22}" text-anchor="middle" class="small">${r.lab}</text>`; });
+  return s;
+}
+
+/* ---- (4) ladder ---- */
+(function(){
+  const W=1160,H=330; let s='';
+  const rowsOf=met=>RUNGS.map(k=>({lab:k[4],c:RCOL(k),v:met==='unc'?L.unc[k].v:m(k,met).seeds,mean:met==='unc'?L.unc[k].mean:m(k,met).mean}));
+  s=strip(s,70,40,300,230,rowsOf('specific_variance_recovered'),0,0.5,'(a) imputation: specific variance',m(PA,'specific_variance_recovered').mean,'position average');
+  s=strip(s,460,40,300,230,rowsOf('gap_closed_oracle'),0,0.7,'(b) correction: gap closed',m(PA,'gap_closed_oracle').mean,'position average');
+  s=strip(s,850,40,290,230,rowsOf('unc'),0,0.8,'(c) uncertainty term',0,'marginal NB');
+  s+=`<text x="580" y="${H-4}" text-anchor="middle" class="axlbl">rung: ${RUNGS.map(k=>`<tspan fill="${RCOL(k)}">${RNAME[k]}</tspan>`).join(' · ')}</text>`;
+  put('figLadder', svg(W,H+10,s));
+  const d=(a,b,met)=>m(a,met).mean-m(b,met).mean, sp=(a,b,met)=>Math.max(m(a,met).spread,m(b,met).spread);
+  put('tLadder',`<li><b>Rung two against rung one</b>: specific variance ${V(sg(d('rung2_base','rung1_base','specific_variance_recovered')))} (larger seed range ${V(f3(sp('rung2_base','rung1_base','specific_variance_recovered')))}), gap closed ${V(sg(d('rung2_base','rung1_base','gap_closed_oracle')))} (${V(f3(sp('rung2_base','rung1_base','gap_closed_oracle')))}): both exceed the seed range.</li><li><b>Rung four against rung three</b>: specific variance ${V(sg(d('rung4_base','rung3_base','specific_variance_recovered')))} (${V(f3(sp('rung4_base','rung3_base','specific_variance_recovered')))}), gap closed ${V(sg(d('rung4_base','rung3_base','gap_closed_oracle')))} (${V(f3(sp('rung4_base','rung3_base','gap_closed_oracle')))}). The Perceiver (rung six) is lowest on both. Screening score, three seeds per rung.</li>`);
+})();
+
+/* ---- (5) composite and compute ---- */
+(function(){
+  const W=1160,H=330; let s='';
+  const rows=RUNGS.map(k=>({lab:k[4],c:RCOL(k),v:m(k,'composite_v2').seeds,mean:m(k,'composite_v2').mean}));
+  s=strip(s,70,40,440,230,rows,0,0.6,'(a) composite, version 2, per seed',m(PA,'composite_v2').mean,'position average');
+  s+=`<line x1="590" y1="20" x2="590" y2="${H-20}" class="sepl"/>`;
+  const x0=700,w=430,y0=40,h=230,lo=13,hi=16.6, Xl=v=>x0+(Math.log10(v)-lo)/(hi-lo)*w, bh=h/RUNGS.length;
+  s+=`<text x="${x0-90}" y="${y0-14}" class="ptitle">(b) training compute per run (floating-point operations, log scale)</text>`;
+  for(let t=lo;t<=16;t++){ s+=`<line x1="${Xl(10**t)}" y1="${y0}" x2="${Xl(10**t)}" y2="${y0+h}" class="gridl"/><text x="${Xl(10**t)}" y="${y0+h+20}" text-anchor="middle" class="tick">10^${t}</text>`; }
+  RUNGS.forEach((k,i)=>{ const c=DATA.compute[k], f=c.flops.reduce((a,b)=>a+b,0)/c.flops.length, y=y0+i*bh;
+    s+=`<rect x="${x0}" y="${y+6}" width="${Xl(f)-x0}" height="${bh-14}" fill="${RCOL(k)}"/>`;
+    s+=`<text x="${x0-8}" y="${y+bh/2+5}" text-anchor="end" class="small">${RNAME[k]}</text>`;
+    s+=`<text x="${Xl(f)+6}" y="${y+bh/2+5}" class="small">${(c.params/1e6).toFixed(2)} M param., ${c.device==='cuda'?'GPU':'CPU'}</text>`; });
+  put('figComp', svg(W,H,s));
+  const d=m('rung2_base','composite_v2').mean-m('rung1_base','composite_v2').mean, sp=Math.max(m('rung2_base','composite_v2').spread,m('rung1_base','composite_v2').spread);
+  put('tCompHead',`Rung two has the highest composite, ${V(f3(m('rung2_base','composite_v2').mean))}, but its gain over rung one is below the two seed ranges that selection asks for`);
+  const fl=RUNGS.map(k=>DATA.compute[k].flops[0]);
+  put('tComp',`<li>Rung two minus rung one: composite ${V(sg(d))} against twice the larger seed range, ${V(f3(2*sp))}: ${d>2*sp?'passes':'does not pass'} the selection rule. Every rung is above the position average (${V(f3(m(PA,'composite_v2').mean))}).</li><li>The pointwise rung used the most compute (${V((fl[0]/Math.min(...fl.slice(1))).toFixed(0))} times the cheapest context rung) and is not better on any term; every rung has about one million parameters and saw the same windows.</li>`);
+})();
+
+/* ---- (6) trade ---- */
+(function(){
+  const W=1160,H=420,x0=120,y0=30,w=700,h=330, xl=0.1,xh=0.5,yl=0.2,yh=0.7, OFF={rung2_base:[-150,-26],rung3_base:[12,30]};
+  const X=v=>x0+(v-xl)/(xh-xl)*w, Y=v=>y0+h-(v-yl)/(yh-yl)*h; let s='';
+  for(let i=0;i<=5;i++){ const tx=xl+0.1*i, ty=yl+0.1*i;
+    if(i<=4) s+=`<line x1="${X(tx)}" y1="${y0}" x2="${X(tx)}" y2="${y0+h}" class="gridl"/><text x="${X(tx)}" y="${y0+h+22}" text-anchor="middle" class="tick">${f2(tx)}</text>`;
+    s+=`<line x1="${x0}" y1="${Y(ty)}" x2="${x0+w}" y2="${Y(ty)}" class="gridl"/><text x="${x0-8}" y="${Y(ty)+5}" text-anchor="end" class="tick">${f2(ty)}</text>`; }
+  s+=`<text x="${x0+w/2}" y="${H-12}" text-anchor="middle" class="axlbl">imputation: specific variance recovered above noise</text>`;
+  s+=`<text transform="translate(28,${y0+h/2}) rotate(-90)" text-anchor="middle" class="axlbl">correction: gap closed (oracle), all pairs</text>`;
+  RUNGS.forEach(k=>{ const a=m(k,'specific_variance_recovered').seeds, b=m(k,'gap_closed_oracle').seeds;
+    a.forEach((v,j)=>{ s+=`<circle cx="${X(v)}" cy="${Y(b[j])}" r="8" fill="${RCOL(k)}" fill-opacity="0.8"/>`; });
+    const o=OFF[k]||[12,-12]; s+=`<text x="${X(m(k,'specific_variance_recovered').mean)+o[0]}" y="${Y(m(k,'gap_closed_oracle').mean)+o[1]}" class="lbl" style="fill:${RCOL(k)};font-weight:600">${RNAME[k]}</text>`; });
+  const px=m(PA,'specific_variance_recovered').mean, py=m(PA,'gap_closed_oracle').mean;
+  s+=`<rect x="${X(px)-7}" y="${Y(py)-7}" width="14" height="14" fill="var(--pa)"/><text x="${X(px)+14}" y="${Y(py)+5}" class="lbl" style="fill:var(--pa)">position average</text>`;
+  s+=`<text x="${x0+w+30}" y="${y0+20}" class="small">each dot: one seed</text><text x="${x0+w+30}" y="${y0+42}" class="small">square: training-free</text><text x="${x0+w+30}" y="${y0+64}" class="small">up and right: better</text>`;
+  put('figTrade', svg(W,H,s));
+  put('tTrade',`<li>The U-Net recovers ${V(f3(m('rung4_base','specific_variance_recovered').mean))} of the specific variance, the most of the ladder, and closes ${V(f3(m('rung4_base','gap_closed_oracle').mean))} of the gap; the conv. autoencoder closes ${V(f3(m('rung2_base','gap_closed_oracle').mean))} and recovers ${V(f3(m('rung2_base','specific_variance_recovered').mean))}. Limit: screening tier; the cause of the trade is not measured.</li>`);
+})();
+
+/* ---- forest helper: paired differences per arm and term ---- */
+function forest(id,arms,terms,names,rng){
+  const W=1160, rowH=50, top=56, lab=250, cw=(W-lab-20)/terms.length, H=top+arms.length*rowH+60; let s='';
+  terms.forEach((t,j)=>{ const x0=lab+j*cw+14, w=cw-28, [lo,hi]=rng[j], X=v=>x0+(v-lo)/(hi-lo)*w;
+    s+=`<text x="${x0+w/2}" y="20" text-anchor="middle" class="lbl" style="font-weight:600">(${String.fromCharCode(97+j)}) ${MN[t]}</text>`;
+    s+=`<line x1="${X(0)}" y1="${top-14}" x2="${X(0)}" y2="${H-52}" stroke="var(--faint)" stroke-width="1.4"/>`;
+    [[lo,'start'],[hi,'end']].forEach(([v,an])=>{ s+=`<text x="${X(v)}" y="${H-36}" text-anchor="${an}" class="tick" style="font-size:12px">${sg(v)}</text>`; });
+    arms.forEach((a,i)=>{ const y=top+i*rowH+rowH/2, D=t==='unc'?a.unc:a[t];
+      const larger=t==='unc'?D.larger:D.larger, cl=v=>Math.max(lo,Math.min(hi,v));
+      if(larger!==null && larger!==undefined && a.n>1){ s+=`<rect x="${X(cl(-larger))}" y="${y-13}" width="${X(cl(larger))-X(cl(-larger))}" height="26" fill="var(--faint)" fill-opacity="0.22"/>`; }
+      D.diffs.filter(v=>v!==null).forEach(v=>{ s+=`<circle cx="${X(cl(v))}" cy="${y}" r="4.5" fill="var(--arm)" fill-opacity="0.7"/>`; });
+      const mm=D.mean, out=a.n>1 && larger!==null && ex(mm,larger);
+      s+=`<path d="M${X(cl(mm))},${y-10} l9,10 l-9,10 l-9,-10 z" fill="${out?'var(--bad)':'var(--ink2)'}"/>`;
+      s+=`<text x="${X(cl(mm))}" y="${y-15}" text-anchor="middle" class="small" style="fill:var(--ink)">${sg(mm)}</text>`; }); });
+  arms.forEach((a,i)=>{ const y=top+i*rowH+rowH/2; s+=`<text x="${lab-6}" y="${y+5}" text-anchor="end" class="lbl">${names[a.key]}</text><text x="${lab-6}" y="${y+22}" text-anchor="end" class="small">${a.n} seed${a.n>1?'s':''}</text>`; });
+  s+=`<text x="10" y="${H-10}" class="small">arm minus reference · dots: seeds · diamond: mean (red: exceeds the seed range) · grey band: ± larger seed range</text>`;
+  put(id, svg(W,H,s));
+}
+const armList=(obj,keys)=>keys.filter(k=>obj[k]).map(k=>Object.assign({key:k},obj[k]));
+
+/* ---- (7) rung-1 arms ---- */
+(function(){
+  const N={rung1_dna_off:'DNA input off',rung1_scrambled_covariates:'covariates scrambled',rung1_inject_concat:'covariates by concatenation',rung1_inject_tokens:'covariates as tokens',rung1_mask_token:'learned mask token'};
+  const arms=armList(DATA.r1,Object.keys(N));
+  forest('figR1',arms,['specific_variance_recovered','gap_closed_oracle','composite_v2'],N,[[-0.03,0.03],[-0.08,0.08],[-0.1,0.1]]);
+  put('tR1Arms',`<li><b>DNA input off</b>: the network gets no sequence.</li><li><b>Covariates scrambled</b>: the four experimental covariates are shuffled across tracks.</li><li><b>Concatenation, tokens</b>: the covariates enter by concatenation or as extra tokens, not by feature-wise scaling (FiLM).</li><li><b>Mask token</b>: a missing assay is marked by a learned token, not dropped.</li>`);
+})();
+
+/* ---- (8) rung-4 arms ---- */
+(function(){
+  const N={rung4_scrambled_covariates:'covariates scrambled',rg_no_eval:'evaluation regions left out',rung4_hard_offset:'depth hidden (hard offset)'};
+  const arms=armList(DATA.r4,Object.keys(N));
+  forest('figR4',arms,['specific_variance_recovered','gap_closed_oracle','gap_closed_oracle_no_nodedup_side','unc','composite_v2'],N,[[-0.06,0.06],[-0.2,0.2],[-0.2,0.2],[-0.8,0.8],[-0.25,0.25]]);
+  const sc=DATA.r4.rung4_scrambled_covariates;
+  put('tR4',`<li><b>Covariates scrambled</b>: gap closed ${V(sg(sc.gap_closed_oracle.mean))} on all pairs and ${V(sg(sc.gap_closed_oracle_no_nodedup_side.mean))} on clean pairs; both exceed the seed range (${V(f3(sc.gap_closed_oracle.larger))}, ${V(f3(sc.gap_closed_oracle_no_nodedup_side.larger))}). A gain on all pairs from a model without covariates suggests the all-pairs term can reward copying fragments shared by source and target.</li><li><b>Evaluation regions left out of training</b>: no term moves beyond the seed range.</li>`);
+})();
+
+/* ---- (9) hard offset ---- */
+(function(){
+  const ho=DATA.r4.rung4_hard_offset, U=ho.unc, W=1160,H=320; let s='';
+  put('tHoHead',`Hiding depth from the network lowers the composite by ${V(f3(-ho.composite_v2.mean))}, and most of the loss is calibration`);
+  const x0=90,y0=40,w=420,h=220,lo=-0.3,hi=0.8,Y=v=>y0+h-(v-lo)/(hi-lo)*h;
+  s+=`<text x="${x0-60}" y="${y0-16}" class="ptitle">(a) uncertainty term per seed</text>`;
+  for(let t=-0.2;t<=0.81;t+=0.2){ s+=`<line x1="${x0}" y1="${Y(t)}" x2="${x0+w}" y2="${Y(t)}" class="gridl"/><text x="${x0-8}" y="${Y(t)+5}" text-anchor="end" class="tick">${f2(t)}</text>`; }
+  s+=`<line x1="${x0}" y1="${Y(0)}" x2="${x0+w}" y2="${Y(0)}" stroke="var(--muted)" stroke-dasharray="6 4"/><text x="${x0+w}" y="${Y(0)+18}" text-anchor="end" class="small">zero = marginal NB</text>`;
+  U.seeds.forEach((sd,i)=>{ const cx=x0+40+i*140, a=U.ref.v[i], b=U.arm.v[i];
+    s+=`<rect x="${cx}" y="${Math.min(Y(a),Y(0))}" width="40" height="${Math.abs(Y(a)-Y(0))}" fill="var(--base)"/><rect x="${cx+46}" y="${Math.min(Y(b),Y(0))}" width="40" height="${Math.abs(Y(b)-Y(0))}" fill="var(--arm)"/>`;
+    s+=`<text x="${cx+20}" y="${Y(a)-6}" text-anchor="middle" class="small" style="fill:var(--ink)">${f2(a)}</text><text x="${cx+66}" y="${b<0?Y(b)+16:Y(b)-6}" text-anchor="middle" class="small" style="fill:var(--ink)">${f2(b)}</text>`;
+    s+=`<text x="${cx+43}" y="${y0+h+22}" text-anchor="middle" class="small">seed ${sd}</text>`; });
+  s+=`<text x="${x0}" y="${H-6}" class="small"><tspan fill="var(--base)">■</tspan> rung-4 base   <tspan fill="var(--arm)">■</tspan> depth hidden</text>`;
+  s+=`<line x1="580" y1="20" x2="580" y2="${H-20}" class="sepl"/>`;
+  const cl=v=>Math.max(0,Math.min(1,v)), mean=a=>a.reduce((p,q)=>p+q,0)/a.length;
+  const parts=[['imputation',W8[0]*ho.specific_variance_recovered.mean,'pa'],['correction',W8[1]*ho.gap_closed_oracle.mean,'dos'],['uncertainty',W8[2]*(mean(U.arm.v.map(cl))-mean(U.ref.v.map(cl))),'flr']];
+  const tot=parts.reduce((p,q)=>p+q[1],0), bx0=640,bw=480, X=v=>bx0+bw+v/0.22*bw;
+  s+=`<text x="${bx0}" y="${y0-16}" class="ptitle">(b) composite difference, split by term</text>`;
+  parts.forEach(([n,v,c],i)=>{ const y=y0+20+i*56; s+=`<rect x="${X(v)}" y="${y}" width="${X(0)-X(v)}" height="34" fill="var(--${c})"/><text x="${X(v)-8}" y="${y+23}" text-anchor="end" class="val">${n} ${sg(v)}</text>`; });
+  s+=`<line x1="${X(0)}" y1="${y0+10}" x2="${X(0)}" y2="${y0+190}" class="axis"/>`;
+  s+=`<text x="${X(0)}" y="${y0+215}" text-anchor="end" class="val">sum ${sg(tot)} (table ${sg(ho.composite_v2.mean)})</text>`;
+  s+=`<text x="${bx0}" y="${H-6}" class="small">weight × change in the clipped seed-mean term</text>`;
+  put('figHO', svg(W,H,s));
+  put('tHO',`<li>Uncertainty term ${V(f3(U.ref.mean))} → ${V(f3(U.arm.mean))} (paired ${V(sg(U.mean))}, larger seed range ${V(f3(U.larger))}); composite ${V(f3(ho.composite_v2.ref_mean))} → ${V(f3(ho.composite_v2.arm_mean))} (range ${V(f3(ho.composite_v2.larger))}). Specific variance ${V(sg(ho.specific_variance_recovered.mean))} (range ${V(f3(ho.specific_variance_recovered.larger))}) exceeds the range; gap closed ${V(sg(ho.gap_closed_oracle.mean))} (${V(f3(ho.gap_closed_oracle.larger))}) does not.</li><li>The answer to the eta question for the model: depth stays an input of the network. Limit: one rung, screening tier.</li>`);
+})();
+
+/* ---- (10) selection ---- */
+(function(){
+  const N={rg_ccredens_e25_w:'cCRE-density tilt, mild, weighted',rg_ccredens_e50_w:'cCRE-density tilt, weighted',rg_ccredens_e50_u:'cCRE-density tilt, unweighted',rg_variance_e50_w:'signal-variance tilt, weighted',rg_kcenter:'k-center',rg_terr_r1024_w20k:'territory draw'};
+  const arms=armList(DATA.sel,Object.keys(N));
+  forest('figSel',arms,['specific_variance_recovered','gap_closed_oracle','unc','composite_v2'],N,[[-0.05,0.05],[-0.1,0.1],[-0.25,0.25],[-0.06,0.06]]);
+  const k=DATA.sel.rg_kcenter, u=DATA.sel.rg_ccredens_e50_u;
+  put('tSel',`<li>Composite: k-center ${V(sg(k.composite_v2.mean))} (range ${V(f3(k.composite_v2.larger))}), unweighted cCRE-density tilt ${V(sg(u.composite_v2.mean))} (${V(f3(u.composite_v2.larger))}). Their uncertainty-term drops (${V(sg(k.unc.mean))}, ${V(sg(u.unc.mean))}) are about one seed range of that term (${V(f3(k.unc.larger))}, ${V(f3(u.unc.larger))}). The uniform draw stays.</li>`);
+})();
+
+/* ---- (11) AlphaGenome 2 ---- */
+(function(){
+  const A=DATA.ag, W=1160,H=310, x0=330,w=700, X=v=>x0+v/0.5*w; let s='';
+  put('tAgHead',`On the ${V(A.fair[0])} fair tracks, AlphaGenome <span data-src="literal">2</span> beats every training-free baseline; our model has no row yet`);
+  const rows=[['AlphaGenome 2','ag2_matched','ok'],['position average','position_average','pa'],['marginal NB','marginal_nb','mnb'],['closest five training tracks (oracle)','closest5_oracle','r6']];
+  for(let t=0;t<=0.5;t+=0.1){ s+=`<line x1="${X(t)}" y1="20" x2="${X(t)}" y2="${H-50}" class="gridl"/><text x="${X(t)}" y="${H-30}" text-anchor="middle" class="tick">${f2(t)}</text>`; }
+  rows.forEach(([n,k,c],i)=>{ const y=30+i*44, v=A.board[k]; s+=`<rect x="${x0}" y="${y}" width="${X(v)-x0}" height="30" fill="var(--${c})"/><text x="${x0-10}" y="${y+21}" text-anchor="end" class="lbl">${n}</text><text x="${X(v)+8}" y="${y+21}" class="val">${f3(v)}</text>`; });
+  const y=30+rows.length*44; s+=`<rect x="${x0}" y="${y}" width="${w*0.6}" height="30" fill="none" stroke="var(--faint)" stroke-dasharray="6 4"/><text x="${x0-10}" y="${y+21}" text-anchor="end" class="lbl">miniCANDI</text><text x="${x0+12}" y="${y+21}" class="small">not scored in the signal space yet</text>`;
+  const nf=A.nf; s+=`<rect x="${X(nf[1])}" y="22" width="${X(nf[2])-X(nf[1])}" height="${H-78}" fill="var(--flr)" fill-opacity="0.12"/><line x1="${X(nf[0])}" y1="22" x2="${X(nf[0])}" y2="${H-56}" stroke="var(--flr)" stroke-width="2" stroke-dasharray="5 3"/><text x="${X(nf[0])}" y="${H-58}" text-anchor="middle" class="small" style="fill:var(--flr)">noise floor ${f3(nf[0])}</text>`;
+  s+=`<text x="${x0+w/2}" y="${H-6}" text-anchor="middle" class="axlbl">specificity correlation, recalibrated (signal space, ${A.fair[0]} tracks, ${A.fair[1]} cells)</text>`;
+  put('figAG', svg(W,H,s));
+  put('tAG',`<li>Position average minus AlphaGenome <span data-src="literal">2</span>: ${V(sg(A.con[0]))} [${V(f3(A.con[1]))}, ${V(f3(A.con[2]))}] (95% cluster-bootstrap confidence interval over cells); the position average leads on ${V(A.con[3])} of ${V(A.con[4])} tracks. Limit: ${V(A.fair[0])} tracks in ${V(A.fair[1])} cells support a direction, not a per-mark ranking.</li>`);
+})();
+
+/* ---- (12) eta view ---- */
+(function(){
+  const E=DATA.eta, as=Object.keys(E), W=1160,H=330; let s='';
+  const pal=['r1','r2','r3','r4','r5','r6','pa','dos','flr','mnb'], LBL=['DNase-seq','H3K27ac','H3K4me2','H3K9ac'];
+  const panel=(x0,title,ylab,get,lo,hi)=>{ const w=420,y0=40,h=220, xs=[1,0.5,0.25], X=i=>x0+i/2*w, Y=v=>y0+h-(v-lo)/(hi-lo)*h;
+    s+=`<text x="${x0-50}" y="${y0-16}" class="ptitle">${title}</text>`;
+    for(let i=0;i<=4;i++){ const t=lo+(hi-lo)*i/4; s+=`<line x1="${x0}" y1="${Y(t)}" x2="${x0+w}" y2="${Y(t)}" class="gridl"/><text x="${x0-8}" y="${Y(t)+5}" text-anchor="end" class="tick">${f2(t)}</text>`; }
+    xs.forEach((f,i)=>{ s+=`<text x="${X(i)}" y="${y0+h+22}" text-anchor="middle" class="tick">${f===1?'full':f===0.5?'half':'quarter'}</text>`; });
+    s+=`<text x="${x0+w/2}" y="${y0+h+44}" text-anchor="middle" class="axlbl">depth after thinning</text>`;
+    s+=`<text x="${x0}" y="${y0+h+64}" class="small">y: ${ylab} · one line per assay (${as.length} assays)</text>`;
+    as.forEach((a,j)=>{ const pts=xs.map((f,i)=>{ const r=E[a].find(q=>q.f===f); const v=r?get(r,E[a]):null; return v===null||isNaN(v)?null:[X(i),Y(v)]; }).filter(p=>p);
+      if(pts.length>1) s+=`<polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="var(--${pal[j%pal.length]})" stroke-width="2.4"/>`;
+      if(pts.length && LBL.includes(a)) s+=`<text x="${pts[pts.length-1][0]+6}" y="${pts[pts.length-1][1]+4}" class="small" style="fill:var(--${pal[j%pal.length]})">${a}</text>`; }); };
+  panel(90,'(a) log counts: cell-type share of three layers','share',r=>r.log1p,0,0.24);
+  panel(650,'(b) eta space: cell-type layer, relative to full depth','layer / layer at full depth',(r,all)=>{ const f=all.find(q=>q.f===1); return f&&f.eta?r.eta/f.eta:null; },0.8,1.2);
+  put('figEta', svg(W,H+40,s));
+  put('tEta',`<li>Thinning to a half and a quarter moved the eta-space replicate and cell-type layers by at most ${V(DATA.inv[0])}%, while the log-count cell-type share fell by ${V(DATA.inv[1])}% to ${V(DATA.inv[2])}%. So layers above sampling can be compared across depths, and with model errors, at one reference. Limit: the eta estimates weigh high-count bins most, and no model score is read in eta space yet.</li>`);
+})();
+
+/* ---- (13) discussion ---- */
+(function(){
+  const d=(a,b,met)=>m(a,met).mean-m(b,met).mean;
+  const ho=DATA.r4.rung4_hard_offset, sc=DATA.r4.rung4_scrambled_covariates;
+  put('tDisc',[
+    `<b>Sequence context helps both goals at first.</b> Rung two beats rung one on every goal term (composite ${V(sg(d('rung2_base','rung1_base','composite_v2')))}). Limit: below the two-range selection rule; three seeds; screening.`,
+    `<b>No architecture leads both imputation and correction.</b> The U-Net leads specific variance (${V(f3(m('rung4_base','specific_variance_recovered').mean))}) and trails on gap closed (${V(f3(m('rung4_base','gap_closed_oracle').mean))}). Limit: the cause is open.`,
+    `<b>Depth must stay a network input.</b> Hiding it cost ${V(f3(-ho.composite_v2.mean))} composite, mostly calibration (uncertainty term ${V(f3(ho.unc.ref.mean))} → ${V(f3(ho.unc.arm.mean))}). Limit: one rung; whether the NB size or eta needs depth is not measured.`,
+    `<b>Gap closed on all pairs can reward fragment sharing.</b> Scrambled covariates at rung four: ${V(sg(sc.gap_closed_oracle.mean))} on all pairs, ${V(sg(sc.gap_closed_oracle_no_nodedup_side.mean))} on clean pairs. Limit: ${V(DATA.nn[2])} clean pairs in ${V(DATA.nn[4])} assays; no direct test yet.`,
+    `<b>Above sampling, the variance layers are depth-free in eta space.</b> Thinning moved them by at most ${V(DATA.inv[0])}%. Limit: estimates weigh high-count bins; no model score in eta space yet.`
+  ].map(x=>`<li>${x}</li>`).join(''));
+})();
+
+/* ---- (14) next ---- */
+(function(){
+  const card=(c,rl,big,p)=>`<div class="card" style="--c:var(--${c})"><div class="rl">${rl}</div><div class="big">${big}</div><p>${p}</p></div>`;
+  const g={}; DATA.pending.forEach(([a,sd])=>{ (g[a]=g[a]||[]).push(sd); });
+  const PN={rung1_average_input:'average input',rung1_two_step_native:'two-step',rung1_inject_concat:'covariates by concatenation',rung1_inject_tokens:'covariates as tokens',rung1_mask_token:'learned mask token',rung1_matched_compute:'matched compute',rung1_scramble_all:'all inputs scrambled',rg_variance_e50_w:'signal-variance tilt'};
+  const lst=Object.keys(g).map(a=>`${PN[a]||a} (${g[a].length} seed${g[a].length>1?'s':''})`).join('; ');
+  const it=DATA.sch['Iteration 2'];
+  put('tNextHead',`${V(DATA.pending.length)} runs of ${V(Object.keys(g).length)} arms are not scored yet, every score is a screening score, and our model has no AlphaGenome <span data-src="literal">2</span> row`);
+  put('cardsNext',
+    card('wait','Not scored yet',`${V(DATA.pending.length)} runs`,`${lst}.`)+
+    card('p16','Limits of every model score','',`Screening tier: pair tests on one region in sixteen. The check of the screening set against the full set has not run on models. The budget curve has no screening score.`)+
+    card('rep','Iteration 2',`${it[1].trim()}`,`${it[0].trim()}. Also: a miniCANDI row on the AlphaGenome <span>2</span> board.`));
+})();
+
+/* navigation and speaker notes, as in the prezit template */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length; let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){
+  cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+}
+const next=()=>show(cur+1), prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;
+document.getElementById('prev').onclick=prev;
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='Home'){show(0);}
+  else if(e.key==='End'){show(tot-1);}
+  else if(e.key==='n'||e.key==='N'){e.preventDefault();document.body.classList.toggle('shownotes');}
+  else if(e.key==='Escape'){document.body.classList.remove('shownotes');}
+});
+show(0);
+</script>
+</body>
+</html>

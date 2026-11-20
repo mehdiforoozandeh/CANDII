@@ -54,12 +54,44 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t131` [admin] walk the PI through the five open design choices of the depth and run-type claims on the counterfactual arms (oracle source, which designs are the model rung, onewarp as a distribution, the encoder-latent check, whether −log10 p gates) as multiple-choice forks — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
 - `t136` [implementation] design and run the arm-to-arm training grid: g trained on base<->arm plus some arm->arm depth pairs, scored on held-out arm->arm pairs against the via-base chain (exploratory) — refs [[h28_training_g_on_arm_to_arm_pairs_lets_a_di\|h28]], [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]]
 - `t145` [admin] bring the research tree up to the crux 4.0 design: expectations, motivation, design logic and findings, reconstructed from the PI's conversations
+- `t152` [implementation] peeling the onion: build the extended 4-axis dataset and the updated EIC dataset, the onion eval set, and miniCANDI through the rung 1-6 ablation ladder
+- `t184` [data-acquisition] Onion: blind build, batch 1 (51 blind rows, 11 controls, 10 outage reruns; the PI runs the submit command) — refs [[q17_what_is_the_dataset_and_what_did_it_cost\|q17]]
+- `t212` [implementation] Onion: crossed mixed model of the replicate ladder, after a residual variance per library exists — refs [[q59_do_the_nested_replicate_ladder_and_the_c\|q59]]
+- `t251` [implementation] Onion: score the retrieval baseline on the eic_v1 evaluation set (256 regions)
+- `t254` [implementation] Onion: resolution arms, full design (5 to 125 bp, 75 runs, 396 jobs) — refs [[q60_how_much_of_the_1_bp_count_variance_of_a\|q60]]
+- `t256` [implementation] Onion: RNA-seq input arms (track and expression vector) on the three models — refs [[q48_which_minicandi_design_choices_move_impu\|q48]]
+- `t280` [implementation] Onion: AlphaGenome 2 against miniCANDI: box-spread signal rescoring of the 9 base runs and their AlphaGenome 2 board rows — refs [[q26_alphagenome_2_against_minicandi_rung_1_a\|q26]], [[q57_how_closely_can_a_formula_on_25_bp_binne\|q57]]
+- `t285` [data-acquisition] Onion: data set version with DNase-seq in the correction term: 4 row rebuilds, version build, baselines — refs [[q17_what_is_the_dataset_and_what_did_it_cost\|q17]]
+- `t294` [implementation] Onion: Per-region output of the scorer and the region bootstrap — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h35_256_evaluation_regions_are_enough\|h35]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]]
+- `t352` [hpc-setup] Onion: push a fresh code kit before the next cluster run of the ladder report (the report stage now needs --tables) — refs [[q59_do_the_nested_replicate_ladder_and_the_c\|q59]]
+- `t357` [implementation] Onion: eic_v1_2 references on 256 regions and the 256-region scores of its 9 base runs (conv autoencoder, conv + attention, U-Net) — refs [[q56_do_the_ablation_conclusions_drawn_from_t\|q56]], [[q48_which_minicandi_design_choices_move_impu\|q48]]
+- `t358` [implementation] Onion: score the 12 matched-compute runs on 256 regions (conv autoencoder, conv + attention, U-Net, Perceiver IO) — refs [[q39_do_the_context_rungs_2_to_6_convolution_\|q39]]
+- `t363` [admin] Onion: PI decision: which architecture goes to scaling (conv autoencoder, conv + attention, U-Net) — refs [[q48_which_minicandi_design_choices_move_impu\|q48]], [[q39_do_the_context_rungs_2_to_6_convolution_\|q39]]
+- `t364` [admin] Onion: PI decision: the data version of the final model (eic_v1_2 or the version with DNase-seq in the correction term) — refs [[q17_what_is_the_dataset_and_what_did_it_cost\|q17]], [[q48_which_minicandi_design_choices_move_impu\|q48]]
+- `t365` [admin] Onion: the PI reviews and merges draft PR 61 (umbrella branch implementation/t152-peeling-the-onion)
+- `t366` [admin] Onion: PI decision on the 14 code kits packed in onion_kit_archive on 2026-11-17 (restore some, or keep them packed)
+- `t367` [visualization] Onion: trace the typed numbers of the supervisor deck of 2026-11-18 to vault files
+- `t368` [implementation] Onion: pointwise MLP under the corrected composite: composite version 3, same-view pass, unscored seeds — refs [[q48_which_minicandi_design_choices_move_impu\|q48]], [[q39_do_the_context_rungs_2_to_6_convolution_\|q39]]
 
 ## Blocked
 
 - `t102` [data-acquisition] rebuild the paired-end arm's experiments as single-end BAMs on Nibi and land both arms in CANDI_STORE — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — blocked by `t100`
 - `t140` [implementation] carry the pivot lesson into CANDI: the full-depth track as the base for depth; non-depth covariates by augmentation only if the arm-to-arm grid shows it is needed — refs [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]], [[q8_does_candi_s_training_which_never_pairs_\|q8]] — blocked by `t135`, `t136`
 - `t143` [visualization] close-out deck and story of the whole counterfactual testbed — refs [[q1_do_the_recorded_experimental_covariates_\|q1]] — blocked by `t142`, `t136`
+- `t220` [implementation] Onion: mix-and-match of the single settings that helped: 256-region gate, then the round — refs [[q48_which_minicandi_design_choices_move_impu\|q48]] — blocked by `t350`, `t357`
+- `t223` [implementation] Onion: final model and EIC board row: freeze, train, check on validation, single blind pass — refs [[q48_which_minicandi_design_choices_move_impu\|q48]] — blocked by `t363`, `t364`, `t220`, `t362`, `t285`, `t184`
+- `t227` [admin] Onion: The gate before the extended-dataset step — blocked by `t223`
+- `t282` [implementation] Onion: AG2 on the blind tracks, inside the single blind pass — blocked by `t223`, `t280`
+- `t295` [implementation] Onion: territory, unseen-loci and selection arms: settled scoring, report and the confirmation of the best strategy — refs [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — blocked by `t294`
+- `t296` [implementation] Onion: evaluation-region count: the 1,024-region set, its scorings and the analysis — refs [[h35_256_evaluation_regions_are_enough\|h35]] — blocked by `t294`
+- `t297` [implementation] Onion: budget curve on the pointwise MLP: score the 42 trained budget runs and report (U-Net curve optional) — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — blocked by `t294`
+- `t304` [implementation] Onion: The answers to the PI's region questions — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h35_256_evaluation_regions_are_enough\|h35]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — blocked by `t295`, `t296`, `t297`
+- `t356` [admin] Onion: remove the worktrees and chunk branches of the peeling-the-onion run, after the umbrella branch merges — blocked by `t350`, `t365`
+- `t359` [implementation] Onion: QC-on-input arm on the three models (read-derived QC values with presence flags and the leak guard) — refs [[q48_which_minicandi_design_choices_move_impu\|q48]] — blocked by `t357`
+- `t360` [implementation] Onion: learned cell-type embedding arm on the three models, with the zero-shot control — refs [[q48_which_minicandi_design_choices_move_impu\|q48]] — blocked by `t357`
+- `t361` [implementation] Onion: second experiments: score the base recipes and the final candidates on the add-on (cross-lab correction, metric 7) — refs [[q58_can_the_second_experiments_separate_a_la\|q58]] — blocked by `t357`
+- `t362` [implementation] Onion: minimum useful covariate set on the model that mix-and-match selects: leave-one-field-out, groups, removal curve — refs [[q48_which_minicandi_design_choices_move_impu\|q48]] — blocked by `t220`, `t357`
+- `t369` [implementation] Scale miniCANDI from the settled design: choose the architecture and the data version, then scale data, context and model size — refs [[q48_which_minicandi_design_choices_move_impu\|q48]], [[q13_how_many_training_windows_and_how_much_d\|q13]] — blocked by `t363`, `t364`
 
 ## By category
 
@@ -67,6 +99,12 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 
 - `t131` [admin] walk the PI through the five open design choices of the depth and run-type claims on the counterfactual arms (oracle source, which designs are the model rung, onewarp as a distribution, the encoder-latent check, whether −log10 p gates) as multiple-choice forks — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
 - `t145` [admin] bring the research tree up to the crux 4.0 design: expectations, motivation, design logic and findings, reconstructed from the PI's conversations — *open*
+- `t227` [admin] Onion: The gate before the extended-dataset step — *blocked*
+- `t356` [admin] Onion: remove the worktrees and chunk branches of the peeling-the-onion run, after the umbrella branch merges — *blocked*
+- `t363` [admin] Onion: PI decision: which architecture goes to scaling (conv autoencoder, conv + attention, U-Net) — refs [[q48_which_minicandi_design_choices_move_impu\|q48]], [[q39_do_the_context_rungs_2_to_6_convolution_\|q39]] — *open*
+- `t364` [admin] Onion: PI decision: the data version of the final model (eic_v1_2 or the version with DNase-seq in the correction term) — refs [[q17_what_is_the_dataset_and_what_did_it_cost\|q17]], [[q48_which_minicandi_design_choices_move_impu\|q48]] — *open*
+- `t365` [admin] Onion: the PI reviews and merges draft PR 61 (umbrella branch implementation/t152-peeling-the-onion) — *open*
+- `t366` [admin] Onion: PI decision on the 14 code kits packed in onion_kit_archive on 2026-11-17 (restore some, or keep them packed) — *open*
 
 ### data-acquisition
 
@@ -74,10 +112,13 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t100` [data-acquisition] measure the conditional entropy of run_type given assay_id and read_length on the biosample panel the in-vitro covariate testbed will use, and select a panel that breaks the degeneracy — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
 - `t102` [data-acquisition] rebuild the paired-end arm's experiments as single-end BAMs on Nibi and land both arms in CANDI_STORE — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *blocked*
 - `t119` [data-acquisition] rebuild the two DNase MAPQ arms (C12M02 mapq 0 and 10) with multimapping off, so the MAPQ cut applies; the t112 builds are byte-identical to the DNase base — refs [[h15_one_transformation_conditioned_on_the_so\|h15]] — *open*
+- `t184` [data-acquisition] Onion: blind build, batch 1 (51 blind rows, 11 controls, 10 outage reruns; the PI runs the submit command) — refs [[q17_what_is_the_dataset_and_what_did_it_cost\|q17]] — *open*
+- `t285` [data-acquisition] Onion: data set version with DNase-seq in the correction term: 4 row rebuilds, version build, baselines — refs [[q17_what_is_the_dataset_and_what_did_it_cost\|q17]] — *open*
 
 ### hpc-setup
 
 - `t39` [hpc-setup] every SLURM job imports candi from the shared kit, not from KIT -- the venv's editable install pins /project/.../CANDII/src — *open*
+- `t352` [hpc-setup] Onion: push a fresh code kit before the next cluster run of the ladder report (the report stage now needs --tables) — refs [[q59_do_the_nested_replicate_ladder_and_the_c\|q59]] — *open*
 
 ### implementation
 
@@ -120,6 +161,28 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t130` [implementation] score the one-warp check set (blind, onewarp, model, oracle) on the counterfactual depth and run-type pairs — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
 - `t136` [implementation] design and run the arm-to-arm training grid: g trained on base<->arm plus some arm->arm depth pairs, scored on held-out arm->arm pairs against the via-base chain (exploratory) — refs [[h28_training_g_on_arm_to_arm_pairs_lets_a_di\|h28]], [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]] — *open*
 - `t140` [implementation] carry the pivot lesson into CANDI: the full-depth track as the base for depth; non-depth covariates by augmentation only if the arm-to-arm grid shows it is needed — refs [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]], [[q8_does_candi_s_training_which_never_pairs_\|q8]] — *blocked*
+- `t152` [implementation] peeling the onion: build the extended 4-axis dataset and the updated EIC dataset, the onion eval set, and miniCANDI through the rung 1-6 ablation ladder — *open*
+- `t212` [implementation] Onion: crossed mixed model of the replicate ladder, after a residual variance per library exists — refs [[q59_do_the_nested_replicate_ladder_and_the_c\|q59]] — *open*
+- `t220` [implementation] Onion: mix-and-match of the single settings that helped: 256-region gate, then the round — refs [[q48_which_minicandi_design_choices_move_impu\|q48]] — *blocked*
+- `t223` [implementation] Onion: final model and EIC board row: freeze, train, check on validation, single blind pass — refs [[q48_which_minicandi_design_choices_move_impu\|q48]] — *blocked*
+- `t251` [implementation] Onion: score the retrieval baseline on the eic_v1 evaluation set (256 regions) — *open*
+- `t254` [implementation] Onion: resolution arms, full design (5 to 125 bp, 75 runs, 396 jobs) — refs [[q60_how_much_of_the_1_bp_count_variance_of_a\|q60]] — *open*
+- `t256` [implementation] Onion: RNA-seq input arms (track and expression vector) on the three models — refs [[q48_which_minicandi_design_choices_move_impu\|q48]] — *open*
+- `t280` [implementation] Onion: AlphaGenome 2 against miniCANDI: box-spread signal rescoring of the 9 base runs and their AlphaGenome 2 board rows — refs [[q26_alphagenome_2_against_minicandi_rung_1_a\|q26]], [[q57_how_closely_can_a_formula_on_25_bp_binne\|q57]] — *open*
+- `t282` [implementation] Onion: AG2 on the blind tracks, inside the single blind pass — *blocked*
+- `t294` [implementation] Onion: Per-region output of the scorer and the region bootstrap — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h35_256_evaluation_regions_are_enough\|h35]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *open*
+- `t295` [implementation] Onion: territory, unseen-loci and selection arms: settled scoring, report and the confirmation of the best strategy — refs [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *blocked*
+- `t296` [implementation] Onion: evaluation-region count: the 1,024-region set, its scorings and the analysis — refs [[h35_256_evaluation_regions_are_enough\|h35]] — *blocked*
+- `t297` [implementation] Onion: budget curve on the pointwise MLP: score the 42 trained budget runs and report (U-Net curve optional) — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — *blocked*
+- `t304` [implementation] Onion: The answers to the PI's region questions — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h35_256_evaluation_regions_are_enough\|h35]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *blocked*
+- `t357` [implementation] Onion: eic_v1_2 references on 256 regions and the 256-region scores of its 9 base runs (conv autoencoder, conv + attention, U-Net) — refs [[q56_do_the_ablation_conclusions_drawn_from_t\|q56]], [[q48_which_minicandi_design_choices_move_impu\|q48]] — *open*
+- `t358` [implementation] Onion: score the 12 matched-compute runs on 256 regions (conv autoencoder, conv + attention, U-Net, Perceiver IO) — refs [[q39_do_the_context_rungs_2_to_6_convolution_\|q39]] — *open*
+- `t359` [implementation] Onion: QC-on-input arm on the three models (read-derived QC values with presence flags and the leak guard) — refs [[q48_which_minicandi_design_choices_move_impu\|q48]] — *blocked*
+- `t360` [implementation] Onion: learned cell-type embedding arm on the three models, with the zero-shot control — refs [[q48_which_minicandi_design_choices_move_impu\|q48]] — *blocked*
+- `t361` [implementation] Onion: second experiments: score the base recipes and the final candidates on the add-on (cross-lab correction, metric 7) — refs [[q58_can_the_second_experiments_separate_a_la\|q58]] — *blocked*
+- `t362` [implementation] Onion: minimum useful covariate set on the model that mix-and-match selects: leave-one-field-out, groups, removal curve — refs [[q48_which_minicandi_design_choices_move_impu\|q48]] — *blocked*
+- `t368` [implementation] Onion: pointwise MLP under the corrected composite: composite version 3, same-view pass, unscored seeds — refs [[q48_which_minicandi_design_choices_move_impu\|q48]], [[q39_do_the_context_rungs_2_to_6_convolution_\|q39]] — *open*
+- `t369` [implementation] Scale miniCANDI from the settled design: choose the architecture and the data version, then scale data, context and model size — refs [[q48_which_minicandi_design_choices_move_impu\|q48]], [[q13_how_many_training_windows_and_how_much_d\|q13]] — *blocked*
 
 ### visualization
 
@@ -128,6 +191,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t110` [visualization] leaderboard page: picking Count, P-value or Peak throws ReferenceError LOSS_ELI5 is not defined — restore the constant t82 deleted while its two uses stayed — *open*
 - `t121` [visualization] build the CEEHRC 2026 poster (44x44 in) from the CANDI graphical abstract — *open*
 - `t143` [visualization] close-out deck and story of the whole counterfactual testbed — refs [[q1_do_the_recorded_experimental_covariates_\|q1]] — *blocked*
+- `t367` [visualization] Onion: trace the typed numbers of the supervisor deck of 2026-11-18 to vault files — *open*
 
 ## Done · Dropped
 
@@ -225,3 +289,189 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t149` [visualization] variance decomposition of every EIC entry on all three truth layers, for the EIC board — *done* → `https://github.com/mehdiforoozandeh/CANDII/pull/55`
 - `t150` [implementation] score a depth-only baseline row (counts × d′/d, no network, no other covariate) beside the learned correction in the final CAC comparison — refs [[q1_do_the_recorded_experimental_covariates_\|q1]] — *done* → `results/t150/REPORT.md`
 - `t151` [visualization] redraw the EIC board's error-decomposition panel as Max's error-budget figure, with the band split, explained/unexplained split and defined axes — *done* → `https://github.com/mehdiforoozandeh/CANDII/pull/59`
+- `t153` [admin] Onion: crux child tasks, notepad rulings, package files, golden reference — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t154` [hpc-setup] Onion: Kit tooling, cluster probes, cluster choice — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t155` [data-acquisition] Onion: Globus transfer of the testbed scratch tree, Nibi to Fir — *done* → `results/t155/NO_ROUTE.md`
+- `t156` [data-acquisition] Onion: ENCODE catalog and replicate-ladder census — *done* → `results/t156/CENSUS.md`
+- `t157` [data-acquisition] Onion: EpiATLAS and ChIP-Atlas catalogs — *done* → `results/t157/source_report.md`
+- `t158` [data-acquisition] Onion: EIC accession ledger and check script — *done* → `results/t158/LEDGER_CHECK.md`
+- `t159` [implementation] Onion: Headline metric library — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t160` [implementation] Onion: Onion layers along the replicate ladder — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t161` [implementation] Onion: Region strata masks — *done* → `results/t161/STRATA.md`
+- `t162` [implementation] Onion: Training-free baselines and copy-leak guardrail — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t163` [implementation] Onion: Development evals: error budget in counts — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t164` [implementation] Onion: miniCANDI contract, dataset and shared components — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t165` [implementation] Onion: Pilot tables over the existing EIC store — *done* → `results/t165/PILOT_TABLES.md`
+- `t166` [implementation] Onion: EIC scoring route against the corrected truth — *done* → `results/t166/BOARD_REPRO.md`
+- `t167` [implementation] Onion: Alignment-level view kit — *done* → `results/t167/SMOKE.md`
+- `t168` [implementation] Onion: FASTQ-level uniform kit for histone ChIP-seq and ATAC-seq — *done* → `results/t168/PIPELINES.md`
+- `t169` [hpc-setup] Onion: DNase-seq pipeline setup and kit — *done* → `results/t169/DNASE_PIPELINE.md`
+- `t170` [data-acquisition] Onion: EIC build list and withheld design — *done* → `results/t170/build_plan.md`
+- `t171` [data-acquisition] Onion: Import the counterfactual testbed as views — *done* → `results/t171/import.md`
+- `t172` [implementation] Onion: Eval set builder, scorer and selection rule — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t173` [implementation] Onion: Train loop, registry, rung 1 (pointwise set model) — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t174` [implementation] Onion: Rung 2: convolutional autoencoder — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t175` [implementation] Onion: Rung 3: conv plus attention autoencoder — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t176` [implementation] Onion: Rung 4: U-Net with skip-source arms — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t177` [implementation] Onion: Rung 5: axial transformer — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t178` [implementation] Onion: Rung 6: Perceiver IO — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t179` [implementation] Onion: Signal from predicted counts — *done* → `results/t179/ROUTES.md`
+- `t180` [data-acquisition] Onion: EIC build, priorities 1 to 3 (submit) — *done* → `results/t180/SUBMITTED.md`
+- `t181` [implementation] Onion: Pilot: all six rungs on pilot_eic (submit) — *done* → `results/t181/SUBMITTED.md`
+- `t182` [implementation] Onion: Pilot: collect — *done* → `results/t182/PILOT.md`
+- `t183` [data-acquisition] Onion: Collect priorities 1 to 3, build and check eic_v1 — *done* → `results/t183/DATASET_EIC_V1.md`
+- `t185` [implementation] Onion: Eval set, layers and baselines on eic_v1 (submit) — *done* → `results/t185/SUBMITTED.md`
+- `t186` [implementation] Onion: Collect: scorer validity on eic_v1 — *done* → `results/t307/BASELINES.md`
+- `t187` [admin] Onion: Crux tasks and task map rows for every remaining chunk — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t188` [implementation] Onion: Two-step correction, loss arms, model wrappers — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t189` [implementation] Onion: Dataset arms — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t190` [implementation] Onion: Component arms: covariate embedding and injection, DNA tower mode, transforms, head — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t191` [implementation] Onion: ChIP control arms: the output-only lambda head — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t192` [implementation] Onion: DNA source arms: precompute tool for frozen sequence-model embeddings — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t193` [implementation] Onion: Scorer and eval-set additions — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t194` [implementation] Onion: Selection rule: the blind state after a validation failure — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t195` [implementation] Onion: Arm report: headline table, development evals, accessibility-only table — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t196` [implementation] Onion: Resolution study tool — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t197` [implementation] Onion: Crossed mixed-model cross-check — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t198` [implementation] Onion: Tables builder and dataset check — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t199` [implementation] Onion: Read-derived QC fill tool — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t200` [implementation] Onion: Ladder kit: arm configs for all six rungs and the submit script — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t201` [implementation] Onion: Genome-wide prediction and EIC export — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t202` [implementation] Onion: Compute and storage tally tool — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t203` [implementation] Onion: Proxy scorer for the evolution step — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t204` [data-acquisition] Onion: Which EIC experiments are among the Borzoi and Flashzoi training targets — *done* → `results/flashzoi_overlap/FLASHZOI_OVERLAP.md`
+- `t205` [implementation] Onion: Rung support for the stage-2 arm keys — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t206` [implementation] Onion: External EIC entries in signal space — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t207` [hpc-setup] Onion: Frozen DNA embeddings: environment, smoke, genome-wide jobs and collect — *done* → `results/t207/DNA_EMBEDDINGS.md`
+- `t208` [implementation] Onion: Stage-2 arm configs and the all-arms integration test — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t209` [implementation] Onion: Arm smoke on the pilot tables (Fir) — *done* → `results/t209/ARM_SMOKE.md`
+- `t210` [data-acquisition] Onion: Collect priority 4, then build and check eic_v2 — *dropped*
+- `t211` [data-acquisition] Onion: Fill the read-derived QC side table (submit and collect) — *done* → `presentations/onion-closeout-2026-11-18-report/report.pdf`
+- `t213` [implementation] Onion: Rung 1: base arm and per-rung ablations, collect and settle — *dropped*
+- `t214` [implementation] Onion: Rung 2: base arm and per-rung ablations, collect and settle — *dropped*
+- `t215` [implementation] Onion: Rung 3: base arm and per-rung ablations, collect and settle — *dropped*
+- `t216` [implementation] Onion: Rung 4: base arm and per-rung ablations, collect and settle — *dropped*
+- `t217` [implementation] Onion: Rung 5: base arm and per-rung ablations, collect and settle — *dropped*
+- `t218` [implementation] Onion: Rung 6: base arm and per-rung ablations, collect and settle — *dropped*
+- `t219` [implementation] Onion: Combined configurations within a rung and the cross-rung comparison — *dropped*
+- `t221` [implementation] Onion: Evolution of the winning recipes: autopilot, confirmations and the named design — *dropped*
+- `t222` [implementation] Onion: Stage 2 on the design: submit, collect and settle — *dropped*
+- `t224` [implementation] Onion: The EIC model: train on training plus validation tracks — *dropped*
+- `t225` [implementation] Onion: The single blind pass and the done rule on the blind tracks — *dropped*
+- `t226` [implementation] Onion: EIC board and the comparison with external entries in signal space — *dropped*
+- `t228` [admin] Onion: Final compute and storage tally — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t229` [visualization] Onion: The /prezit deck — *done* → `presentations/onion-closeout-2026-11-18/index.html`
+- `t230` [manuscript] Onion: The 12-page /storify report — *done* → `presentations/onion-closeout-2026-11-18-report/report.pdf`
+- `t231` [admin] Onion: Vault close-out — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/HANDOFF_NEXT_SESSION.md`
+- `t232` [manuscript] Onion: The total-variance note — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t233` [implementation] Onion: The audit of the estimators against the identity — *done* → `results/t233/AUDIT.md`
+- `t234` [implementation] Onion: Fix the real defects of the estimator audit — *done* → `results/t234/FIXES.md`
+- `t235` [data-acquisition] Onion: Read Max's result files — *done* → `results/t235/MAX_NUMBERS.md`
+- `t236` [implementation] Onion: Retrieval baseline — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t237` [implementation] Onion: RNA-seq input tool — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t238` [implementation] Onion: Extra-input model components — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t239` [implementation] Onion: Extra-input readers and the reverse-complement transform — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t240` [data-acquisition] Onion: Probe: are the read sets there, and what does a recount cost — *done* → `results/t240/READSETS.md`
+- `t241` [implementation] Onion: Recount tool at 1 bp with the point rule — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t242` [implementation] Onion: Variance-by-scale tool — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t243` [implementation] Onion: Loss arms — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t244` [implementation] Onion: Integration of the extra inputs in the dataset, the contract and the six rungs — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t245` [data-acquisition] Onion: Fetch and bin the RNA-seq inputs (Nibi) — *done* → `results/t245/RNA_INPUTS.md`
+- `t246` [implementation] Onion: Stage-3 arm configs — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t247` [implementation] Onion: Model code for another bin size — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t248` [implementation] Onion: Smoke of the Amendment 3 arms on the pilot tables (Fir) — *done* → `results/t248/ARM_SMOKE_3.md`
+- `t249` [data-acquisition] Onion: Recount the subset at 1 bp (submit and collect) — *done* → `presentations/onion-closeout-2026-11-18-report/report.pdf`
+- `t250` [implementation] Onion: Variance lost below 25 bp (run and report) — *done* → `presentations/onion-closeout-2026-11-18-report/report.pdf`
+- `t252` [implementation] Onion: Run-to-run yardstick — *dropped*
+- `t253` [implementation] Onion: Does the NB head down-weight peaks — *dropped*
+- `t255` [implementation] Onion: Extra inputs in a mix or evolved design — *dropped*
+- `t257` [data-acquisition] Onion: Select the second experiments — *done* → `results/t257/SELECTION.md`
+- `t258` [implementation] Onion: Dataset guard for evaluation-only second experiments — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t259` [implementation] Onion: Eval set add-on and add-on scoring — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t260` [implementation] Onion: Layers by pair class — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t261` [implementation] Onion: Arm report: metric 7 per rung with two bounds — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t262` [data-acquisition] Onion: Build list of the second experiments, and its kit — *done* → `results/t262/BUILD_LIST.md`
+- `t263` [implementation] Onion: Tables add-on and the ledger exception — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t264` [data-acquisition] Onion: Build the second experiments: submit and collect — *done* → `results/t264/SUBMITTED.md`
+- `t265` [data-acquisition] Onion: Build and check the eic_v1x tables — *done* → `results/closeout_D2/D2_PREP.md`
+- `t266` [implementation] Onion: Add-on eval set, the experiment layer and the baselines' two bounds — *done* → `presentations/onion-closeout-2026-11-18-report/report.pdf`
+- `t267` [data-acquisition] Onion: The AG2 metadata tables and the remaining API facts — *done* → `results/t267/API_SMOKE.md`
+- `t268` [implementation] Onion: Fetch tool with a restartable cache and quota backoff — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t269` [implementation] Onion: Leakage audit tool — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t270` [implementation] Onion: Space maps: counts to AG2's space, recalibration, peak probability — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t271` [implementation] Onion: Peaks: ENCODE peak files, tiles, consensus AUPRC — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t272` [implementation] Onion: Signal-space baselines of Max: training mean and closest-5 oracle — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t273` [data-acquisition] Onion: Run the leakage audit on the EIC ledger — *done* → `results/t273/AG2_LEAKAGE.md`
+- `t274` [implementation] Onion: The same-track scorer and the ag2_board table — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t275` [implementation] Onion: Dump hook: method track files from the scorer — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t276` [implementation] Onion: Reproduction gate against Max's numbers — *done* → `results/t276/MAX_REPRO.md`
+- `t277` [data-acquisition] Onion: Fetch AG2 for the EIC cells on the eval regions — *done* → `results/t284/FETCH.md`
+- `t278` [implementation] Onion: AG2 against the baselines on the validation tracks (submit) — *done* → `results/t308/AG2_VS_BASELINES.md`
+- `t279` [implementation] Onion: AG2 against the baselines on the validation tracks (collect) — *done* → `results/t308/AG2_VS_BASELINES.md`
+- `t281` [implementation] Onion: miniCANDI against AG2 on the validation tracks (collect) — *dropped*
+- `t283` [implementation] Onion: The eval regions, written before the tables exist — *done* → `results/t283/REGIONS.md`
+- `t284` [data-acquisition] Onion: AlphaGenome 2 fetch on the regions file — *done* → `results/t284/FETCH.md`
+- `t286` [implementation] Onion: Training regions, exclusion and per-window loss weights — refs [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t287` [implementation] Onion: Evaluation set from an explicit regions file — refs [[h35_256_evaluation_regions_are_enough\|h35]] — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t288` [implementation] Onion: Strata and region-list tool, from training data only — refs [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t289` [implementation] Onion: Configs of the region experiments — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t290` [implementation] Onion: submit_arms.sh: extra scoring arguments and a nice value — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t291` [implementation] Onion: Budget curve on rung 1: submit the trainings — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — *done* → `results/t291/SUBMITTED.md`
+- `t292` [data-acquisition] Onion: Strata tables and region lists: submit (Nibi) — refs [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *done* → `results/t292/STRATA_REAL.md`
+- `t293` [data-acquisition] Onion: Strata tables and region lists: collect — refs [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *done* → `results/t292/STRATA_REAL.md`
+- `t298` [implementation] Onion: Budget curve on rung 1: report — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — *dropped*
+- `t299` [implementation] Onion: Territory, unseen loci and selection: report — refs [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *dropped*
+- `t300` [implementation] Onion: Confirmation of the best selection strategy at the full budget — refs [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]] — *dropped*
+- `t301` [implementation] Onion: Evaluation-region count: analysis — refs [[h35_256_evaluation_regions_are_enough\|h35]] — *dropped*
+- `t302` [implementation] Onion: Budget curve on rung 4: submit — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — *dropped*
+- `t303` [implementation] Onion: Budget curve on rung 4: report — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — *dropped*
+- `t305` [implementation] Onion: The variance layers on real data — refs [[h37_on_real_data_the_cell_type_layer_is_the_\|h37]], [[q18_how_large_is_each_layer_of_the_variance_\|q18]] — *done* → `results/t305/LAYERS_REAL.md`
+- `t306` [implementation] Onion: The baselines on the eic_v1 evaluation set (submit) — refs [[h38_the_gap_between_depth_only_scaling_and_t\|h38]], [[q19_what_do_the_training_free_baselines_reac\|q19]] — *done* → `results/t307/BASELINES.md`
+- `t307` [implementation] Onion: The baselines: collect, and the room for a model — refs [[h38_the_gap_between_depth_only_scaling_and_t\|h38]], [[q19_what_do_the_training_free_baselines_reac\|q19]] — *done* → `results/t307/BASELINES.md`
+- `t308` [implementation] Onion: AlphaGenome 2 against the baselines on the validation tracks — refs [[q20_which_eic_tracks_did_alphagenome_2_train\|q20]] — *done* → `results/t308/AG2_VS_BASELINES.md`, `results/t308/ag2_contrasts_val.tsv`
+- `t309` [manuscript] Onion: Methods: the dataset and the evaluation protocol — refs [[q17_what_is_the_dataset_and_what_did_it_cost\|q17]] — *done* → `results/t309/sources.md`
+- `t310` [manuscript] Onion: Deck 1 and the paper note of iteration 1 — refs [[q17_what_is_the_dataset_and_what_did_it_cost\|q17]], [[q18_how_large_is_each_layer_of_the_variance_\|q18]], [[q19_what_do_the_training_free_baselines_reac\|q19]], [[q20_which_eic_tracks_did_alphagenome_2_train\|q20]], [[q21_does_stratified_selection_of_training_re\|q21]] — *done* → `presentations/onion-ship1-2026-11-15/DECK.md`
+- `t311` [implementation] Onion: The screening evaluation set and its baselines — refs [[q22_does_the_smallest_model_beat_the_baselin\|q22]] — *done* → `results/t307/BASELINES.md`, `results/metrics_screening/scores_ladder.md`
+- `t312` [implementation] Onion: Screening scorings of rung 1 and of the budget curve (submit) — refs [[h39_rung_1_base_beats_the_position_average_o\|h39]], [[h40_scrambled_covariates_lowers_the_correcti\|h40]], [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — *done* → `results/metrics_screening/scores_rung1_arms.md`
+- `t313` [implementation] Onion: Rung 1: the model results — refs [[h39_rung_1_base_beats_the_position_average_o\|h39]], [[h40_scrambled_covariates_lowers_the_correcti\|h40]], [[q24_how_much_of_each_variance_layer_does_the\|q24]] — *done* → `presentations/onion-ship2-2026-11-15/DECK.md`
+- `t314` [implementation] Onion: The budget curve on rung 1 — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[q25_does_a_run_of_20_000_or_40_000_windows_r\|q25]] — *dropped*
+- `t315` [implementation] Onion: AlphaGenome 2 against miniCANDI rung 1 on the fair tracks — refs [[h41_on_the_12_unseen_validation_tracks_alpha\|h41]], [[q26_alphagenome_2_against_minicandi_rung_1_a\|q26]] — *dropped*
+- `t316` [manuscript] Onion: Deck 2 and the paper note of iteration 2 — refs [[q22_does_the_smallest_model_beat_the_baselin\|q22]], [[q23_is_the_model_wired_as_designed_does_scra\|q23]], [[q24_how_much_of_each_variance_layer_does_the\|q24]], [[q25_does_a_run_of_20_000_or_40_000_windows_r\|q25]], [[q26_alphagenome_2_against_minicandi_rung_1_a\|q26]] — *done* → `presentations/onion-ship2-2026-11-15/DECK.md`
+- `t317` [implementation] Onion: rung consistency across the six rungs (scramble rule, wiring check, registration) — refs [[q27_are_the_onion_run_s_estimators_scorers_a\|q27]] — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t318` [implementation] Onion: guardrail gate = wiring check only; copy gain as a diagnostic (F2) — refs [[q27_are_the_onion_run_s_estimators_scorers_a\|q27]] — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t319` [implementation] Onion: fix the 17 review findings of the scorer and selection rule (E6f) — refs [[q27_are_the_onion_run_s_estimators_scorers_a\|q27]] — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t320` [admin] Onion: apply PI rulings 16 to 21 in code and notepad (PR) — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t321` [implementation] Onion: position-average signal with the training-average control as lambda (F4) — refs [[q27_are_the_onion_run_s_estimators_scorers_a\|q27]] — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t322` [implementation] Onion: kit integration and fixes before the EIC build (KF, KF2) — *done* → `results/t180/KIT_INTEGRATION.md`
+- `t323` [implementation] Onion: pilot defects: scoring cost, check retry, guardrail runner, mask-seed noise (F3) — refs [[q27_are_the_onion_run_s_estimators_scorers_a\|q27]] — *done* → `results/t182/F3.md`
+- `t324` [implementation] Onion: arm-smoke defects: CAPPED marker, setup retry (ASf) — *done* → `results/t209/ASF.md`
+- `t325` [hpc-setup] Onion: network probe: ENCODE download throughput from Nibi and Fir — refs [[q17_what_is_the_dataset_and_what_did_it_cost\|q17]] — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t326` [data-acquisition] Onion: fix the EIC build failures (read names, truncated FASTQ, adapters, Java heap) and the tail watchdog (D6x) — refs [[q17_what_is_the_dataset_and_what_did_it_cost\|q17]] — *done* → `results/t183/EARLY_COLLECT.md`, `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t327` [implementation] Onion: fast model scoring for a fast feedback loop (PI directive 2026-11-14; Amendment 8) — refs [[q27_are_the_onion_run_s_estimators_scorers_a\|q27]] — *done* → `results/two_phase_metrics/TWO_PHASE.md`
+- `t328` [implementation] Onion: scorer memory: stream per region, identical outputs (SM) — refs [[q27_are_the_onion_run_s_estimators_scorers_a\|q27]] — *done* → `results/scorer_memory/NOTES.md`
+- `t329` [implementation] Onion: legacy scorer: merge, pair rules for cross-cell pairs, per-region pair sums (SF0) — refs [[q27_are_the_onion_run_s_estimators_scorers_a\|q27]] — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t330` [implementation] Onion: prediction store and forward speed per rung (SP1) — refs [[q27_are_the_onion_run_s_estimators_scorers_a\|q27]] — *done* → `results/predict_store_speed/FORWARD_SPEED.md`
+- `t331` [implementation] Onion: derived evaluation set with pair regions (EVd) — refs [[q15_are_256_evaluation_regions_enough\|q15]] — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t332` [implementation] Onion: pair-region check tool with thresholds committed first (PCk) — refs [[q15_are_256_evaluation_regions_enough\|q15]] — *done* → `results/pair_region_check/PAIR_CHECK_PREREGISTRATION.md`
+- `t333` [implementation] Onion: two-phase path in the scorer (SP2) — refs [[q27_are_the_onion_run_s_estimators_scorers_a\|q27]] — *done* → `results/two_phase_metrics/TWO_PHASE.md`
+- `t334` [implementation] Onion: job shapes of score.sh and submit_arms.sh for the two-phase path (SP3) — refs [[q27_are_the_onion_run_s_estimators_scorers_a\|q27]] — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t335` [implementation] Onion: first model scoring, 6 rung-1 runs at all 256 pair regions (SRa) — refs [[q15_are_256_evaluation_regions_enough\|q15]] — *done* → `results/pair_region_check/PAIR_CHECK_PREREGISTRATION.md`
+- `t336` [implementation] Onion: choose the pair-region count, derive the evaluation set, rescore (PCa) — refs [[q15_are_256_evaluation_regions_enough\|q15]] — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t337` [implementation] Onion: strata tool with a continuous score and a solved tilt; the tilted lists (STt2) — refs [[q21_does_stratified_selection_of_training_re\|q21]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]] — *done* → `results/t292/STRATA_REAL.md`
+- `t338` [implementation] Onion: configs of the amended selection arms (RBk2) — refs [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]] — *done* → `INSTRUCTIONS/peeling_the_onion/run_state/plan.md`
+- `t339` [admin] Onion: research on training-region count and selection (literature and code) — refs [[q13_how_many_training_windows_and_how_much_d\|q13]], [[q14_how_should_training_regions_be_selected_\|q14]], [[q15_are_256_evaluation_regions_enough\|q15]], [[q16_does_the_validation_score_depend_on_havi\|q16]] — *done* → `results/region_budget/REGION_RESEARCH.md`
+- `t340` [admin] Onion: read the AlphaGenome 2 paper and Max's sprint 12 — refs [[q20_which_eic_tracks_did_alphagenome_2_train\|q20]] — *done* → `results/ag2/AG2_FACTS.md`, `results/ag2/MAX_SPRINT12.md`
+- `t341` [admin] Onion: read the PI notes of 2026-11-12: Max's new sprints, architecture survey, RNA-seq census — *done* → `results/pi_notes_2026-11-12/MAX_SPRINTS.md`, `results/pi_notes_2026-11-12/ARCHITECTURE_SURVEY.md`, `results/pi_notes_2026-11-12/RNA_CENSUS.md`
+- `t342` [visualization] Onion: deck on the law of total variance and the variance decomposition — refs [[q18_how_large_is_each_layer_of_the_variance_\|q18]] — *done* → `presentations/onion-total-variance/DECK.md`
+- `t343` [admin] Onion: record the run's findings, questions and task states in the crux tree (recorder CR1) — *done* → `f34_at_25_bp_over_all_regions_the_cell_type_.md`, `q27_are_the_onion_run_s_estimators_scorers_a.md`
+- `t344` [implementation] Onion: fragment length for ChIP-seq tracks with an empty frag_len: side table and scorer option (FL) — refs [[q17_what_is_the_dataset_and_what_did_it_cost\|q17]], [[q20_which_eic_tracks_did_alphagenome_2_train\|q20]] — *done* → `results/fraglen_single_end/FRAGLEN.md`
+- `t345` [implementation] Onion: the oracle floor for the correction gap closed: investigation (GF) — refs [[q32_which_reference_should_define_the_1_of_t\|q32]] — *done* → `results/gap_closed_floor/GAP_FLOOR.md`
+- `t346` [implementation] Onion: the oracle floor in the tools: reference build, select_rule and arm_report (OF) — refs [[q32_which_reference_should_define_the_1_of_t\|q32]] — *done* → `results/oracle_floor/ORACLE_FLOOR.md`
+- `t347` [implementation] Onion: the depth-corrected eta formulation: theory, model design, literature and real-data layers (ETA) — refs [[q33_can_the_negative_binomial_be_written_wit\|q33]], [[q34_what_does_the_eta_formulation_change_in_\|q34]], [[q31_how_do_the_variance_layer_shares_change_\|q31]] — *done* → `results/eta_space/THEORY.md`, `results/eta_space/LAYERS_ETA.md`, `results/eta_space/MODEL_DESIGN.md`, `results/eta_space/LITERATURE.md`
+- `t348` [visualization] Onion: status deck of the run, 2026-11-14 — refs [[q18_how_large_is_each_layer_of_the_variance_\|q18]], [[q19_what_do_the_training_free_baselines_reac\|q19]] — *done* → `presentations/onion-status-2026-11-14/DECK.md`
+- `t349` [implementation] Onion: first read of the 256-region rescoring by the pre-written rules (rules 2.1, 2.2 and 2.6 decided at 30 of 62 scores) and the one final-pass command — refs [[q56_do_the_ablation_conclusions_drawn_from_t\|q56]], [[h40_scrambled_covariates_lowers_the_correcti\|h40]], [[q44_does_training_the_u_net_on_the_counterfa\|q44]], [[q54_does_another_loss_poisson_mean_nb_crps_e\|q54]] — *done* → `presentations/onion-closeout-2026-11-18-report/report.pdf`
+- `t350` [implementation] Onion: finish the 256-region rescoring on Nibi (62 run-seeds of 7 arms) and rerun the final-pass command on the full arm-summary table — refs [[q56_do_the_ablation_conclusions_drawn_from_t\|q56]], [[q48_which_minicandi_design_choices_move_impu\|q48]] — *done* → `results/rescoring_p256/read_20261119T0850Z/RESCORING_READ.md`
+- `t351` [implementation] Onion: replicate ladder in the two-sided form, with the joint cluster bootstrap and the common-cell check — refs [[q59_do_the_nested_replicate_ladder_and_the_c\|q59]] — *done* → `presentations/onion-closeout-2026-11-18-report/report.pdf`
+- `t353` [implementation] Onion: rerun the DNase-seq layers of the replicate ladder and of the second-experiment layers without the 15,201-read track ENCSR000EKG (or with a minimum common depth) — refs [[q59_do_the_nested_replicate_ladder_and_the_c\|q59]], [[q58_can_the_second_experiments_separate_a_la\|q58]] — *done* → `results/closeout_E4/ladder_excl_ENCSR000EKG_2026-11-19/ladder.md`
+- `t354` [implementation] Onion: verify the 1 bp tables with more memory per worker and build the resolution eval set (job 27692994 ran out of memory) — refs [[q60_how_much_of_the_1_bp_count_variance_of_a\|q60]] — *done* → `results/closeout_A7/verify_2026-11-19/onion_a7_verify_27868178.out`
+- `t355` [admin] Onion: the PI cancels the Fir rescoring copies (jobs 4535347 to 4535923) after the Nibi scores are on disk — refs [[q56_do_the_ablation_conclusions_drawn_from_t\|q56]] — *done* → `results/rescoring_p256/read_20261119T0850Z/RESCORING_READ.md`
