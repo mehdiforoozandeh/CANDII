@@ -3235,3 +3235,4 @@ What can start before `eic_v1` exists: the 18 chunks of wave B1 now; then B2 (RX
 - 2026-11-20 00:15 UTC. Fir down (PI). Reference jobs 4581644-4581648 last seen PENDING at 2026-11-19 21:21 UTC.
 - 2026-11-20 00:25 UTC. PI ruling: Fir base-model scores (t357) move to the next sprint. Session work ends.
 - 2026-11-20T20:15Z FIR BACK. Reference jobs 4581644-4581648 all COMPLETED; baselines on disk (4 SCORED + oracle_floor.json). PI ruled (dialog): submit scoring now. Submitted 20:11Z, kit CO10, submit_a12.sh STEP=ref DRY_RUN=0: 9 scorings, 81 jobs, 326.7 CPU-h, ids 4712722-4712931 (not contiguous), all PENDING. NEVER RESUBMIT. Fir log ~/a12_ref_submit_20261120T2011Z.log. Left: read scores, close t357.
+- 2026-11-20T20:55Z PR 61 MERGED by PI (merge commit f1864282, mergedAt 2026-11-20T00:46Z). t365 and t152 closed. Two later commits (handoff 3a37fd11, snapshot) are on the branch only; they go to main with the score read in one follow-up PR.
