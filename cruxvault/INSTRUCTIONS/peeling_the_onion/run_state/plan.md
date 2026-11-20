@@ -3233,3 +3233,4 @@ What can start before `eic_v1` exists: the 18 chunks of wave B1 now; then B2 (RX
 - 2026-11-19 04:15 UTC. `co_d2_layers_excl_ENCSR000EKG` 27851431 COMPLETED (22800 rows; DNase-seq depth 13,300,584). Findings f136, f137, f138 recorded; t353, t354 done. A7 rerun 27868178/27868179 and E4 report 27868089 COMPLETED.
 - 2026-11-19 08:55 UTC. RESCORING DONE: 62 of 62 scored on Nibi, 0 live jobs. Read read_20261119T0850Z: all six rules decided; rule 2.3 two-step routing stays off. f139 settles h42; t350 done. Fir: scancel of 558 PENDING mc_ jobs in range 4535347-4535923 under the PI ruling of 01:40 UTC; 0 left in range; t355 done. Close-out deck republished (version 8). Fir reference jobs 4581644-4581648 still PENDING.
 - 2026-11-20 00:15 UTC. Fir down (PI). Reference jobs 4581644-4581648 last seen PENDING at 2026-11-19 21:21 UTC.
+- 2026-11-20 00:25 UTC. PI ruling: Fir base-model scores (t357) move to the next sprint. Session work ends.
