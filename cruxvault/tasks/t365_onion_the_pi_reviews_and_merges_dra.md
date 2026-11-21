@@ -1,15 +1,15 @@
 ---
 id: t365
 type: task
-title: Onion: the PI reviews and merges draft PR 61 (umbrella branch implementation/t152-peeling-the-onion)
+title: "Onion: the PI reviews and merges draft PR 61 (umbrella branch implementation/t152-peeling-the-onion)"
 category: admin
 parent: t152
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-18T16:21:33
-updated: "2026-11-18T23:23:12"
+status: done
+created: "2026-11-18T16:21:33"
+updated: "2026-11-20T13:47:11"
 ---
 
 # t365 — Onion: the PI reviews and merges draft PR 61 (umbrella branch implementation/t152-peeling-the-onion)
@@ -30,7 +30,7 @@ lands the run on main; the worktree removal waits for it
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged f1864282](INSTRUCTIONS/peeling_the_onion/run_state/HANDOFF_NEXT_SESSION.md)
 
 ## Evidence
 

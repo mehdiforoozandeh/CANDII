@@ -1,15 +1,15 @@
 ---
 id: t152
 type: task
-title: peeling the onion: build the extended 4-axis dataset and the updated EIC dataset, the onion eval set, and miniCANDI through the rung 1-6 ablation ladder
+title: "peeling the onion: build the extended 4-axis dataset and the updated EIC dataset, the onion eval set, and miniCANDI through the rung 1-6 ablation ladder"
 category: implementation
 parent: 
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-10T21:51:42
-updated: "2026-11-18T23:23:12"
+status: done
+created: "2026-11-10T21:51:42"
+updated: "2026-11-20T13:47:11"
 ---
 
 # t152 — peeling the onion: build the extended 4-axis dataset and the updated EIC dataset, the onion eval set, and miniCANDI through the rung 1-6 ablation ladder
@@ -28,7 +28,7 @@ The run ended 2026-11-18T20:00Z. The rung-by-rung ladder of this task's title wa
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged f1864282](INSTRUCTIONS/peeling_the_onion/closeout/settled%20miniCANDI%20design.md)
 
 ## Evidence
 
