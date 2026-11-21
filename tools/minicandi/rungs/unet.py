@@ -38,6 +38,17 @@ output, tests/test_minicandi_tune_rung4.py): `n_levels` (2 to 5, default N_LEVEL
 bottleneck stride is 2**n_levels, channels follow LEVEL_MULT, and the width is refitted to
 `param_budget`) and `attn_dropout` (default 0.0; the dropout of the bottleneck transformer layers).
 
+Recipe switches (t370 C1, default = today's model, which builds nothing new):
+`film_placement` (ends | encoder | decoder | bottleneck | all, `tools/minicandi/trunk_film.py`):
+FiLM from the pooled (C, C') embedding on `count_tower.blocks` (not the DNA tower), on `dec1` and
+`dec2`, and/or on the input of each transformer layer; `tokens` with a non-default placement
+raises NotApplicable. `skip_film` (cprime | c_cprime): `c_cprime` feeds the pooled (C, C')
+vector (width 2 D_COV) to every `steer[i]`. `head_skip` (plain | off | film): `off` removes
+`head_skip` and `h_track` does not join the head; `film` modulates the D_TRACK features of
+`h_track` per track by a FiLM from cat(C embedding, C' embedding) of that track (identity at the
+start; the visibility flag is not modulated). Either non-default with `skip_source = dna` raises
+NotApplicable.
+
 Not applicable (`NotApplicable`): `skip_source = dna` with `dna = off` (no DNA skip exists), and
 `two_step = true`, as in every rung.
 `skip_source = both` with `dna = off` keeps only the count skips; that is the `dna_off` arm of the
@@ -91,10 +102,13 @@ from minicandi.components import (ConvBlock, CountTransform, CovariateInjector, 
 from minicandi.contract import A, K_META, LOG2_DEPTH_COL, MiniCandi, k_input  # noqa: E402
 from minicandi.covariates import drop_field_indices, model_covariates, scramble_mode  # noqa: E402
 from minicandi.dna_fusion import DnaCrossAttn, DnaFiLM, fusion_of, without_fusion  # noqa: E402
+from minicandi.trunk_film import TrunkFiLM, placement_of, pooled_condition, sites_of  # noqa: E402
 
 RUNG = 4
 NAME = "unet"
 SKIP_SOURCES = ("dna", "counts", "both")
+SKIP_FILMS = ("cprime", "c_cprime")      # t370 C1 `skip_film`; cprime = today
+HEAD_SKIPS = ("plain", "off", "film")    # t370 C1 `head_skip`; plain = today
 N_LEVELS = 4                 # stride 16 at the bottleneck
 LEVEL_MULT = (1, 2, 2, 4, 4, 4)  # channels per level as multiples of `width` (level n = bottom)
 N_LEVELS_RANGE = (2, 5)      # tuning key `n_levels` (round-2 tuning, default-off)
@@ -142,10 +156,10 @@ class _Tower(nn.Module):
         self.blocks = nn.ModuleList(ConvBlock(chans[i], chans[i]) for i in range(n))
         self.down = nn.ModuleList(Downsample(chans[i], chans[i + 1]) for i in range(n))
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor, films: list | None = None):
         skips = []
-        for blk, down in zip(self.blocks, self.down):
-            x = blk(x)
+        for i, (blk, down) in enumerate(zip(self.blocks, self.down)):
+            x = blk(x) if films is None else blk(x, films[i])
             skips.append(x)
             x = down(x)
         return skips, x
@@ -207,6 +221,10 @@ class Model(MiniCandi):
         self.chans = chans
         tokens = self.injection == "tokens"
         d_model = chans[-1]
+        # t370 C1 switches (defaults = today's model)
+        self.film_sites = sites_of(placement_of(cfg))
+        self.skip_film = cfg.get("skip_film", "cprime")
+        self.head_skip_mode = cfg.get("head_skip", "plain")
 
         # per-track input path
         self.transform = CountTransform(cfg["count_transform"], **kw["transform"])
@@ -253,8 +271,9 @@ class Model(MiniCandi):
             self.tok_to_head = nn.Linear(d_model, D_HEAD)
         skip_w = [chans[i] * (int(self.skip_counts) + int(self.skip_dna)) for i in range(nl)]
         self.up = nn.ModuleList(Upsample(chans[i + 1], chans[i]) for i in range(nl))
+        d_steer = 2 * D_COV if self.skip_film == "c_cprime" else D_COV
         self.steer = nn.ModuleList(
-            G(D_COV, 2 * skip_w[i], torch.cat([torch.ones(skip_w[i]), torch.zeros(skip_w[i])]))
+            G(d_steer, 2 * skip_w[i], torch.cat([torch.ones(skip_w[i]), torch.zeros(skip_w[i])]))
             for i in range(nl))
         self.dec1 = nn.ModuleList(ConvBlock(chans[i] + skip_w[i], chans[i])
                                   for i in range(nl))
@@ -263,12 +282,26 @@ class Model(MiniCandi):
         # head
         self.to_head = nn.Linear(chans[0], D_HEAD)
         self.track_emb_out = nn.Parameter(torch.randn(A, D_HEAD) * 0.02)
-        if self.skip_counts:
+        if self.skip_counts and self.head_skip_mode != "off":
             self.head_skip = nn.Linear(D_HEAD + D_TRACK + 1, D_HEAD)
         self.head_mlp = nn.Sequential(nn.GELU(), nn.Linear(D_HEAD, D_HEAD), nn.GELU())
         self.nb = NBHead(D_HEAD, self.transform, **kw["head"])
         if self.out_sub > 1:
             self.out_sub_emb = nn.Parameter(torch.randn(self.out_sub, D_HEAD) * 0.02)
+        # t370 C1 modules, built last so the base modules keep their draws; the defaults build
+        # nothing
+        if self.head_skip_mode == "film":
+            self.head_skip_film = G(2 * D_COV, 2 * D_TRACK,
+                                    torch.cat([torch.ones(D_TRACK), torch.zeros(D_TRACK)]))
+        if self.film_sites:
+            ch = []
+            if "encoder" in self.film_sites:
+                ch += list(chans[:nl])
+            if "bottleneck" in self.film_sites:
+                ch += [d_model] * N_ATTN_LAYERS
+            if "decoder" in self.film_sites:
+                ch += [chans[i] for i in reversed(range(nl)) for _ in range(2)]
+            self.trunk_film = TrunkFiLM(2 * D_COV, ch)
 
     # ------------------------------------------------------------------ forward
     def forward(self, batch: dict) -> dict:
@@ -306,6 +339,15 @@ class Model(MiniCandi):
             h = h + self.avg_in(torch.log1p(batch["avg"].float().clamp_min(0))[..., None])
         h_track = torch.cat([h, vis[..., None].to(h.dtype)], dim=-1)      # [B, L, A, d+1]
 
+        # t370 C1: the pooled (C, C') condition of the trunk FiLM and of skip_film = c_cprime
+        cond = None
+        if self.film_sites or self.skip_film == "c_cprime":
+            cond = pooled_condition(self.in_inj.embed(c_in), x_avail,
+                                    self.out_inj.embed(c_out), y_avail)
+        films = iter(self.trunk_film(cond)) if self.film_sites else iter(())
+        enc_f, mid_f, dec_f = (part in self.film_sites
+                               for part in ("encoder", "bottleneck", "decoder"))
+
         # pad L to a multiple of 2**n_levels (zeros carry no input value)
         stride = 2 ** self.n_levels
         Lp = -(-L // stride) * stride
@@ -316,7 +358,8 @@ class Model(MiniCandi):
             dna = F.pad(self.add_extra_track(self.dna(x_dna), batch).transpose(1, 2),
                         (0, Lp - L))
             fused = torch.cat([fused, dna.to(fused.dtype)], dim=1)
-        c_skips, bottom = self.count_tower(self.stem(fused))
+        c_skips, bottom = self.count_tower(
+            self.stem(fused), [next(films) for _ in range(self.n_levels)] if enc_f else None)
         d_skips = None
         if self.dna_mode != "off" and self.fusion != "early":
             x_dna = batch["x_dna_emb" if self.dna_mode == "precomputed" else "x_dna"]
@@ -344,6 +387,12 @@ class Model(MiniCandi):
             seq = self.attn(seq, src_key_padding_mask=pad)
             tok_out = seq[:, Lb + A:]                                        # [B, A, d_model]
             seq = seq[:, :Lb]
+        elif mid_f:                   # FiLM on the input of each transformer layer
+            for layer in self.attn.layers:
+                gamma, beta = next(films)
+                seq = layer(gamma.transpose(1, 2) * seq + beta.transpose(1, 2))
+            if self.attn.norm is not None:
+                seq = self.attn.norm(seq)
         else:
             seq = self.attn(seq)
         z = seq.transpose(1, 2)
@@ -355,6 +404,8 @@ class Model(MiniCandi):
         else:
             per = self.out_inj.embed(c_out)
         g_out = (per * w).sum(1) / w.sum(1).clamp_min(1.0)                  # [B, D_COV]
+        if self.skip_film == "c_cprime":
+            g_out = cond                                                    # [B, 2 D_COV]
 
         for i in reversed(range(self.n_levels)):
             z = self.up[i](z)
@@ -369,13 +420,23 @@ class Model(MiniCandi):
                 k = s.shape[1]
                 s = theta[:, :k, None] * s + theta[:, k:, None]
                 z = torch.cat([z, s], dim=1)
-            z = self.dec2[i](self.dec1[i](z))
+            if dec_f:
+                z = self.dec2[i](self.dec1[i](z, next(films)), next(films))
+            else:
+                z = self.dec2[i](self.dec1[i](z))
         z = z[..., :L].transpose(1, 2)                                      # [B, L, C0]
 
         # per-track head
         hd = self.to_head(z)[:, :, None, :] + self.track_emb_out          # [B, L, A, D_HEAD]
-        if self.skip_counts:
-            hd = self.head_skip(torch.cat([hd, h_track], dim=-1))
+        if self.skip_counts and self.head_skip_mode != "off":
+            hs = h_track
+            if self.head_skip_mode == "film":         # FiLM(C, C') per track; flag untouched
+                theta = self.head_skip_film(torch.cat([self.in_inj.embed(c_in),
+                                                       self.out_inj.embed(c_out)], dim=-1))
+                theta = theta[:, None]                                      # [B, 1, A, 2 d]
+                hs = torch.cat([theta[..., :D_TRACK] * h_track[..., :D_TRACK]
+                                + theta[..., D_TRACK:], h_track[..., D_TRACK:]], dim=-1)
+            hd = self.head_skip(torch.cat([hd, hs], dim=-1))
         if self.out_sub > 1:                                                # [B, L*s, A, D]
             hd = (hd[:, :, None] + self.out_sub_emb[:, None, :]).reshape(
                 B, L * self.out_sub, A, D_HEAD)
@@ -391,6 +452,15 @@ def _validate(cfg: dict) -> None:
     check_rung(cfg)
     if cfg["skip_source"] not in SKIP_SOURCES:
         raise ValueError(f"skip_source {cfg['skip_source']!r} not in {SKIP_SOURCES}")
+    placement_of(cfg)
+    sf, hs = cfg.get("skip_film", "cprime"), cfg.get("head_skip", "plain")
+    if sf not in SKIP_FILMS:
+        raise ValueError(f"skip_film {sf!r} not in {SKIP_FILMS}")
+    if hs not in HEAD_SKIPS:
+        raise ValueError(f"head_skip {hs!r} not in {HEAD_SKIPS}")
+    if cfg["skip_source"] == "dna" and (sf != "cprime" or hs != "plain"):
+        raise NotApplicable(f"rung 4: skip_film = {sf} / head_skip = {hs} act on the count skips; "
+                            f"skip_source = dna has none")
     if cfg["skip_source"] == "dna" and cfg["dna"] == "off":
         raise NotApplicable("rung 4: skip_source = dna needs a DNA tower; dna = off has none")
 
