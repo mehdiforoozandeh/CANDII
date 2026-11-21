@@ -10,3 +10,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-21T11:43Z cold review: arithmetic sound (cum ~11,991 CPU-h), 4 factual fixes, coverage gaps, waits-in-chunk; sent once to planner with 15 amendments; D26-D27
 - 2026-11-21T11:48Z wave 1 launched: C1-C10, 10 opus builders, base 57f3c9e8
 - 2026-11-21T12:02Z ADDITION D29 read-disjoint training pairs: displaces nothing; ~150 CPU-h screen (9 run-seeds); serves R1 R3 R4; PI informed at next report
+- 2026-11-21T12:09Z Fir: rcp_tests 4863258; U-Net probe train 4863259, predict 4863260-63, metrics 4863264 (kit RCP1)
