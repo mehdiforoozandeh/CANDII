@@ -47,6 +47,13 @@ count transform through `component_kwargs` as on rungs 2 and 4; `res_in_sub` / `
 NotApplicable. With every key at its default the model is today's, parameter for
 parameter and output for output (tests/test_minicandi_rung_arms.py).
 
+Trunk FiLM (t370 C1, `tools/minicandi/trunk_film.py`): `film_placement` (ends | encoder |
+decoder | bottleneck | all; default ends = today's model, which builds nothing). The sites are the
+`enc` ConvBlocks, the input of each transformer layer (gamma * seq + beta, the padding mask kept)
+and the `dec` ConvBlocks; the condition is the pooled C and C' embedding of `cov_in` and
+`cov_out`. `tokens` with a non-default placement, and the U-Net keys `skip_film` / `head_skip`,
+raise NotApplicable.
+
 DNA fusion (item A11, `tools/minicandi/dna_fusion.py`): `dna_fusion = film` (the DNA features
 FiLM the track-fusion output, which then reads counts only), `late` (DNA joins after the conv
 encoder through a learned patch pooling) or `xattn` (the coarse count tokens cross-attend to the
@@ -74,6 +81,8 @@ from minicandi.contract import (A, K_META, LOG2_DEPTH_COL, MiniCandi, k_input,  
 from minicandi.covariates import drop_field_indices, model_covariates, scramble_mode  # noqa: E402
 from minicandi.dna_fusion import (DnaCrossAttn, DnaFiLM, DnaPatchDown, fusion_of,  # noqa: E402
                                   without_fusion)
+from minicandi.trunk_film import (TrunkFiLM, check_unet_only, placement_of,  # noqa: E402
+                                  pooled_condition, sites_of)
 
 RUNG = 3
 NAME = "conv_attn_ae"
@@ -126,6 +135,8 @@ class Model(MiniCandi):
         super().__init__()
         cfg = resolve_config(config)
         check_rung(cfg)
+        check_unet_only(cfg, NAME)
+        film_sites = sites_of(placement_of(cfg))
         if max(M.res_subs_of(cfg)) > 1:               # item A7: the decoupled arms are rungs 2 and 4
             raise NotApplicable("res_in_sub / res_out_sub are built in rungs 2 and 4 only")
         # tuning knobs (round-2 tuning, default-off: absent = the module constants)
@@ -192,6 +203,18 @@ class Model(MiniCandi):
             self.dna_down = DnaPatchDown(D_DNA, W, 2 ** n_down)
             if self.fusion == "xattn":
                 self.dna_xattn = DnaCrossAttn(W, n_heads)
+        # trunk FiLM (t370 C1), built after the base modules; film_placement = ends (default)
+        # builds nothing
+        self.film_sites = film_sites
+        if film_sites:
+            ch = []
+            if "encoder" in film_sites:
+                ch += [W] * n_down
+            if "bottleneck" in film_sites:
+                ch += [W] * n_layers
+            if "decoder" in film_sites:
+                ch += [W] * n_down
+            self.trunk_film = TrunkFiLM(2 * D_COV, ch)
         # extra inputs (chunk XI), constructed last; dna = off leaves no DNA features
         self.build_extras(cfg, D_DNA if cfg["dna"] != "off" else None, ("cov_in", "cov_out"))
 
@@ -224,8 +247,14 @@ class Model(MiniCandi):
         if self.fusion == "film":
             z = self.dna_film(z, dna)
 
+        films = iter(())
+        if self.film_sites:
+            films = iter(self.trunk_film(pooled_condition(
+                self.cov_in.embed(c_in), x_avail, self.cov_out.embed(c_out), batch["y_avail"])))
+        enc_f, mid_f, dec_f = (part in self.film_sites
+                               for part in ("encoder", "bottleneck", "decoder"))
         for blk, dn in zip(self.enc, self.down):
-            z = dn(blk(z))
+            z = dn(blk(z, next(films) if enc_f else None))
         if self.fusion == "late":
             z = z + self.dna_down(dna)
         seq = z.transpose(1, 2)                                            # [B, L', W]
@@ -240,10 +269,18 @@ class Model(MiniCandi):
             seq = torch.cat([seq, t_in, t_out], dim=1)
             pad = torch.cat([torch.zeros(B, Lc, dtype=torch.bool, device=seq.device),
                              ~x_avail, ~batch["y_avail"]], dim=1)          # True = not a key
-        seq = self.attn(seq, src_key_padding_mask=pad)
+        if mid_f:                     # FiLM on the input of each transformer layer
+            for layer in self.attn.layers:
+                gamma, beta = next(films)
+                seq = gamma.transpose(1, 2) * seq + beta.transpose(1, 2)
+                seq = layer(seq, src_key_padding_mask=pad)
+            if self.attn.norm is not None:
+                seq = self.attn.norm(seq)
+        else:
+            seq = self.attn(seq, src_key_padding_mask=pad)
         z = seq[:, :Lc].transpose(1, 2)
         for upm, blk in zip(self.up, self.dec):
-            z = blk(upm(z))
+            z = blk(upm(z), next(films) if dec_f else None)
 
         f = self.readout(z.transpose(1, 2)).reshape(B, L, Ac, D_OUT) + self.track_emb
         if self.injection == "tokens":
