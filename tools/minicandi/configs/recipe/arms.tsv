@@ -21,6 +21,15 @@ nocov	nocov	4	unet	rcp_nocov_unet	tools/minicandi/configs/recipe/nocov/rung4/noc
 halves	halves	2	convae	rcp_halves_convae	tools/minicandi/configs/recipe/halves/rung2/halves.json	{"train_halves":"pairs"}	03:00:00	s1a
 halves	halves	3	convattn	rcp_halves_convattn	tools/minicandi/configs/recipe/halves/rung3/halves.json	{"train_halves":"pairs"}	03:00:00	s1a
 halves	halves	4	unet	rcp_halves_unet	tools/minicandi/configs/recipe/halves/rung4/halves.json	{"train_halves":"pairs"}	03:00:00	s1a
+ctl_holdout	control	2	convae	rcp_ctl_holdout_convae	tools/minicandi/configs/recipe/control/rung2/ctl_holdout.json	{"control_holdout_cells":["C02","C10","C16","C20","C25","C31","C36","C46"]}	03:00:00	
+ctl_holdout	control	3	convattn	rcp_ctl_holdout_convattn	tools/minicandi/configs/recipe/control/rung3/ctl_holdout.json	{"control_holdout_cells":["C02","C10","C16","C20","C25","C31","C36","C46"]}	03:00:00	
+ctl_holdout	control	4	unet	rcp_ctl_holdout_unet	tools/minicandi/configs/recipe/control/rung4/ctl_holdout.json	{"control_holdout_cells":["C02","C10","C16","C20","C25","C31","C36","C46"]}	03:00:00	
+ctl_holdout_w4	control	2	convae	rcp_ctl_holdout_w4_convae	tools/minicandi/configs/recipe/control/rung2/ctl_holdout_w4.json	{"control_holdout_cells":["C02","C10","C16","C20","C25","C31","C36","C46"],"control_loss_weight":4.0}	03:00:00	
+ctl_holdout_w4	control	3	convattn	rcp_ctl_holdout_w4_convattn	tools/minicandi/configs/recipe/control/rung3/ctl_holdout_w4.json	{"control_holdout_cells":["C02","C10","C16","C20","C25","C31","C36","C46"],"control_loss_weight":4.0}	03:00:00	
+ctl_holdout_w4	control	4	unet	rcp_ctl_holdout_w4_unet	tools/minicandi/configs/recipe/control/rung4/ctl_holdout_w4.json	{"control_holdout_cells":["C02","C10","C16","C20","C25","C31","C36","C46"],"control_loss_weight":4.0}	03:00:00	
+ctl_holdout_separate	control	2	convae	rcp_ctl_holdout_separate_convae	tools/minicandi/configs/recipe/control/rung2/ctl_holdout_separate.json	{"control_branch":"separate","control_holdout_cells":["C02","C10","C16","C20","C25","C31","C36","C46"]}	03:00:00	
+ctl_holdout_separate	control	3	convattn	rcp_ctl_holdout_separate_convattn	tools/minicandi/configs/recipe/control/rung3/ctl_holdout_separate.json	{"control_branch":"separate","control_holdout_cells":["C02","C10","C16","C20","C25","C31","C36","C46"]}	03:00:00	
+ctl_holdout_separate	control	4	unet	rcp_ctl_holdout_separate_unet	tools/minicandi/configs/recipe/control/rung4/ctl_holdout_separate.json	{"control_branch":"separate","control_holdout_cells":["C02","C10","C16","C20","C25","C31","C36","C46"]}	03:00:00	
 cac_curve	cac	2	convae	rcp_cac_curve_convae	tools/minicandi/configs/recipe/cac/rung2/cac_curve.json	{"cac_post":"curve","cac_pre":"curve"}	03:00:00	s1b
 cac_curve	cac	3	convattn	rcp_cac_curve_convattn	tools/minicandi/configs/recipe/cac/rung3/cac_curve.json	{"cac_post":"curve","cac_pre":"curve"}	03:00:00	s1b
 cac_curve	cac	4	unet	rcp_cac_curve_unet	tools/minicandi/configs/recipe/cac/rung4/cac_curve.json	{"cac_post":"curve","cac_pre":"curve"}	03:00:00	s1b

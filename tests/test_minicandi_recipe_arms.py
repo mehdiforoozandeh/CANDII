@@ -48,9 +48,14 @@ PINNED = {
                                      "covariate_drop_fields": list(C.META_COLUMNS)}},
     "probe": {"probe_base": {}},
     "halves": {"halves": {"train_halves": "pairs"}},
+    "control": {"ctl_holdout": {"control_holdout_cells": RA.CONTROL_HOLDOUT},
+                "ctl_holdout_w4": {"control_holdout_cells": RA.CONTROL_HOLDOUT,
+                                   "control_loss_weight": 4.0},
+                "ctl_holdout_separate": {"control_holdout_cells": RA.CONTROL_HOLDOUT,
+                                         "control_branch": "separate"}},
 }
 PINNED_MODELS = {"skip": (4,), "placement": (2, 3, 4), "nocov": (2, 3, 4), "cac": (2, 3, 4),
-                 "probe": (4,), "halves": (2, 3, 4)}
+                 "probe": (4,), "halves": (2, 3, 4), "control": (2, 3, 4)}
 #: the mix arms of the plan, per model
 PINNED_MIX = {2: {"mix_svonly"}, 3: {"mix_concat", "mix_fixdepth", "mix_imp4", "mix_crps",
                                      "mix_svonly"}, 4: {"mix_avg", "mix_pearson", "mix_fixdepth"}}
@@ -91,6 +96,9 @@ def test_stages():
     assert set(RA.STAGES["s1c"]) == {"cac_cnn", "cac_cnn_corefilm_off"}
     # arm-models per stage (the plan: C12 19 arm-models, C13 15, C27 6; C29 adds 3 to s1a)
     assert [len(RA.select(s)) for s in ("probe", "s1a", "s1b", "s1c")] == [1, 22, 15, 6]
+    # C15: the control family is in no stage; C18 runs it with STAGE=arms
+    assert not any(RA.stages_of(a) for a in PINNED["control"])
+    assert len(RA.select(arms=list(PINNED["control"]))) == 9
     assert [RA.run_name(r, a) for r, a in RA.select(arms=["halves"])] == \
         ["rcp_halves_convae", "rcp_halves_convattn", "rcp_halves_unet"]
 

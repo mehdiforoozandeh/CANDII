@@ -17,6 +17,10 @@ Keys introduced by other chunks of t370, pinned in the plan (.orchestrate/plan.m
 `cac_pre`, `cac_post` (C2, covariate-correction layers before and after the trunk). The
 configs use them as pinned; this module does not import the code that reads them.
 
+Family control (C15, decision D9): `ctl_holdout`, `ctl_holdout_w4`, `ctl_holdout_separate` on all
+three models; keys `control_holdout_cells`, `control_loss_weight`, `control_branch` (read by
+dataset.py, losses.py and the rungs). The family is in no stage: it runs with STAGE=arms (C18).
+
 Stages (configs/recipe/submit_recipe.sh STAGE=...): probe = family probe; s1a = families skip,
 placement, nocov, halves (C29: read-disjoint training pairs, `train_halves = pairs`, decision D29); s1b = the curve arms of family cac and family mix; s1c = the CNN arms of family
 cac. Training time: 08:00:00 for an arm with the average input or a CNN correction layer, else
@@ -50,6 +54,14 @@ TRAIN_TIME, TRAIN_TIME_LONG = "03:00:00", "08:00:00"
 #: C2 keys, read here through names only: a string literal in a subscript or .get would make
 #: train.check_config_keys accept the key even where no model code reads it
 CAC_KEYS = ("cac_pre", "cac_post")
+#: Decision D22: the cells whose ChIP control the control arms hold out of training. Computed once
+#: on 2026-11-21 from Fir /project/def-maxwl/mforooz/ONION/tables/eic_v1_2/measurements.tsv and
+#: eval/eic_v1_2/evalset.json: the cells of the 42 validation leave-one-assay-out ChIP-seq targets
+#: (`imputation_targets`, regime leave_one_assay_out, assay_class narrow_histone or broad_histone)
+#: that hold a training `chipseq-control` row; 24 cells, sorted, every third ([::3]).
+#: (C02 is in the 24 through its training control; its target's own control is the one
+#: validation control row.)
+CONTROL_HOLDOUT = ["C02", "C10", "C16", "C20", "C25", "C31", "C36", "C46"]
 
 
 def _arms() -> dict[str, dict]:
@@ -67,6 +79,10 @@ def _arms() -> dict[str, dict]:
         add(f"film_{p}", "placement", ALL, {"film_placement": p})
     add("nocov", "nocov", ALL, dict(NOCOV))
     add("halves", "halves", ALL, {"train_halves": "pairs"})
+    ctl = {"control_holdout_cells": list(CONTROL_HOLDOUT)}
+    add("ctl_holdout", "control", ALL, dict(ctl))
+    add("ctl_holdout_w4", "control", ALL, {**ctl, "control_loss_weight": 4.0})
+    add("ctl_holdout_separate", "control", ALL, {**ctl, "control_branch": "separate"})
     for form in ("curve", "cnn"):
         add(f"cac_{form}", "cac", ALL, {"cac_pre": form, "cac_post": form})
         add(f"cac_{form}_corefilm_off", "cac", ALL, {"cac_pre": form, "cac_post": form, **NOCOV})
