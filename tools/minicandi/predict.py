@@ -3,11 +3,18 @@
     python tools/minicandi/predict.py --run <run dir> --tables <dir> --evalset <json>
         --split val|blind [--allow-blind --freeze <FREEZE.md>] --out <dir>
         [--chroms chr21[,chr22]] [--stride-bins 512] [--device auto] [--infer-batch N]
-        [--cell-index i] [--repeat-blind-reason "<text>"]
+        [--cell-index i] [--repeat-blind-reason "<text>"] [--fraglen-table <tsv>]
     -> <out>/counts/<eic_track>.h5          groups `mu` and `n`, one float16 dataset per chromosome
        <out>/signal/<eic_track>.npy         pickled {chrom: float32} on the raw 25 bp grid (the
        <out>/signal_plug_in/<eic_track>.npy challenge's own .npy, read by eic_score.load_prediction)
        <out>/lambda_source.tsv, <out>/DONE  (both after the last target of the split)
+
+Fragment length (`--fraglen-table`, C40): the frozen tables leave `frag_len` empty for most
+single-end ChIP-seq tracks, and the ChIP signal route then fails "covariates lack ['frag_len']".
+With a side table (`qc_fill.py collect --fraglen-out`), a ChIP target with an empty `frag_len`
+takes its plausible estimate (`signal_from_counts.with_fraglen`; a filled value is never replaced).
+lambda_source.tsv records per target `fraglen_source` (`table`, `estimated` or `none`; empty for a
+route that reads no fragment length) and `fraglen_table_sha256` (empty without a table).
 
 Targets: the eval set's `imputation_targets` of the split with regime `leave_one_assay_out` (its
 inputs are the leave-one-assay-out inputs). The target's own counts are never read: the target's
@@ -80,7 +87,8 @@ SIGNAL_PILEUP = "box_d"                               # E2, PI ruling 2026-11-17
 SIGNAL_DIRS = (("signal", "expectation"), ("signal_plug_in", "plug_in"))   # PI ruling 20
 F16_MAX = float(np.finfo(np.float16).max)
 DONE = "DONE"
-LAMBDA_COLUMNS = ("eic_track", "measurement_id", "cell", "assay", "lambda_source")
+LAMBDA_COLUMNS = ("eic_track", "measurement_id", "cell", "assay", "lambda_source",
+                  "fraglen_source", "fraglen_table_sha256")
 
 
 class PredictRefused(Exception):
@@ -168,7 +176,8 @@ def open_pass(rows: list[dict], key: str, esha: str, out: str):
 class Predictor:
     def __init__(self, run, tables, evalset, *, split="val", allow_blind=False, freeze=None,
                  out, model=None, config=None, device="cpu", stride_bins=512, chroms=None,
-                 infer_batch=None, cell_index=None, repeat_blind_reason=None, log=print):
+                 infer_batch=None, cell_index=None, repeat_blind_reason=None, fraglen_table=None,
+                 log=print):
         if split not in ("val", "blind"):
             raise ValueError("split must be val or blind")
         if split == "blind" and not allow_blind:
@@ -184,6 +193,8 @@ class Predictor:
             self.freeze_sha256 = check_freeze(freeze, run)
         self.tables = Path(tables)
         self.tables_sha256 = tables_sha256(self.tables)
+        self.fraglen = SIG.load_fraglen_table(fraglen_table) if fraglen_table else None
+        self.fraglen_sha256 = S.sha256_file(Path(fraglen_table)) if fraglen_table else ""
         if not self.ev.get("tables_sha256"):
             raise PredictRefused(f"{self.evalset_path}: no tables_sha256 (rebuild the eval set)")
         if self.ev["tables_sha256"] != self.tables_sha256:
@@ -329,11 +340,26 @@ class Predictor:
                 g.create_dataset(chrom, data=np.clip(arr, 0.0, F16_MAX).astype(np.float16))
             f.flush()
 
+    def signal_row(self, mid) -> tuple[dict, str]:
+        """(row for the signal routes, fraglen source). A ChIP-seq row with an empty `frag_len`
+        takes the side table's plausible estimate (`with_fraglen`); other routes read no
+        fragment length (source '')."""
+        row = self.ds.rows[mid]
+        if SIG.route_of(row["assay_class"] or row["assay"]) != "chip":
+            return row, ""
+        row, src, _ = SIG.with_fraglen(row, self.fraglen)
+        return row, src
+
+    def _lambda_row(self, fields) -> str:
+        """One lambda_source.tsv line: the first five LAMBDA_COLUMNS, then the fraglen columns."""
+        fl_src = self.signal_row(fields[1])[1]
+        return "\t".join(list(fields[:5]) + [fl_src, self.fraglen_sha256]) + "\n"
+
     def do_chrom(self, job, chrom) -> None:
         t0 = time.time()
         n, mu, ctl = self.predict_chrom(job, chrom)
         self._write_counts(job, chrom, n, mu)
-        row = self.ds.rows[job["target"]]
+        row = self.signal_row(job["target"])[0]
         nb = self.ds.n_bins[chrom]
         sig, src = {}, None
         for _, mode in SIGNAL_DIRS:
@@ -363,7 +389,7 @@ class Predictor:
         ld = self.out / "lambda"
         ld.mkdir(parents=True, exist_ok=True)
         (ld / f"{job['track']}.tsv").write_text(
-            "\t".join([job["track"], job["target"], job["cell"], job["assay"], src]) + "\n",
+            self._lambda_row([job["track"], job["target"], job["cell"], job["assay"], src]),
             encoding="utf-8")
         for d, mode in SIGNAL_DIRS:
             (self.out / d).mkdir(parents=True, exist_ok=True)
@@ -423,8 +449,9 @@ class Predictor:
         if done:
             with open(self.out / "lambda_source.tsv", "w", encoding="utf-8") as fh:
                 fh.write("\t".join(LAMBDA_COLUMNS) + "\n")
-                for j in self.jobs:
-                    fh.write((self.out / "lambda" / f"{j['track']}.tsv").read_text(encoding="utf-8"))
+                for j in self.jobs:   # fraglen columns rebuilt: a target finished before them has 5
+                    f = (self.out / "lambda" / f"{j['track']}.tsv").read_text(encoding="utf-8")
+                    fh.write(self._lambda_row(f.rstrip("\n").split("\t")))
             (self.out / "signal_pileup.txt").write_text(SIGNAL_PILEUP + "\n", encoding="utf-8")
             if ledger is not None:
                 self._ledger_finish(ledger, entry)
@@ -456,6 +483,9 @@ def main(argv=None) -> int:
                     help="windows per forward pass (default: the run's batch_size)")
     ap.add_argument("--cell-index", type=int, default=None,
                     help="only the targets of the i-th cell of the split (cells sorted)")
+    ap.add_argument("--fraglen-table", default=None,
+                    help="side table of estimated fragment lengths (qc_fill.py collect "
+                         "--fraglen-out) for ChIP targets with an empty frag_len; default none")
     a = ap.parse_args(argv)
     if (Path(a.out) / DONE).is_file():
         print(f"skip: {a.out}/{DONE} exists")
@@ -470,7 +500,7 @@ def main(argv=None) -> int:
                       stride_bins=a.stride_bins,
                       chroms=a.chroms.split(",") if a.chroms else None,
                       infer_batch=a.infer_batch, cell_index=a.cell_index,
-                      repeat_blind_reason=a.repeat_blind_reason)
+                      repeat_blind_reason=a.repeat_blind_reason, fraglen_table=a.fraglen_table)
         if a.cell_index is not None and a.cell_index >= len(p.cells):
             print(f"skip: cell index {a.cell_index} >= {len(p.cells)} cells")
             return 0

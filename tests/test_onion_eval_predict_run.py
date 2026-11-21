@@ -199,3 +199,75 @@ def test_predict_sh_dry_run_prints_the_command_with_each_variable(tmp_path):
     bad = subprocess.run(["bash", str(SCRIPT), "/kit", "/r", "/e", "/s"], capture_output=True,
                          text=True, env={**os.environ, "DRY_RUN": "1", "ONION_SHARD": "x"})
     assert bad.returncode == 2 and "want i/N" in bad.stderr
+
+
+# ---- minicandi/predict.py --fraglen-table (C40; Fir job 4906465) ----------------------------
+
+def _fraglen_env(tmp_path):
+    """Synthetic tables with the frag_len of the s0 H3K4me3 validation target emptied, as the
+    frozen tables leave it for most single-end ChIP-seq tracks."""
+    from minicandi import contract as C
+    t = make_synthetic_tables(tmp_path / "fl")
+    rows = list(csv.DictReader(open(t / "measurements.tsv", encoding="utf-8"), delimiter="\t"))
+    ctl = next(r["measurement_id"] for r in rows if r["cell"] == "s1"
+               and r["assay"] == C.CONTROL and not r["arm_knob"])
+    target = None
+    for r in rows:
+        if r["cell"] == "s1" and r["assay"] == "H3K27ac":
+            r["control_measurement_id"] = ctl
+        if r["cell"] == "s0" and r["assay"] == "H3K4me3" and not r["arm_knob"]:
+            r["frag_len"], target = "", r["measurement_id"]
+    with open(t / "measurements.tsv", "w", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(rows[0]), delimiter="\t", lineterminator="\n")
+        w.writeheader()
+        w.writerows(rows)
+    ev = tmp_path / "eval" / "evalset.json"
+    E.build(t, ev, n_regions=1, n_fit_regions=1, region_bins=256)
+    fl = tmp_path / "fraglen.tsv"
+    fl.write_text("measurement_id\tfrag_len_estimated\testimate_kind\tquality_tag\n"
+                  f"{target}\t180\txcor\t1\n", encoding="utf-8")
+    return t, ev, fl, target
+
+
+def _predictor(t, ev, out, **kw):
+    from minicandi import predict as MP
+    from test_minicandi_predict import CFG, STRIDE, Local
+    return MP.Predictor(out.parent / "run", t, ev, out=out, model=Local(), config=CFG,
+                        stride_bins=STRIDE, log=lambda *a: None, **kw)
+
+
+def test_predict_without_fraglen_table_fails_on_an_empty_chip_frag_len(tmp_path):
+    t, ev, _, _ = _fraglen_env(tmp_path)
+    with pytest.raises(KeyError, match="frag_len"):
+        _predictor(t, ev, tmp_path / "o").run_all()
+
+
+def test_predict_fraglen_table_fills_the_estimate_and_records_its_source(tmp_path):
+    t, ev, fl, target = _fraglen_env(tmp_path)
+    out = tmp_path / "o"
+    p = _predictor(t, ev, out, fraglen_table=fl)
+    assert p.signal_row(target)[0]["frag_len"] == "180"
+    assert p.run_all()["done"]
+    rows = {r["measurement_id"]: r for r in
+            csv.DictReader(open(out / "lambda_source.tsv", encoding="utf-8"), delimiter="\t")}
+    sha = S.sha256_file(fl)
+    assert rows[target]["fraglen_source"] == "estimated"
+    by_cell = {r["cell"]: r for r in rows.values()}
+    assert by_cell["s1"]["fraglen_source"] == "table"        # H3K27ac: frozen frag_len kept
+    assert by_cell["s2"]["fraglen_source"] == ""             # DNase reads no fragment length
+    assert {r["fraglen_table_sha256"] for r in rows.values()} == {sha}
+    # a target finished before the fraglen columns existed (5 fields) is rebuilt to 7
+    lam = next((out / "lambda").glob("*.tsv"))
+    lam.write_text("\t".join(lam.read_text().rstrip("\n").split("\t")[:5]) + "\n")
+    (out / "DONE").unlink()
+    _predictor(t, ev, out, fraglen_table=fl).run_all()
+    lines = (out / "lambda_source.tsv").read_text().splitlines()
+    assert {len(x.split("\t")) for x in lines} == {7}
+
+
+def test_predict_cli_accepts_fraglen_table(tmp_path, capsys):
+    from minicandi import predict as MP
+    (tmp_path / MP.DONE).write_text("x\n")     # DONE present: main parses, then skips
+    assert MP.main(["--run", "r", "--tables", "t", "--evalset", "e", "--split", "val",
+                    "--out", str(tmp_path), "--fraglen-table", "fl.tsv"]) == 0
+    assert "skip" in capsys.readouterr().out
