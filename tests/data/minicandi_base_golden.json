@@ -1,0 +1,69 @@
+{
+ "recorded_on": "exp/t370-minicandi-recipe 57f3c9e8 (pre-change tree)",
+ "rungs": {
+  "2": {
+   "batch_sha256": "8fc6dc7c90bab218cfbca530a79d6c7423d8c47415b186963b688bebf18907e0",
+   "batch_size": 4,
+   "config": "tools/minicandi/configs/rung2/base_heldout.json",
+   "context_bins": 64,
+   "init": {
+    "loss": 4.88059663772583,
+    "loss_hex": "0x1.385bb20000000p+2",
+    "mu_sha256": "ce0b1fa435dac9c1f8073e44a2006796e0bb2977f77d44b539155e3fb5f10e04",
+    "n_sha256": "6df93ec70064deb1e3c67094096feea27a261949eb5f8c29525143fb67af805c"
+   },
+   "n_parameters": 1042514,
+   "perturbed": {
+    "loss": 4.853792667388916,
+    "loss_hex": "0x1.36a48a0000000p+2",
+    "mu_sha256": "057b86590167956b2e2124fb3829f9bccea9e3d057d89e1153ab888d62f6117f",
+    "n_sha256": "31a234df5d12cfe6610eea6353b4bfbb70be183391dfbe52243361517eafaf10"
+   },
+   "state_dict_keys_sha256": "7b08e3e30e19548ca4b2fad54141d7938ea0f5bb4b099d07d949a418f7fde584",
+   "state_dict_sha256": "21c736717cdb7eaeee7ad0c48413f693cdb701c3c645c3e697f80772ace6d125"
+  },
+  "3": {
+   "batch_sha256": "8fc6dc7c90bab218cfbca530a79d6c7423d8c47415b186963b688bebf18907e0",
+   "batch_size": 4,
+   "config": "tools/minicandi/configs/rung3/base_heldout.json",
+   "context_bins": 64,
+   "init": {
+    "loss": 4.88059663772583,
+    "loss_hex": "0x1.385bb20000000p+2",
+    "mu_sha256": "ce0b1fa435dac9c1f8073e44a2006796e0bb2977f77d44b539155e3fb5f10e04",
+    "n_sha256": "6df93ec70064deb1e3c67094096feea27a261949eb5f8c29525143fb67af805c"
+   },
+   "n_parameters": 1038018,
+   "perturbed": {
+    "loss": 4.795825481414795,
+    "loss_hex": "0x1.32eece0000000p+2",
+    "mu_sha256": "e0a55eddac455fbbf2b5515419cc07c0acb9f104abb94685082376c82c31743f",
+    "n_sha256": "7c15784e69b73b2ca126fd8c8de3190da79888c4e5a800c9431e2eadd26fed8b"
+   },
+   "state_dict_keys_sha256": "c76b8620054f71b1bdb901a0274e6d26ef50e2c69a7d9a6e4265c7f2cc6f7bd1",
+   "state_dict_sha256": "22f5a428df010ae450ad46de983da1fa313529e93bad8d6b0d9e358d5d619ec5"
+  },
+  "4": {
+   "batch_sha256": "8fc6dc7c90bab218cfbca530a79d6c7423d8c47415b186963b688bebf18907e0",
+   "batch_size": 4,
+   "config": "tools/minicandi/configs/rung4/base_heldout.json",
+   "context_bins": 64,
+   "init": {
+    "loss": 4.88059663772583,
+    "loss_hex": "0x1.385bb20000000p+2",
+    "mu_sha256": "ce0b1fa435dac9c1f8073e44a2006796e0bb2977f77d44b539155e3fb5f10e04",
+    "n_sha256": "6df93ec70064deb1e3c67094096feea27a261949eb5f8c29525143fb67af805c"
+   },
+   "n_parameters": 993599,
+   "perturbed": {
+    "loss": 4.8402605056762695,
+    "loss_hex": "0x1.35c6d40000000p+2",
+    "mu_sha256": "cf12ee0b8c58d56e0cd1cbe13b736373a0285c00d27c2a4b818f7566fc926d30",
+    "n_sha256": "576c97f103d0da5852d242de369eb0c6c8f0b5ea810c76608aa79311e4480eda"
+   },
+   "state_dict_keys_sha256": "a5e216321a59d1babfd4557fa0ecac6d4a939ae104af79997f15b922b3d6aa96",
+   "state_dict_sha256": "4feb2405f6404458984b931e689765649c68e45d75c554151227e4d48fe862d0"
+  }
+ },
+ "torch": "2.6.0"
+}
