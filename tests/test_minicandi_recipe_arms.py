@@ -47,9 +47,10 @@ PINNED = {
             "cac_cnn_corefilm_off": {"cac_pre": "cnn", "cac_post": "cnn",
                                      "covariate_drop_fields": list(C.META_COLUMNS)}},
     "probe": {"probe_base": {}},
+    "halves": {"halves": {"train_halves": "pairs"}},
 }
 PINNED_MODELS = {"skip": (4,), "placement": (2, 3, 4), "nocov": (2, 3, 4), "cac": (2, 3, 4),
-                 "probe": (4,)}
+                 "probe": (4,), "halves": (2, 3, 4)}
 #: the mix arms of the plan, per model
 PINNED_MIX = {2: {"mix_svonly"}, 3: {"mix_concat", "mix_fixdepth", "mix_imp4", "mix_crps",
                                      "mix_svonly"}, 4: {"mix_avg", "mix_pearson", "mix_fixdepth"}}
@@ -83,12 +84,15 @@ def test_mix_arms_follow_the_pool():
 
 def test_stages():
     assert RA.STAGES["probe"] == ("probe_base",)
-    assert set(RA.STAGES["s1a"]) == set(PINNED["skip"]) | set(PINNED["placement"]) | {"nocov"}
+    assert set(RA.STAGES["s1a"]) == set(PINNED["skip"]) | set(PINNED["placement"]) | {"nocov",
+                                                                                       "halves"}
     assert set(RA.STAGES["s1b"]) == ({"cac_curve", "cac_curve_corefilm_off"}
                                      | {a for a, x in RA.ARMS.items() if x["family"] == "mix"})
     assert set(RA.STAGES["s1c"]) == {"cac_cnn", "cac_cnn_corefilm_off"}
-    # arm-models per stage (the plan: C12 19 arm-models, C13 15, C27 6)
-    assert [len(RA.select(s)) for s in ("probe", "s1a", "s1b", "s1c")] == [1, 19, 15, 6]
+    # arm-models per stage (the plan: C12 19 arm-models, C13 15, C27 6; C29 adds 3 to s1a)
+    assert [len(RA.select(s)) for s in ("probe", "s1a", "s1b", "s1c")] == [1, 22, 15, 6]
+    assert [RA.run_name(r, a) for r, a in RA.select(arms=["halves"])] == \
+        ["rcp_halves_convae", "rcp_halves_convattn", "rcp_halves_unet"]
 
 
 def test_train_time_and_run_names():

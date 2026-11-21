@@ -18,6 +18,9 @@ film_all	placement	4	unet	rcp_film_all_unet	tools/minicandi/configs/recipe/place
 nocov	nocov	2	convae	rcp_nocov_convae	tools/minicandi/configs/recipe/nocov/rung2/nocov.json	{"covariate_drop_fields":["log2_depth","run_type_pe","read_length","dedup_on","mapq_threshold","pipeline_id","pipeline_version_id","lab_id","platform_id","antibody_id","donor_id"]}	03:00:00	s1a
 nocov	nocov	3	convattn	rcp_nocov_convattn	tools/minicandi/configs/recipe/nocov/rung3/nocov.json	{"covariate_drop_fields":["log2_depth","run_type_pe","read_length","dedup_on","mapq_threshold","pipeline_id","pipeline_version_id","lab_id","platform_id","antibody_id","donor_id"]}	03:00:00	s1a
 nocov	nocov	4	unet	rcp_nocov_unet	tools/minicandi/configs/recipe/nocov/rung4/nocov.json	{"covariate_drop_fields":["log2_depth","run_type_pe","read_length","dedup_on","mapq_threshold","pipeline_id","pipeline_version_id","lab_id","platform_id","antibody_id","donor_id"]}	03:00:00	s1a
+halves	halves	2	convae	rcp_halves_convae	tools/minicandi/configs/recipe/halves/rung2/halves.json	{"train_halves":"pairs"}	03:00:00	s1a
+halves	halves	3	convattn	rcp_halves_convattn	tools/minicandi/configs/recipe/halves/rung3/halves.json	{"train_halves":"pairs"}	03:00:00	s1a
+halves	halves	4	unet	rcp_halves_unet	tools/minicandi/configs/recipe/halves/rung4/halves.json	{"train_halves":"pairs"}	03:00:00	s1a
 cac_curve	cac	2	convae	rcp_cac_curve_convae	tools/minicandi/configs/recipe/cac/rung2/cac_curve.json	{"cac_post":"curve","cac_pre":"curve"}	03:00:00	s1b
 cac_curve	cac	3	convattn	rcp_cac_curve_convattn	tools/minicandi/configs/recipe/cac/rung3/cac_curve.json	{"cac_post":"curve","cac_pre":"curve"}	03:00:00	s1b
 cac_curve	cac	4	unet	rcp_cac_curve_unet	tools/minicandi/configs/recipe/cac/rung4/cac_curve.json	{"cac_post":"curve","cac_pre":"curve"}	03:00:00	s1b

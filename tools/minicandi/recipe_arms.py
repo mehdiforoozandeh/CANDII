@@ -18,7 +18,7 @@ Keys introduced by other chunks of t370, pinned in the plan (.orchestrate/plan.m
 configs use them as pinned; this module does not import the code that reads them.
 
 Stages (configs/recipe/submit_recipe.sh STAGE=...): probe = family probe; s1a = families skip,
-placement, nocov; s1b = the curve arms of family cac and family mix; s1c = the CNN arms of family
+placement, nocov, halves (C29: read-disjoint training pairs, `train_halves = pairs`, decision D29); s1b = the curve arms of family cac and family mix; s1c = the CNN arms of family
 cac. Training time: 08:00:00 for an arm with the average input or a CNN correction layer, else
 03:00:00.
 
@@ -66,6 +66,7 @@ def _arms() -> dict[str, dict]:
     for p in ("encoder", "decoder", "bottleneck", "all"):
         add(f"film_{p}", "placement", ALL, {"film_placement": p})
     add("nocov", "nocov", ALL, dict(NOCOV))
+    add("halves", "halves", ALL, {"train_halves": "pairs"})
     for form in ("curve", "cnn"):
         add(f"cac_{form}", "cac", ALL, {"cac_pre": form, "cac_post": form})
         add(f"cac_{form}_corefilm_off", "cac", ALL, {"cac_pre": form, "cac_post": form, **NOCOV})
@@ -82,7 +83,8 @@ ARMS: dict[str, dict] = _arms()
 #: stage -> arms, in ARMS order
 STAGES = {
     "probe": tuple(n for n, x in ARMS.items() if x["family"] == "probe"),
-    "s1a": tuple(n for n, x in ARMS.items() if x["family"] in ("skip", "placement", "nocov")),
+    "s1a": tuple(n for n, x in ARMS.items() if x["family"] in ("skip", "placement", "nocov",
+                                                                 "halves")),
     "s1b": tuple(n for n, x in ARMS.items()
                  if (x["family"] == "cac" and x["keys"][CAC_KEYS[0]] == "curve")
                  or x["family"] == "mix"),
