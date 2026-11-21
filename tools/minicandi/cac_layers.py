@@ -36,6 +36,7 @@ no counts, and the post side reads only the inner model's output.
 """
 from __future__ import annotations
 
+import math
 import sys
 from pathlib import Path
 
@@ -72,6 +73,13 @@ def form_of(config: dict, key: str):
     if v is not None and v not in FORMS:
         raise ValueError(f"{key} {v!r} not in (None,) + {FORMS}")
     return v
+
+
+# FormB extrapolates linearly past its last knot, so loc and disp are unbounded. Capping the
+# exponent arguments keeps exp finite (an inf then clamped gives a 0 x inf = NaN gradient). The
+# caps bind only beyond MU_MAX (1e6 counts per bin) and |disp| > 30, so normal outputs are unchanged.
+LOC_CAP = math.log1p(C.MU_MAX)
+DISP_CAP = 30.0
 
 
 def _make_f(form: str) -> nn.Module:
@@ -127,15 +135,15 @@ class CacLayers(C.MiniCandi):
             x = torch.where(vis, x, torch.zeros_like(x))
             loc, _ = self.pre(x, batch["c_in"])
             batch = dict(batch)
-            batch["x_counts"] = torch.expm1(loc).clamp_min(0).to(torch.float32)
+            batch["x_counts"] = torch.expm1(loc.clamp(max=LOC_CAP)).clamp_min(0).to(torch.float32)
         out = self.inner(batch)
         if self.post is None:
             return out
         out = dict(out)
         z = torch.log1p(out["mu"])
         loc, disp = self.post(z, batch["c_out"])
-        out["mu"] = torch.expm1(loc).clamp(C.MU_MIN, C.MU_MAX)
-        out["n"] = (out["n"] * torch.exp(disp)).clamp(C.N_MIN, C.N_MAX)
+        out["mu"] = torch.expm1(loc.clamp(max=LOC_CAP)).clamp(C.MU_MIN, C.MU_MAX)
+        out["n"] = (out["n"] * torch.exp(disp.clamp(-DISP_CAP, DISP_CAP))).clamp(C.N_MIN, C.N_MAX)
         return out
 
 

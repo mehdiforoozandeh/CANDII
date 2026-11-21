@@ -213,3 +213,16 @@ def test_over_budget_raises():
     torch.manual_seed(0)
     with pytest.raises(ValueError, match="param_budget"):
         R.build_model(_cfg(2, cac_pre="cnn", cac_post="cnn", param_budget=3e5))
+
+
+def test_curve_extrapolation_overflow_gives_finite_gradients():
+    """t370: FormB extrapolates past its last knot; an uncapped expm1/exp overflowed to inf and the
+    clamp then gave a 0 x inf = NaN gradient (U-Net curve runs died at steps 6,505-9,765)."""
+    loc = torch.full((4,), 200.0, requires_grad=True)
+    disp = torch.full((4,), 200.0, requires_grad=True)
+    mu = torch.expm1(loc.clamp(max=CAC.LOC_CAP)).clamp(C.MU_MIN, C.MU_MAX)
+    n = (torch.ones(4) * torch.exp(disp.clamp(-CAC.DISP_CAP, CAC.DISP_CAP))).clamp(C.N_MIN, C.N_MAX)
+    (mu.sum() + n.sum()).backward()
+    assert torch.isfinite(mu).all() and torch.isfinite(n).all()
+    assert torch.isfinite(loc.grad).all() and torch.isfinite(disp.grad).all()
+    assert abs(CAC.LOC_CAP - np.log1p(C.MU_MAX)) < 1e-12
