@@ -49,6 +49,11 @@ vector (width 2 D_COV) to every `steer[i]`. `head_skip` (plain | off | film): `o
 start; the visibility flag is not modulated). Either non-default with `skip_source = dna` raises
 NotApplicable.
 
+Control branch (t370 C15): `control_branch` (shared | separate; default shared = today's model,
+which builds nothing). `separate` gives track 35 (the ChIP control) its own copy of `head_mlp` and
+of the NB head (`ctl_mlp`, `ctl_nb`, same shapes), built last in `_build` (so the width search
+counts them) and fed by the same head features; tracks 0 to 34 keep the shared head.
+
 Not applicable (`NotApplicable`): `skip_source = dna` with `dna = off` (no DNA skip exists), and
 `two_step = true`, as in every rung.
 `skip_source = both` with `dna = off` keeps only the count skips; that is the `dna_off` arm of the
@@ -99,7 +104,8 @@ from minicandi.components import (ConvBlock, CountTransform, CovariateInjector, 
                                   DnaTower, Downsample, MaskHandler, NBHead, NotApplicable,
                                   Upsample, component_kwargs, fine_to_sub, res_subs_of,
                                   sinusoidal_positions, sub_output, sub_to_fine)
-from minicandi.contract import A, K_META, LOG2_DEPTH_COL, MiniCandi, k_input  # noqa: E402
+from minicandi.contract import (A, CONTROL_INDEX, K_META, LOG2_DEPTH_COL, MiniCandi,  # noqa: E402
+                                k_input)
 from minicandi.covariates import drop_field_indices, model_covariates, scramble_mode  # noqa: E402
 from minicandi.dna_fusion import DnaCrossAttn, DnaFiLM, fusion_of, without_fusion  # noqa: E402
 from minicandi.trunk_film import TrunkFiLM, placement_of, pooled_condition, sites_of  # noqa: E402
@@ -109,6 +115,7 @@ NAME = "unet"
 SKIP_SOURCES = ("dna", "counts", "both")
 SKIP_FILMS = ("cprime", "c_cprime")      # t370 C1 `skip_film`; cprime = today
 HEAD_SKIPS = ("plain", "off", "film")    # t370 C1 `head_skip`; plain = today
+CONTROL_BRANCHES = ("shared", "separate")  # t370 C15 `control_branch`; shared = today
 N_LEVELS = 4                 # stride 16 at the bottleneck
 LEVEL_MULT = (1, 2, 2, 4, 4, 4)  # channels per level as multiples of `width` (level n = bottom)
 N_LEVELS_RANGE = (2, 5)      # tuning key `n_levels` (round-2 tuning, default-off)
@@ -302,6 +309,11 @@ class Model(MiniCandi):
             if "decoder" in self.film_sites:
                 ch += [chans[i] for i in reversed(range(nl)) for _ in range(2)]
             self.trunk_film = TrunkFiLM(2 * D_COV, ch)
+        # t370 C15 control branch, built after everything; shared (default) builds nothing
+        self.control_branch = cfg.get("control_branch", "shared")
+        if self.control_branch == "separate":
+            self.ctl_mlp = nn.Sequential(nn.GELU(), nn.Linear(D_HEAD, D_HEAD), nn.GELU())
+            self.ctl_nb = NBHead(D_HEAD, self.transform, **kw["head"])
 
     # ------------------------------------------------------------------ forward
     def forward(self, batch: dict) -> dict:
@@ -445,6 +457,10 @@ class Model(MiniCandi):
         else:
             hd = self.out_inj(hd, c_out[:, None])
         out = self.nb(self.head_mlp(hd), c_out_t.float())
+        if self.control_branch == "separate":                               # t370 C15
+            ctl, i = self.ctl_nb(self.ctl_mlp(hd), c_out_t.float()), CONTROL_INDEX
+            out = {**out, **{k: torch.cat([out[k][..., :i], ctl[k][..., i:]], dim=-1)
+                             for k in ("n", "mu")}}
         return sub_output(out, self.out_sub) if self.out_sub > 1 else out
 
 
@@ -458,6 +474,9 @@ def _validate(cfg: dict) -> None:
         raise ValueError(f"skip_film {sf!r} not in {SKIP_FILMS}")
     if hs not in HEAD_SKIPS:
         raise ValueError(f"head_skip {hs!r} not in {HEAD_SKIPS}")
+    cb = cfg.get("control_branch", "shared")
+    if cb not in CONTROL_BRANCHES:
+        raise ValueError(f"control_branch {cb!r} not in {CONTROL_BRANCHES}")
     if cfg["skip_source"] == "dna" and (sf != "cprime" or hs != "plain"):
         raise NotApplicable(f"rung 4: skip_film = {sf} / head_skip = {hs} act on the count skips; "
                             f"skip_source = dna has none")

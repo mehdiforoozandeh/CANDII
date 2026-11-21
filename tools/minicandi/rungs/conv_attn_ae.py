@@ -54,6 +54,12 @@ and the `dec` ConvBlocks; the condition is the pooled C and C' embedding of `cov
 `cov_out`. `tokens` with a non-default placement, and the U-Net keys `skip_film` / `head_skip`,
 raise NotApplicable.
 
+Control branch (t370 C15): `control_branch` (shared | separate; default shared = today's model,
+which builds nothing). `separate` gives track 35 (the ChIP control) its own copy of the NB head
+(`ctl_head`, same shapes; this rung has no per-track output MLP, so there is none to copy), built
+last and fed by the same head features; tracks 0 to 34 keep the shared head. The width is fitted
+with the extra head counted.
+
 DNA fusion (item A11, `tools/minicandi/dna_fusion.py`): `dna_fusion = film` (the DNA features
 FiLM the track-fusion output, which then reads counts only), `late` (DNA joins after the conv
 encoder through a learned patch pooling) or `xattn` (the coarse count tokens cross-attend to the
@@ -76,8 +82,8 @@ if str(_TOOLS) not in sys.path:
 
 from minicandi import components as M  # noqa: E402
 from minicandi.components import NotApplicable  # noqa: E402
-from minicandi.contract import (A, K_META, LOG2_DEPTH_COL, MiniCandi, k_input,  # noqa: E402
-                                without_extras)
+from minicandi.contract import (A, CONTROL_INDEX, K_META, LOG2_DEPTH_COL, MiniCandi,  # noqa: E402
+                                k_input, without_extras)
 from minicandi.covariates import drop_field_indices, model_covariates, scramble_mode  # noqa: E402
 from minicandi.dna_fusion import (DnaCrossAttn, DnaFiLM, DnaPatchDown, fusion_of,  # noqa: E402
                                   without_fusion)
@@ -102,6 +108,7 @@ KERNEL = 5
 WIDTH_STEP = 8
 WIDTH_RANGE = (16, 1024)
 BUDGET_TOL = 0.10
+CONTROL_BRANCHES = ("shared", "separate")   # t370 C15 `control_branch`; shared = today
 
 
 # ---------------------------------------------------------------------------------------------
@@ -217,6 +224,12 @@ class Model(MiniCandi):
             self.trunk_film = TrunkFiLM(2 * D_COV, ch)
         # extra inputs (chunk XI), constructed last; dna = off leaves no DNA features
         self.build_extras(cfg, D_DNA if cfg["dna"] != "off" else None, ("cov_in", "cov_out"))
+        # control branch (t370 C15), constructed last; shared builds nothing
+        self.control_branch = cfg.get("control_branch", "shared")
+        if self.control_branch not in CONTROL_BRANCHES:
+            raise ValueError(f"control_branch {self.control_branch!r} not in {CONTROL_BRANCHES}")
+        if self.control_branch == "separate":
+            self.ctl_head = M.NBHead(D_OUT, self.transform, **kw["head"])
 
     # -------------------------------------------------------------------------------- forward
 
@@ -287,7 +300,12 @@ class Model(MiniCandi):
             f = f + self.tok_read(seq[:, Lc + Ac:])[:, None]               # c_out tokens
         else:
             f = self.cov_out(f, c_out[:, None])
-        return self.head(f, c_out_t)
+        out = self.head(f, c_out_t)
+        if self.control_branch == "separate":                              # t370 C15
+            ctl, i = self.ctl_head(f, c_out_t), CONTROL_INDEX
+            out = {**out, **{k: torch.cat([out[k][..., :i], ctl[k][..., i:]], dim=-1)
+                             for k in ("n", "mu")}}
+        return out
 
 
 # ------------------------------------------------------------------------------- budget

@@ -63,6 +63,11 @@ decoder | bottleneck | all; default ends = today's model, which builds nothing).
 `enc` blocks, the `mid` blocks and the `dec` blocks; the condition is the pooled C and C' embedding
 of `inj_in` and `inj_out`. The U-Net keys `skip_film` and `head_skip` raise NotApplicable here.
 
+Control branch (t370 C15): `control_branch` (shared | separate; default shared = today's model,
+which builds nothing). `separate` gives track 35 (the ChIP control) its own copy of `out_mlp` and
+of the NB head (`ctl_mlp`, `ctl_head`, same shapes), built last and fed by the same head
+features; tracks 0 to 34 keep the shared head. The width is fitted with the extra head counted.
+
 Guardrail part 1 holds by construction: the only reads of `x_counts` go through the
 count transform, whose window statistics use visible bins only, and the MaskHandler replaces every
 hidden or missing position before any cross-bin or cross-track mixing.
@@ -106,6 +111,7 @@ N_LEVELS = 4          # downsampling steps of 2: the latent is at L / 16
 KERNEL = 5
 WIDTH_STEP = 4        # W and every level width are multiples of 4
 WIDTH_RANGE = (16, 1024)
+CONTROL_BRANCHES = ("shared", "separate")   # t370 C15 `control_branch`; shared = today
 
 
 # ---------------------------------------------------------------------------------------------
@@ -163,6 +169,13 @@ class Model(C.MiniCandi):
         self._build(cfg, self.width)
         # extra inputs (chunk XI), constructed last; dna = off leaves no DNA features
         self.build_extras(cfg, D_DNA if cfg["dna"] != "off" else None, ("inj_in", "inj_out"))
+        # control branch (t370 C15), constructed last; shared builds nothing
+        self.control_branch = cfg.get("control_branch", "shared")
+        if self.control_branch not in CONTROL_BRANCHES:
+            raise ValueError(f"control_branch {self.control_branch!r} not in {CONTROL_BRANCHES}")
+        if self.control_branch == "separate":
+            self.ctl_mlp = nn.Sequential(nn.GELU(), nn.Linear(D_OUT, D_OUT), nn.GELU())
+            self.ctl_head = NBHead(D_OUT, self.transform, **component_kwargs(cfg)["head"])
 
     # ------------------------------------------------------------------ construction
 
@@ -319,8 +332,11 @@ class Model(C.MiniCandi):
             o = (o[:, :, None] + self.out_sub_emb[:, None, :]).reshape(B, L * self.out_sub, A,
                                                                         D_OUT)
         o = self.inj_out(o, c_out[:, None])
-        o = self.out_mlp(o)
-        out = self.head(o, c_out_t)
+        out = self.head(self.out_mlp(o), c_out_t)
+        if self.control_branch == "separate":                              # t370 C15
+            ctl, i = self.ctl_head(self.ctl_mlp(o), c_out_t), C.CONTROL_INDEX
+            out = {**out, **{k: torch.cat([out[k][..., :i], ctl[k][..., i:]], dim=-1)
+                             for k in ("n", "mu")}}
         return sub_output(out, self.out_sub) if self.out_sub > 1 else out
 
 

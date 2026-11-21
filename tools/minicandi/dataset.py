@@ -196,6 +196,15 @@ Read-disjoint training pairs (t370 chunk C29, decision D29). Train mode only; of
   train_halves_prob  default 1.0. Under `pairs`, each kind 2 / kind 3 pair of a window is halved
                    with this probability: one draw per pair, after the bin masks, none at 1.0.
 
+Held-out controls (t370 chunk C15, decision D9). Train mode only; off by default.
+  control_holdout_cells  absent or null = today's sampler, bit for bit. A list of cell ids: in
+                   train mode the control track (`chipseq-control`) of each listed cell is
+                   removed from the sampler's candidates, so it is never an input and never a
+                   target of a training window (the cell keeps its other tracks). Val and blind
+                   modes, `train_cells`, `train_base` and the leave-one-cell-out average are
+                   unchanged (the average of a window already leaves its own cell out). A string,
+                   or a listed cell with no row in `measurements.tsv`, raises ValueError.
+
 Leave-one-cell-out average (`average_input`): with `config["average_h5"]` (built once by
 `build_average_h5`) it reads one per-track sum of training-cell rates and subtracts the window's
 own cell; without it, it reads every other training cell directly (small tables only). The
@@ -450,6 +459,7 @@ class OnionDataset(IterableDataset):
         self.train_base = {k: min(v, key=lambda m: (view_of(self.rows[m])[0] != "base",
                                                      _base_rank(self.rows[m])))
                            for k, v in self.train_tracks.items()}
+        self._init_control_holdout()
         self._init_train_views()
 
         gdir = self.config.get("genome_dir") or (self.tables_dir.parent.parent / "genome")
@@ -495,17 +505,36 @@ class OnionDataset(IterableDataset):
             raise ValueError(f"train_views {sorted(self.train_views)}: no training track "
                              f"keeps a view of these kinds")
 
+    def _init_control_holdout(self) -> None:
+        """`control_holdout_cells` (module docstring, Held-out controls); train mode only."""
+        cells = self.config.get("control_holdout_cells")
+        self.control_holdout = frozenset()
+        if cells is None:
+            return
+        if isinstance(cells, str):
+            raise ValueError(f"control_holdout_cells {cells!r}: want a list of cell ids")
+        cells = {str(c) for c in cells}
+        unknown = sorted(cells - {r["cell"] for r in self.rows.values()})
+        if unknown:
+            raise ValueError(f"control_holdout_cells names cells with no row: {unknown}")
+        if self.mode == "train":
+            self.control_holdout = frozenset(cells)
+
     def _sampled(self) -> tuple[dict, list]:
         """(tracks, cells) the training sampler draws from: `train_tracks` and `train_cells`
-        without `train_views`; else each track's views of the listed kinds, tracks with none
-        dropped, and the cells that keep a track."""
-        if self.train_views is None:
+        without `train_views` and `control_holdout_cells`; else each track's views of the listed
+        kinds, minus the control track of each held-out cell, tracks with none dropped, and the
+        cells that keep a track."""
+        if self.train_views is None and not self.control_holdout:
             return self.train_tracks, self.train_cells
         cache = self._sampled_cache
         if cache is None or cache[0] is not self.train_tracks:
             tracks = {}
             for k, mids in self.train_tracks.items():
-                keep = [m for m in mids if view_of(self.rows[m])[0] in self.train_views]
+                if k[1] == C.CONTROL and k[0] in self.control_holdout:
+                    continue
+                keep = [m for m in mids if self.train_views is None
+                        or view_of(self.rows[m])[0] in self.train_views]
                 if keep:
                     tracks[k] = keep
             cache = self._sampled_cache = (self.train_tracks, tracks,
