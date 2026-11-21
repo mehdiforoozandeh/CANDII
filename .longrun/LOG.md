@@ -18,3 +18,5 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-21T18:45Z Curve NaN fixed e8dec6a8; cancelled curve U-Net jobs, dirs to _nan_RCP2; Avocado chain to 4906099; 8 base ctl evals 4906119-26; 27 ctl-arm run-seeds + chained ctl evals; EIC val base U-Net s0 4906465, Average 4906466
 - 2026-11-21T18:47Z RCP3 pushed (e8dec6a8). Curve U-Net reruns trains 4908746-4908912; s1c CNN 17 seeds submitted on RCP3 (102 jobs); CNN cost seed done at 10,000 steps in ~87 min
 - 2026-11-21T21:55Z screen Pareto: winner halves U-Net (imp 0.4263, corr 0.7535, cal 0.6872 vs floors 0.4072/0.6491/0.4883); tests 69 env failures; 7 train timeouts; EIC jobs failed (avocado import, frag_len, KIT) -> C40 builder; kit RCP4 pushing
+- 2026-11-21T22:07Z glossary: reply sent with unregistered terms: d20, gloss, glossary
+- 2026-11-21T22:12Z RCP5 pushed; eic_val 4945457, avocado chain to 4945495, average 4943718

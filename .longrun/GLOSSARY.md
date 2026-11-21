@@ -17,3 +17,10 @@ Every term and metric in use. A new entry lands before its first use in anything
 | two-step CAC | (X,C) -> base view -> (X',C'), shared weights | onion close-out | D8 |
 | leave-control-out evaluation | hide observed control, score the predicted control and its p-value | agent, PI chose | D9 |
 | pair regions | 16 genome regions where correction pairs are scored | onion close-out | D3 |
+| read-disjoint training pairs | input and target drawn from separate read halves | agent proposal, status proposed | D29, D35 |
+| halves | short arm name for read-disjoint training pairs | agent, status proposed | D29 |
+| budget checkpoint | spend level where spend is reported; work continues | PI | D20 |
+| Avocado | published tensor-factorization imputation method; EIC comparison baseline | PI doc | D10, D33 |
+| conv+attn | convolutional model with attention layers (rung 3) | onion close-out | D2 |
+| ssh | remote shell connection to a cluster | standard tool | none |
+| rsync | file copy tool that sends only changed files | standard tool | none |
