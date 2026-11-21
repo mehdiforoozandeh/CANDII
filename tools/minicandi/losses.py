@@ -74,6 +74,13 @@ the tilted draw equals the loss under the uniform draw. The parts `impute`, `cor
 `shape`, `multiscale_<k>`, `base` and `assay_mean` (with `loss_assay_weight`: the mean over the
 present assays of each assay's window-weighted per-bin mean) are weighted. Without `w_window` every
 term is bit-identical.
+
+Control loss weight (t370 chunk C15, decision D9).
+  control_loss_weight (float)  default 1.0 = the loss above, bit for bit. Multiplies the per-bin
+                               loss of every masked bin of track `contract.CONTROL_INDEX` (after
+                               the kind and window weights, before the mean); the denominator
+                               stays the masked-bin count. Parts `main_no_control`, `impute`,
+                               `correct` and `same` stay unweighted.
 """
 from __future__ import annotations
 
@@ -128,6 +135,9 @@ def check_config(config: dict) -> None:
         raise ValueError(f"loss_bin_equal {be!r} must be a bool")
     if be and name != DEFAULT_LOSS:
         raise ValueError(f"loss_bin_equal needs loss {DEFAULT_LOSS!r}, not {name!r}")
+    cw = config.get("control_loss_weight", 1.0)
+    if not isinstance(cw, (int, float)) or isinstance(cw, bool) or cw < 0:
+        raise ValueError(f"control_loss_weight {cw!r} must be a number >= 0")
 
 
 def weights(config: dict) -> dict:
@@ -297,7 +307,9 @@ def total_loss(out: dict, batch: dict, config: dict | None) -> tuple[torch.Tenso
     assay_w = config.get("loss_assay_weight", "none")
     track = torch.arange(mask.shape[-1], device=mask.device).expand_as(mask)[mask]
     ww = batch.get("w_window")                               # interface I; None by default
-    if name == DEFAULT_LOSS and unit and not bin_equal and assay_w == "none" and ww is None:
+    cw = float(config.get("control_loss_weight", 1.0))
+    if (name == DEFAULT_LOSS and unit and not bin_equal and assay_w == "none" and ww is None
+            and cw == 1.0):
         main = C.nb_nll(out["n"], out["mu"], y, mask)      # the pre-A1 loss, bit for bit
         with torch.no_grad():
             per_m = nb_nll_per(out["n"][mask], out["mu"][mask], y[mask])
@@ -316,6 +328,8 @@ def total_loss(out: dict, batch: dict, config: dict | None) -> tuple[torch.Tenso
             per_w = per_m * wk[kind[mask].long()]
             if ww is not None:
                 per_w = per_w * ww.to(per_w.dtype)[:, None, None].expand_as(mask)[mask]
+            if cw != 1.0:
+                per_w = torch.where(track == C.CONTROL_INDEX, per_w * cw, per_w)
             if assay_w == "none":
                 main = per_w.sum() / k
             else:

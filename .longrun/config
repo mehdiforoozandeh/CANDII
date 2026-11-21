@@ -1,0 +1,3 @@
+protected=cruxvault/INSTRUCTIONS/miniCANDI_closeout
+job_prefix=rcp_
+cluster_exec=hpc run
