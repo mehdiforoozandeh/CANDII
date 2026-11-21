@@ -93,6 +93,7 @@ Root: [[candii]]
     - ○ `q71` [Q] [[q71_does_the_architecture_order_at_equal_tra|**Does the architecture order at equal training windows hold when every architecture gets the same training compute (2.4e15 FLOPs)?**]] — *open*
   - ◐ `q48` [Q] [[q48_which_minicandi_design_choices_move_impu|**Which miniCANDI design choices move imputation, correction or calibration beyond the seed range on the conv autoencoder, conv + attention and the U-Net at about 1.0 M parameters?**]] — *leaning* · moderate
     - ◐ `q49` [Q] [[q49_does_the_chip_seq_control_help_minicandi|**Does the ChIP-seq control help miniCANDI as an input assay and as a predicted output?**]] — *leaning* · weak
+      - ○ `q76` [Q] [[q76_can_minicandi_predict_the_chip_seq_contr|**Can miniCANDI predict the ChIP-seq control well enough to stand in for an observed control in the signal p-value and fold change of a target with no control?**]] — *open*
     - ◐ `q50` [Q] [[q50_does_the_leave_one_out_average_of_the_tr|**Does the leave-one-out average of the training cell types, given as an input, help miniCANDI?**]] — *leaning* · moderate
       - ◐ `h43` [H] [[h43_on_all_256_regions_the_leave_one_out_ave|On all 256 regions, the leave-one-out average input keeps its place in the U-Net mix-and-match pool: better beyond the seed range on one goal term and worse beyond on none]] — *leaning* · moderate · supports
     - ◐ `q51` [Q] [[q51_does_two_step_correction_through_a_base_|**Does two-step correction through a base covariate set help miniCANDI, with native or fixed base depth?**]] — *leaning* · moderate
@@ -121,11 +122,15 @@ Root: [[candii]]
 - ● `q27` [Q] [[q27_are_the_onion_run_s_estimators_scorers_a|**Are the onion run's estimators, scorers and training pipeline correct, fast and reproducible on the clusters?**]] — *settled* · strong
 - ● `q28` [Q] [[q28_did_flashzoi_train_on_eic_blind_tracks_o|**Did Flashzoi train on EIC blind tracks or on the genomic loci of the blind scoring?**]] — *settled* · strong
 - ○ `q72` [Q] [[q72_which_architecture_and_which_data_versio|**Which architecture and which data version should the scaled miniCANDI use, given that the conv autoencoder, conv + attention and the U-Net tie on the composite?**]] — *open*
+  - ○ `q75` [Q] [[q75_can_one_minicandi_recipe_match_or_beat_t|**Can one miniCANDI recipe match or beat the best base model on imputation, correction and calibration at the same time (Pareto dominance over the conv autoencoder, conv + attention and U-Net bases on eic_v1_2)?**]] — *open*
+    - ○ `h44` [H] [[h44_a_u_net_whose_count_skips_are_film_modul|A U-Net whose count skips are FiLM-modulated by (C, C') keeps the base U-Net imputation and reaches conv-level correction]] — *open*
+    - ○ `h45` [H] [[h45_pre_and_post_cac_layers_in_the_testbed_g|Pre and post CAC layers in the testbed g/f form (g reads only covariates and outputs the parameters of a count map f; f before the network removes the C artifact, f after the NB re-applies the C' artifact) raise correction without lowering imputation or calibration]] — *open*
+    - ○ `h46` [H] [[h46_where_film_injects_the_covariates_encode|Where FiLM injects the covariates (encoder only, decoder only, bottleneck only, every block including attention) moves correction beyond the seed range while imputation stays within range]] — *open*
 - ○ `q73` [Q] [[q73_how_does_the_final_minicandi_score_on_th|**How does the final miniCANDI score on the 51 EIC blind tracks, against the published EIC board and the baselines, once the blind rows are built?**]] — *open*
 
 ## Dashboard
 
-- **Questions** (74): open 24 · leaning 40 · settled 10 · parked 0
-- **Hypotheses** (42): open 10 · leaning 19 · settled 7 · parked 6
+- **Questions** (76): open 26 · leaning 40 · settled 10 · parked 0
+- **Hypotheses** (45): open 13 · leaning 19 · settled 7 · parked 6
 - **Confidence**: weak 22 · moderate 37 · strong 17
 - **Findings**: 137
