@@ -18,7 +18,7 @@ Provenance: PI, agent proposal approved, agent (code-level or supplementary only
 | D11 | Data version eic_v1_2. | alacarte | PI | closes t364 for this run | in force |
 | D12 | Mix-and-match switches fold into the screen as arms; minimum covariate set, QC input, cell embedding, resolution run after the recipe is chosen. | alacarte: "Fold mix-in, rest after" | PI | separate mix-and-match round (PI decision 8, 2026-11-17) | in force |
 | D13 | Compute cap 6,000 allocated CPU-h for the run. | alacarte | PI | | superseded by D20 |
-| D14 | Horizon 10 days from 2026-11-21; first measured screen result by 2026-11-24. | alacarte: "10 days, first in 3" | PI | | in force |
+| D14 | Horizon 10 days from 2026-11-21; first measured screen result by 2026-11-24. | alacarte: "10 days, first in 3" | PI | | superseded by D31 |
 | D15 | Headline: the three Pareto terms decide; Max's three (R2 on test tracks, with-vs-without covariates gain, real-vs-wrong covariates gain) are reported beside them. | alacarte: "Pareto terms + Max panel" | PI | | in force |
 | D16 | Cluster: Fir first, Nibi failover; heavy compute never on the laptop. | global CLAUDE.md; memory heavy-compute-on-nibi | PI | | in force |
 | D17 | Review and merge of PR 63 into main are the PI's. | Max notes:17-18; project CLAUDE.md | PI | | in force |
@@ -31,7 +31,11 @@ Provenance: PI, agent proposal approved, agent (code-level or supplementary only
 | D24 | 256-region prediction stays on CPU as in the references (no GPU slices). | planner default | agent | | in force |
 | D25 | Run outputs live in cruxvault/INSTRUCTIONS/t370_recipe/ (analysis/, results/, run_state/, recipe.md), never in the protected miniCANDI_closeout/ folder. | longrun guard rule | agent | | in force |
 | D26 | Post-recipe items of D12 (minimum covariate set, QC input, cell embedding, resolution) are out of this run (D18 scope). Blind pass not run in this run unless the PI starts the blind-row build (t184). | D18; cold plan review | agent | narrows D12 | in force |
-| D27 | Date stop: on 2026-11-29 the recipe freezes on what is confirmed at 256 regions by then. | cold plan review | agent | | in force |
+| D27 | Date stop: on 2026-11-29 the recipe freezes on what is confirmed at 256 regions by then. | cold plan review | agent | | superseded by D31 |
 | D28 | Pre/post CAC layers use smaller widths of the testbed classes (embedding d_cat 2 / d_cov 16 / hidden 32; G hidden 32; FormD 16 channels) so every arm stays within 1.10 x the 1.0e6 parameter budget; one curve side 15,784 params, one CNN side 23,234. | C2 builder; keeps arms parameter-matched | agent | | in force |
 | D29 | Add arm "read-disjoint training pairs": training correction and same-view pairs read the source from the pr1 half and the target from the pr2 half (half depth in C and C', as in scoring), so source and target share no reads. All 3 models, 3 seeds, screened with the other arms; also combined with each winner. | Analyses C7, C8, C9 (2026-11-21): U-Net copies the input because training pairs share reads (copy gain 0.63-0.67 vs 0.03-0.09), while scoring uses disjoint halves; all 2,328 training rows have pr1/pr2 files (Fir). | agent proposal, under PI D18 ("every ablation needed is warranted") | | in force |
 | D30 | Gate G0 passed on terms and scoring cost; training cost was 2.4 x fact 9, so the screen budget is the projection x 1.50 (5,209 CPU-h). The screen runs on kit RCP2 (RCP1 + C15-C17 + C29) and was submitted before the rerun test verdict (4888524). | probe.md, 2026-11-21 | agent, under PI "keep working and try not to be blocked by me" | | in force |
+| D31 | Deadline: deliver the recipe within 24 h of 2026-11-21 18:30 UTC, i.e. by 2026-11-22 18:30 UTC. Supersedes the horizon of D14 and the freeze of D27. | PI chat 2026-11-21: "my deadline is not 2026-11-24. it's within 24 hours" | PI | supersedes D14, D27 | in force |
+| D32 | Fix the curve pre/post layer NaN on the U-Net and rerun its 6 U-Net run-seeds (~235 CPU-h). | PI chat 2026-11-21: "i) yes" | PI | | in force |
+| D33 | Run the training-only Avocado retrain (~86 GPU-h) for the EIC comparison. | PI chat 2026-11-21: "ii) yes" | PI | | in force |
+| D34 | No blind-row build and no blind pass this run. | PI chat 2026-11-21: "iii) no" | PI | confirms D26 | in force |

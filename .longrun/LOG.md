@@ -13,3 +13,6 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-21T12:09Z Fir: rcp_tests 4863258; U-Net probe train 4863259, predict 4863260-63, metrics 4863264 (kit RCP1)
 - 2026-11-21T16:14Z G0: probe terms reproduce base seed0 exactly; scoring cost pass (22.0 vs 38.1); train cost fail (17.13 vs 14.12) -> continue, screen budget x1.50 = 5,209 CPU-h; rcp_tests 4863258 TIMEOUT, resubmitted 4888524 on RCP2 (12 h); screen submitted on RCP2 before test verdict (probe.md)
 - 2026-11-21T16:17Z Screen submitted on RCP2: s1a 396 jobs, s1b 270, native 30, CNN seed 6, ctleval 4889711; 704 rcp_ jobs queued; ids in run_state/jobs_C12-14.tsv
+- 2026-11-21T18:30Z PI: deadline within 24 h (by 2026-11-22 18:30 UTC, D31); yes to curve-NaN fix (D32), yes Avocado retrain (D33), no blind (D34)
+- 2026-11-21T18:32Z cancel-own.sh cancel on fir: 4889385 4889386 4889387 4889388 4889389 4889390 4889398 4889399 4889400 4889401 4889402 4889457
+- 2026-11-21T18:45Z Curve NaN fixed e8dec6a8; cancelled curve U-Net jobs, dirs to _nan_RCP2; Avocado chain to 4906099; 8 base ctl evals 4906119-26; 27 ctl-arm run-seeds + chained ctl evals; EIC val base U-Net s0 4906465, Average 4906466
