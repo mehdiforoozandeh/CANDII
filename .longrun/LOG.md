@@ -9,3 +9,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-21T11:37Z plan returned: 26 chunks, 8 waves; 256-region scoring measured 87.6/92.9/114.1 CPU-h per run-seed (2.7x older docs); upper bound ~12,000 CPU-h, 6,000 checkpoint in wave 5; D21-D25 recorded; cold review (opus) running; open PI asks: training-only Avocado retrain (~86 GPU-h), blind-row build (t184, ~22,700 CPU-h)
 - 2026-11-21T11:43Z cold review: arithmetic sound (cum ~11,991 CPU-h), 4 factual fixes, coverage gaps, waits-in-chunk; sent once to planner with 15 amendments; D26-D27
 - 2026-11-21T11:48Z wave 1 launched: C1-C10, 10 opus builders, base 57f3c9e8
+- 2026-11-21T12:02Z ADDITION D29 read-disjoint training pairs: displaces nothing; ~150 CPU-h screen (9 run-seeds); serves R1 R3 R4; PI informed at next report
