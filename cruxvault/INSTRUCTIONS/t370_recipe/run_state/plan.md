@@ -476,3 +476,30 @@ Wall-clock plan against the horizon: wave 1 and wave 2 on 2026-11-21; wave 3 sub
 
 ## Log
 
+- 2026-11-21T11:46:35Z wave 1: worktrees rcp-C1..C10 cut from 57f3c9e8; 10 builders (opus)
+- 2026-11-21T11:50:04Z C5 accepted (foreman <20-line fix: platform-gated digests), merged; diff total 207
+- 2026-11-21T11:50:16Z C3 accepted (rule logic read against D1/D21; 449 lines, tests not read line by line), merged; diff total 656
+- 2026-11-21T11:51:52Z C7 accepted (analysis doc; answer: U-Net count skips carry a full-res copy, copy gain 0.67 vs 0.03-0.05), merged
+- 2026-11-21T11:52:55Z C2 accepted (registry diff + module contract read; smaller g/f widths accepted as D28), merged; diff total ~1130
+- 2026-11-21T11:55:32Z C1 accepted (base digests pass on C1+C2 merged tree: defaults bit-identical), merged
+- 2026-11-21T11:55:32Z C6 accepted, merged; AMENDMENT: test commands use PYTHONPATH=$PWD/src:$PWD:$PWD/tests (score tests import e2_inbin from tests/)
+- 2026-11-21T11:55:46Z C10 accepted (sprint-10 reference recipe 4,622,554 params, width 384), merged
+- 2026-11-21T11:56:24Z C9 accepted (alignment views share ~96% reads with base -> covariate-gated copy; U-Net head skip copy gain 0.65), merged. CANDIDATE ARM for wave 3: pair alignment-view targets with read-disjoint halves (pr1 source / pr2 target)
+- 2026-11-21T11:57:32Z C4 accepted (merged-tree tests: 202 passed incl. key guard on all 41 configs), merged; screen dry-run projection 2,155 CPU-h for 41 arm-models x 3 seeds. Wave 2 started before C8 (analysis only, touches no code) returns
+- 2026-11-21T12:01:18Z C8 accepted (held-out loss dominated by read-sharing kind-2/3 bins; U-Net copy wins loss, loses disjoint-half correction), merged. Wave 1 complete.
+
+### C29 read-disjoint training pairs   wave 2   (added by the foreman, D29)
+- **Goal.** New config key `train_halves` (default absent = today's sampler, bit-identical). Value `pairs`: in training, every correction (different-view) and same-view pair reads its source from the source view's `pr1` file and its target from the target view's `pr2` file, each described at half depth (input_depth_scale = target_depth_scale = 0.5, exactly as the scored correction items do), so source and target share no reads. Imputation targets (kind 1) and context inputs keep reading `counts`. Optional `train_halves_prob` (default 1.0) applies it per pair. For same-view pairs under `pairs` the bin mask rule stays as today.
+- **Owns.** tools/minicandi/dataset.py, tests/test_minicandi_train_halves.py, tools/minicandi/recipe_arms.py, tools/minicandi/configs/recipe/arms.tsv, tools/minicandi/configs/recipe/halves/ (new folder), tests/test_minicandi_recipe_arms.py.
+- **Interfaces.** Key names above; arm names `halves_convae`, `halves_convattn`, `halves_unet` in arms.tsv, screen stage `s1a` (or the stage that holds the skip and placement arms), family `halves`.
+- **Serves.** R1 R3 R4.
+- **Test.** `PYTHONPATH=$PWD/src:$PWD:$PWD/tests python -m pytest -q tests/test_minicandi_train_halves.py tests/test_minicandi_dataset.py tests/test_minicandi_train_views.py tests/test_minicandi_recipe_arms.py tests/test_minicandi_recipe_keys.py tests/test_minicandi_base_golden.py`
+- 2026-11-21T12:02:54Z C29 added to wave 2 (D29), worktree rcp-C29 cut from 345c0c7c
+- 2026-11-21T12:06:49Z C29 accepted (145 tests), merged
+- 2026-11-21T12:09:52Z C11 done by foreman: kit RCP1 (git 7b5dc8cd), rcp_tests 4863258, probe 4863259-4863264
+- 2026-11-21T12:10:01Z wave 3 code chunks C15 C16 C17 started early (no dependency on G0); cut from 1da07953
+- 2026-11-21T12:15:21Z C17 accepted (15 tests; R2 from level + Gram, verified vs direct), merged
+- 2026-11-21T12:18:07Z C16 accepted (38 tests; 45 validation bigWigs, miniCANDI predicts 43), merged
+- 2026-11-21T12:22:10Z C15 accepted (cell-level held-out control list C02 C10 C16 C20 C25 C31 C36 C46 per D22), merged
+- 2026-11-21T12:33:41Z kit RCP2 pushed (all code through C17 + C29), used for the screen and control arms
+- 2026-11-21 G0 verdict: terms pass, scoring cost pass, train cost fail (continue, x1.50 budget), tests timeout -> rerun 4888524. C12, C13, C14 submitted by foreman on RCP2 (no builder needed: submission only). C12 test 66 (57 + 9 halves), C13 test 46: pass.

@@ -11,3 +11,5 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-21T11:48Z wave 1 launched: C1-C10, 10 opus builders, base 57f3c9e8
 - 2026-11-21T12:02Z ADDITION D29 read-disjoint training pairs: displaces nothing; ~150 CPU-h screen (9 run-seeds); serves R1 R3 R4; PI informed at next report
 - 2026-11-21T12:09Z Fir: rcp_tests 4863258; U-Net probe train 4863259, predict 4863260-63, metrics 4863264 (kit RCP1)
+- 2026-11-21T16:14Z G0: probe terms reproduce base seed0 exactly; scoring cost pass (22.0 vs 38.1); train cost fail (17.13 vs 14.12) -> continue, screen budget x1.50 = 5,209 CPU-h; rcp_tests 4863258 TIMEOUT, resubmitted 4888524 on RCP2 (12 h); screen submitted on RCP2 before test verdict (probe.md)
+- 2026-11-21T16:17Z Screen submitted on RCP2: s1a 396 jobs, s1b 270, native 30, CNN seed 6, ctleval 4889711; 704 rcp_ jobs queued; ids in run_state/jobs_C12-14.tsv
