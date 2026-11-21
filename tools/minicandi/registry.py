@@ -14,8 +14,11 @@ number (1 to 6, mapped through `RUNGS`) or the module name itself, so a new modu
 Wrappers (plan pinned interface E). `build_model(config)` builds the model class with `two_step`
 and `control_head` removed from the config, then applies `minicandi.control_head.wrap(model,
 config)` when `config["control_head"]` is set and not `"channel"`, then
+`minicandi.cac_layers.wrap(model, config)` when `config["cac_pre"]` or `config["cac_post"]` is set
+(t370 chunk C2, the pre and post covariate-correction layers), then
 `minicandi.two_step.wrap(model, config)` when `config["two_step"]` is true (lazy imports, this
-order). A rung's own `Model(config)` still raises NotApplicable for `two_step`.
+order; so both two-step legs pass through the cac layers). The inner model is built without
+`WRAPPER_KEYS`. A rung's own `Model(config)` still raises NotApplicable for `two_step`.
 
 `config["model_file"]` (a path relative to the repository root, or absolute; default absent) makes
 `build_model` load `class Model` from that file with importlib in place of the rung module named
@@ -62,7 +65,7 @@ PACKAGE = "minicandi.rungs"
 CKPT_NAME = "ckpt.pt"
 REPO = _TOOLS.parent
 #: config keys that select a wrapper; the inner model is built without them
-WRAPPER_KEYS = ("two_step", "control_head")
+WRAPPER_KEYS = ("two_step", "control_head", "cac_pre", "cac_post")
 #: `loss_assay_weight` values (pinned interface E); `learned` adds the parameter `assay_log_w`
 LOSS_ASSAY_WEIGHTS = (None, "none", "equal", "learned")
 _MODEL_FILES: dict = {}
@@ -164,6 +167,9 @@ def build_model(config: dict) -> C.MiniCandi:
     if config.get("control_head") not in (None, "channel"):
         from minicandi import control_head as CH
         model = CH.wrap(model, dict(config))
+    if config.get("cac_pre") is not None or config.get("cac_post") is not None:
+        from minicandi import cac_layers as CAC
+        model = CAC.wrap(model, dict(config))
     if config.get("two_step"):
         from minicandi import two_step as TS
         model = TS.wrap(model, dict(config))
