@@ -16,3 +16,5 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-21T18:30Z PI: deadline within 24 h (by 2026-11-22 18:30 UTC, D31); yes to curve-NaN fix (D32), yes Avocado retrain (D33), no blind (D34)
 - 2026-11-21T18:32Z cancel-own.sh cancel on fir: 4889385 4889386 4889387 4889388 4889389 4889390 4889398 4889399 4889400 4889401 4889402 4889457
 - 2026-11-21T18:45Z Curve NaN fixed e8dec6a8; cancelled curve U-Net jobs, dirs to _nan_RCP2; Avocado chain to 4906099; 8 base ctl evals 4906119-26; 27 ctl-arm run-seeds + chained ctl evals; EIC val base U-Net s0 4906465, Average 4906466
+- 2026-11-21T18:47Z RCP3 pushed (e8dec6a8). Curve U-Net reruns trains 4908746-4908912; s1c CNN 17 seeds submitted on RCP3 (102 jobs); CNN cost seed done at 10,000 steps in ~87 min
+- 2026-11-21T21:55Z screen Pareto: winner halves U-Net (imp 0.4263, corr 0.7535, cal 0.6872 vs floors 0.4072/0.6491/0.4883); tests 69 env failures; 7 train timeouts; EIC jobs failed (avocado import, frag_len, KIT) -> C40 builder; kit RCP4 pushing

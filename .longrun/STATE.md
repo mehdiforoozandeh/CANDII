@@ -8,18 +8,16 @@ Find one miniCANDI recipe that Pareto-dominates the three base models on imputat
 ## Horizon
 DEADLINE 2026-11-22 18:30 UTC (D31, PI: "within 24 hours"). Budget checkpoint 6,000 CPU-h (D20). Fir is the scoring cluster (eval sets live only there); Nibi may be used for training-only overflow (PI 2026-11-21).
 
-## In flight (Fir)
-- Screen s1a + s1b on kit RCP2: jobs_C12.tsv, jobs_C13.tsv. At 18:26 UTC: 90/112 trained, 8 scored.
-- Curve pre/post U-Net NaN (3/6 runs): fixed in e8dec6a8 (exponent caps), kit RCP3; old dirs in runs_rcp/_nan_RCP2; 6 U-Net curve run-seeds resubmit on RCP3 by a laptop waiter after the kit push.
-- CNN cost seed rcp_cac_cnn_unet s0 (RCP2, old code); s1c (17 CNN seeds) to go on RCP3.
-- Control: 9 base control evals (4889711 done, 3.1 CPU-h; 4906119-26); 27 control-arm run-seeds (trains 4906134-4906354) each with a chained control eval (4906361-4906402).
-- EIC: Avocado training-only chain 4906094?-4906099 (H100, up to ~33 h worst case: may miss deadline); base U-Net s0 validation prediction array 4906465; Average entry 4906466.
-- Tests rerun 4888524 (RCP2).
+## In flight (Fir), at 2026-11-21 22:30 UTC
+- Screen result (p16): Pareto winner halves U-Net (D35); runs_rcp/_sel/pareto_2130.json. Spend 4,954 CPU-h by 21:50 UTC; new submissions project +1,637 (past the 6,000 checkpoint, D20: report).
+- Kit RCP4 (79c82df7): 7 timed-out run-seeds rerun at 6 h; combo arms halves + {mix_pearson, mix_fixdepth, headskip_film, mix_avg} U-Net x 3 seeds at p16; p256 confirm of halves U-Net, mix_fixdepth U-Net, mix_svonly conv AE / conv+attn. Ids in SUBMITTED.tsv.
+- Still running from before: rest of screen (RCP2/RCP3), CNN seeds, curve U-Net reruns, control arms + control evals.
+- EIC: fixes merged (fc4eb40a); kit RCP5 pushing; then resubmit eic_val (FRAGLEN_TABLE) and Avocado chain (D33). Average entry rerun 4943718 (KIT=RCP2 export).
 
-## Next (24 h plan)
-1. Submit RCP3 curve reruns + s1c CNN seeds.
-2. As p16 scores land (~next 6 h): pareto_select -> finalists; 256-region confirm of finalists; two-step retest on winners.
-3. Deck of the recipe result by the deadline, with control and EIC sections as far as they landed.
+## Next
+1. After RCP5: resubmit eic_val array and Avocado chain.
+2. When combos and p256 score: rerun pareto_select at p16 and p256; pick the recipe; two-step retest on it.
+3. Deck by 2026-11-22 18:30 UTC.
 
 ## Open asks to the PI
 None (Avocado yes, blind no, curve fix yes: D32-D34).
