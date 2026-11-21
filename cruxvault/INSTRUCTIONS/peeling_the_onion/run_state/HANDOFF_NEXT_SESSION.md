@@ -138,3 +138,10 @@ The PI ruled: leave the base-model scores on `eic_v1_2` at 256 regions to the ne
 - The PI ruled on 2026-11-20 (question dialog): submit the scoring now. This replaces the ruling "leave it to the next sprint" of 00:25 UTC.
 - Submitted at 20:11 UTC with kit CO10, `STEP=ref DRY_RUN=0` of `submit_a12.sh`: 3 base runs x 3 seeds = 9 scorings, 81 jobs (8 predict + 1 metrics each), 326.7 CPU-hours. Job ids 4712722 to 4712931 (not contiguous). All 81 were PENDING at submission. Submit log on Fir: `~/a12_ref_submit_20261120T2011Z.log`; per-run ids in `/project/def-maxwl/mforooz/ONION/runs_fir/SUBMITTED.tsv`.
 - NEVER resubmit these jobs. Left to do: when each `seed<k>/p256_sv/` has its metrics output, read the scores for `eic_v1_2_rung{2,3,4}_base_heldout`, then close task t357.
+
+## Added 2026-11-21 05:25 UTC: base-model scores on eic_v1_2 are done; nothing is left from this sprint
+
+- All 81 Fir scoring jobs (4712722 to 4712931) ended COMPLETED; 9 of 9 `p256_sv/SCORED`. Task t357 is done. Never resubmit.
+- Read: `cruxvault/results/eic_v1_2_base_p256/read_20261121T0520Z/READ.md` (local, results/ is git-ignored). Composite (version 3), mean over 3 seeds (seed range): conv autoencoder 0.5007 (0.0281), conv + attention 0.5186 (0.0197), U-Net 0.5179 (0.0360). The three models tie.
+- PR 61 was merged by the PI (merge commit f1864282). Commits after it on `implementation/t152-peeling-the-onion` are records only and wait for a follow-up pull request.
+- The entries of the ready queue that needed these references (entries 10 to 14) are unblocked.

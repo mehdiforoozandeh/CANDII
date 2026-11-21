@@ -1,15 +1,15 @@
 ---
 id: t357
 type: task
-title: Onion: eic_v1_2 references on 256 regions and the 256-region scores of its 9 base runs (conv autoencoder, conv + attention, U-Net)
+title: "Onion: eic_v1_2 references on 256 regions and the 256-region scores of its 9 base runs (conv autoencoder, conv + attention, U-Net)"
 category: implementation
 parent: t152
 blocked_by: None
 refs: q56, q48
 hypothesis_refs: 
-status: open
-created: 2026-11-18T16:21:21
-updated: "2026-11-18T23:23:12"
+status: done
+created: "2026-11-18T16:21:21"
+updated: "2026-11-20T22:15:02"
 ---
 
 # t357 — Onion: eic_v1_2 references on 256 regions and the 256-region scores of its 9 base runs (conv autoencoder, conv + attention, U-Net)
@@ -32,7 +32,7 @@ Ready queue entry 6 (`closeout/ready queue for scaling.md`).
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Base-model scores on eic_v1_2, 256 regions](results/eic_v1_2_base_p256/read_20261121T0520Z/READ.md)
 
 ## Evidence
 
