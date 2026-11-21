@@ -23,7 +23,7 @@ Provenance: PI doc, PI, agent proposal approved.
 | R15 | P1 | "Difference in performance giving as input the real covariates vs wrong covariates" | Max notes 2026-11-19.md:6 | PI doc | open | |
 | R16 | P3 | "Assemble big data set including IHEC and any others. We will consult regarding train/dev/test split." | Max notes 2026-11-19.md:7 | PI doc | open | |
 | R17 | P3 | "Look for signal units which are less variable across replicates?" | Max notes 2026-11-19.md:11 | PI doc | open | |
-| R18 | P1 | "figure out the difference between the width of the layers of Sprint 10's onion and Mehdi onion" | Max notes 2026-11-19.md:13 | PI doc | open | |
+| R18 | P1 | "figure out the difference between the width of the layers of Sprint 10's onion and Mehdi onion" | Max notes 2026-11-19.md:13 | PI doc | done | cruxvault/INSTRUCTIONS/t370_recipe/analysis/layer_widths_sprint10_vs_ours.md: sprint-10 reference 4,622,554 params (4.4-4.7x ours), shared width 384 vs 60-120 / 104 / 25-100 |
 | R19 | P0 | carry-over: "the base-model scores on eic_v1_2 at 256 regions on Fir (task t357)" -- the reference bar of the win rule; then "run STEP=ref of submit_a12.sh with kit CO10 (81 jobs)" | Max notes 2026-11-19.md:24-27 | agent handoff | done | Fir 2026-11-21: 9 of 9 runs_fir/eic_v1_2_rung{2,3,4}_base_heldout/seed*/p256_sv/SCORED exist |
 | R20 | P0 | "Never resubmit a job that the Log of .orchestrate/plan.md lists"; "never resubmit a job that is still queued" | Max notes 2026-11-19.md:25-30 | agent handoff | open | |
 | R21 | P1 | "Read first, in this order: ...HANDOFF_NEXT_SESSION.md ..., then closeout/settled miniCANDI design.md, then closeout/ready queue for scaling.md" | Max notes 2026-11-19.md:18-20 | agent handoff | partial | settled design read 2026-11-21 |
