@@ -15,6 +15,12 @@
 #   EIC_VAL_CHROMS   comma list passed to predict.py as --chroms (e.g. chr21: the cost probe; such
 #                    a run writes per-chromosome parts only, no .npy and no DONE). Unset: every
 #                    chromosome. Defined here; no other code reads it.
+#   FRAGLEN_TABLE    side table of estimated fragment lengths (qc_fill.py collect --fraglen-out),
+#                    passed to predict.py as --fraglen-table; the ChIP signal route needs `frag_len`
+#                    and the frozen tables leave it empty for most single-end tracks (job 4906465:
+#                    23 of 25 cells failed with "covariates lack ['frag_len']"). Default
+#                    $ONION_ROOT/e2/eic_v1_fraglen.tsv (it covers all 32 empty-frag_len ChIP
+#                    validation targets of eic_v1_2, checked 2026-11-21). Set it empty to pass none.
 #   ONION_ROOT       default /project/def-maxwl/mforooz/ONION (tables $ONION_ROOT/tables/eic_v1_2,
 #                    eval set $ONION_ROOT/eval/eic_v1_2/evalset.json, logs $ONION_ROOT/logs)
 #   ONION_EXCLUDE    node list for --exclude (launcher only)
@@ -39,6 +45,7 @@ O="${ONION_ROOT:-/project/def-maxwl/mforooz/ONION}"
 TABLES="$O/tables/eic_v1_2"
 EVALSET="$O/eval/eic_v1_2/evalset.json"
 EIC_VAL_CHROMS="${EIC_VAL_CHROMS:-}"
+FRAGLEN_TABLE="${FRAGLEN_TABLE-$O/e2/eic_v1_fraglen.tsv}"
 
 if [ -z "${SLURM_JOB_ID:-}" ]; then
   # ------------------------------------------------------------------ launcher
@@ -50,9 +57,9 @@ if [ -z "${SLURM_JOB_ID:-}" ]; then
   EXCLUDE="${ONION_EXCLUDE:-}"; EXCLUDE="${EXCLUDE//[[:space:]]/}"
   [ -z "$EXCLUDE" ] || SB+=(--exclude="$EXCLUDE")
   SB+=("$KIT/slurm/onion_eval/eic_val.sh" "$KIT" "$RUN" "$OUT")
-  echo "validation cells: $N; EIC_VAL_CHROMS=${EIC_VAL_CHROMS:-all}"
+  echo "validation cells: $N; EIC_VAL_CHROMS=${EIC_VAL_CHROMS:-all}; FRAGLEN_TABLE=${FRAGLEN_TABLE:-none}"
   if [ "${DRY_RUN:-0}" = 1 ]; then echo "${SB[*]}"; exit 0; fi
-  export EIC_VAL_CHROMS
+  export EIC_VAL_CHROMS FRAGLEN_TABLE
   "${SB[@]}"
   exit 0
 fi
@@ -62,11 +69,13 @@ CMD=(python3 "$KIT/tools/minicandi/predict.py" --run "$RUN" --tables "$TABLES"
      --evalset "$EVALSET" --split val --out "$OUT" --device cpu)
 [ -z "${SLURM_ARRAY_TASK_ID:-}" ] || CMD+=(--cell-index "$SLURM_ARRAY_TASK_ID")
 [ -z "$EIC_VAL_CHROMS" ] || CMD+=(--chroms "$EIC_VAL_CHROMS")
+[ -z "$FRAGLEN_TABLE" ] || CMD+=(--fraglen-table "$FRAGLEN_TABLE")
 
 echo "EIC_VAL_CHROMS=${EIC_VAL_CHROMS:-all} cell index ${SLURM_ARRAY_TASK_ID:-all}"
 if [ "${DRY_RUN:-0}" = 1 ]; then echo "${CMD[*]}"; exit 0; fi
 [ -f "$EVALSET" ] || { echo "no evalset $EVALSET" >&2; exit 2; }
 [ -f "$RUN/ckpt.pt" ] || { echo "no checkpoint $RUN/ckpt.pt" >&2; exit 2; }
+[ -z "$FRAGLEN_TABLE" ] || [ -f "$FRAGLEN_TABLE" ] || { echo "no fragment-length table $FRAGLEN_TABLE" >&2; exit 2; }
 
 T0=$(date +%s)
 echo "=== eic_val job ${SLURM_JOB_ID} task ${SLURM_ARRAY_TASK_ID:-none} host=$(hostname) $(date -u)"

@@ -197,7 +197,7 @@ def test_val_cells_counts_validation_leave_one_assay_out_cells(tmp_path, capsys)
 
 def _clean_env(**kw):
     env = {k: v for k, v in os.environ.items()
-           if not k.startswith("SLURM_") and k not in ("EIC_VAL_CHROMS", "ONION_EXCLUDE")}
+           if not k.startswith("SLURM_") and k not in ("EIC_VAL_CHROMS", "ONION_EXCLUDE", "FRAGLEN_TABLE")}
     env.update(kw)
     return env
 
@@ -227,6 +227,24 @@ def test_eic_val_task_without_chroms_predicts_every_chromosome(tmp_path):
     assert "--chroms" not in out and "--cell-index 0" in out
 
 
+def test_eic_val_task_passes_the_default_fragment_length_table(tmp_path):
+    # job 4906465: without a side table the ChIP route failed "covariates lack ['frag_len']"
+    out = _sh(EIC_VAL, [str(REPO), "/r", "/o"],
+              _clean_env(DRY_RUN="1", SLURM_JOB_ID="7", SLURM_ARRAY_TASK_ID="0",
+                         ONION_ROOT="/x/ONION"))
+    cmd = out.strip().splitlines()[-1].split()
+    assert cmd[cmd.index("--fraglen-table") + 1] == "/x/ONION/e2/eic_v1_fraglen.tsv"
+
+
+def test_eic_val_task_fragment_length_table_override_and_none(tmp_path):
+    env = dict(DRY_RUN="1", SLURM_JOB_ID="7", SLURM_ARRAY_TASK_ID="0")
+    out = _sh(EIC_VAL, [str(REPO), "/r", "/o"], _clean_env(FRAGLEN_TABLE="/t/fl.tsv", **env))
+    cmd = out.strip().splitlines()[-1].split()
+    assert cmd[cmd.index("--fraglen-table") + 1] == "/t/fl.tsv"
+    out = _sh(EIC_VAL, [str(REPO), "/r", "/o"], _clean_env(FRAGLEN_TABLE="", **env))
+    assert "--fraglen-table" not in out
+
+
 def test_eic_val_launcher_sizes_the_array_by_validation_cells(tmp_path):
     _tables(tmp_path)
     out = _sh(EIC_VAL, [str(REPO), "/r", "/o"],
@@ -237,6 +255,7 @@ def test_eic_val_launcher_sizes_the_array_by_validation_cells(tmp_path):
     assert "--exclude=fc1,fc2" in line and "--export=ALL" in line
     assert line[-3:] == [str(REPO), "/r", "/o"]
     assert "validation cells: 2; EIC_VAL_CHROMS=chr21" in out
+    assert f"FRAGLEN_TABLE={tmp_path / 'ONION' / 'e2' / 'eic_v1_fraglen.tsv'}" in out
 
 
 # ---- avocado_train_only.sh -----------------------------------------------------------------
@@ -245,6 +264,9 @@ def _fake_005(tmp_path):
     e = tmp_path / "005"
     (e / "scripts").mkdir(parents=True)
     (e / "output" / "inputs" / "bridge").mkdir(parents=True)
+    (e / "output" / "inputs" / "vendor_001").mkdir(parents=True)
+    for f in ("eic_metrics.py", "fir_tracks.py"):
+        (e / "output" / "inputs" / "vendor_001" / f).write_text("# stub\n")
     for f in ("hpc_env.sh", "hpc_prepare_grid.py", "hpc_train.py", "hpc_predict.py"):
         (e / "scripts" / f).write_text("# stub\n")
     hdr = ("#SBATCH --output=/scratch/maxwl/logs/x_%A_%a.out\n"
@@ -306,6 +328,9 @@ def test_avocado_dry_run_stages_training_only_and_prints_the_chain(tmp_path):
     assert "--array=0-1%12" in lines[5]                         # one task per validation track
     assert "2 training tracks" in p.stdout and "2 validation targets" in p.stdout
     assert "Avocado_train_only" in p.stdout
+    # job 4906094: hpc_prepare_grid.py imports eic_metrics from <scripts>/../inputs/vendor_001
+    assert sorted(x.name for x in (ws / "inputs" / "vendor_001").iterdir()) == \
+        ["eic_metrics.py", "fir_tracks.py"]
 
 
 def test_avocado_refuses_a_bridge_that_disagrees_with_the_training_folder(tmp_path):

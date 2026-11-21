@@ -38,19 +38,23 @@ EXCLUDE="${ONION_EXCLUDE:-}"; EXCLUDE="${EXCLUDE//[[:space:]]/}"
 
 for f in scripts/hpc_env.sh scripts/hpc_prepare_grid.py scripts/hpc_bin_tracks.slurm \
          scripts/hpc_train.slurm scripts/hpc_predict.slurm scripts/hpc_make_bigwig.slurm \
-         output/inputs/bridge/eic_bridge.csv; do
+         output/inputs/bridge/eic_bridge.csv output/inputs/vendor_001/eic_metrics.py \
+         output/inputs/vendor_001/fir_tracks.py; do
   [ -f "$E/$f" ] || { echo "missing $E/$f" >&2; exit 2; }
 done
 [ -d "$D/training_data" ] || { echo "missing $D/training_data" >&2; exit 2; }
 
 # ---------------------------------------------------------------- stage (idempotent, no compute)
-mkdir -p "$WS/scripts" "$WS/inputs/bridge" "$WS/inputs/grid" "$SC" "$TRACKS" "$LOGS"
+mkdir -p "$WS/scripts" "$WS/inputs/bridge" "$WS/inputs/grid" "$WS/inputs/vendor_001" "$SC" "$TRACKS" "$LOGS"
 ls "$D/training_data" | sed -n 's/^\(C[0-9][0-9]M[0-9][0-9]\)\.bigwig$/\1/p' | sort \
   > "$WS/inputs/train_only_experiments.txt"
 NT=$(wc -l < "$WS/inputs/train_only_experiments.txt" | tr -d ' ')
 while read -r x; do ln -sfn "$D/training_data/$x.bigwig" "$TRACKS/$x.bigwig"; done \
   < "$WS/inputs/train_only_experiments.txt"
 cp "$E"/scripts/*.py "$E"/scripts/*.sh "$E"/scripts/*.slurm "$WS/scripts/"
+# 005's scripts import eic_metrics / fir_tracks from <scripts>/../inputs/vendor_001 (001's scorer,
+# vendored unmodified); without this copy hpc_prepare_grid.py fails (job 4906094).
+cp "$E"/output/inputs/vendor_001/*.py "$WS/inputs/vendor_001/"
 for f in "$WS"/scripts/*.slurm; do
   sed -i.bak -e "s#/scratch/maxwl/epi_imputation/005_ws#$WS#g" \
              -e "s#/scratch/maxwl/epi_imputation/005#$SC#g" \
