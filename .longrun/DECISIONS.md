@@ -17,7 +17,11 @@ Provenance: PI, agent proposal approved, agent (code-level or supplementary only
 | D10 | EIC comparison: validation vs retrained Avocado and the average during selection; one blind pass vs the 23 entrants at the end; signal p-value from the predicted NB, EIC scorer. | alacarte: "Validation + one blind" | PI | | in force |
 | D11 | Data version eic_v1_2. | alacarte | PI | closes t364 for this run | in force |
 | D12 | Mix-and-match switches fold into the screen as arms; minimum covariate set, QC input, cell embedding, resolution run after the recipe is chosen. | alacarte: "Fold mix-in, rest after" | PI | separate mix-and-match round (PI decision 8, 2026-11-17) | in force |
-| D13 | Compute cap 6,000 allocated CPU-h for the run. | alacarte | PI | | in force |
+| D13 | Compute cap 6,000 allocated CPU-h for the run. | alacarte | PI | | superseded by D20 |
 | D14 | Horizon 10 days from 2026-11-21; first measured screen result by 2026-11-24. | alacarte: "10 days, first in 3" | PI | | in force |
 | D15 | Headline: the three Pareto terms decide; Max's three (R2 on test tracks, with-vs-without covariates gain, real-vs-wrong covariates gain) are reported beside them. | alacarte: "Pareto terms + Max panel" | PI | | in force |
 | D16 | Cluster: Fir first, Nibi failover; heavy compute never on the laptop. | global CLAUDE.md; memory heavy-compute-on-nibi | PI | | in force |
+| D17 | Review and merge of PR 63 into main are the PI's. | Max notes:17-18; project CLAUDE.md | PI | | in force |
+| D18 | Scope: only P0 and P1 rows are this run's goals; P2 and P3 are out. Priority 1: find the best miniCANDI recipe (every ablation needed to reach it is warranted). Priority 2: good ChIP-control prediction. | PI 2026-11-21: "none of p2 and p3 are within the scopre of this session ... the number one priorities is 1. fiding the best recipe ... priority 2 is the good control pred" | PI | | in force |
+| D19 | Deeper-look analyses in scope (R12): the U-Net correction cause, the held-out-loss vs composite gap, the views that hurt the combined no-dedup + MAPQ-0 pair. | PI alacarte 2026-11-21, three picked | PI | | in force |
+| D20 | 6,000 CPU-h is a checkpoint, not a ceiling: needed arms continue past it; report spend and what more buys at 6,000 and at each milestone. | PI 2026-11-21: "6,000 as checkpoint (Recommended)" | PI | D13 | in force |

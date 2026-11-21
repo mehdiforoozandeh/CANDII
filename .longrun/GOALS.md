@@ -17,11 +17,14 @@ Provenance: PI doc, PI, agent proposal approved.
 | R9 | P1 | "compare minicandi against other imputation methods on our imputation metrics (+some of EIC imputation metrics)" | mini candi.md:37 | PI doc | open | |
 | R10 | P1 | "process the predicted count data from miniCANDI to signal pvalues (which are comparable with the EIC)" | mini candi.md:37 | PI doc | open | |
 | R11 | P1 | "make miniCANDI robust to this covariate shift and also be a good imputation method (+ caliberated uncertainty)" | mini candi.md:39 | PI doc | open | |
-| R12 | P2 | "there are other things about the minicandi results that need some deeper investigation" | mini candi.md:6 | PI doc | open | |
+| R12 | P1 | "there are other things about the minicandi results that need some deeper investigation" | mini candi.md:6 | PI doc | open | PI 2026-11-21 named three analyses: U-Net correction cause, held-out-loss vs composite gap, views hurting the no-dedup + MAPQ-0 pair |
 | R13 | P1 | "Headline metric: R2 on test tracks" | Max notes 2026-11-19.md:4 | PI doc | open | |
 | R14 | P1 | "Difference in performance including covariates vs not" | Max notes 2026-11-19.md:5 | PI doc | open | |
 | R15 | P1 | "Difference in performance giving as input the real covariates vs wrong covariates" | Max notes 2026-11-19.md:6 | PI doc | open | |
 | R16 | P3 | "Assemble big data set including IHEC and any others. We will consult regarding train/dev/test split." | Max notes 2026-11-19.md:7 | PI doc | open | |
-| R17 | P2 | "Look for signal units which are less variable across replicates?" | Max notes 2026-11-19.md:11 | PI doc | open | |
+| R17 | P3 | "Look for signal units which are less variable across replicates?" | Max notes 2026-11-19.md:11 | PI doc | open | |
 | R18 | P1 | "figure out the difference between the width of the layers of Sprint 10's onion and Mehdi onion" | Max notes 2026-11-19.md:13 | PI doc | open | |
-| R19 | P0 | carry-over: "the base-model scores on eic_v1_2 at 256 regions on Fir (task t357)" -- the reference bar of the win rule | Max notes 2026-11-19.md:24-27 | PI doc | partial | memory onion-long-horizon-run: done 2026-11-21; verify on Fir |
+| R19 | P0 | carry-over: "the base-model scores on eic_v1_2 at 256 regions on Fir (task t357)" -- the reference bar of the win rule; then "run STEP=ref of submit_a12.sh with kit CO10 (81 jobs)" | Max notes 2026-11-19.md:24-27 | agent handoff | partial | memory onion-long-horizon-run: done 2026-11-21; verify on Fir |
+| R20 | P0 | "Never resubmit a job that the Log of .orchestrate/plan.md lists"; "never resubmit a job that is still queued" | Max notes 2026-11-19.md:25-30 | agent handoff | open | |
+| R21 | P1 | "Read first, in this order: ...HANDOFF_NEXT_SESSION.md ..., then closeout/settled miniCANDI design.md, then closeout/ready queue for scaling.md" | Max notes 2026-11-19.md:18-20 | agent handoff | partial | settled design read 2026-11-21 |
+| R22 | P1 | "The main line of the next sprint is scaling miniCANDI (task t369). It waits on ... the architecture for scaling (t363)" -- this run's recipe is the input to t363; scaling itself is out of scope | Max notes 2026-11-19.md:27-29 | agent handoff | open | |
