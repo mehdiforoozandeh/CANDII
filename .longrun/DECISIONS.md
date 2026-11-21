@@ -26,7 +26,7 @@ Provenance: PI, agent proposal approved, agent (code-level or supplementary only
 | D19 | Deeper-look analyses in scope (R12): the U-Net correction cause, the held-out-loss vs composite gap, the views that hurt the combined no-dedup + MAPQ-0 pair. | PI alacarte 2026-11-21, three picked | PI | | in force |
 | D20 | 6,000 CPU-h is a checkpoint, not a ceiling: needed arms continue past it; report spend and what more buys at 6,000 and at each milestone. | PI 2026-11-21: "6,000 as checkpoint (Recommended)" | PI | D13 | in force |
 | D21 | "Beyond" in D1 = difference of means larger than the larger of the two seed ranges (close-out convention). | planner default; settled design section 0 | agent | | in force |
-| D22 | Held-out control cells for the control arms: every third of the 24 validation cells whose control is a training row (8 cells). | planner default | agent | | in force |
+| D22 | Held-out control cells for the control arms: every third of the 24 validation cells whose control is a training row (8 cells: C02 C10 C16 C20 C25 C31 C36 C46, cell-level rule). | planner default | agent | | in force |
 | D23 | Max's "R2 on test tracks" = 1 - SSE/SST in log1p counts per validation target at 25 bp, mean over targets; validation stands in for test until a blind pass exists. | planner default | agent | | in force |
 | D24 | 256-region prediction stays on CPU as in the references (no GPU slices). | planner default | agent | | in force |
 | D25 | Run outputs live in cruxvault/INSTRUCTIONS/t370_recipe/ (analysis/, results/, run_state/, recipe.md), never in the protected miniCANDI_closeout/ folder. | longrun guard rule | agent | | in force |
