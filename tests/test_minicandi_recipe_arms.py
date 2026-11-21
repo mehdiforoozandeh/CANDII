@@ -54,7 +54,14 @@ PINNED = {
                 "ctl_holdout_separate": {"control_holdout_cells": RA.CONTROL_HOLDOUT,
                                          "control_branch": "separate"}},
 }
-PINNED_MODELS = {"skip": (4,), "placement": (2, 3, 4), "nocov": (2, 3, 4), "cac": (2, 3, 4),
+_HV = {"train_halves": "pairs"}
+#: decision D35: the screen winner halves plus one U-Net switch each, U-Net only, no stage
+PINNED["combo"] = {
+    "halves_mix_avg": {**_HV, "average_input": True, "average_h5": M.AVERAGE_H5},
+    "halves_mix_pearson": {**_HV, "count_transform": "pearson"},
+    "halves_mix_fixdepth": {**_HV, "input_depth": "fixed"},
+    "halves_headskip_film": {**_HV, "head_skip": "film"}}
+PINNED_MODELS = {"combo": (4,), "skip": (4,), "placement": (2, 3, 4), "nocov": (2, 3, 4), "cac": (2, 3, 4),
                  "probe": (4,), "halves": (2, 3, 4), "control": (2, 3, 4)}
 #: the mix arms of the plan, per model
 PINNED_MIX = {2: {"mix_svonly"}, 3: {"mix_concat", "mix_fixdepth", "mix_imp4", "mix_crps",
@@ -105,7 +112,7 @@ def test_stages():
 
 def test_train_time_and_run_names():
     long = {a for a in RA.ARMS if RA.train_time(a) == "08:00:00"}
-    assert long == {"mix_avg", "cac_cnn", "cac_cnn_corefilm_off"}
+    assert long == {"mix_avg", "cac_cnn", "cac_cnn_corefilm_off", "halves_mix_avg"}
     assert all(RA.train_time(a) == "03:00:00" for a in set(RA.ARMS) - long)
     for arm, x in RA.ARMS.items():
         for r in x["models"]:

@@ -23,7 +23,7 @@
 #   foreign   FOREIGN_COVARIATES=$FOREIGN into p16_foreign_$FOREIGN (screen options).
 # Every call to slurm/minicandi/submit_arms.sh uses JOB_PREFIX="" (job name = run dir name +
 # _s<seed>), runs root $O/runs_rcp, tables $O/tables/eic_v1_2, the ONION_EXCLUDE list of
-# configs/base_on_version.sh, and TRAIN_TIME 03:00:00 (08:00:00 with the average input or a CNN
+# configs/base_on_version.sh, and TRAIN_TIME (TRAIN_TIME_OVERRIDE wins) 03:00:00 (08:00:00 with the average input or a CNN
 # correction layer; recipe_arms.py list gives it). A run name that does not start with rcp_ is
 # refused (exit 2). submit_arms.sh is idempotent (SCORED, DONE and live jobs are skipped) and
 # appends to $O/runs_rcp/SUBMITTED.tsv under flock.
@@ -109,7 +109,7 @@ while IFS=$'\t' read -r r arm run cfg tt; do
     [ "$DRY_RUN" = 1 ] || continue
   fi
   echo "## $run ($arm, rung $r) -> $SD"
-  TRAIN_TIME=$tt bash "$SUBMIT" "$K" "$T" "$EV" "$RUNS" "$r" "$run=$c" < /dev/null 2>&1 | { grep -v "^$" || true; } | tee -a "$OUTF"
+  TRAIN_TIME=${TRAIN_TIME_OVERRIDE:-$tt} bash "$SUBMIT" "$K" "$T" "$EV" "$RUNS" "$r" "$run=$c" < /dev/null 2>&1 | { grep -v "^$" || true; } | tee -a "$OUTF"
   rc=${PIPESTATUS[0]}
   if [ "$rc" != 0 ]; then
     n_fail=$((n_fail + 1)); echo "FAILED submit_arms.sh exit $rc: $run"
