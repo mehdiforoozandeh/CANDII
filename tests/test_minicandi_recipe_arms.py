@@ -65,10 +65,14 @@ PINNED["combo"] = {
     "halves_mix_avg_pearson": {**_HV, "average_input": True, "average_h5": M.AVERAGE_H5,
                                "count_transform": "pearson"}}   # PI 2026-11-22: full combination
 _REC = {**_HV, "count_transform": "pearson"}
+_CTL = {"control_holdout_cells": RA.CONTROL_HOLDOUT}
+PINNED["reccontrol"] = {"rec_ctlw4": {**_REC, "control_loss_weight": 4.0},   # gate G5
+                        "rec_ctl_holdout": {**_REC, **_CTL},
+                        "rec_ctl_holdout_w4": {**_REC, **_CTL, "control_loss_weight": 4.0}}
 PINNED["scale"] = {"scale_p2x": {**_REC, "param_budget": 2.0e6},   # D42
                    "scale_p4x": {**_REC, "param_budget": 4.0e6},
                    "scale_w2x": {**_REC, "windows_seen": 160000}}
-PINNED_MODELS = {"combo": (4,), "scale": (4,), "skip": (4,), "placement": (2, 3, 4), "nocov": (2, 3, 4), "cac": (2, 3, 4),
+PINNED_MODELS = {"combo": (4,), "scale": (4,), "reccontrol": (4,), "skip": (4,), "placement": (2, 3, 4), "nocov": (2, 3, 4), "cac": (2, 3, 4),
                  "probe": (4,), "halves": (2, 3, 4), "control": (2, 3, 4)}
 #: the mix arms of the plan, per model
 PINNED_MIX = {2: {"mix_svonly"}, 3: {"mix_concat", "mix_fixdepth", "mix_imp4", "mix_crps",

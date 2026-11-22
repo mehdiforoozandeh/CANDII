@@ -47,3 +47,7 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-22T19:55Z moved from DECISIONS (history): | D38 | After the Fir fault (2026-11-21 23:25-23:56 UTC, 251 jobs killed at start), resubmit everything on kit RCP5 with a 6 h training limit (8 h for CNN and average arms); RCP5 supersedes RCP4; Average entry runs with the KIT=RCP2 export workaround. | agent, 2026-11-22 01:25 UTC | agent | | in force |
 - 2026-11-22T19:55Z moved from DECISIONS (history): | D34 | No blind-row build and no blind pass this run. | PI chat 2026-11-21: "iii) no" | PI | confirms D26 | in force |
 - 2026-11-22T19:55Z After talk (PI): submitted D44 full combo, D45 scaling (RCP7), D46 headskip_off p256, D48 control_eval x27; D47 ensemble builder spawned; watch byejoej5t.
+- 2026-11-22T20:18Z glossary: reply sent with unregistered terms: crps_depth, flagged
+- 2026-11-22T20:25Z glossary: reply sent with unregistered terms: flagged, predictor's
+- 2026-11-22T20:33Z glossary: reply sent with unregistered terms: flagged
+- 2026-11-22T21:01Z G5 read written (results/control/control_read.md): works on U-Net (held-out skill 0.131, signal 0.948 vs avg 0.932); weight 4 adopted by rule (conv models), no U-Net gain. D48 premise wrong: 34 of 36 control evals existed; my jobs filled gaps.
