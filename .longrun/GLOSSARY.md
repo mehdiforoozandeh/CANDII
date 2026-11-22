@@ -163,3 +163,6 @@ Every term and metric in use. A new entry lands before its first use in anything
 | PCR | polymerase chain reaction; amplification that copies DNA fragments | agent; proposed | 2026-11-22 six-metric proposal |
 | stratum | one subgroup of bins, e.g. by assay or count level | agent; proposed | 2026-11-22 six-metric proposal |
 | testbed | small fixed training-and-scoring setup for comparing miniCANDI arms | agent; proposed | 2026-11-22 six-metric proposal |
+| −log10 p | negative base-10 logarithm of a p-value; MACS2 signal unit | field; proposed | 2026-11-22 EIC-entry kickoff |
+| MOESM4 | EIC paper's corrected leaderboard (Additional file 4) | field; proposed | 2026-11-22 EIC-entry kickoff |
+| Zenodo | public research-data archive hosting Jacob Schreiber's corrected tracks | field; proposed | 2026-11-22 EIC-entry kickoff |
