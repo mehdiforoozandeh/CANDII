@@ -108,3 +108,8 @@ Every term and metric in use. A new entry lands before its first use in anything
 | RCP6 | code snapshot id pushed to Fir (agent-facing) | agent; proposed | none |
 | t370 | crux task id of this recipe run (agent-facing) | agent; proposed | none |
 | worktree | separate checkout of one git branch in its own folder | agent; proposed | none |
+| denoisers | models that remove noise from an observed signal | agent; proposed | R3 |
+| dispersion | NB spread parameter: how far counts vary around the mean | agent; proposed | R2 |
+| dropout | randomly zeroing a component during training | agent; proposed | R3 |
+| post hoc | applied after training, with no retraining | agent; proposed | R2 |
+| shortcut | easy solution that lowers loss without learning the task | agent; proposed | R3 |
