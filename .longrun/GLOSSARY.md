@@ -127,3 +127,9 @@ Every term and metric in use. A new entry lands before its first use in anything
 | schematics | simplified labelled diagrams of a design | agent; proposed | none |
 | enhancer | DNA region that raises a distant gene's transcription | genomics | proposed | 2026-11-22 EIC slide |
 | MSE | mean squared error: average squared prediction difference | statistics | proposed | 2026-11-22 EIC slide |
+| clipped | values beyond a bound are set to that bound | agent; proposed | 2026-11-22 Pearson residual |
+| deviations | distances of observed values from their expected values | agent; proposed | 2026-11-22 Pearson residual |
+| emptied | all stored files removed after use | agent; proposed | 2026-11-22 prediction store |
+| G5 | pre-set pass rule for held-out control prediction (plan C21) | agent; proposed | 2026-11-22 |
+| ledger | GOALS.md table: one row per PI requirement | longrun skill; proposed | 2026-11-22 |
+| P0 | top priority tier: the run fails without it | longrun skill; proposed | 2026-11-22 |
