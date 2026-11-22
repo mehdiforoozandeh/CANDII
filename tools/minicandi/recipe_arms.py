@@ -97,6 +97,15 @@ def _arms() -> dict[str, dict]:
     hv = dict(a["halves"]["keys"])
     for other in ("mix_avg", "mix_pearson", "mix_fixdepth", "headskip_film", "headskip_off"):
         add(f"halves_{other}", "combo", (4,), {**hv, **a[other]["keys"]})
+    # Full combination (PI 2026-11-22, after the talk): pairs + both winning inputs.
+    add("halves_mix_avg_pearson", "combo", (4,),
+        {**hv, **a["mix_avg"]["keys"], **a["mix_pearson"]["keys"]})
+    # Family scale (decision D42): the 256-region recipe (pairs + Pearson-residual input, D43) at
+    # 2x and 4x parameters and at 2x training windows. In no stage: runs with STAGE=arms.
+    rec = {**hv, **a["mix_pearson"]["keys"]}
+    add("scale_p2x", "scale", (4,), {**rec, "param_budget": 2.0e6})
+    add("scale_p4x", "scale", (4,), {**rec, "param_budget": 4.0e6})
+    add("scale_w2x", "scale", (4,), {**rec, "windows_seen": 160000})
     return a
 
 
@@ -133,7 +142,13 @@ def config_path(rung: int, arm: str) -> Path:
     return OUT / ARMS[arm]["family"] / f"rung{rung}" / f"{arm}.json"
 
 
+#: training time limits of family scale (U-Net base runs took up to 2.6 h at 1e6 params, 80k windows)
+SCALE_TIME = {"scale_p2x": "08:00:00", "scale_p4x": "16:00:00", "scale_w2x": "08:00:00"}
+
+
 def train_time(arm: str) -> str:
+    if arm in SCALE_TIME:
+        return SCALE_TIME[arm]
     k = ARMS[arm]["keys"]
     long = bool(k.get("average_input")) or "cnn" in [k.get(c) for c in CAC_KEYS]
     return TRAIN_TIME_LONG if long else TRAIN_TIME

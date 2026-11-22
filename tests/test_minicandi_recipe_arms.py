@@ -61,8 +61,14 @@ PINNED["combo"] = {
     "halves_mix_pearson": {**_HV, "count_transform": "pearson"},
     "halves_mix_fixdepth": {**_HV, "input_depth": "fixed"},
     "halves_headskip_film": {**_HV, "head_skip": "film"},
-    "halves_headskip_off": {**_HV, "head_skip": "off"}}   # D41: the copy-path test
-PINNED_MODELS = {"combo": (4,), "skip": (4,), "placement": (2, 3, 4), "nocov": (2, 3, 4), "cac": (2, 3, 4),
+    "halves_headskip_off": {**_HV, "head_skip": "off"},   # D41: the copy-path test
+    "halves_mix_avg_pearson": {**_HV, "average_input": True, "average_h5": M.AVERAGE_H5,
+                               "count_transform": "pearson"}}   # PI 2026-11-22: full combination
+_REC = {**_HV, "count_transform": "pearson"}
+PINNED["scale"] = {"scale_p2x": {**_REC, "param_budget": 2.0e6},   # D42
+                   "scale_p4x": {**_REC, "param_budget": 4.0e6},
+                   "scale_w2x": {**_REC, "windows_seen": 160000}}
+PINNED_MODELS = {"combo": (4,), "scale": (4,), "skip": (4,), "placement": (2, 3, 4), "nocov": (2, 3, 4), "cac": (2, 3, 4),
                  "probe": (4,), "halves": (2, 3, 4), "control": (2, 3, 4)}
 #: the mix arms of the plan, per model
 PINNED_MIX = {2: {"mix_svonly"}, 3: {"mix_concat", "mix_fixdepth", "mix_imp4", "mix_crps",
@@ -113,8 +119,10 @@ def test_stages():
 
 def test_train_time_and_run_names():
     long = {a for a in RA.ARMS if RA.train_time(a) == "08:00:00"}
-    assert long == {"mix_avg", "cac_cnn", "cac_cnn_corefilm_off", "halves_mix_avg"}
-    assert all(RA.train_time(a) == "03:00:00" for a in set(RA.ARMS) - long)
+    assert long == {"mix_avg", "cac_cnn", "cac_cnn_corefilm_off", "halves_mix_avg",
+                    "halves_mix_avg_pearson", "scale_p2x", "scale_w2x"}
+    assert RA.train_time("scale_p4x") == "16:00:00"   # D42
+    assert all(RA.train_time(a) == "03:00:00" for a in set(RA.ARMS) - long - {"scale_p4x"})
     for arm, x in RA.ARMS.items():
         for r in x["models"]:
             assert RA.run_name(r, arm) == f"rcp_{arm}_{RA.MODELS[r]}"
