@@ -49,3 +49,15 @@ Every term and metric in use. A new entry lands before its first use in anything
 | caveats | limits on how a result may be read | agent; proposed | D39 |
 | inference | running a trained model to make predictions | agent; proposed | R9 |
 | parentheses | the bracket marks ( ) | agent; proposed | none |
+| pr1 | first pseudoreplicate: random half of one experiment's reads | agent (ENCODE convention); proposed | D29 |
+| pr2 | second pseudoreplicate: the other, disjoint half of the reads | agent (ENCODE convention); proposed | D29 |
+| antibody | reagent that pulls down the ChIP target protein | agent; proposed | D5 |
+| crop36 | view with reads trimmed to 36 bp | agent (view name in tables); proposed | D3 |
+| decoded | turned from features into output values | agent; proposed | R2 |
+| dedup | removal of PCR-duplicate reads | agent; proposed | D5 |
+| downsample | reduce resolution by pooling neighbouring bins | agent; proposed | R3 |
+| upsamples | raises resolution back toward 25 bp bins | agent; proposed | R3 |
+| embedding | learned vector standing for a category or input | agent; proposed | R3 |
+| log2 | base-2 logarithm | agent; proposed | none |
+| MAPQ | read mapping-quality score; threshold filters ambiguous alignments | agent; proposed | D5 |
+| MLP | small stack of fully connected layers | agent; proposed | R3 |
