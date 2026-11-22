@@ -93,7 +93,7 @@ Root: [[candii]]
     - ○ `q71` [Q] [[q71_does_the_architecture_order_at_equal_tra|**Does the architecture order at equal training windows hold when every architecture gets the same training compute (2.4e15 FLOPs)?**]] — *open*
   - ◐ `q48` [Q] [[q48_which_minicandi_design_choices_move_impu|**Which miniCANDI design choices move imputation, correction or calibration beyond the seed range on the conv autoencoder, conv + attention and the U-Net at about 1.0 M parameters?**]] — *leaning* · moderate
     - ◐ `q49` [Q] [[q49_does_the_chip_seq_control_help_minicandi|**Does the ChIP-seq control help miniCANDI as an input assay and as a predicted output?**]] — *leaning* · weak
-      - ○ `q76` [Q] [[q76_can_minicandi_predict_the_chip_seq_contr|**Can miniCANDI predict the ChIP-seq control well enough to stand in for an observed control in the signal p-value and fold change of a target with no control?**]] — *open*
+      - ◐ `q76` [Q] [[q76_can_minicandi_predict_the_chip_seq_contr|**Can miniCANDI predict the ChIP-seq control well enough to stand in for an observed control in the signal p-value and fold change of a target with no control?**]] — *leaning* · moderate
     - ◐ `q50` [Q] [[q50_does_the_leave_one_out_average_of_the_tr|**Does the leave-one-out average of the training cell types, given as an input, help miniCANDI?**]] — *leaning* · moderate
       - ◐ `h43` [H] [[h43_on_all_256_regions_the_leave_one_out_ave|On all 256 regions, the leave-one-out average input keeps its place in the U-Net mix-and-match pool: better beyond the seed range on one goal term and worse beyond on none]] — *leaning* · moderate · supports
     - ◐ `q51` [Q] [[q51_does_two_step_correction_through_a_base_|**Does two-step correction through a base covariate set help miniCANDI, with native or fixed base depth?**]] — *leaning* · moderate
@@ -131,7 +131,7 @@ Root: [[candii]]
 
 ## Dashboard
 
-- **Questions** (76): open 25 · leaning 41 · settled 10 · parked 0
+- **Questions** (76): open 24 · leaning 42 · settled 10 · parked 0
 - **Hypotheses** (46): open 14 · leaning 19 · settled 7 · parked 6
-- **Confidence**: weak 22 · moderate 38 · strong 17
-- **Findings**: 139
+- **Confidence**: weak 22 · moderate 39 · strong 17
+- **Findings**: 140
