@@ -6,7 +6,7 @@
 #
 #   sbatch --output=<logs>/%x_%j.out [resources] $KIT/slurm/onion_eval/ensemble.sh <kit_dir> \
 #       fit|combine [ensemble_store.py args]
-# Submitter: tools/minicandi/configs/recipe/submit_ensemble.sh. DRY_RUN=1 prints the command.
+# Submitter: slurm/onion_eval/submit_ensemble.sh. DRY_RUN=1 prints the command.
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=onion_ensemble
 #SBATCH --time=02:00:00

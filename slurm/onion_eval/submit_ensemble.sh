@@ -40,8 +40,11 @@ case $SUBT in
   p256) EV=$EV256; B=$O/eval/$V/baselines; NSH=8; SD=p256_sv ;;
   *) echo "SUB must be p16 or p256" >&2; exit 2 ;;
 esac
-PRED_TIME="${PRED_TIME:-06:00:00}"; FIT_TIME="${FIT_TIME:-03:00:00}"
-COMB_TIME="${COMB_TIME:-02:00:00}"; COMB_MEM="${COMB_MEM:-8000}"
+# measured on Fir 2026-11-22 (rcp_halves_mix_pearson_unet, p16): predict shard 19-25 min at 8 CPUs,
+# 32.8 GB peak; fit 11.4 min at 4 CPUs; combine of one member 3.1 min, 8.2 GB peak
+P256=0; [ "$SUBT" = p256 ] && P256=1
+PRED_TIME="${PRED_TIME:-$([ $P256 = 1 ] && echo 04:00:00 || echo 01:00:00)}"; FIT_TIME="${FIT_TIME:-00:45:00}"
+COMB_TIME="${COMB_TIME:-$([ $P256 = 1 ] && echo 03:00:00 || echo 00:45:00)}"; COMB_MEM="${COMB_MEM:-16000}"
 MET_TIME="${MET_TIME:-$([ "$SUBT" = p256 ] && echo 06:00:00 || echo 03:00:00)}"
 for p in "$K/slurm/onion_eval/predict.sh" "$K/slurm/onion_eval/score.sh" "$K/slurm/onion_eval/ensemble.sh" \
          "$K/tools/onion_eval/ensemble_store.py" "$EV" "$EV16" "$EV256" "$B"; do
@@ -133,7 +136,7 @@ for RUN in $RUNS; do
     if [ -f "$CS/COMBINED.json" ]; then CID=""; echo "note $RUN $v: $CS combined"
     else
       CID="$(sub "combine_${RUN}_$v" "${COMMON[@]}" "--job-name=ens_${RUN}_${v}_comb" "--time=$COMB_TIME" \
-          --cpus-per-task=2 "--mem=${COMB_MEM}M" "--output=$SO/combine_%j.out" $(dep "$W") --export=ALL \
+          --cpus-per-task=4 "--mem=${COMB_MEM}M" "--output=$SO/combine_%j.out" $(dep "$W") --export=ALL \
           "$K/slurm/onion_eval/ensemble.sh" "$K" combine --members "${MEM[@]}" --out "$CS" \
           ${FA[@]+"${FA[@]}"} --record "$SO/ENSEMBLE.json")" || exit 1
       echo "$CID $RUN $v combine -> $CS"; log_tsv "$RUN" combine "$CID" "$v $CS"
