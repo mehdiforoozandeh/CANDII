@@ -3,26 +3,27 @@
 Rewritten, never appended. Cap: 5 KB.
 
 ## Goal now
-Find one miniCANDI recipe that Pareto-dominates the three base models on imputation, correction and calibration on eic_v1_2 (D1); priority 2 is ChIP-control prediction (D18). Task t370, branch exp/t370-minicandi-recipe (PR 63), worktree .claude/worktrees/recipe.
-
-## Horizon
-Deck due 10:30 Vancouver time 2026-11-22 (PI, 05:26 local). The laptop clock (`date -u`) reads 12:26 at 05:26 local, so the deadline is laptop-UTC 17:30. Talk at 11:00 local. Budget checkpoint 6,000 CPU-h (D20).
+Close the session with one trusted miniCANDI architecture (PI 2026-11-22, after the talk): the recipe must Pareto-dominate the three base models on imputation, correction and calibration on eic_v1_2 (D1); priority 2 is ChIP-control prediction (D18). Task t370, branch exp/t370-minicandi-recipe (PR 63), worktree .claude/worktrees/recipe.
 
 ## Where the recipe stands
-- 256 regions (D43, final): recipe = halves + Pearson-residual input U-Net (PASS, 3 seeds; imp 0.445, cor 0.774, cal 0.625). Runner-up halves + average-signal input (PASS). Halves U-Net NEAR.
-- D41 done (16 regions, 3 seeds): pairs + head skip off: copy gain 0.013 vs 0.205; imp 0.4295 vs 0.4263; cor 0.6985 vs 0.7535 (pairs range 0.058); NEAR. Not confirmed at 256 regions.
-- EIC validation: base U-Net beats Average on 7 of 9 mean measures; loses gwcorr and mseenh (data/table_unet_vs_average.tsv).
-- Head skip alone carries the copy: copy gain U-Net 0.67, head skip off 0.06, halves 0.20 (data/copy_gain_p16_sv.tsv in the deck folder).
+- 256 regions (D43, final so far): pairs + Pearson-residual input U-Net, PASS, 3 seeds (imp 0.445, cor 0.774, cal 0.625). Runner-up pairs + average input (PASS).
+- Pairs + head skip off (D41, 16 regions): copy gain 0.013 vs 0.205; correction 0.699 vs 0.754, inside the pairs range 0.058; NEAR.
+- Talk done 2026-11-22. Deck https://claude.ai/artifact/Jhi5EjXAF5d1gRoTktaU97 (v3).
 
-## Deck
-cruxvault/presentations/t370-minicandi-recipe/ (prezit paper arc, 18 slides). Artifact https://claude.ai/artifact/Jhi5EjXAF5d1gRoTktaU97. Verify and lint green. Refresh: ./refresh_data.sh; ./assemble.sh; python3 build_deck.py; crux deck --verify/--lint (from cruxvault/); republish the same file path.
-
-## In flight (Fir)
-- Avocado 5022624 pending; misses the deadline.
+## In flight (Fir, kit RCP7)
+- D44 full combo halves_mix_avg_pearson: train 5264674/80/87 + p16 scoring.
+- D45 scaling: rcp_scale_p2x/p4x/w2x_unet, 3 seeds, train 5264693-5264764 + p16.
+- D46 p256 confirm of rcp_halves_headskip_off_unet, 3 seeds (342 CPU-h projected).
+- D48 control_eval on 27 ctl_holdout run-seeds -> runs_rcp/control_eval/<run>/seed<s>/; ids in runs_rcp/control_eval/SUBMITTED.tsv.
+- D47 ensemble + recalibration: builder agent on chunk/t370-ens (worktree .orchestrate-wt/CANDII/t370-ens); slip pending.
+- Avocado 5022624 still pending.
+- Laptop watch byejoej5t (10 h): exits when the combo p16 or all 27 control evals land.
 
 ## Next
-1. On each watch result: refresh the deck, verify, lint, republish; D43 is final.
-2. After the talk: D42 scaling test; ensemble + recalibration question to the PI.
+1. When p16 of D44/D45 lands: pareto_select; submit p256 confirm for D44 and any scaling arm that PASSes.
+2. When control_eval lands: control_eval.py summary, gate G5 (plan C21) -> results/control_read.md.
+3. Review the ensemble slip; read its scores against single seeds.
+4. Final pick of the architecture (new decision); update GOALS R1-R4, R8; refresh the deck.
 
 ## Open asks to the PI
-(i) Ensemble + NB dispersion recalibration from existing predictions (asked 2026-11-22, unanswered; not started).
+None.
