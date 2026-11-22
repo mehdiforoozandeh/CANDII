@@ -170,3 +170,5 @@ Every term and metric in use. A new entry lands before its first use in anything
 | b735 | fragment of a linked session id (agent-facing) | app; proposed | 2026-11-22 |
 | baf | fragment of a linked session id (agent-facing) | app; proposed | 2026-11-22 |
 | prefix | fixed text at the start of a name | agent; proposed | 2026-11-22 job names |
+| genomic | of the DNA sequence and its positions | agent; proposed | 2026-11-22 calibration regions |
+| reproducible | can be rebuilt exactly from saved inputs | agent; proposed | 2026-11-22 prediction stores |
