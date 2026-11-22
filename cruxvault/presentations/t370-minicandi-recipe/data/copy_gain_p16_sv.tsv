@@ -32,5 +32,6 @@ rcp_halves_mix_pearson_unet	p16_sv	seed2	0.17517046391817537
 rcp_halves_headskip_film_unet	p16_sv	seed0	0.23463530574184496
 rcp_halves_headskip_film_unet	p16_sv	seed1	0.23751817271180767
 rcp_halves_headskip_film_unet	p16_sv	seed2	0.1925352694903255
+rcp_halves_headskip_off_unet	p16_sv	seed0	0.016058697389247565
 rcp_halves_headskip_off_unet	p16_sv	seed1	0.0110923718617958
 rcp_halves_headskip_off_unet	p16_sv	seed2	0.011937866472496398

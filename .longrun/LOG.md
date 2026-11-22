@@ -41,3 +41,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-22T12:19Z glossary: reply sent with unregistered terms: glossary
 - 2026-11-22T12:29Z 256-region selection: PASS halves+mix_pearson (n=2, score -0.158), halves+mix_avg (n=3, -0.243); halves NEAR. D43.
 - 2026-11-22T15:28Z D43 final: Pearson seed 0 scored at 256 regions; recipe = halves + Pearson-residual input U-Net (PASS, score -0.132, 3 seeds). EIC table landed: base U-Net beats Average on 7/9 means. Deck rebuilt (slides 11, 14), verify+lint green, republished v2.
+- 2026-11-22T16:21Z D41 result (p16, 3 seeds): halves_headskip_off copy gain 0.013 (pairs 0.205), imp 0.4295 vs 0.4263, cor 0.6985 vs 0.7535 (inside pairs range 0.058), NEAR. Deck slides 12, 15, 17 updated; republished v3.

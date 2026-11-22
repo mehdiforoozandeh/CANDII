@@ -157,6 +157,11 @@ function scatter(o){
     s+=`<text x="${X(v.m)+6}" y="${y+20}" class="cap">${v.m.toFixed(2)} (${v.r.toFixed(2)})${v.n<3?` n=${v.n}`:''}</text>`;});
   s+=`<text x="${L}" y="${H-10}" class="cap">mean (seed range); 0 = no copying</text>`;
   put('figCopy', s+`</svg>`);
+  const hp=S.rcp_halves_unet&&S.rcp_halves_unet.p16, ho=S.rcp_halves_headskip_off_unet&&S.rcp_halves_headskip_off_unet.p16;
+  if(ho&&cp.rcp_halves_headskip_off_unet){
+    put('tCopyH', `With pairs, removing the head skip ends the copy (${cp.rcp_halves_headskip_off_unet.m.toFixed(2)}) and keeps imputation; correction falls, inside the pairs model's seed range`);
+    put('tCopyLi', `<li>Pairs, head skip removed vs pairs: copy gain ${cp.rcp_halves_headskip_off_unet.m.toFixed(3)} vs ${cp.rcp_halves_unet.m.toFixed(3)}; imputation ${f3(ho.imp.m)} vs ${f3(hp.imp.m)}; correction ${f3(ho.cor.m)} vs ${f3(hp.cor.m)} (pairs seed range ${f3(hp.cor.r)}), on 16 regions.</li>`);
+  } else { put('tCopyH','The head skip carries the copy; pairs cut it, but not to the conv models\' level'); put('tCopyLi',''); }
   const sk=DATA.skip;
   put('figSkip', scatter({title:'(b) Which skips carry the copy, eic_v1', sub:'correction on 16 regions; bars = seed range',
     x0:0.36,x1:0.46,y0:0.45,y1:0.8,xt:[0.36,0.38,0.40,0.42,0.44,0.46],yt:[0.5,0.6,0.7,0.8],xl:'imputation',yl:'correction',W:640,H:520,

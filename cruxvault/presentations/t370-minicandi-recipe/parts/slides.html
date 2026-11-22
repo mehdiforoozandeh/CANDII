@@ -187,17 +187,18 @@
 
   <!-- 12 · RESULTS · (d) the copy path
        job      one claim, one figure as its evidence
-       claim    the head skip carries the copy; pairs cut it, but not to the conv models' level
+       claim    the head skip carries the copy; with pairs, removing it ends the copy at no clear cost
        source   data/copy_gain_p16_sv.tsv; data/eic_v1_arm_summary_p16_sv.tsv
        numbers  DATA.copy, DATA.skip
        cut      nothing -->
   <section class="slide">
     <div class="wrap">
       <div class="kicker"><span class="sec">Results</span>(d) where the U-Net copies</div>
-      <h2>The head skip carries the copy; pairs cut it, but not to the conv models' level</h2>
+      <h2 id="tCopyH"></h2>
       <div class="chartbox panels"><div class="fig" id="figCopy"></div><div class="fig" id="figSkip"></div></div>
+      <ul class="pts" id="tCopyLi"></ul>
       <p class="small">Copy gain = (CRPS on hidden bins − CRPS on visible bins) / CRPS on hidden bins, same-view reconstruction; near <span data-src="literal">0</span> means no copying. CRPS: a proper score of a predictive distribution, lower is better.</p>
-      <aside class="notes"><p>Panel a: the full U-Net has a copy gain far above the conv models. Removing the head skip alone brings it down to the conv models' level, so the head skip, not the level skips, carries the copy. Read-disjoint pairs cut it by most of the way, and the average-signal input cuts it further. Panel b is the earlier data version: when only DNA skips remain, correction rises and imputation falls. The open question is whether removing the head skip on top of the pairs keeps imputation; that run is training now.</p></aside>
+      <aside class="notes"><p>Panel a: the full U-Net has a copy gain far above the conv models. Removing the head skip alone brings it down to the conv models' level, so the head skip, not the level skips, carries the copy. Read-disjoint pairs cut it by most of the way, and the average-signal input cuts it further. Panel b is the earlier data version: when only DNA skips remain, correction rises and imputation falls. Removing the head skip on top of the pairs ended the copy and kept imputation. Correction fell, but by less than the pairs model's own seed range, and only on the <span data-src="literal">16</span>-region screen; it is not confirmed on <span data-src="literal">256</span> regions.</p></aside>
     </div>
   </section>
 
@@ -243,7 +244,7 @@
       <div class="cards">
         <div class="card" style="--c:var(--recipe)"><div class="rl">Ruled in</div><p>The U-Net's skips learned to copy because correction pairs shared reads. Read-disjoint pairs remove the reward for copying, and the U-Net keeps most of its imputation lead.</p></div>
         <div class="card" style="--c:var(--base)"><div class="rl">Ruled out</div><p>Fixing the trade-off by moving covariate conditioning, adding correction layers or conditioning the skips: none reached the correction floor. Only fixed input depth did, which needs every input thinned to one depth.</p></div>
-        <div class="card" style="--c:var(--addon)"><div class="rl">Limitations</div><p>One data version, three seeds per arm, one model size. The added inputs lower calibration and vary widely between seeds. The head skip still copies more than the conv models.</p></div>
+        <div class="card" style="--c:var(--addon)"><div class="rl">Limitations</div><p>One data version, three seeds per arm, one model size. The added inputs lower calibration and vary widely between seeds. Removing the head skip with pairs ends the copy; its correction is screened on <span data-src="literal">16</span> regions only.</p></div>
       </div>
       <aside class="notes"><p>The discussion adds no number of its own. Each card restates a result slide.</p></aside>
     </div>
@@ -277,11 +278,11 @@
       <div class="kicker"><span class="sec">Discussion</span>options for the next phase</div>
       <h2>Options for the next phase</h2>
       <div class="cards" style="grid-template-columns:repeat(3,1fr)">
-        <div class="card"><div class="rl">Option A · close the copy path</div><p>Pairs with the head skip removed (training now), a blind-spot head skip (output at a bin never sees that bin's input), or skip dropout. Cheap; tells us whether the remaining copy costs correction.</p></div>
+        <div class="card"><div class="rl">Option A · close the copy path</div><p>Pairs with the head skip removed ended the copy with no clear loss (results d). Next: confirm it on <span data-src="literal">256</span> regions, then a blind-spot head skip (output at a bin never sees that bin's input) or skip dropout.</p></div>
         <div class="card"><div class="rl">Option B · calibration of the added inputs</div><p>Seed ensembling and post-training dispersion recalibration on held-out data. No training; tests whether the imputation gain of the added inputs can keep the pairs model's calibration.</p></div>
         <div class="card"><div class="rl">Option C · scale with pairs</div><p>Two and four times the parameters, twice the windows, with read-disjoint pairs. About a thousand CPU-hours; tells us whether scaling helps once copying is not rewarded.</p></div>
       </div>
-      <aside class="notes"><p>These are options, not recommendations. Option A's first run and option C are already approved and queued.</p></aside>
+      <aside class="notes"><p>These are options, not recommendations. Option A's first run is done; option C is approved and queued.</p></aside>
     </div>
   </section>
 
