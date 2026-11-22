@@ -161,6 +161,18 @@ def checks(depth_rows, cal_rows, cor_rows) -> dict:
     res["C2_worst_label"] = str(span.idxmax())
     res["C2_fail_labels"] = [str(i) for i in span.index[span > tol]]
     res["C2_pass"] = not res["C2_fail_labels"]
+    # C2 paired (added after the first small run; a smoke check, not the pre-registered C2): the
+    # floor is the realized deviance of the true rate on the same draw, which removes the sampling
+    # noise every mistake shares at one depth
+    tru = dr[dr.family == "truth"].set_index(["rep", "depth"]).D
+    F = tru.reindex(pd.MultiIndex.from_frame(dr[["rep", "depth"]])).values
+    dp = dr.assign(paired=(dr.D.values - F) / (1 - F))
+    gp = dp[dp.family != "truth"].groupby(["family", "label", "depth"]).paired.mean().unstack()
+    sp = gp.max(axis=1) - gp.min(axis=1)
+    tp = np.maximum(0.03, 0.2 * gp.abs().mean(axis=1))
+    res["C2_paired_worst_drift"] = float(sp.max())
+    res["C2_paired_fail_labels"] = [str(i) for i in sp.index[sp > tp]]
+    res["C2_paired_pass"] = not res["C2_paired_fail_labels"]
     gl = dr[dr.family != "truth"].groupby(["family", "label", "depth"]).log1p_mse_over_var.mean().unstack()
     res["contrast_log1p_worst_drift"] = float((gl.max(axis=1) - gl.min(axis=1)).max())
     m = dr.groupby(["depth", "family", "severity"]).D.mean()
