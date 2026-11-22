@@ -1,6 +1,6 @@
 # Decisions in force
 
-One row per decision. Superseded rows stay, with Status `superseded by <id>`. Cap: 10 KB.
+One row per decision. Superseded rows move to LOG.md at compaction. Cap: 10 KB.
 Provenance: PI, agent proposal approved, agent (code-level or supplementary only).
 
 | ID | Decision | Source (verbatim or file:line) | Provenance | Supersedes | Status |
@@ -17,8 +17,6 @@ Provenance: PI, agent proposal approved, agent (code-level or supplementary only
 | D10 | EIC comparison: validation vs retrained Avocado and the average during selection; one blind pass vs the 23 entrants at the end; signal p-value from the predicted NB, EIC scorer. | alacarte: "Validation + one blind" | PI | | in force |
 | D11 | Data version eic_v1_2. | alacarte | PI | closes t364 for this run | in force |
 | D12 | Mix-and-match switches fold into the screen as arms; minimum covariate set, QC input, cell embedding, resolution run after the recipe is chosen. | alacarte: "Fold mix-in, rest after" | PI | separate mix-and-match round (PI decision 8, 2026-11-17) | in force |
-| D13 | Compute cap 6,000 allocated CPU-h for the run. | alacarte | PI | | superseded by D20 |
-| D14 | Horizon 10 days from 2026-11-21; first measured screen result by 2026-11-24. | alacarte: "10 days, first in 3" | PI | | superseded by D31 |
 | D15 | Headline: the three Pareto terms decide; Max's three (R2 on test tracks, with-vs-without covariates gain, real-vs-wrong covariates gain) are reported beside them. | alacarte: "Pareto terms + Max panel" | PI | | in force |
 | D16 | Cluster: Fir first, Nibi failover; heavy compute never on the laptop. | global CLAUDE.md; memory heavy-compute-on-nibi | PI | | in force |
 | D17 | Review and merge of PR 63 into main are the PI's. | Max notes:17-18; project CLAUDE.md | PI | | in force |
@@ -31,7 +29,6 @@ Provenance: PI, agent proposal approved, agent (code-level or supplementary only
 | D24 | 256-region prediction stays on CPU as in the references (no GPU slices). | planner default | agent | | in force |
 | D25 | Run outputs live in cruxvault/INSTRUCTIONS/t370_recipe/ (analysis/, results/, run_state/, recipe.md), never in the protected miniCANDI_closeout/ folder. | longrun guard rule | agent | | in force |
 | D26 | Post-recipe items of D12 (minimum covariate set, QC input, cell embedding, resolution) are out of this run (D18 scope). Blind pass not run in this run unless the PI starts the blind-row build (t184). | D18; cold plan review | agent | narrows D12 | in force |
-| D27 | Date stop: on 2026-11-29 the recipe freezes on what is confirmed at 256 regions by then. | cold plan review | agent | | superseded by D31 |
 | D28 | Pre/post CAC layers use smaller widths of the testbed classes (embedding d_cat 2 / d_cov 16 / hidden 32; G hidden 32; FormD 16 channels) so every arm stays within 1.10 x the 1.0e6 parameter budget; one curve side 15,784 params, one CNN side 23,234. | C2 builder; keeps arms parameter-matched | agent | | in force |
 | D29 | Add arm "read-disjoint training pairs": training correction and same-view pairs read the source from the pr1 half and the target from the pr2 half (half depth in C and C', as in scoring), so source and target share no reads. All 3 models, 3 seeds, screened with the other arms; also combined with each winner. | Analyses C7, C8, C9 (2026-11-21): U-Net copies the input because training pairs share reads (copy gain 0.63-0.67 vs 0.03-0.09), while scoring uses disjoint halves; all 2,328 training rows have pr1/pr2 files (Fir). | agent proposal, under PI D18 ("every ablation needed is warranted") | | in force |
 | D30 | Gate G0 passed on terms and scoring cost; training cost was 2.4 x fact 9, so the screen budget is the projection x 1.50 (5,209 CPU-h). The screen runs on kit RCP2 (RCP1 + C15-C17 + C29) and was submitted before the rerun test verdict (4888524). | probe.md, 2026-11-21 | agent, under PI "keep working and try not to be blocked by me" | | in force |
@@ -45,3 +42,5 @@ Provenance: PI, agent proposal approved, agent (code-level or supplementary only
 | D38 | After the Fir fault (2026-11-21 23:25-23:56 UTC, 251 jobs killed at start), resubmit everything on kit RCP5 with a 6 h training limit (8 h for CNN and average arms); RCP5 supersedes RCP4; Average entry runs with the KIT=RCP2 export workaround. | agent, 2026-11-22 01:25 UTC | agent | | in force |
 | D39 | 256-region result: halves U-Net is eligible on all three floors but NEAR (correction diff 0.0549 < its own seed range 0.0707). The three combo arms that PASS at 16 regions (halves+mix_avg, halves+mix_pearson, halves+headskip_film) go to 256-region confirmation (72 jobs, 913 CPU-h projected). | agent, 2026-11-22 05:35 UTC; runs_rcp/_sel/pareto_0525_*.json | agent | | in force |
 | D40 | No arm for read-disjoint pairs + level skips conditioned on C and C'. | PI 2026-11-22 ~08:50 UTC: "no don't need to do that." | PI | | in force |
+| D41 | Train halves U-Net with the head skip off (arm halves_headskip_off, 3 seeds, p16 then p256): test whether the direct input-to-output skip still drives copying under read-disjoint pairs. | "Run it now (Recommended)" to the head-skip question, 2026-11-22 | PI | | in force |
+| D42 | Queue a scaling test of the recipe (read-disjoint pairs) at 2x and 4x parameters and 2x training windows, after the 2026-11-22 talk (~1,000-1,500 CPU-h). | "Queue after the talk (Recommended)", 2026-11-22 | PI | | in force |

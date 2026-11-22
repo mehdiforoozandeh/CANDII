@@ -24,3 +24,17 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-22T01:10Z Fir fault 23:25-23:56 UTC: every job starting then failed in 1 s (signal 53), 251 jobs incl. all RCP4 submissions and EIC jobs. Test job 5021994 ok at 01:20 UTC. Resubmitted all on RCP5 (~2,130 CPU-h projected); eic_val 5022609, avocado chain 5022622-27, average 5022628
 - 2026-11-22T02:41Z Failure watch ended 02:30 UTC: 117 COMPLETED, 0 FAILED, 1 NODE_FAIL (eicval 5022609_7); resubmitted index 7. Avocado bin array 5022623 done; train/predict/bigwig pending.
 - 2026-11-22T05:25Z 05:25 UTC Pareto: p16 PASS = halves_unet, halves_mix_avg, halves_mix_pearson (2 seeds), halves_headskip_film. p256: halves_unet eligible but NEAR (cor z 2.84, not beyond own range 0.0707); no p256 winner. Submitted p256 confirm for 3 combos (D39).
+- 2026-11-22T05:26Z glossary: reply sent with unregistered terms: glossary
+- 2026-11-22T08:06Z 08:10 UTC: combo p256 0/8 scored (mix_avg predicting, pearson and headskip_film in metrics); no failures since 21:30. EIC: Average entry scored (runs_rcp/eic_val/average/scores.tsv, 495 rows); U-Net eic_val 24/25 done (index 22 running 4h48); Avocado train 5022624 pending 6.7 h on Priority (full H100, 12 h) -> Avocado likely misses 18:30 deadline.
+- 2026-11-22T08:07Z glossary: reply sent with unregistered terms: glossary, nvidia
+- 2026-11-22T08:23Z glossary: reply sent with unregistered terms: glossary, pr1, pr2, pseudoreplicates
+- 2026-11-22T08:30Z glossary: reply sent with unregistered terms: glossary
+- 2026-11-22T08:33Z glossary: reply sent with unregistered terms: flagged, glossary
+- 2026-11-22T10:26Z glossary: reply sent with unregistered terms: gloss, glossary, pcr, pseudoreplicates, schematic, trimmed
+- 2026-11-22T11:49Z glossary: reply sent with unregistered terms: flagged, glossary
+- 2026-11-22T12:02Z glossary: reply sent with unregistered terms: glossary
+- 2026-11-22T12:04Z evolution figure (ladder eic_v1 + recipe path eic_v1_2) committed: cruxvault/INSTRUCTIONS/t370_recipe/evolution/evolution.png
+- 2026-11-22T12:04Z glossary: reply sent with unregistered terms: flagged, glossary
+- 2026-11-22T12:16Z DECISIONS compaction, superseded row moved here: | D13 | Compute cap 6,000 allocated CPU-h for the run. | alacarte | PI | | superseded by D20 |
+- 2026-11-22T12:16Z DECISIONS compaction, superseded row moved here: | D14 | Horizon 10 days from 2026-11-21; first measured screen result by 2026-11-24. | alacarte: "10 days, first in 3" | PI | | superseded by D31 |
+- 2026-11-22T12:16Z DECISIONS compaction, superseded row moved here: | D27 | Date stop: on 2026-11-29 the recipe freezes on what is confirmed at 256 regions by then. | cold plan review | agent | | superseded by D31 |

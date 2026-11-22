@@ -56,3 +56,4 @@ halves_mix_avg	combo	4	unet	rcp_halves_mix_avg_unet	tools/minicandi/configs/reci
 halves_mix_pearson	combo	4	unet	rcp_halves_mix_pearson_unet	tools/minicandi/configs/recipe/combo/rung4/halves_mix_pearson.json	{"count_transform":"pearson","train_halves":"pairs"}	03:00:00	
 halves_mix_fixdepth	combo	4	unet	rcp_halves_mix_fixdepth_unet	tools/minicandi/configs/recipe/combo/rung4/halves_mix_fixdepth.json	{"input_depth":"fixed","train_halves":"pairs"}	03:00:00	
 halves_headskip_film	combo	4	unet	rcp_halves_headskip_film_unet	tools/minicandi/configs/recipe/combo/rung4/halves_headskip_film.json	{"head_skip":"film","train_halves":"pairs"}	03:00:00	
+halves_headskip_off	combo	4	unet	rcp_halves_headskip_off_unet	tools/minicandi/configs/recipe/combo/rung4/halves_headskip_off.json	{"head_skip":"off","train_halves":"pairs"}	03:00:00	

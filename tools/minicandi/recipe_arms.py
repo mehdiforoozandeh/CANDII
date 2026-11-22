@@ -92,9 +92,10 @@ def _arms() -> dict[str, dict]:
             add(f"mix_{short}", "mix", models, dict(keys))
     add("probe_base", "probe", (4,), {})
     # Family combo (decision D35): the screen winner halves (U-Net) plus each U-Net switch that
-    # raised imputation or calibration in the screen. In no stage: runs with STAGE=arms.
+    # raised imputation or calibration in the screen, plus headskip_off (D41, the copy-path test).
+    # In no stage: runs with STAGE=arms.
     hv = dict(a["halves"]["keys"])
-    for other in ("mix_avg", "mix_pearson", "mix_fixdepth", "headskip_film"):
+    for other in ("mix_avg", "mix_pearson", "mix_fixdepth", "headskip_film", "headskip_off"):
         add(f"halves_{other}", "combo", (4,), {**hv, **a[other]["keys"]})
     return a
 

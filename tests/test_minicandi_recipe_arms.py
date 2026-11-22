@@ -60,7 +60,8 @@ PINNED["combo"] = {
     "halves_mix_avg": {**_HV, "average_input": True, "average_h5": M.AVERAGE_H5},
     "halves_mix_pearson": {**_HV, "count_transform": "pearson"},
     "halves_mix_fixdepth": {**_HV, "input_depth": "fixed"},
-    "halves_headskip_film": {**_HV, "head_skip": "film"}}
+    "halves_headskip_film": {**_HV, "head_skip": "film"},
+    "halves_headskip_off": {**_HV, "head_skip": "off"}}   # D41: the copy-path test
 PINNED_MODELS = {"combo": (4,), "skip": (4,), "placement": (2, 3, 4), "nocov": (2, 3, 4), "cac": (2, 3, 4),
                  "probe": (4,), "halves": (2, 3, 4), "control": (2, 3, 4)}
 #: the mix arms of the plan, per model
