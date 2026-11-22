@@ -3,18 +3,19 @@
 Rewritten, never appended. Cap: 5 KB.
 
 ## Goal now
-<one or two sentences>
+Find and test a fair count-to-p-value route that puts miniCANDI on the EIC board (q90, task t390). Exploratory branch implementation/t390-eic-pvalue-entry, draft PR 64, never merged.
 
 ## Horizon
-Time horizon: <date>. First measured result due: <date>.
+Time horizon: exploratory, open (PI away from 2026-11-22). First measured result due: 2026-11-23 (conversion floor on a few tracks with known p-values).
 
 ## In flight
-<job ids, agent names, what each produces, where its output lands>
+- Two read agents (Sonnet): (a) our store, miniCANDI outputs, our EIC scorer, our SE reprocess; (b) Max's sprint 04 scorer and truth, sprint 10 count route, fairness of tcfloor and AG2 recalibration.
 
 ## Next
-1.
-2.
-3.
+1. Merge both agents' facts into a route map: formula route, learned-map route, output-change route.
+2. First measured result: conversion floor (true counts -> p-values vs the actual p-value track) on a handful of tracks, with data already on the clusters.
+3. Plan with orchestrate; each chunk cites a ledger row.
 
 ## Open asks to the PI
-<none, or numbered items, each with a recommendation>
+1. Confirm D2 (fairness = only training/validation data in any fitted step). Recommended: yes.
+2. Tiers in GOALS.md are the agent's recommendation. Recommended: accept.
