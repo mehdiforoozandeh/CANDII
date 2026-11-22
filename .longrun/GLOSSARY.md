@@ -163,3 +163,5 @@ Every term and metric in use. A new entry lands before its first use in anything
 | PCR | polymerase chain reaction; amplification that copies DNA fragments | agent; proposed | 2026-11-22 six-metric proposal |
 | stratum | one subgroup of bins, e.g. by assay or count level | agent; proposed | 2026-11-22 six-metric proposal |
 | testbed | small fixed training-and-scoring setup for comparing miniCANDI arms | agent; proposed | 2026-11-22 six-metric proposal |
+| deployable | the version meant for real use, not an evaluation device | agent; proposed | 2026-11-22 control arms |
+| RCP8 | code snapshot id pushed to Fir (agent-facing) | agent; proposed | 2026-11-22 |
