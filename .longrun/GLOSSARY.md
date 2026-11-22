@@ -125,3 +125,5 @@ Every term and metric in use. A new entry lands before its first use in anything
 | imputes | predicts a missing track from the other inputs | agent; proposed | R2 |
 | schematic | simplified labelled diagram of a design | agent; proposed | none |
 | schematics | simplified labelled diagrams of a design | agent; proposed | none |
+| enhancer | DNA region that raises a distant gene's transcription | genomics | proposed | 2026-11-22 EIC slide |
+| MSE | mean squared error: average squared prediction difference | statistics | proposed | 2026-11-22 EIC slide |
