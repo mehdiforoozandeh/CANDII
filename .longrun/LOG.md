@@ -22,3 +22,5 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-21T22:12Z RCP5 pushed; eic_val 4945457, avocado chain to 4945495, average 4943718
 - 2026-11-21T22:12Z glossary: reply sent with unregistered terms: glossary
 - 2026-11-22T01:10Z Fir fault 23:25-23:56 UTC: every job starting then failed in 1 s (signal 53), 251 jobs incl. all RCP4 submissions and EIC jobs. Test job 5021994 ok at 01:20 UTC. Resubmitted all on RCP5 (~2,130 CPU-h projected); eic_val 5022609, avocado chain 5022622-27, average 5022628
+- 2026-11-22T02:41Z Failure watch ended 02:30 UTC: 117 COMPLETED, 0 FAILED, 1 NODE_FAIL (eicval 5022609_7); resubmitted index 7. Avocado bin array 5022623 done; train/predict/bigwig pending.
+- 2026-11-22T05:25Z 05:25 UTC Pareto: p16 PASS = halves_unet, halves_mix_avg, halves_mix_pearson (2 seeds), halves_headskip_film. p256: halves_unet eligible but NEAR (cor z 2.84, not beyond own range 0.0707); no p256 winner. Submitted p256 confirm for 3 combos (D39).

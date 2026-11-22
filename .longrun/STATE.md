@@ -8,15 +8,16 @@ Find one miniCANDI recipe that Pareto-dominates the three base models on imputat
 ## Horizon
 DEADLINE 2026-11-22 18:30 UTC (D31, PI: "within 24 hours"). Budget checkpoint 6,000 CPU-h (D20). Fir is the scoring cluster (eval sets live only there); Nibi may be used for training-only overflow (PI 2026-11-21).
 
-## In flight (Fir), at 2026-11-22 01:25 UTC
-- Fir fault 23:25-23:56 UTC killed 251 jobs at start (signal 53, many nodes). All resubmitted on kit RCP5 (fc4eb40a) at 01:25 UTC: p256 confirm (halves U-Net, mix_fixdepth U-Net, mix_svonly conv AE / conv+attn), combo arms x 3 seeds, unfinished s1a/s1b/s1c and control arms (6 h train limit except CNN/average 8 h). Ids in SUBMITTED.tsv.
-- Screen result (p16): Pareto winner halves U-Net (D35); runs_rcp/_sel/pareto_2130.json. Spend 4,954 CPU-h by 21:50 UTC.
-- EIC: eic_val array 5022609; Avocado chain 5022622-5022627 (score after 5022627); Average entry 5022628.
+## In flight (Fir), at 2026-11-22 05:40 UTC
+- Selection at 05:25 UTC (runs_rcp/_sel/pareto_0525_p16_sv.json, _p256_sv.json). 16 regions: PASS = halves U-Net, halves+mix_avg U-Net, halves+mix_pearson U-Net (2 seeds), halves+headskip_film U-Net. 256 regions: halves U-Net eligible on all three floors but NEAR (correction 0.7299 vs best base 0.6750; diff below its own seed range 0.0707); no winner yet.
+- 256-region confirmation of the three PASS combos submitted 05:35 UTC (72 jobs, 913 CPU-h projected; D39). Watch bj140el0j exits at 8 scored run-seeds or 7 h.
+- Still training: halves+mix_pearson seed 0, halves+mix_fixdepth seed 1, curve-CNN core-FiLM-off U-Net seed 2.
+- EIC: eic_val array 5022609 (index 7 node-failed, resubmitted as 5050354); Avocado train 5022624 pending (Priority), then 5022625-5022627, then score; Average entry 5022628 running.
 
 ## Next
-1. After 4945495: run eic_val_compare.py score for Avocado; score the U-Net validation predictions.
-2. When combos and p256 score: rerun pareto_select at p16 and p256; pick the recipe; two-step retest on it.
-3. Deck by 2026-11-22 18:30 UTC.
+1. When combo 256-region scores land: rerun pareto_select at 256 regions; pick the recipe (D1); record it; two-step retest on it if time allows.
+2. After 5022627 and 5022609: eic_val_compare.py score for Avocado, the U-Net and the Average entry.
+3. Deck by 2026-11-22 18:30 UTC; start the draft by 12:00 UTC with the 16-region and current 256-region results.
 
 ## Open asks to the PI
 None (Avocado yes, blind no, curve fix yes: D32-D34).
