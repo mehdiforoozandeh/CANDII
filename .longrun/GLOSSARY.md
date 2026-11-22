@@ -44,3 +44,8 @@ Every term and metric in use. A new entry lands before its first use in anything
 | coarser | at lower resolution, i.e. larger bins | agent; proposed | R3 |
 | widen | make a margin larger | agent; proposed | D1 |
 | computed | calculated | agent; proposed | R6 |
+| agnostic | independent of, not specific to | agent; proposed | D39 |
+| calibrated | predicted uncertainty matches observed error | agent; proposed | R2 |
+| caveats | limits on how a result may be read | agent; proposed | D39 |
+| inference | running a trained model to make predictions | agent; proposed | R9 |
+| parentheses | the bracket marks ( ) | agent; proposed | none |
