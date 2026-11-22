@@ -166,3 +166,5 @@ Every term and metric in use. A new entry lands before its first use in anything
 | −log10 p | negative base-10 logarithm of a p-value; MACS2 signal unit | field; proposed | 2026-11-22 EIC-entry kickoff |
 | MOESM4 | EIC paper's corrected leaderboard (Additional file 4) | field; proposed | 2026-11-22 EIC-entry kickoff |
 | Zenodo | public research-data archive hosting Jacob Schreiber's corrected tracks | field; proposed | 2026-11-22 EIC-entry kickoff |
+| MACS2 | peak caller whose Poisson model produces the signal p-value tracks | field; proposed | 2026-11-22 EIC-entry plan |
+| t184 | task: build miniCANDI's blind-experiment input rows (recipe run gate) | agent; proposed | 2026-11-22 EIC-entry plan |
