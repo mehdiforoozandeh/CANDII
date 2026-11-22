@@ -83,3 +83,9 @@ Every term and metric in use. A new entry lands before its first use in anything
 | vis | code name of the visible-bin flag: real count present | agent; proposed | R3 |
 | footer | small text line at the bottom of a figure | agent; proposed | R3 |
 | noisier | with a wider spread across seeds | agent; proposed | R3 |
+| convolutional | using sliding learned filters over neighbouring bins | agent; proposed | R3 |
+| eic_v1 | earlier data version of the EIC tables, before eic_v1_2 | agent; proposed | R3 |
+| measurable | large enough to detect above seed noise | agent; proposed | R3 |
+| axial attention | attention along one axis at a time: position, then track | agent; proposed | R3 |
+| Perceiver IO | attention model through a small set of learned latents | agent; proposed | R3 |
+| position average | baseline predicting each bin from other cell types' mean | agent; proposed | R3 |
