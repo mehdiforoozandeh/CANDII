@@ -38,3 +38,5 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-22T12:16Z DECISIONS compaction, superseded row moved here: | D13 | Compute cap 6,000 allocated CPU-h for the run. | alacarte | PI | | superseded by D20 |
 - 2026-11-22T12:16Z DECISIONS compaction, superseded row moved here: | D14 | Horizon 10 days from 2026-11-21; first measured screen result by 2026-11-24. | alacarte: "10 days, first in 3" | PI | | superseded by D31 |
 - 2026-11-22T12:16Z DECISIONS compaction, superseded row moved here: | D27 | Date stop: on 2026-11-29 the recipe freezes on what is confirmed at 256 regions by then. | cold plan review | agent | | superseded by D31 |
+- 2026-11-22T12:19Z glossary: reply sent with unregistered terms: glossary
+- 2026-11-22T12:29Z 256-region selection: PASS halves+mix_pearson (n=2, score -0.158), halves+mix_avg (n=3, -0.243); halves NEAR. D43.
