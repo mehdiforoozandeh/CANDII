@@ -74,6 +74,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t366` [admin] Onion: PI decision on the 14 code kits packed in onion_kit_archive on 2026-11-17 (restore some, or keep them packed)
 - `t367` [visualization] Onion: trace the typed numbers of the supervisor deck of 2026-11-18 to vault files
 - `t368` [implementation] Onion: pointwise MLP under the corrected composite: composite version 3, same-view pass, unscored seeds — refs [[q48_which_minicandi_design_choices_move_impu\|q48]], [[q39_do_the_context_rungs_2_to_6_convolution_\|q39]]
+- `t390` [implementation] find and test a fair count-to-p-value route that puts miniCANDI on the EIC entrant board (exploratory, never merged) — refs [[q90_can_a_count_space_model_like_minicandi_b\|q90]]
 
 ## Blocked
 
@@ -177,6 +178,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t362` [implementation] Onion: minimum useful covariate set on the model that mix-and-match selects: leave-one-field-out, groups, removal curve — refs [[q48_which_minicandi_design_choices_move_impu\|q48]] — *blocked*
 - `t368` [implementation] Onion: pointwise MLP under the corrected composite: composite version 3, same-view pass, unscored seeds — refs [[q48_which_minicandi_design_choices_move_impu\|q48]], [[q39_do_the_context_rungs_2_to_6_convolution_\|q39]] — *open*
 - `t369` [implementation] Scale miniCANDI from the settled design: choose the architecture and the data version, then scale data, context and model size — refs [[q48_which_minicandi_design_choices_move_impu\|q48]], [[q13_how_many_training_windows_and_how_much_d\|q13]] — *blocked*
+- `t390` [implementation] find and test a fair count-to-p-value route that puts miniCANDI on the EIC entrant board (exploratory, never merged) — refs [[q90_can_a_count_space_model_like_minicandi_b\|q90]] — *open*
 
 ### visualization
 

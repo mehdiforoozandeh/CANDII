@@ -1,0 +1,39 @@
+---
+id: q90
+type: question
+schema: 3
+title: Can a count-space model like miniCANDI be scored fairly on the EIC board of signal p-value entrants, through an exact count-to-p-value pipeline or a change of the model's output?
+parent: q6
+created: "2026-11-22T13:58:48"
+updated: "2026-11-22T13:58:48"
+---
+
+# q90 — Can a count-space model like miniCANDI be scored fairly on the EIC board of signal p-value entrants, through an exact count-to-p-value pipeline or a change of the model's output?
+
+Parent:: [[q6_how_closely_does_a_map_h_reproduce_the_l]]
+
+## ELI5
+
+_(one sentence a science undergraduate follows — the correct terms, any beyond that glossed in 10 words or fewer)_
+
+## TL;DR
+
+_(one paragraph: what this asks, and what would settle it)_
+
+## Question
+
+Can a count-space model like miniCANDI be scored fairly on the EIC board of signal p-value entrants, through an exact count-to-p-value pipeline or a change of the model's output?
+
+## Bears on
+
+an exact, tested conversion shows how much of the chain's p-value error is the map and how much is the predicted counts
+
+## Protocol
+
+<!-- optional (engine 1.4 / spec 11): the pre-registered rules — endpoints, arms, thresholds,
+     scope — fixed BEFORE any run. `crux deck` surfaces this as the pre-registration note. -->
+_(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
+
+<!-- crux:ledger:start -->
+_(no children yet)_
+<!-- crux:ledger:end -->
