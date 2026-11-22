@@ -17,5 +17,4 @@ Time horizon: exploratory, open (PI away from 2026-11-22). First measured result
 3. Plan with orchestrate; each chunk cites a ledger row.
 
 ## Open asks to the PI
-1. Confirm D2 (fairness = only training/validation data in any fitted step). Recommended: yes.
-2. Tiers in GOALS.md are the agent's recommendation. Recommended: accept.
+None. D2 and the ledger tiers confirmed by the PI on 2026-11-22.
