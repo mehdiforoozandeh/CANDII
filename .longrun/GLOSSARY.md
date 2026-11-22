@@ -31,3 +31,6 @@ Every term and metric in use. A new entry lands before its first use in anything
 | average-signal input | same as mix_avg: cross-cell-type average track as input | agent; proposed | D39 |
 | Pearson-residual input | same as mix_pearson: (count minus NB mean) over NB spread | agent; proposed | D39 |
 | conditioned head skip | same as headskip_film | agent; proposed | D39 |
+| GPU | graphics processor used to train neural networks fast | agent; proposed | R9 |
+| H100 | NVIDIA's current data-centre graphics processor model on Fir | agent; proposed | R9 |
+| shard | one of 8 equal slices of the evaluation set, predicted in parallel | agent; proposed | D39 |
