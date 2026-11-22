@@ -120,3 +120,8 @@ Every term and metric in use. A new entry lands before its first use in anything
 | lint | automatic check of a file against style rules | agent; proposed | none |
 | prezit | slide-deck builder skill used for lab decks | agent; proposed | none |
 | python3 | the Python interpreter command | agent; proposed | none |
+| calibrate | adjust predicted uncertainty to match observed error | agent; proposed | R2 |
+| glossary | list of terms with short definitions | agent; proposed | none |
+| imputes | predicts a missing track from the other inputs | agent; proposed | R2 |
+| schematic | simplified labelled diagram of a design | agent; proposed | none |
+| schematics | simplified labelled diagrams of a design | agent; proposed | none |
