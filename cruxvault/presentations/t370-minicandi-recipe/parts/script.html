@@ -7,7 +7,7 @@ const sg=v=>(v>=0?'+':'−')+Math.abs(v).toFixed(3);
 const COL={base:'var(--base)',unet:'var(--unet)',recipe:'var(--recipe)',addon:'var(--addon)',diag:'var(--diag)',fix:'var(--fix)'};
 const S=Object.fromEntries(DATA.steps.map(s=>[s.key,s]));
 const stepCol=k=>k.startsWith('eic_v1_2_rung4')?COL.unet:k.startsWith('eic_v1_2')?COL.base:
-  k==='rcp_headskip_off_unet'?COL.diag:k==='rcp_halves_unet'?COL.recipe:COL.addon;
+  (k==='rcp_headskip_off_unet'||k==='rcp_halves_headskip_off_unet')?COL.diag:k==='rcp_halves_unet'?COL.recipe:COL.addon;
 const F16=DATA.floor16, F256=DATA.floor256;
 
 /* generic scatter: pts {x,xr,y,yr,col,lab,dx,dy,anchor,big} */
@@ -62,7 +62,7 @@ function scatter(o){
   DATA.fixes.forEach(r=>pts.push({x:r.imp.m,y:r.cor.m,col:COL.fix}));
   const lab={'eic_v1_2_rung2_base_heldout':[-12,-10,'end'],'eic_v1_2_rung3_base_heldout':[12,34,'start'],
     'eic_v1_2_rung4_base_heldout':[12,26,'start'],'rcp_headskip_off_unet':[-12,26,'end'],
-    'rcp_halves_unet':[14,30,'start'],'rcp_halves_mix_pearson_unet':[-12,-12,'end'],'rcp_halves_mix_avg_unet':[10,26,'end']};
+    'rcp_halves_unet':[14,30,'start'],'rcp_halves_mix_pearson_unet':[-12,-12,'end'],'rcp_halves_mix_avg_unet':[10,26,'end'],'rcp_halves_headskip_off_unet':[12,-12,'start']};
   st.forEach((r,i)=>{const L=lab[r.key]||[10,-10,'start'];
     pts.push({x:r.p16.imp.m,xr:r.p16.imp.r,y:r.p16.cor.m,yr:r.p16.cor.r,col:stepCol(r.key),big:r.key==='rcp_halves_unet',
       lab:`${i+1}. ${r.lab}`+(r.p16.n<3?` (n=${r.p16.n})`:''),dx:L[0],dy:L[1],anchor:L[2]});});
@@ -77,7 +77,8 @@ function scatter(o){
     arrows:[ar('eic_v1_2_rung2_base_heldout','eic_v1_2_rung3_base_heldout'),ar('eic_v1_2_rung3_base_heldout','eic_v1_2_rung4_base_heldout'),
       ar('eic_v1_2_rung4_base_heldout','rcp_halves_unet','var(--recipe)'),ar('eic_v1_2_rung4_base_heldout','rcp_headskip_off_unet','var(--diag)',1),
       ...(S.rcp_halves_mix_avg_unet?[ar('rcp_halves_unet','rcp_halves_mix_avg_unet','var(--addon)',1)]:[]),
-      ...(S.rcp_halves_mix_pearson_unet?[ar('rcp_halves_unet','rcp_halves_mix_pearson_unet','var(--addon)',1)]:[])],
+      ...(S.rcp_halves_mix_pearson_unet?[ar('rcp_halves_unet','rcp_halves_mix_pearson_unet','var(--addon)',1)]:[]),
+      ...(S.rcp_halves_headskip_off_unet?[ar('rcp_halves_unet','rcp_halves_headskip_off_unet','var(--diag)',1)]:[])],
     pts}));
   const u=S.eic_v1_2_rung4_base_heldout.p16, h=S.rcp_halves_unet.p16;
   put('tPathC0',f3(u.cor.m)); put('tPathC1',f3(h.cor.m)); put('tPathI1',f3(h.imp.m)); put('tPathIF',f3(F16.imp.floor));
@@ -86,7 +87,7 @@ function scatter(o){
 /* ---------- slide 10: strips ---------- */
 (function(){
   const SHORT={'eic_v1_2_rung2_base_heldout':'Conv AE','eic_v1_2_rung3_base_heldout':'Conv + attn','eic_v1_2_rung4_base_heldout':'U-Net',
-    'rcp_headskip_off_unet':'no head skip','rcp_halves_unet':'+ pairs','rcp_halves_mix_pearson_unet':'pairs + Pearson','rcp_halves_mix_avg_unet':'pairs + average'};
+    'rcp_headskip_off_unet':'no head skip','rcp_halves_unet':'+ pairs','rcp_halves_mix_pearson_unet':'pairs + Pearson','rcp_halves_mix_avg_unet':'pairs + average','rcp_halves_headskip_off_unet':'pairs, no head skip'};
   const st=DATA.steps, W=1160, H=640, L=120, R=30, rows=[['imp','imputation'],['cor','correction (16 regions; ◇ = 256)'],['cal','calibration']];
   const n=st.length, bw=(W-L-R)/n, rh=(H-90)/3;
   let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;

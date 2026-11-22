@@ -86,7 +86,8 @@ STEPS = [("eic_v1_2_rung2_base_heldout", "Conv autoencoder"),
          ("rcp_headskip_off_unet", "U-Net, head skip removed"),
          ("rcp_halves_unet", "U-Net + read-disjoint pairs"),
          ("rcp_halves_mix_pearson_unet", "+ Pearson-residual input"),
-         ("rcp_halves_mix_avg_unet", "+ average-signal input")]
+         ("rcp_halves_mix_avg_unet", "+ average-signal input"),
+         ("rcp_halves_headskip_off_unet", "pairs + head skip removed")]
 FIXES = {"rcp_cac_cnn_unet": "covariate correction layers (CNN)",
          "rcp_cac_cnn_corefilm_off_unet": "correction layers (CNN), core FiLM off",
          "rcp_cac_curve_unet": "covariate correction layers (curve)",
