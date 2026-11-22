@@ -43,3 +43,4 @@ Every term and metric in use. A new entry lands before its first use in anything
 | artifact | signal distortion caused by protocol, not biology | agent; proposed | R4 |
 | coarser | at lower resolution, i.e. larger bins | agent; proposed | R3 |
 | widen | make a margin larger | agent; proposed | D1 |
+| computed | calculated | agent; proposed | R6 |
