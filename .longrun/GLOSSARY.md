@@ -61,3 +61,9 @@ Every term and metric in use. A new entry lands before its first use in anything
 | log2 | base-2 logarithm | agent; proposed | none |
 | MAPQ | read mapping-quality score; threshold filters ambiguous alignments | agent; proposed | D5 |
 | MLP | small stack of fully connected layers | agent; proposed | R3 |
+| GELU | smooth nonlinear activation, close to ReLU | agent; proposed | R3 |
+| stem | first layer of a tower; mixes all tracks per bin | agent; proposed | R3 |
+| size factor | depth scale s = 2^(log2_depth - 24) vs 16.8 M reads | agent; proposed | R3 |
+| pseudocount | constant added to counts so log of zero is defined | agent; proposed | R3 |
+| 1x1 convolution | per-position linear map across channels, no neighbour mixing | agent; proposed | R3 |
+| broadcast | reuse one value across a tensor axis without copying | agent; proposed | R3 |
