@@ -4,6 +4,7 @@
 #
 #   K=<kit dir> RUNS_LIST="<run name> ..." SUB=p16|p256 [SEEDS="0 1"] [DRY_RUN=0] \
 #       bash $K/slurm/onion_eval/deviance_submit.sh
+#   RUNS_LIST may also name the base models ${V}_rung{2,3,4}_base_heldout (runs_fir).
 #   -> <runs_rcp>/<run>/seed<s>/{p16_dev|p256_dev}/{scores.json,...}; scores.json carries every
 #      current key (same options as submit_recipe.sh: same-view on, CPU predict, batch 8) plus the
 #      key `deviance`. Stores go to /scratch/mforooz/onion/pred_store_dev and are kept
@@ -42,6 +43,14 @@ export ONION_EXCLUDE="$EXC" ONION_STAGE=1 CLUSTER=fir NICE="${NICE:-100}"
 
 LIST="$("$PY" "$RA" list --stage all --models "2 3 4")" || { echo "recipe_arms.py list failed" >&2; exit 2; }
 for want in $RUNS_LIST; do
+  if [[ "$want" =~ ^${V}_rung([234])_base_heldout$ ]]; then   # the base models (Pareto references)
+    r="${BASH_REMATCH[1]}"
+    [ -f "$O/runs_fir/$want/seed0/DONE" ] || { echo "skip $want: not trained"; continue; }
+    echo "## $want (base, rung $r) -> $SCORE_SUBDIR"
+    bash "$SUBMIT" "$K" "$T" "$EV" "$O/runs_fir" "$r" \
+      "$want=$K/tools/minicandi/configs/rung$r/base_heldout.json" < /dev/null 2>&1 | { grep -v "^$" || true; }
+    continue
+  fi
   line="$(printf '%s\n' "$LIST" | awk -F'\t' -v w="$want" '$3 == w' | head -n 1)"
   [ -n "$line" ] || { echo "no recipe arm for run $want" >&2; exit 2; }
   IFS=$'\t' read -r r arm run cfg tt <<< "$line"
