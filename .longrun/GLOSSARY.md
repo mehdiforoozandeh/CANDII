@@ -67,3 +67,17 @@ Every term and metric in use. A new entry lands before its first use in anything
 | pseudocount | constant added to counts so log of zero is defined | agent; proposed | R3 |
 | 1x1 convolution | per-position linear map across channels, no neighbour mixing | agent; proposed | R3 |
 | broadcast | reuse one value across a tensor axis without copying | agent; proposed | R3 |
+| append | add to the end | agent; proposed | R3 |
+| arithmetically | by a fixed formula, with no learned weights | agent; proposed | R3 |
+| bool | true/false data type | agent; proposed | R3 |
+| D_TRACK | per-track feature width in the U-Net code (8) | agent; proposed | R3 |
+| flattens | merges two array axes into one | agent; proposed | R3 |
+| initialization | starting weight values before training | agent; proposed | R3 |
+| leakage | target information reaching the model's input by mistake | agent; proposed | R3 |
+| log1p | log(1 + x), natural logarithm | agent; proposed | R3 |
+| log2_depth | covariate column: base-2 log of the experiment's read count | agent; proposed | R3 |
+| normalized | put on a common scale | agent; proposed | R3 |
+| padded | extended with zeros to a required length | agent; proposed | R3 |
+| tensor | multi-dimensional array of numbers | agent; proposed | R3 |
+| transposed | with two axes swapped | agent; proposed | R3 |
+| vis | code name of the visible-bin flag: real count present | agent; proposed | R3 |
