@@ -81,3 +81,5 @@ Every term and metric in use. A new entry lands before its first use in anything
 | tensor | multi-dimensional array of numbers | agent; proposed | R3 |
 | transposed | with two axes swapped | agent; proposed | R3 |
 | vis | code name of the visible-bin flag: real count present | agent; proposed | R3 |
+| footer | small text line at the bottom of a figure | agent; proposed | R3 |
+| noisier | with a wider spread across seeds | agent; proposed | R3 |
