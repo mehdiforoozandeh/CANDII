@@ -51,3 +51,5 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-22T20:25Z glossary: reply sent with unregistered terms: flagged, predictor's
 - 2026-11-22T20:33Z glossary: reply sent with unregistered terms: flagged
 - 2026-11-22T21:01Z G5 read written (results/control/control_read.md): works on U-Net (held-out skill 0.131, signal 0.948 vs avg 0.932); weight 4 adopted by rule (conv models), no U-Net gain. D48 premise wrong: 34 of 36 control evals existed; my jobs filled gaps.
+- 2026-11-22T21:06Z moved from DECISIONS (history): | D32 | Fix the curve pre/post layer NaN on the U-Net and rerun its 6 U-Net run-seeds (~235 CPU-h). | PI chat 2026-11-21: "i) yes" | PI | | in force |
+- 2026-11-22T21:06Z moved from DECISIONS (history): | D31 | Deadline: deliver the recipe within 24 h of 2026-11-21 18:30 UTC, i.e. by 2026-11-22 18:30 UTC. Supersedes the horizon of D14 and the freeze of D27. | PI chat 2026-11-21: "my deadline is not 2026-11-24. it's within 24 hours" | PI | supersedes D14, D27 | in force |

@@ -133,3 +133,33 @@ Every term and metric in use. A new entry lands before its first use in anything
 | G5 | pre-set pass rule for held-out control prediction (plan C21) | agent; proposed | 2026-11-22 |
 | ledger | GOALS.md table: one row per PI requirement | longrun skill; proposed | 2026-11-22 |
 | P0 | top priority tier: the run fails without it | longrun skill; proposed | 2026-11-22 |
+| Poisson | count distribution whose variance equals its mean | agent; proposed | 2026-11-22 count-score discussion |
+| deviance | twice the log-likelihood gap to a perfect fit | agent; proposed | 2026-11-22 count-score discussion |
+| binomial | count of successes in n independent yes/no trials | agent; proposed | 2026-11-22 count-score discussion |
+| thinning | keep each read independently with fixed probability | agent; proposed | 2026-11-22 count-score discussion |
+| CRPS | squared distance between predicted and step CDF, summed | agent; proposed | 2026-11-22 count-score discussion |
+| CRPS_depth-only | that score for counts scaled by target-over-source depth | agent; proposed | 2026-11-22 count-score discussion |
+| CRPS_floor | that score of a perfect predictor (oracle floor) | agent; proposed | 2026-11-22 count-score discussion |
+| E_sp | specific error: error on the cell-type-specific signal part | agent; proposed | 2026-11-22 count-score discussion |
+| r_spec | correlation after removing a smooth function of the average | agent; proposed | 2026-11-22 count-score discussion |
+| deviation (PIT) | mean gap between average predictive CDF and uniform | agent; proposed | 2026-11-22 count-score discussion |
+| invariant | unchanged when a quantity, e.g. depth, changes | agent; proposed | 2026-11-22 count-score discussion |
+| additive | parts sum exactly to the total; also "additivity" | agent; proposed | 2026-11-22 metric-family table |
+| additivity | property that component errors sum to the total error | agent; proposed | 2026-11-22 metric-family table |
+| AlphaGenome | DeepMind sequence-to-function genomics model (AG2 = version 2) | agent; proposed | 2026-11-22 metric-family table |
+| invariance | score stays the same when depth changes | agent; proposed | 2026-11-22 metric-family table |
+| outlier | a bin with a value far from the rest; plural "outliers" | agent; proposed | 2026-11-22 metric-family table |
+| outliers | bins with values far from the rest | agent; proposed | 2026-11-22 metric-family table |
+| quadrature | combine as square root of summed squares | agent; proposed | 2026-11-22 metric-family table |
+| penalizes | raises the error score for | agent; proposed | 2026-11-22 metric-family table |
+| predictor's | belonging to a model or baseline that outputs predictions | agent; proposed | 2026-11-22 metric-family table |
+| unifies | puts two metric families on one scale | agent; proposed | 2026-11-22 metric-family table |
+| comparability | ability to set our numbers beside published or earlier ones | agent; proposed | 2026-11-22 six-metric proposal |
+| D9 | long-horizon decision: EIC headline uses the challenge's own metrics | long-horizon decisions.md; proposed | 2026-11-22 six-metric proposal |
+| D_baseline | normalized Poisson deviance of the baseline prediction | agent; proposed | 2026-11-22 six-metric proposal |
+| D_floor | normalized Poisson deviance a perfect predictor gets from read noise | agent; proposed | 2026-11-22 six-metric proposal |
+| D_model | normalized Poisson deviance of the model's predicted mean | agent; proposed | 2026-11-22 six-metric proposal |
+| deduplicated | with repeated copies of one sequenced fragment removed | agent; proposed | 2026-11-22 six-metric proposal |
+| PCR | polymerase chain reaction; amplification that copies DNA fragments | agent; proposed | 2026-11-22 six-metric proposal |
+| stratum | one subgroup of bins, e.g. by assay or count level | agent; proposed | 2026-11-22 six-metric proposal |
+| testbed | small fixed training-and-scoring setup for comparing miniCANDI arms | agent; proposed | 2026-11-22 six-metric proposal |
