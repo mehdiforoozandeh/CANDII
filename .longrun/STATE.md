@@ -6,18 +6,21 @@ Rewritten, never appended. Cap: 5 KB.
 Find one miniCANDI recipe that Pareto-dominates the three base models on imputation, correction and calibration on eic_v1_2 (D1); priority 2 is ChIP-control prediction (D18). Task t370, branch exp/t370-minicandi-recipe (PR 63), worktree .claude/worktrees/recipe.
 
 ## Horizon
-DEADLINE 2026-11-22 18:30 UTC (D31, PI: "within 24 hours"). Budget checkpoint 6,000 CPU-h (D20). Fir is the scoring cluster (eval sets live only there); Nibi may be used for training-only overflow (PI 2026-11-21).
+DEADLINE 2026-11-22 18:30 UTC (D31). PI talk 2026-11-22 19:00 UTC. Budget checkpoint 6,000 CPU-h (D20). Fir scores; Nibi training-only overflow.
 
-## In flight (Fir), at 2026-11-22 05:40 UTC
-- Selection at 05:25 UTC (runs_rcp/_sel/pareto_0525_p16_sv.json, _p256_sv.json). 16 regions: PASS = halves U-Net, halves+mix_avg U-Net, halves+mix_pearson U-Net (2 seeds), halves+headskip_film U-Net. 256 regions: halves U-Net eligible on all three floors but NEAR (correction 0.7299 vs best base 0.6750; diff below its own seed range 0.0707); no winner yet.
-- 256-region confirmation of the three PASS combos submitted 05:35 UTC (72 jobs, 913 CPU-h projected; D39). Watch bj140el0j exits at 8 scored run-seeds or 7 h.
-- Still training: halves+mix_pearson seed 0, halves+mix_fixdepth seed 1, curve-CNN core-FiLM-off U-Net seed 2.
-- EIC: eic_val array 5022609 (index 7 node-failed, resubmitted as 5050354); Avocado train 5022624 pending (Priority), then 5022625-5022627, then score; Average entry 5022628 running.
+## Where the recipe stands (12:30 UTC)
+- Recipe = halves U-Net (read-disjoint pairs). 16 regions: imputation 0.4263, correction 0.7535, calibration 0.6872 (3 seeds). 256 regions: correction 0.7299 (range 0.0707); eligible on all three floors, NEAR (no term beyond).
+- Evolution figure for the talk: cruxvault/INSTRUCTIONS/t370_recipe/evolution/evolution.png (script plot_evolution.py; reads the copied tables only).
+
+## In flight (Fir)
+- 256-region confirm of combos (D39): headskip_film 3/3 scored, mix_pearson 2/3 (+ seed 0 submitted 12:05 UTC, 9 jobs), mix_avg 1/3 (seeds 0, 2 running). Watch bj140el0j.
+- D41 arm halves_headskip_off (copy-path test): train 5195200, 5195206, 5195212 + p16 scoring (kit RCP6). Then SUB=p256.
+- EIC: U-Net validation scoring 5195226 (5194524 failed: KIT unbound, fixed). Avocado 5022624 pending on an unavailable node; misses the deadline.
 
 ## Next
-1. When combo 256-region scores land: rerun pareto_select at 256 regions; pick the recipe (D1); record it; two-step retest on it if time allows.
-2. After 5022627 and 5022609: eic_val_compare.py score for Avocado, the U-Net and the Average entry.
-3. Deck by 2026-11-22 18:30 UTC; start the draft by 12:00 UTC with the 16-region and current 256-region results.
+1. When combos and headskip_off land: rerun pareto_select at 16 and 256 regions; record the pick (D1); refresh the figure (rerun plot_evolution.py after copying the tables).
+2. eic_val table U-Net vs Average: runs_rcp/eic_val/table_unet_vs_average.tsv.
+3. After the talk: D42 scaling test (2x, 4x params; 2x windows; with pairs).
 
 ## Open asks to the PI
-None (Avocado yes, blind no, curve fix yes: D32-D34).
+None.
