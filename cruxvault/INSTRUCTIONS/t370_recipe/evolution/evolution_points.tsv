@@ -1,0 +1,8 @@
+arm	label	why	n16	imp	imp_r	cor16	cor16_r	cal	cal_r	cor256	cor256_r	n256
+eic_v1_2_rung2_base_heldout	Conv AE	conv encoder-decoder	3	0.3704	0.0214	0.6815	0.0324	0.5986	0.1864	0.6636	0.0312	3
+eic_v1_2_rung3_base_heldout	Conv + attention	+ transformer at bottleneck	3	0.386	0.0298	0.671	0.0303	0.6272	0.1379	0.675	0.0193	3
+eic_v1_2_rung4_base_heldout	U-Net	+ skip connections	3	0.4452	0.038	0.5379	0.0592	0.646	0.1577	0.5352	0.0624	3
+rcp_headskip_off_unet	U-Net, head skip off	diagnosis: cut the copy path	3	0.3761	0.0235	0.6754	0.0673	0.6069	0.0834			0
+rcp_halves_unet	U-Net + read-disjoint pairs	RECIPE: pr1 in, pr2 target	3	0.4263	0.0212	0.7535	0.058	0.6872	0.0289	0.7299	0.0707	3
+rcp_halves_mix_pearson_unet	+ Pearson-residual input	candidate add-on	2	0.4392	0.0642	0.7899	0.0052	0.6328	0.1444	0.784	0.0034	2
+rcp_halves_mix_avg_unet	+ average-signal input	candidate add-on	3	0.483	0.0226	0.7812	0.0028	0.6077	0.1895	0.7841	0.0	1
