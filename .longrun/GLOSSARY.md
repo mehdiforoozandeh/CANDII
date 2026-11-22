@@ -113,3 +113,10 @@ Every term and metric in use. A new entry lands before its first use in anything
 | dropout | randomly zeroing a component during training | agent; proposed | R3 |
 | post hoc | applied after training, with no retraining | agent; proposed | R2 |
 | shortcut | easy solution that lowers loss without learning the task | agent; proposed | R3 |
+| b904xdk65 | id of a laptop watch job (agent-facing) | agent; proposed | none |
+| bx8rkzhqf | id of a laptop watch job (agent-facing) | agent; proposed | none |
+| crux | research-notebook tool that keeps the vault (agent-facing) | agent; proposed | none |
+| D43 | row id of a decision in DECISIONS.md (agent-facing) | agent; proposed | none |
+| lint | automatic check of a file against style rules | agent; proposed | none |
+| prezit | slide-deck builder skill used for lab decks | agent; proposed | none |
+| python3 | the Python interpreter command | agent; proposed | none |
