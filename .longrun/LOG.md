@@ -40,3 +40,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-22T12:16Z DECISIONS compaction, superseded row moved here: | D27 | Date stop: on 2026-11-29 the recipe freezes on what is confirmed at 256 regions by then. | cold plan review | agent | | superseded by D31 |
 - 2026-11-22T12:19Z glossary: reply sent with unregistered terms: glossary
 - 2026-11-22T12:29Z 256-region selection: PASS halves+mix_pearson (n=2, score -0.158), halves+mix_avg (n=3, -0.243); halves NEAR. D43.
+- 2026-11-22T15:28Z D43 final: Pearson seed 0 scored at 256 regions; recipe = halves + Pearson-residual input U-Net (PASS, score -0.132, 3 seeds). EIC table landed: base U-Net beats Average on 7/9 means. Deck rebuilt (slides 11, 14), verify+lint green, republished v2.

@@ -486,7 +486,7 @@
       <div class="kicker"><span class="sec">Results</span>(f) EIC validation tracks</div>
       <h2 id="tEicH"></h2>
       <div id="eicBody"></div>
-      <aside class="notes"><p>This uses the challenge's own nine measures on its validation tracks. The Average baseline is the mean of the training tracks of the same assay, built from training cells only. The retrained Avocado comparison was queued but its training job did not start in time, so it is not in this deck.</p></aside>
+      <aside class="notes"><p>This uses the challenge's own nine measures on its validation tracks. The Average baseline is the mean of the training tracks of the same assay, built from training cells only. The entry is the base U-Net from before the read-disjoint pairs, one seed; the chosen recipe was not scored here. The last column counts tracks, so a better mean can come with fewer than half the tracks better. The retrained Avocado comparison was queued but its training job did not start in time, so it is not in this deck.</p></aside>
     </div>
   </section>
 
@@ -711,7 +711,7 @@ function scatter(o){
   const pass=C.filter(r=>r.class_p256==='PASS').sort((a,b)=>b.score_p256-a.score_p256);
   put('tConfH', pass.length?`At 256 regions, ${pass.length===2?'two':pass.length} combinations PASS; the plain pairs U-Net is ${C.find(r=>r.key==='rcp_halves_unet').class_p256}`:'At 256 regions no arm passes yet');
   const h=C.find(r=>r.key==='rcp_halves_unet');
-  let li=pass.map(r=>`<li><b>${names[r.key]}</b>${r.p256.n<3?` (only ${r.p256.n} seeds scored)`:''}: correction ${f3(r.p256.cor.m)} beyond the best base ${f3(F256.cor.best)}; imputation ${f3(r.p256.imp.m)}, calibration ${f3(r.p256.cal.m)} above their floors.</li>`).join('');
+  let li=pass.map((r,i)=>`<li><b>${names[r.key]}</b>${i===0?' (highest Pareto score: the chosen recipe)':''}${r.p256.n<3?` (only ${r.p256.n} seeds scored)`:''}: correction ${f3(r.p256.cor.m)} beyond the best base ${f3(F256.cor.best)}; imputation ${f3(r.p256.imp.m)}, calibration ${f3(r.p256.cal.m)} above their floors.</li>`).join('');
   li+=`<li>The plain pairs U-Net has the best calibration (${f3(h.p256.cal.m)}), but its correction gain (${sg(h.p256.cor.m-F256.cor.best)}) is inside its own seed range (${f3(h.p256.cor.r)}).</li>`;
   put('tConfList', li);
 })();
@@ -760,13 +760,13 @@ function scatter(o){
   const un=ents.find(e=>/UNet|U-Net|miniCANDI/i.test(e))||ents[0], av=ents.find(e=>e!==un);
   const get=(e,m)=>rows.find(r=>r.entry===e&&r.measure===m);
   let t='<table class="dtable tight"><thead><tr><th>measure</th><th>miniCANDI U-Net</th><th>Average (training cells)</th><th>tracks where U-Net is better</th></tr></thead><tbody>';
-  let wins=0;
+  let wins=0; const lost=[];
   meas.forEach(m=>{const a=get(un,m), b=get(av,m); if(!a||!b) return;
     const bk=Object.keys(a).find(k=>k==='beats:'+av); const w=bk?+a[bk]:null; const n=+a.n_tracks;
-    const hb=/corr|spear/.test(m), better=hb?(+a.mean>+b.mean):(+a.mean<+b.mean); if(better) wins++;
+    const hb=/corr|spear/.test(m), better=hb?(+a.mean>+b.mean):(+a.mean<+b.mean); if(better) wins++; else lost.push(m);
     t+=`<tr><td>${m}${hb?' (higher better)':''}</td><td class="num" style="${better?'color:var(--recipe);font-weight:700':''}">${(+a.mean).toPrecision(4)}</td><td class="num">${(+b.mean).toPrecision(4)}</td><td class="num">${w==null?'–':w+' of '+n}</td></tr>`;});
-  put('eicBody', t+'</tbody></table><p class="small">EIC challenge measures on its validation tracks (all 23 chromosomes); MSE measures lower is better. Retrained Avocado did not start in time.</p>');
-  put('tEicH', `On the EIC validation tracks the U-Net beats the Average baseline on ${wins} of ${meas.length} measures`);
+  put('eicBody', t+'</tbody></table><p class="small">EIC challenge measures on its validation tracks (all 23 chromosomes); MSE measures lower is better. The entry is the base U-Net (trained before the read-disjoint pairs), one seed. Retrained Avocado did not start in time.</p>');
+  put('tEicH', `On the EIC validation tracks the base U-Net beats the Average baseline on ${wins} of ${meas.length} mean measures; it loses on ${lost.map(m=>({gwcorr:'genome-wide Pearson correlation (gwcorr)',mseenh:'enhancer MSE (mseenh)'})[m]||m).join(' and ')}`);
 })();
 
 /* ---------- slide 16: 160k windows ---------- */
