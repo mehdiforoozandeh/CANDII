@@ -89,3 +89,22 @@ Every term and metric in use. A new entry lands before its first use in anything
 | axial attention | attention along one axis at a time: position, then track | agent; proposed | R3 |
 | Perceiver IO | attention model through a small set of learned latents | agent; proposed | R3 |
 | position average | baseline predicting each bin from other cell types' mean | agent; proposed | R3 |
+| D1 | row id of a decision in DECISIONS.md (agent-facing) | agent; proposed | none |
+| D18 | row id of a decision in DECISIONS.md (agent-facing) | agent; proposed | none |
+| D20 | row id of a decision in DECISIONS.md (agent-facing) | agent; proposed | none |
+| D31 | row id of a decision in DECISIONS.md (agent-facing) | agent; proposed | none |
+| D39 | row id of a decision in DECISIONS.md (agent-facing) | agent; proposed | none |
+| D41 | row id of a decision in DECISIONS.md (agent-facing) | agent; proposed | none |
+| D42 | row id of a decision in DECISIONS.md (agent-facing) | agent; proposed | none |
+| bj140el0j | id of a laptop watch job (agent-facing) | agent; proposed | none |
+| eic_val | EIC validation-track prediction and scoring step (agent-facing) | agent; proposed | R9 |
+| halves_headskip_off | arm: read-disjoint pairs U-Net with the head skip removed | agent; proposed | R3 |
+| headskip_off | arm: U-Net with the head skip removed | agent; proposed | R3 |
+| Nibi | second Alliance Canada cluster, used for training overflow | agent; proposed | none |
+| p16 | scoring with correction on 16 pair regions (screen) | agent; proposed | R1 |
+| p256 | scoring with correction on 256 pair regions (confirm) | agent; proposed | R1 |
+| params | model parameters, i.e. learned weights | agent; proposed | R22 |
+| pareto_select | script applying the Pareto win rule to arm summaries | agent; proposed | R1 |
+| RCP6 | code snapshot id pushed to Fir (agent-facing) | agent; proposed | none |
+| t370 | crux task id of this recipe run (agent-facing) | agent; proposed | none |
+| worktree | separate checkout of one git branch in its own folder | agent; proposed | none |
