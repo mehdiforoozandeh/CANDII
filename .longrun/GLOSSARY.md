@@ -169,3 +169,4 @@ Every term and metric in use. A new entry lands before its first use in anything
 | local_2eb1d23b | id prefix of a linked Claude session (agent-facing) | app; proposed | 2026-11-22 |
 | b735 | fragment of a linked session id (agent-facing) | app; proposed | 2026-11-22 |
 | baf | fragment of a linked session id (agent-facing) | app; proposed | 2026-11-22 |
+| prefix | fixed text at the start of a name | agent; proposed | 2026-11-22 job names |
