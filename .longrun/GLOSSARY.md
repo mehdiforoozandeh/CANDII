@@ -25,3 +25,9 @@ Every term and metric in use. A new entry lands before its first use in anything
 | ssh | remote shell connection to a cluster | standard tool | none |
 | rsync | file copy tool that sends only changed files | standard tool | none |
 | bigWig | indexed binary file format for genome signal tracks | standard format, status proposed | D33 |
+| mix_avg | adds cross-cell-type average signal as an extra input | agent (arm label, mix_arms.py average_input); proposed | D39 |
+| mix_pearson | inputs fed as NB Pearson residuals, not log counts | agent (arm label, count_transform pearson); proposed | D39 |
+| headskip_film | covariates rescale the input features skipped to the output head | agent (arm label, unet.py head_skip film); proposed | D39 |
+| average-signal input | same as mix_avg: cross-cell-type average track as input | agent; proposed | D39 |
+| Pearson-residual input | same as mix_pearson: (count minus NB mean) over NB spread | agent; proposed | D39 |
+| conditioned head skip | same as headskip_film | agent; proposed | D39 |
