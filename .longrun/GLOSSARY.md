@@ -165,3 +165,7 @@ Every term and metric in use. A new entry lands before its first use in anything
 | testbed | small fixed training-and-scoring setup for comparing miniCANDI arms | agent; proposed | 2026-11-22 six-metric proposal |
 | deployable | the version meant for real use, not an evaluation device | agent; proposed | 2026-11-22 control arms |
 | RCP8 | code snapshot id pushed to Fir (agent-facing) | agent; proposed | 2026-11-22 |
+| rcp_halves_mix_pearson_unet | run name of the chosen recipe (agent-facing) | agent; proposed | 2026-11-22 |
+| local_2eb1d23b | id prefix of a linked Claude session (agent-facing) | app; proposed | 2026-11-22 |
+| b735 | fragment of a linked session id (agent-facing) | app; proposed | 2026-11-22 |
+| baf | fragment of a linked session id (agent-facing) | app; proposed | 2026-11-22 |
