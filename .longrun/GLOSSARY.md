@@ -34,3 +34,12 @@ Every term and metric in use. A new entry lands before its first use in anything
 | GPU | graphics processor used to train neural networks fast | agent; proposed | R9 |
 | H100 | NVIDIA's current data-centre graphics processor model on Fir | agent; proposed | R9 |
 | shard | one of 8 equal slices of the evaluation set, predicted in parallel | agent; proposed | D39 |
+| encoder | network half that downsamples the input into compact features | agent; proposed | R3 |
+| decoder | network half that upsamples features back to 25 bp outputs | agent; proposed | R3 |
+| bottleneck | lowest-resolution layer between the two network halves | agent; proposed | R3 |
+| transformer | attention layers relating every position in the window | agent; proposed | R3 |
+| pr1 / pr2 | the two pseudoreplicates: disjoint random halves of one experiment's reads | agent (ENCODE convention); proposed | D29 |
+| config | training settings file read at launch | agent; proposed | D29 |
+| artifact | signal distortion caused by protocol, not biology | agent; proposed | R4 |
+| coarser | at lower resolution, i.e. larger bins | agent; proposed | R3 |
+| widen | make a margin larger | agent; proposed | D1 |
