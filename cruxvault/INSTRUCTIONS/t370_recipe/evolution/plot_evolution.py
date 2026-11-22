@@ -4,6 +4,7 @@ Reads only the score tables in this folder (copied from Fir runs_rcp/_sel/). No 
   all_p16_sv.tsv          arm summaries, 16 pair regions (screen), every arm
   base_p256_sv.tsv        base models, 256 pair regions (confirm)
   arms_p256_sv_1200.tsv   recipe arms, 256 pair regions, read 2026-11-22 12:00 UTC
+  scores_ladder.md        the six-rung ladder on eic_v1 (onion run, results/metrics_screening/)
 Run: python plot_evolution.py  ->  evolution.png, evolution.svg, evolution_points.tsv
 """
 import csv
@@ -73,9 +74,43 @@ for m in (IMP, COR, CAL):
 C_BASE, C_FIX, C_WIN, C_ADD, C_DIAG = "#6b7280", "#c7cbd1", "#d1495b", "#edae49", "#00798c"
 col = [C_BASE, C_BASE, C_BASE, C_DIAG, C_WIN, C_ADD, C_ADD]
 
-fig = plt.figure(figsize=(15, 6.4))
-gs = fig.add_gridspec(3, 2, width_ratios=[1.25, 1], hspace=0.12, wspace=0.22)
-ax = fig.add_subplot(gs[:, 0])
+# ladder era (eic_v1): imputation and correction (102 pairs, oracle floor) from scores_ladder.md
+LADDER = {"rung1_base": "MLP, no context", "rung2_base": "Conv AE", "rung3_base": "Conv + attention",
+          "rung4_base": "U-Net", "rung5_base": "Axial attention", "rung6_base": "Perceiver IO",
+          "baseline position_average": "position average"}
+lad = {}
+for line in (HERE / "scores_ladder.md").read_text().splitlines():
+    cells = [c.strip() for c in line.strip("|").split("|")]
+    if cells and cells[0] in LADDER and cells[0] not in lad:
+        num = lambda c: (float(c.split()[0]), float(c.split("(")[1].rstrip(")")) if "(" in c else 0.0)
+        lad[cells[0]] = (num(cells[2]), num(cells[4]))
+
+fig = plt.figure(figsize=(20, 6.4))
+gs = fig.add_gridspec(3, 3, width_ratios=[0.85, 1.25, 1], hspace=0.12, wspace=0.22)
+c0 = fig.add_subplot(gs[:, 0])
+for k, ((i, ir), (c, cr)) in lad.items():
+    u = k == "rung4_base"
+    kept = k in ("rung2_base", "rung3_base", "rung4_base")
+    colr = C_BASE if kept else C_FIX
+    c0.errorbar(i, c, xerr=ir / 2, yerr=cr / 2, fmt="o", ms=8, color=colr, mec="white", lw=1)
+    left = k == "rung2_base"
+    c0.annotate(LADDER[k] + ("" if kept else " (dropped)"), (i, c),
+                xytext=(-8, 4) if left else (8, 6 if k == "baseline position_average" else -10 if k == "rung3_base" else 4),
+                ha="right" if left else "left", textcoords="offset points", fontsize=8.5, color="#374151" if kept else "#9ca3af")
+c0.annotate("", xy=(lad["rung4_base"][0][0], lad["rung4_base"][1][0]),
+            xytext=(lad["rung3_base"][0][0], lad["rung3_base"][1][0]),
+            arrowprops=dict(arrowstyle="-|>", lw=1.4, color="#374151"))
+c0.set_xlabel("imputation")
+c0.set_ylabel("correction, older scale (102 pairs)")
+c0.set_title("A   2026-11-14: six-model ladder (eic_v1)", loc="left", fontsize=11,
+             fontweight="bold")
+c0.text(0.02, 0.47, "skips already traded correction for imputation;\n"
+        "axial and Perceiver dropped. Not comparable\nwith B and C (other data, scale).",
+        transform=c0.transAxes, fontsize=8, color="#6b7280", va="top")
+c0.set_xlim(0.08, 0.56)
+for s_ in ("top", "right"):
+    c0.spines[s_].set_visible(False)
+ax = fig.add_subplot(gs[:, 1])
 
 # A: imputation x correction, the trade-off and how it was broken
 fx = [val(p16, a, IMP)[0] for a in FIXES]
@@ -115,7 +150,7 @@ ax.set_ylim(0.43, 0.82)
 ax.set_xlim(0.34, 0.50)
 ax.set_xlabel("imputation (higher is better)")
 ax.set_ylabel("correction, 16 pair regions (higher is better)")
-ax.set_title("A   Imputation vs correction: the U-Net trade-off and the fix", loc="left",
+ax.set_title("B   2026-11-21/22 (eic_v1_2): the U-Net trade-off and the fix", loc="left",
              fontsize=11, fontweight="bold")
 ax.legend(loc="lower left", fontsize=8, frameon=False)
 for s in ("top", "right"):
@@ -125,7 +160,7 @@ for s in ("top", "right"):
 xs = range(1, len(rows) + 1)
 for k, (m, key, name) in enumerate([(IMP, "imp", "imputation"), (COR, "cor16", "correction"),
                                     (CAL, "cal", "calibration")]):
-    b = fig.add_subplot(gs[k, 1])
+    b = fig.add_subplot(gs[k, 2])
     rk = "cor16_r" if key == "cor16" else f"{key}_r"
     for x, r, c in zip(xs, rows, col):
         b.errorbar(x, r[key], yerr=r[rk] / 2, fmt="o", ms=7, color=c, mec="white", lw=1)
@@ -139,17 +174,17 @@ for k, (m, key, name) in enumerate([(IMP, "imp", "imputation"), (COR, "cor16", "
     for s in ("top", "right"):
         b.spines[s].set_visible(False)
     if k == 0:
-        b.set_title("B   Each objective per step (dashed = best base, dotted = floor)", loc="left",
+        b.set_title("C   Each objective per step (dashed = best base, dotted = floor)", loc="left",
                     fontsize=11, fontweight="bold")
     if key == "cor16":
         b.text(len(rows) + 0.4, best[m], "◇ = 256 regions", fontsize=7, color="#6b7280",
                ha="right", va="bottom")
-b.set_xlabel("step (numbers as in A)")
+b.set_xlabel("step (numbers as in B)")
 
-fig.text(0.01, 0.005, "eic_v1_2, same scorer for every point; dot = seed mean, bar = seed range "
+fig.text(0.01, 0.005, "B and C: eic_v1_2, same scorer for every point; dot = seed mean, bar = seed range "
          "(3 seeds unless n shown).\nCorrection at 16 regions for all points (screen); 256-region "
          "confirm where run (step 7: 1 seed at 256). Floor = best base mean minus its seed range (Pareto rule). Sources: runs_rcp/_sel/all_p16_sv.tsv, base_p256_sv.tsv, "
-         "arms_p256_sv_1200.tsv (Fir).", fontsize=7.5, color="#6b7280")
+         "arms_p256_sv_1200.tsv (Fir); A: onion results/metrics_screening/scores_ladder.md.", fontsize=7.5, color="#6b7280")
 fig.savefig(HERE / "evolution.png", dpi=160, bbox_inches="tight")
 fig.savefig(HERE / "evolution.svg", bbox_inches="tight")
 print("ok", {k: round(v, 4) for k, v in best.items()})
