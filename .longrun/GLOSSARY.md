@@ -24,3 +24,4 @@ Every term and metric in use. A new entry lands before its first use in anything
 | conv+attn | convolutional model with attention layers (rung 3) | onion close-out | D2 |
 | ssh | remote shell connection to a cluster | standard tool | none |
 | rsync | file copy tool that sends only changed files | standard tool | none |
+| bigWig | indexed binary file format for genome signal tracks | standard format, status proposed | D33 |

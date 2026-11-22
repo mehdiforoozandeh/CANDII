@@ -20,3 +20,5 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-21T21:55Z screen Pareto: winner halves U-Net (imp 0.4263, corr 0.7535, cal 0.6872 vs floors 0.4072/0.6491/0.4883); tests 69 env failures; 7 train timeouts; EIC jobs failed (avocado import, frag_len, KIT) -> C40 builder; kit RCP4 pushing
 - 2026-11-21T22:07Z glossary: reply sent with unregistered terms: d20, gloss, glossary
 - 2026-11-21T22:12Z RCP5 pushed; eic_val 4945457, avocado chain to 4945495, average 4943718
+- 2026-11-21T22:12Z glossary: reply sent with unregistered terms: glossary
+- 2026-11-22T01:10Z Fir fault 23:25-23:56 UTC: every job starting then failed in 1 s (signal 53), 251 jobs incl. all RCP4 submissions and EIC jobs. Test job 5021994 ok at 01:20 UTC. Resubmitted all on RCP5 (~2,130 CPU-h projected); eic_val 5022609, avocado chain 5022622-27, average 5022628

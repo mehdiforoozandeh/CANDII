@@ -8,11 +8,10 @@ Find one miniCANDI recipe that Pareto-dominates the three base models on imputat
 ## Horizon
 DEADLINE 2026-11-22 18:30 UTC (D31, PI: "within 24 hours"). Budget checkpoint 6,000 CPU-h (D20). Fir is the scoring cluster (eval sets live only there); Nibi may be used for training-only overflow (PI 2026-11-21).
 
-## In flight (Fir), at 2026-11-21 22:30 UTC
-- Screen result (p16): Pareto winner halves U-Net (D35); runs_rcp/_sel/pareto_2130.json. Spend 4,954 CPU-h by 21:50 UTC; new submissions project +1,637 (past the 6,000 checkpoint, D20: report).
-- Kit RCP4 (79c82df7): 7 timed-out run-seeds rerun at 6 h; combo arms halves + {mix_pearson, mix_fixdepth, headskip_film, mix_avg} U-Net x 3 seeds at p16; p256 confirm of halves U-Net, mix_fixdepth U-Net, mix_svonly conv AE / conv+attn. Ids in SUBMITTED.tsv.
-- Still running from before: rest of screen (RCP2/RCP3), CNN seeds, curve U-Net reruns, control arms + control evals.
-- EIC (kit RCP5, fc4eb40a): eic_val array 4945457; Avocado chain resubmitted, ends bigwig 4945495 (score after it); Average entry 4943718.
+## In flight (Fir), at 2026-11-22 01:25 UTC
+- Fir fault 23:25-23:56 UTC killed 251 jobs at start (signal 53, many nodes). All resubmitted on kit RCP5 (fc4eb40a) at 01:25 UTC: p256 confirm (halves U-Net, mix_fixdepth U-Net, mix_svonly conv AE / conv+attn), combo arms x 3 seeds, unfinished s1a/s1b/s1c and control arms (6 h train limit except CNN/average 8 h). Ids in SUBMITTED.tsv.
+- Screen result (p16): Pareto winner halves U-Net (D35); runs_rcp/_sel/pareto_2130.json. Spend 4,954 CPU-h by 21:50 UTC.
+- EIC: eic_val array 5022609; Avocado chain 5022622-5022627 (score after 5022627); Average entry 5022628.
 
 ## Next
 1. After 4945495: run eic_val_compare.py score for Avocado; score the U-Net validation predictions.
