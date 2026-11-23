@@ -31,6 +31,7 @@ load alone):
   compare       normalized MSE between two tracks on the scorer's grid (blacklist deleted)
   entrants      score the 25 published entries on given experiments against one truth
   placement     rank each rung among the 25 entrants per measure (all23 chromosome set)
+  eic_score ... passes the rest to tools/onion_eval/eic_score.py's CLI (needs the stubs)
 
 FORMULA (L5) is ported from Max Libbrecht's sprint 10 testbed thread:
 GitHub mlibbrecht/01_2026-10-19_research, projects/03_2026-10-20_epi_imputation/sprints/
@@ -545,6 +546,9 @@ def cmd_placement(a):
 
 
 def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[0] == "eic_score":           # eic_score.py's CLI, with the candi stubs in place
+        return E.main(argv[1:])
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("starts"); p.add_argument("--ta", required=True); p.add_argument("--out", required=True)
