@@ -178,3 +178,8 @@ Every term and metric in use. A new entry lands before its first use in anything
 | reachable | able to be attained | agent | proposed | 2026-11-23 ladder probe report |
 | count route | predicted counts converted to -log10 p by formula | agent | proposed | 2026-11-23 ladder probe |
 | conversion floor | error the counts-to-p-value map alone adds, on observed reads | agent | proposed | D3 |
+| checker | script that validates glossary rows (termcheck.py) | agent | proposed | 2026-11-23 audit reply |
+| D2 | decision: only training and validation data enter fitted steps | agent | proposed | DECISIONS.md |
+| D4 | decision: no downloads or large compute while PI away | agent | proposed | DECISIONS.md |
+| D5 | decision: peak rule fixed before any blind-truth scoring | agent | proposed | DECISIONS.md |
+| MOESM2 | EIC paper's original leaderboard, paired-end truth (Additional file 2) | field | proposed | D1 |
