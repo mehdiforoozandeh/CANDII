@@ -13,3 +13,4 @@ Provenance: PI, agent proposal approved, agent (code-level or supplementary only
 | D6 | Start the blind-row build (t184) so miniCANDI can predict the blind experiments. It belongs to the recipe run; this run hands the go-ahead to that session. | PI 2026-11-23: "yes to i and ii" (i = start the blind-row build) | PI | none | in force |
 | D7 | Headline board for miniCANDI = MOESM2 (original truth, no QN, no reprocessing): it tests correction. MOESM4 is reported beside it. | PI 2026-11-23: "yes to i and ii" (ii = MOESM2 headline, MOESM4 beside) | PI | D1 headline truth | in force |
 | D8 | Hold the 48-experiment conversion batch and the message to Jacob Schreiber. | PI 2026-11-23: "hold off on iii and iv" | PI | none | in force |
+| D9 | Copy the 51 original-truth bigWigs to /project; a read-start-count miniCANDI arm is built in a new long-run session | "yes" (PI via foreman, 2026-11-23) | PI | none | in force |
