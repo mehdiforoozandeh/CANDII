@@ -131,4 +131,4 @@ Root: [[candii]]
 - **Questions** (76): open 24 · leaning 42 · settled 10 · parked 0
 - **Hypotheses** (43): open 10 · leaning 19 · settled 8 · parked 6
 - **Confidence**: weak 22 · moderate 39 · strong 18
-- **Findings**: 140
+- **Findings**: 141

@@ -22,3 +22,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-23T07:56Z Nibi scratch: quota -s = 1024G soft, 20480G hard, 691G used; t184 batch 1 (~2.6 TB) fits under hard limit; told recipe session
 - 2026-11-23T08:02Z t184 batch 1 submitted on Nibi 08:01 UTC by recipe session (jobs 28629674-78, 28629699-701); predictions after final model
 - 2026-11-23T08:44Z foreman relayed overnight rules: workers' judgment on compute, report job ids, D8 holds stay, no stopping for questions
+- 2026-11-23T09:05Z MOESM2 path done: reproduces 25/25 positions on 3 exps; observed SE rungs rank 15/1/17 combined (DNase mse 21); L7 5.9/1.4/4.9; 2.2 CPU-h, jobs 28627126-7; f-node on q90
