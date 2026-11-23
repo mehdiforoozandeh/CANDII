@@ -198,3 +198,6 @@ Every term and metric in use. A new entry lands before its first use in anything
 | ENCODE | public consortium database of functional genomics experiments | field term; proposed | 2026-11-23 reply |
 | MOESM2 | EIC supplementary truth table, original uncorrected tracks | EIC paper supplement; proposed | 2026-11-23 reply |
 | t184 | task id: build the blind-experiment input rows | crux taskhub; proposed | 2026-11-23 reply |
+| pval | short for p-value, in a session title | app; proposed | 2026-11-23 t371 status |
+| predictive | the full count distribution a model predicts | statistics; proposed | 2026-11-23 deviance explainer |
+| widget | interactive chart shown inline in the chat | app; proposed | 2026-11-23 deviance explainer |
