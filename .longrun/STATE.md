@@ -18,7 +18,7 @@ Exploratory, open. First measured result delivered 2026-11-22: ladder probe on 3
 - miniCANDI blind predictions do not exist: blind-row build t184 is a PI gate in the recipe run.
 
 ## In flight
-- Probe 2 (QN with overlap peaks, split-half peaks, fragment pileup): C19M22 done except score 28605164; C40M17 28610164-28610171 and C12M02 28610172-28610179 queued on Nibi. Never resubmit (ids in /scratch/mforooz/eicx/ladder/JOBS.txt). C19M22 split-half peaks reach Jaccard 0.925 (counts) and 0.954 (pileup) vs the pipeline overlap set; overlap rule port equals the pipeline's own script. When jobs end: resume the probe-2 agent to run cruxvault/results/t390/ladder_probe2/runall.sh and write PROBE2.md.
+- Probe 2 DONE (results/t390/ladder_probe2/PROBE2.md): fragment pileup nMSE 0.0021/0.062/0.00003; half-read peaks within 8.5% of truth peaks.
 
 ## Next
 0. t184 batch 1 submitted on Nibi 2026-11-23 08:01 UTC by the recipe session (PI-approved there): ChIP/ATAC 28629674-28629678, DNase 28629699-28629701; outputs /scratch/mforooz/onion/{work,measurements}; limits 3 d / 7 d. Never resubmit (not ours). Blind predictions follow the final architecture at original covariates; recipe session sends paths.
@@ -32,3 +32,4 @@ Ping the PI (push notification) when probe 2, MOESM2 or miniCANDI scores land. F
 
 ## Open asks to the PI
 - Copy the 51 original-truth bigWigs (~70 GB) to /project/def-maxwl/mforooz/ONION/eic/original_pe? Asked via foreman 2026-11-23; default meanwhile: no copy (/project 4264/4657 GiB).
+- Change miniCANDI output to a 25 bp fragment pileup for the EIC entry? Asked via foreman 2026-11-23; default meanwhile: score counts as they are.
