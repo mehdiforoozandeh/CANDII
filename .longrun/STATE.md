@@ -31,4 +31,4 @@ Exploratory, open. First measured result delivered 2026-11-22: ladder probe on 3
 Ping the PI (push notification) when probe 2, MOESM2 or miniCANDI scores land. Foreman session local_b5c55e32-4e2a-4edc-b4b7-6f0134e8bc43 ("Open sessions on project", 2026-11-23): send it every PI-facing item and a 2-3 line status at each milestone. Overnight 2026-11-23 (relayed by foreman): compute by workers' judgment, report each job id to the foreman; 48-experiment batch and Jacob message stay held (D8); do not stop for questions, take the safe default and report it.
 
 ## Open asks to the PI
-None. PI 2026-11-23: blind-row build yes (D6), MOESM2 headline (D7); 48-experiment batch and Jacob message held (D8).
+- Copy the 51 original-truth bigWigs (~70 GB) to /project/def-maxwl/mforooz/ONION/eic/original_pe? Asked via foreman 2026-11-23; default meanwhile: no copy (/project 4264/4657 GiB).
