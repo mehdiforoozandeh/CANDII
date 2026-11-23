@@ -24,4 +24,5 @@ Close the session with one trusted miniCANDI architecture (PI 2026-11-22, after 
 3. Final architecture decision; update GOALS R1-R4, R8; refresh the deck; tell the deviance session the final arm.
 
 ## Open asks to the PI
+- Blind-row build (PI said start): blocked; Nibi scratch 333 GiB free of 1 TiB vs ~2.6 TB needed; Fir lacks the pipelines. Ask: raise Nibi scratch quota (PI-stated 20 TB) or port to Fir.
 - Merge PR 65 (Poisson-deviance scorer) into the recipe branch? Recommended yes.
