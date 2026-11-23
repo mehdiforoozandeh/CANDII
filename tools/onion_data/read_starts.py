@@ -6,9 +6,12 @@
 
 READ-START RULE. The 5' base of a tagAlign line is `start` on strand `+` and `end - 1` on strand
 `-` (`recount.point_positions(start, end, strand, 0)`). Its start bin is that base `// 25`. The grid
-of a chromosome is the shape of its dataset in the measurement's `counts.h5` (`len // 25` bins), for
-the chromosomes of `bin25.MAIN_CHROMS`. A line whose start bin is not on the grid adds no start and
-is counted in `n_off_grid`. Each line is one read, as in `bin25.counts_from_tagalign`, so a file
+of a chromosome is the shape of its dataset in the reference file (`counts.h5`, `pr1.h5`, `pr2.h5`;
+`len // 25` bins), and the chromosome set is every dataset key of that file (chr1 to chr22, chrX
+and, where the reads hold it, chrY; not `bin25.MAIN_CHROMS`, which lacks chrY). The three reference
+files of a measurement must hold the same keys and shapes. Lines on other chromosomes count in
+`n_lines` only. A line whose start bin is not on the grid adds no start and is counted in
+`n_off_grid`. Each line is one read, as in `bin25.counts_from_tagalign`, so a file
 with 2 lines per fragment counts both lines.
 
 OVERLAP RULE AND THE GATE (D9). `records.COUNT_RULE` with the edge handling of
@@ -48,7 +51,6 @@ for _p in (TOOLS, TOOLS / "t112"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from bin25 import MAIN_CHROMS  # noqa: E402
 from records import COUNT_RULE  # noqa: E402
 from onion_data.recount import point_positions  # noqa: E402
 
@@ -270,9 +272,23 @@ def halves_paths(prov: dict, work_root: str | None, testbed_root: str | None = N
 
 
 def grid_sizes(reference_h5) -> dict:
-    """{chrom: n_bins * 25} from the reference's dataset shapes, MAIN_CHROMS order."""
+    """{chrom: n_bins * 25} for every dataset of the reference file, in the file's key order."""
     with h5py.File(reference_h5, "r") as f:
-        return {c: int(f[c].shape[0]) * RES for c in MAIN_CHROMS if c in f}
+        return {c: int(f[c].shape[0]) * RES for c in f.keys()}
+
+
+def reference_grids(mdir) -> dict:
+    """{reference file: grid sizes} of counts.h5, pr1.h5, pr2.h5; raises if they disagree."""
+    grids = {ref: grid_sizes(Path(mdir) / ref) for _, ref in FILES.values()}
+    first = grids["counts.h5"]
+    for ref, g in grids.items():
+        if set(g) != set(first):
+            raise ValueError(f"{mdir}: {ref} holds chromosomes {sorted(g)}, counts.h5 holds "
+                             f"{sorted(first)}")
+        bad = [c for c in g if g[c] != first[c]]
+        if bad:
+            raise ValueError(f"{mdir}: {ref} and counts.h5 differ in grid length on {bad}")
+    return grids
 
 
 def _peak_rss_kb() -> int:
@@ -292,11 +308,12 @@ def run(measurement: str, measurements, work_root, out, reach: int = REACH,
     mdir = Path(measurements) / measurement
     prov_in = json.loads((mdir / "provenance.json").read_text())
     reads = halves_paths(prov_in, work_root, testbed_root)
-    sizes = grid_sizes(mdir / "counts.h5")
+    grids = reference_grids(mdir)
     odir = Path(out) / measurement
     odir.mkdir(parents=True, exist_ok=True)
 
-    res = {h: scan(reads[h], sizes, reach=reach) for h in HALVES}
+    res = {h: scan(reads[h], grids[f"{h}.h5"], reach=reach) for h in HALVES}
+    sizes = grids["counts.h5"]
     res["counts"] = {
         "starts": {c: res["pr1"]["starts"][c] + res["pr2"]["starts"][c] for c in sizes},
         "overlap": {c: res["pr1"]["overlap"][c] + res["pr2"]["overlap"][c] for c in sizes},

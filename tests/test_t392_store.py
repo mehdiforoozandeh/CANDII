@@ -75,9 +75,11 @@ def _write_counts(path: Path, arrays: dict, mid: str, depth: float) -> None:
                         "resolution": RES, "counting_rule": "overlap"})
 
 
-def make_measurement(root: Path, mid: str, halves: dict) -> dict:
-    """halves: {"pr1": reads, "pr2": reads}. Writes the eic_v1_2-like folder and the tagAligns."""
+def make_measurement(root: Path, mid: str, halves: dict, sizes: dict | None = None) -> dict:
+    """halves: {"pr1": reads, "pr2": reads}. Writes the eic_v1_2-like folder and the tagAligns.
+    `sizes` (default SIZES) is the chromosome set of the reference files."""
     import bin25
+    sizes = SIZES if sizes is None else sizes
     work_root = root / "wr"
     work = work_root / "onion" / "work" / mid
     mdir = root / "measurements" / mid
@@ -85,16 +87,16 @@ def make_measurement(root: Path, mid: str, halves: dict) -> dict:
     tas, ov = {}, {}
     for h, reads in halves.items():
         tas[h] = _write_tagalign(work / f"{h}.tagAlign.gz", reads)
-        ov[h] = bin25.counts_from_tagalign(str(tas[h]), SIZES)
+        ov[h] = bin25.counts_from_tagalign(str(tas[h]), sizes)
     depth = float(sum(len(r) for r in halves.values()))
-    _write_counts(mdir / "counts.h5", {c: ov["pr1"][c] + ov["pr2"][c] for c in SIZES}, mid, depth)
+    _write_counts(mdir / "counts.h5", {c: ov["pr1"][c] + ov["pr2"][c] for c in sizes}, mid, depth)
     _write_counts(mdir / "pr1.h5", ov["pr1"], mid, float(len(halves["pr1"])))
     _write_counts(mdir / "pr2.h5", ov["pr2"], mid, float(len(halves["pr2"])))
     recorded = {h: f"{CLUSTER_WORK}/{mid}/{h}.tagAlign.gz" for h in tas}
     (mdir / "provenance.json").write_text(json.dumps(
         {"schema": 1, "measurement_id": mid,
          "halves": {h: {"tagalign": [recorded[h]], "n_lines": len(halves[h])} for h in tas},
-         "chrom_sizes": {"sizes": SIZES}}))
+         "chrom_sizes": {"sizes": sizes}}))
     return {"mdir": mdir, "work": work_root, "measurements": root / "measurements",
             "halves": halves, "overlap": ov}
 
@@ -296,3 +298,40 @@ def test_read_strands_returns_the_stored_slice_as_int32(built):
     got = _rs().read_strands(str(p), "chr1", 10, 30)
     assert got.dtype == np.int32 and got.shape == (30, 2)
     np.testing.assert_array_equal(got, _read(p, "chr1")[10:40].astype(np.int32))
+
+
+# --------------------------------------------------------------------------- chromosome set (t392 probe: chrY)
+
+def test_a_reference_chromosome_outside_main_chroms_is_stored_and_gated(tmp_path):
+    # eic_v1_2 files hold chrY (not in bin25.MAIN_CHROMS); the store and the gate follow the
+    # reference's keys, so chrY reads are stored and the gate has 0 differing bins
+    sizes = {**SIZES, "chrY": 1000}
+    rng = np.random.default_rng(12)
+    y = [("chrY", int(s), int(s) + 60, "+" if i % 2 else "-")
+         for i, s in enumerate(rng.integers(0, 900, 80))]
+    mid = "ENCSR000CHY.pooled.uniform"
+    m = make_measurement(tmp_path, mid, {"pr1": _random_reads(rng, 200) + y[:40],
+                                         "pr2": _random_reads(rng, 200) + y[40:]}, sizes)
+    out = tmp_path / "store"
+    assert _run(m, mid, out) == 0
+    for name in FILES.values():
+        with h5py.File(out / mid / name, "r") as f:
+            assert set(f.keys()) == set(sizes), name
+            assert f["chrY"].shape == (40, 2)
+    s = _read(out / mid / FILES["counts"], "chrY").astype(np.int64)
+    assert int(s.sum()) == 80
+    prov = json.loads((out / mid / "provenance.json").read_text())
+    text = json.dumps(prov)
+    assert text.count('"n_differing": 0') >= 3
+    assert _cli(["verify", "--out", str(out / mid)]) == 0
+
+
+def test_reference_files_with_different_chromosome_sets_are_refused(tmp_path):
+    rng = np.random.default_rng(13)
+    mid = "ENCSR000KEY.pooled.uniform"
+    m = make_measurement(tmp_path, mid, {"pr1": _random_reads(rng, 100),
+                                         "pr2": _random_reads(rng, 100)})
+    with h5py.File(m["mdir"] / "pr2.h5", "r+") as f:
+        f.create_dataset("chrY", data=np.zeros(40, np.uint32))
+    with pytest.raises(ValueError):
+        _rs().run(mid, str(m["measurements"]), str(m["work"]), str(tmp_path / "store"))

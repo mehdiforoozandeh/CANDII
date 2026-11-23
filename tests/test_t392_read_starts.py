@@ -357,3 +357,23 @@ def test_conversion_floor_is_the_nmse_of_kernel_convolved_starts(tmp_path):
     got = rs.conversion_floor({"chr1": st}, kernel, {"chr1": b})
     assert want > 0
     assert got == pytest.approx(want, rel=1e-3)
+
+
+def test_a_reference_chromosome_missing_from_the_store_fails_the_gate(ta, scanned, tmp_path):
+    # t392 probe: the reference holds chrY; a rebuilt overlap without chrY must not pass
+    import bin25
+    arrays = dict(bin25.counts_from_tagalign(str(ta), SIZES))
+    arrays["chrY"] = np.arange(30, dtype=np.uint32)
+    g = _rs().gate(_overlap_dict(scanned), str(_write_reference(tmp_path / "y.h5", arrays)))
+    assert int(g["n_differing"]) == 30
+    assert int(g["n_bins"]) == sum(SIZES[c] // RES for c in SIZES) + 30
+    assert str(g["result"]).lower().startswith("fail")
+
+
+def test_scan_counts_a_chromosome_outside_main_chroms_when_sizes_name_it(tmp_path):
+    p = _write_tagalign(tmp_path / "y.tagAlign.gz",
+                        [("chrY", 10, 60, "+"), ("chrY", 30, 80, "-"), ("chrM", 5, 40, "+")])
+    r = _rs().scan([str(p)], {"chrY": 500}, reach=REACH)
+    s = _per_chrom(r, "starts", "chrY")
+    assert s[0, 0] == 1 and s[3, 1] == 1
+    assert int(r["n_lines"]) == 3 and int(r["n_main"]) == 2
