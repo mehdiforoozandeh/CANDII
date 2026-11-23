@@ -190,3 +190,5 @@ Every term and metric in use. A new entry lands before its first use in anything
 | hg38 | human reference genome assembly GRCh38 | field term; proposed | 2026-11-23 reply |
 | outage | period when a cluster was down and jobs died | agent; proposed | 2026-11-23 reply |
 | nearline | Alliance tape-backed archive storage, slow to recall | cluster term; proposed | 2026-11-23 reply |
+| ATAC | ATAC-seq: assay for open chromatin by transposase insertion | field term; proposed | 2026-11-23 reply |
+| ids | identifiers, e.g. cluster job numbers | agent; proposed | 2026-11-23 reply |
