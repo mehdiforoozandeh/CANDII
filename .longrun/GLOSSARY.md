@@ -175,3 +175,4 @@ Every term and metric in use. A new entry lands before its first use in anything
 | read 5' ends | first sequenced base of each read; MACS2 input | field; proposed | 2026-11-23 ladder probe |
 | fragment pileup | coverage after extending each read to fragment length | field; proposed | 2026-11-23 ladder probe |
 | ladder probe | stepwise test from truth track to count route | agent; proposed | 2026-11-23 ladder probe |
+| reachable | able to be attained; as in "best score reachable" | agent; proposed | 2026-11-23 ladder probe report |
