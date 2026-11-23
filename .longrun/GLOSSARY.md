@@ -222,3 +222,6 @@ Every term and metric in use. A new entry lands before its first use in anything
 | watchers | background scripts that poll the cluster and act on events | app; proposed | 2026-11-23 overnight rules |
 | watcher | background script that polls the cluster and acts on events | app; proposed | 2026-11-23 deviance status |
 | pileup | per-bin count of sequenced fragments covering each position | field term; proposed | 2026-11-23 reply |
+| launchers | scripts that build and submit cluster jobs | repo (tests/test_score_launchers.py); proposed | 2026-11-23 PR 65 test status |
+| diagnose | find the cause of a failure | common; proposed | 2026-11-23 PR 65 test diff |
+| git | version-control tool that records the history of code | common; proposed | 2026-11-23 PR 65 test diff |
