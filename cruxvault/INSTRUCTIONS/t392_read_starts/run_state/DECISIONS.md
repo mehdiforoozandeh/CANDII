@@ -9,3 +9,4 @@
 | D5 | 2026-11-23 | All communication through foreman local_b5c55e32 | H | PI | |
 | D6 | 2026-11-23 | Run memory in run_state/, not .longrun/ (t370's); plan file here too | session prompt | foreman | longrun default |
 | D7 | 2026-11-23 | Ledger written directly from the two short docs, no reader agent | agent | agent | |
+| D8 | 2026-11-23 | Merge origin/exp/t370-minicandi-recipe into umbrella after PR 65 lands; deviance scoring after that merge; report input-check results (esp. figures differing from handoff) as soon as done | foreman message 2026-11-23 | foreman | |
