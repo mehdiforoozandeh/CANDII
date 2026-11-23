@@ -189,3 +189,4 @@ Every term and metric in use. A new entry lands before its first use in anything
 | chrY | the Y chromosome; outside the EIC scorer's chromosome set | field | proposed | 2026-11-23 probe 2 reply |
 | auditor | read-only agent that checks the run's records for drift | agent | proposed | 2026-11-23 brief |
 | halved | reduced to one half of its earlier value | agent | proposed | 2026-11-23 brief |
+| log10 | base-10 logarithm | field | proposed | 2026-11-23 process answer |
