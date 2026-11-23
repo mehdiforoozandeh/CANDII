@@ -7,3 +7,4 @@
 - 2026-11-23T20:43Z foreman: (iv) new class yes, not a deviation; 600 measure ok; transfer not started yet
 - 2026-11-23T20:48Z planner amended plan (24 chunks, waves 1-14). Foreman: both transfers started Nibi->Fir (6 tars 1,185.8 GB from tape -> /scratch/mforooz/rs392/tars/; 78 testbed readset folders -> /scratch/mforooz/rs392/work/testbed/). Watch Fir side; report landing/failure.
 - 2026-11-23T20:48Z testbed transfer landed (18813836293 B, 156 files, matches source); reported. Wave 1: worktrees C1, C2 cut from 4712b34e
+- 2026-11-23T21:18Z C7a: probe array 28712220 ran; GATE FAILED 4/4 (12 files, 2,289,096 differing bins each = chrY size; chrY missing from grid because read_starts uses bin25.MAIN_CHROMS). chr1-22,X exact. 0.35 CPU-h. STOP reported to foreman; asked "fix chrY and rerun probe" (rec yes). Waiting; preparing C3 fix only (no compute). Merged jobs.tsv.

@@ -17,5 +17,5 @@ Next 3:
 2. Merge wave 4; C10a end-to-end + full suite on Fir.
 3. C11a Fir build once tars land (one array per tar + testbed, --testbed-root).
 
-Open asks to foreman: read starts in and out (rec yes), sent 2026-11-23; proceeding with rec.
+Open asks to foreman: (a) read starts in and out (rec yes); (b) STOP: probe gate failed on missing chrY only; "fix chrY and rerun probe" (rec yes). No recount/train/build until answered.
 Blocked: C11a on tars; C14 deviance on PR 65 merge (then merge origin/exp/t370 into umbrella, D8).
