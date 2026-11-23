@@ -192,3 +192,5 @@ Every term and metric in use. A new entry lands before its first use in anything
 | nearline | Alliance tape-backed archive storage, slow to recall | cluster term; proposed | 2026-11-23 reply |
 | ATAC | ATAC-seq: assay for open chromatin by transposase insertion | field term; proposed | 2026-11-23 reply |
 | ids | identifiers, e.g. cluster job numbers | agent; proposed | 2026-11-23 reply |
+| r_a | per-assay negative-binomial dispersion fit on training data | components.py:394; proposed | 2026-11-23 reply |
+| tightest | smallest range across seeds | agent; proposed | 2026-11-23 reply |
