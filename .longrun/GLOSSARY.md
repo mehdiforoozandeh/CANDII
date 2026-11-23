@@ -219,3 +219,4 @@ Every term and metric in use. A new entry lands before its first use in anything
 | mergeable | has no conflicts, so a merge can proceed | git; proposed | 2026-11-23 PR 65 conflicts |
 | ULP | unit in the last place: smallest float step | numerics; proposed | 2026-11-23 PR 65 conflicts |
 | froze | stopped pushing changes to given files for a time | agent; proposed | 2026-11-23 reply |
+| watchers | background scripts that poll the cluster and act on events | app; proposed | 2026-11-23 overnight rules |
