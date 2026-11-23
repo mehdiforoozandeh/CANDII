@@ -21,11 +21,11 @@ Exploratory, open. First measured result delivered 2026-11-22: ladder probe on 3
 - Probe 2 (QN with overlap peaks, split-half peaks, fragment pileup): C19M22 done except score 28605164; C40M17 28610164-28610171 and C12M02 28610172-28610179 queued on Nibi. Never resubmit (ids in /scratch/mforooz/eicx/ladder/JOBS.txt). C19M22 split-half peaks reach Jaccard 0.925 (counts) and 0.954 (pileup) vs the pipeline overlap set; overlap rule port equals the pipeline's own script. When jobs end: resume the probe-2 agent to run cruxvault/results/t390/ladder_probe2/runall.sh and write PROBE2.md.
 
 ## Next
+0. Hand D6 to the recipe session (miniCANDI architecture optimization); build the MOESM2 scorer path (Max's pe cache /scratch/maxwl/epi_imputation/s04/cache/pe).
 1. Read probe 2; record findings; choose the fair peak rule for the count route.
-2. Decide the 48-experiment batch (about 175 CPU-h plus bam2ta for 34; 7 have no BAM). Ask the PI: D4 limits compute while away.
+2. 48-experiment batch: held by the PI (D8).
 3. Score the rungs against the MOESM2 (original PE) truth too, as D1 asks; probe 1 used the unnormalized SE truth instead. Max's pe cache: /scratch/maxwl/epi_imputation/s04/cache/pe.
 4. Fair map for model outputs (training and validation data only, D2); needs blind predictions (t184).
 
 ## Open asks to the PI
-- Compute: probe 1 used about 82 CPU-h (64 of them a one-off SE-truth setup). Is that within D4's "small probes"? Probe 2 is capped at 20 CPU-h.
-At the next milestone: (a) start the blind-row build t184 so miniCANDI can be scored; (b) run the 48-experiment batch.
+None. PI 2026-11-23: blind-row build yes (D6), MOESM2 headline (D7); 48-experiment batch and Jacob message held (D8).
