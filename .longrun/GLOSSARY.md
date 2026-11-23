@@ -183,3 +183,5 @@ Every term and metric in use. A new entry lands before its first use in anything
 | D4 | decision: no downloads or large compute while PI away | agent | proposed | DECISIONS.md |
 | D5 | decision: peak rule fixed before any blind-truth scoring | agent | proposed | DECISIONS.md |
 | MOESM2 | EIC paper's original leaderboard, paired-end truth (Additional file 2) | field | proposed | D1 |
+| lambda | MACS2 local background read rate behind each p-value | field | proposed | 2026-11-23 ChIP gap reply |
+| shallower | sequenced to fewer reads, i.e. lower depth | agent | proposed | 2026-11-23 ChIP gap reply |
