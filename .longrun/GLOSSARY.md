@@ -201,3 +201,4 @@ Every term and metric in use. A new entry lands before its first use in anything
 | edc | part of the app's link address for the foreman session | agent | proposed | 2026-11-23 foreman reply |
 | b4b7 | part of the app's link address for the foreman session | agent | proposed | 2026-11-23 foreman reply |
 | reran | ran again; past tense of rerun | agent | proposed | 2026-11-23 probe 2 reply |
+| divisor | number another number is divided by | field | proposed | 2026-11-24 postpile reply |
