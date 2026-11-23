@@ -198,3 +198,4 @@ Every term and metric in use. A new entry lands before its first use in anything
 | b4b7 | fragment of a linked session id (agent-facing) | session id; proposed | 2026-11-23 reply |
 | edc | fragment of a linked session id (agent-facing) | session id; proposed | 2026-11-23 reply |
 | froze | stopped pushing changes to given files for a time | agent; proposed | 2026-11-23 reply |
+| pileup | per-bin count of sequenced fragments covering each position | field term; proposed | 2026-11-23 reply |
