@@ -86,3 +86,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-23T13:20Z deviance p16 combo_w2x seed2: skill 0.590 floor 0.514, gap 0.952, R 1.060; seed1 queued
 - 2026-11-23T15:20Z deviance p16 combo_w2x 3 seeds: skill 0.562 (0.537-0.590), gap 0.950, R 1.067 vs full combination 0.543 (0.510-0.575), 0.951, 1.059: within seed range. Deviance p256 combo_w2x on Fir 5443555-5443583 (deviance session's jobs)
 - 2026-11-23T16:36Z deviance p256 full combination seed0: skill 0.543, gap 0.9494, R 1.068. Deviance session: p16/p256 share the 256 imputation regions, so skill and R are identical; only the gap moves (<0.001). Matches our pareto tables (imp, cal equal at p16/p256).
+- 2026-11-23T18:06Z deviance p256 full combination seed2: skill 0.575, gap 0.9525, R 1.034; seed1 running
