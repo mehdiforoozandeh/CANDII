@@ -32,4 +32,4 @@ Ping the PI (push notification) when probe 2, MOESM2 or miniCANDI scores land. F
 
 ## Open asks to the PI
 - Copy the 51 original-truth bigWigs (~70 GB) to /project/def-maxwl/mforooz/ONION/eic/original_pe? Asked via foreman 2026-11-23; default meanwhile: no copy (/project 4264/4657 GiB).
-- Change miniCANDI output to a 25 bp fragment pileup for the EIC entry? Asked via foreman 2026-11-23; default meanwhile: score counts as they are.
+- Change miniCANDI's target from 25 bp overlap counts to 25 bp read-start counts (stranded for ChIP, unstranded for DNase)? Post-prediction spreading recovers only 3-12% (postpile). Asked via foreman 2026-11-24; default: score counts as they are.

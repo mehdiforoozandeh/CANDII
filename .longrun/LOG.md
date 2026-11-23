@@ -24,3 +24,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-23T08:44Z foreman relayed overnight rules: workers' judgment on compute, report job ids, D8 holds stay, no stopping for questions
 - 2026-11-23T09:05Z MOESM2 path done: reproduces 25/25 positions on 3 exps; observed SE rungs rank 15/1/17 combined (DNase mse 21); L7 5.9/1.4/4.9; 2.2 CPU-h, jobs 28627126-7; f-node on q90
 - 2026-11-23T09:12Z probe 2 done (9.0 CPU-h): fragment pileup nMSE 0.0021/0.062/0.00003 vs counts 0.017/0.255/0.021; half-read peaks within 8.5% of truth peaks (h91 supports moderate); L7f qn mse 1.74/0.066/1.96, rank 1; score jobs failed only at placement step, rerun by hand
+- 2026-11-23T09:30Z postpile test (0.37 CPU-h, jobs 28647409, 28647648, 28647649): spreading overlap counts recovers 3/12/3% of pileup gain; stranded starts 95/93%, unstranded DNase 92%

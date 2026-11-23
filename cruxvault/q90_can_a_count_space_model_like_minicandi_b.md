@@ -35,7 +35,7 @@ an exact, tested conversion shows how much of the chain's p-value error is the m
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**3 children** · open 0, leaning 2, settled 1, parked 0 · 3 finding(s) on this question
+**3 children** · open 0, leaning 2, settled 1, parked 0 · 4 finding(s) on this question
 
 - `h90` [[h90_max_s_quantile_normalization_rule_and_hi|Max's quantile-normalization rule and his 1 bp MACS2 formula together reproduce the organizers' signal p-value pipeline exactly, so a count route can be converted without a conversion error of its own]] — *settled · strong*
 - `h91` [[h91_peaks_kept_by_the_encode_naive_overlap_r|Peaks kept by the ENCODE naive-overlap rule across two halves of the reads (an entrant-side analogue of the pseudoreplicate-overlap set) bring the count route's normalized score close to the score it gets with the truth's own peaks]] — *leaning · moderate*
@@ -43,4 +43,5 @@ _(optional: the pre-registered rules — endpoints, thresholds, scope — locked
 - `f391` finding (moderate) [[f391_3_experiments_only_one_per_assay_class_t|3 experiments only, one per assay class; the model-side test needs blind…]]
 - `f393` finding (moderate) [[f393_3_experiments_reproduction_exact_placeme|3 experiments; reproduction exact, placements are observed-read rungs, not…]]
 - `f395` finding (moderate) [[f395_3_experiments_observed_reads_how_to_make|3 experiments, observed reads; how to make two halves from a model's…]]
+- `f396` finding (moderate) [[f396_3_experiments_observed_reads_nmse_vs_the|3 experiments, observed reads, nMSE vs the exact formula; no model retrained]]
 <!-- crux:ledger:end -->
