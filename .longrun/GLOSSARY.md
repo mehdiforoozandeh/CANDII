@@ -183,3 +183,9 @@ Every term and metric in use. A new entry lands before its first use in anything
 | ENCODE | public consortium database of functional genomics experiments | field term; proposed | 2026-11-23 reply |
 | MOESM2 | EIC supplementary truth table, original uncorrected tracks | EIC paper supplement; proposed | 2026-11-23 reply |
 | t184 | task id: build the blind-experiment input rows | crux taskhub; proposed | 2026-11-23 reply |
+| FASTQ | raw sequencing-read file format with base qualities | field term; proposed | 2026-11-23 reply |
+| GiB | gibibyte, 2^30 bytes | unit; proposed | 2026-11-23 reply |
+| TiB | tebibyte, 2^40 bytes | unit; proposed | 2026-11-23 reply |
+| Globus | cluster-to-cluster file transfer service used by Alliance Canada | tool; proposed | 2026-11-23 reply |
+| hg38 | human reference genome assembly GRCh38 | field term; proposed | 2026-11-23 reply |
+| outage | period when a cluster was down and jobs died | agent; proposed | 2026-11-23 reply |
