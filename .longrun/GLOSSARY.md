@@ -201,3 +201,17 @@ Every term and metric in use. A new entry lands before its first use in anything
 | pval | short for p-value, in a session title | app; proposed | 2026-11-23 t371 status |
 | predictive | the full count distribution a model predicts | statistics; proposed | 2026-11-23 deviance explainer |
 | widget | interactive chart shown inline in the chat | app; proposed | 2026-11-23 deviance explainer |
+| FASTQ | raw sequencing-read file format with base qualities | field term; proposed | 2026-11-23 reply |
+| GiB | gibibyte, 2^30 bytes | unit; proposed | 2026-11-23 reply |
+| TiB | tebibyte, 2^40 bytes | unit; proposed | 2026-11-23 reply |
+| Globus | cluster-to-cluster file transfer service used by Alliance Canada | tool; proposed | 2026-11-23 reply |
+| hg38 | human reference genome assembly GRCh38 | field term; proposed | 2026-11-23 reply |
+| outage | period when a cluster was down and jobs died | agent; proposed | 2026-11-23 reply |
+| nearline | Alliance tape-backed archive storage, slow to recall | cluster term; proposed | 2026-11-23 reply |
+| ATAC | ATAC-seq: assay for open chromatin by transposase insertion | field term; proposed | 2026-11-23 reply |
+| ids | identifiers, e.g. cluster job numbers | agent; proposed | 2026-11-23 reply |
+| r_a | per-assay negative-binomial dispersion fit on training data | components.py:394; proposed | 2026-11-23 reply |
+| tightest | smallest range across seeds | agent; proposed | 2026-11-23 reply |
+| local_b5c55e32 | id prefix of the foreman Claude session (agent-facing) | session id; proposed | 2026-11-23 reply |
+| b4b7 | fragment of a linked session id (agent-facing) | session id; proposed | 2026-11-23 reply |
+| edc | fragment of a linked session id (agent-facing) | session id; proposed | 2026-11-23 reply |

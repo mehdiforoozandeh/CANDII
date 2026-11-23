@@ -68,3 +68,12 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-23T05:03Z glossary: reply sent with unregistered terms: flagged
 - 2026-11-23T07:47Z PI 'iii) yes': deleting Fir /scratch/mforooz/onion/pred_store/runs_rcp_ens (ensemble per-seed stores; scores kept under runs_rcp_ens). Peer session 'pval eic comparison' relayed PI approval to start t184 blind-row build; t184 says the PI runs the submit command; asked PI here.
 - 2026-11-23T08:08Z glossary: reply sent with unregistered terms: inline
+- 2026-11-23T07:47Z glossary: reply sent with unregistered terms: flagged
+- 2026-11-23T07:53Z t184 (PI 'Yes, start it'): NOT submitted. Nibi dry run 72 rows OK, but Nibi /scratch quota 1024 GiB with 691 used (diskusage_report) vs ~1.2 TB staging + 1.4 TB BAMs. Fir port refused: pipelines, refs, build lists missing on Fir (closeout_D4b/FIR_PORT.md). Asked PI.
+- 2026-11-23T07:54Z glossary: reply sent with unregistered terms: flagged
+- 2026-11-23T07:56Z Nibi scratch: quota -s shows soft 1024G, hard 20480G (peer fact verified); t184 blocker withdrawn; re-asked PI with cost 22,700 CPU-h
+- 2026-11-23T08:01Z t184 batch 1 SUBMITTED on Nibi 2026-11-23T08:01Z (PI yes, under 20 TiB hard quota): 72 rows; stage 28629674/76/99, 28629702/04/10/12/16/18; build 28629675/77, 28629700/03/05/11/13/17/19; signal 28629678 (ChIP/ATAC), 28629701 (DNase); record /project/def-maxwl/mforooz/ONION/logs/closeout_d4_submit_20261123T080124Z.log; never resubmit (script skips queued rows)
+- 2026-11-23T08:15Z PI: 'yes rescore' -> asked deviance session (local_2eb1d23b) to rescore rcp_halves_mix_avg_pearson_unet and rcp_combo_w2x_unet at p16_dev and p256_dev, 3 seeds. PI asked: compare all variants of the design evolution and pick the best combination; explain Pearson residual.
+- 2026-11-23T08:18Z deviance session: combo p16_dev jobs 5381558-5381572 (metrics 5381562/67/72) on DEV1; p256_dev chained; combo_w2x on DEV2 auto after DONE; ids in runs_rcp/DEV_SUBMITTED_{p16,p256}.txt
+- 2026-11-23T08:22Z foreman session local_b5c55e32 set up; status sent; PI-facing items go there
+- 2026-11-23T08:24Z PI via foreman on PR 65: 'after the 256 region. but right now there are merge conflicts that need solving.' Deviance session resolving; freeze PR 65 files on our branch until told.

@@ -95,3 +95,8 @@ working autonomously
 full region
 region results
 deviance metrics
+hard quota
+best combo
+different variants
+minicandi design
+please explain

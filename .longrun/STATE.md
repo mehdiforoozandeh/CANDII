@@ -18,10 +18,13 @@ Close the session with one trusted miniCANDI architecture (PI 2026-11-22, after 
 - Avocado 5022624 still pending. rcp_rec_ctlw4 seed 2 timed out (2 seeds read; not resubmitted).
 - Ensemble on pairs + average: ens3 missing (only seed0_recal landed); low priority.
 
+- Blind-row build batch 1 on Nibi (submitted 08:01 UTC, 72 rows, ~22,700 CPU-h): stage 28629674/76/99, 28629702/04/10/12/16/18; build 28629675/77, 28629700/03/05/11/13/17/19; signal 28629678 (ChIP/ATAC), 28629701 (DNase). Watch scratch; move BAMs and delete staged FASTQs as rows finish to fall under 1024G soft quota.
+
 ## Next
 1. When combo p256 lands: pareto_select at 256; compare with the recipe.
 2. When combo_w2x p16 lands: if PASS and not worse beyond range than the combination, submit its p256 confirm.
 3. Final architecture decision; update GOALS R1-R4, R8; refresh the deck; tell the deviance session the final arm.
 
 ## Open asks to the PI
-- Merge PR 65 (Poisson-deviance scorer) into the recipe branch? Recommended yes.
+Route PI-facing items and milestone status (2-3 lines) to foreman session local_b5c55e32-4e2a-4edc-b4b7-6f0134e8bc43 (setup 2026-11-23).
+- PR 65: PI says merge after the 256-region results; deviance session resolving conflicts first. Do not push PR 65's files until the foreman says resolved.
