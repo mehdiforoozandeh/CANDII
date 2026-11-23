@@ -1,0 +1,5 @@
+job_id	array_task	name	cluster	kit	submitted_utc	state	cputime_raw_s
+28712220	1	rs392_probe	nibi	RS1	2026-11-23T21:08:54Z	FAILED	186
+28712220	2	rs392_probe	nibi	RS1	2026-11-23T21:08:54Z	FAILED	258
+28712220	3	rs392_probe	nibi	RS1	2026-11-23T21:08:54Z	FAILED	552
+28712220	4	rs392_probe	nibi	RS1	2026-11-23T21:08:54Z	FAILED	280
