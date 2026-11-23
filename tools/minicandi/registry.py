@@ -37,6 +37,11 @@ it through `component_kwargs`); `load_run` wraps a run of `res_bp` < 25 or `res_
 `res_adapter.ResAdapter`, which presents it to the scorer at 25 bp, and refuses `res_bp` > 25
 (scored by `onion_eval/res_score.py` only).
 
+Read starts (t392 chunk C9): `load_run` wraps a run whose config sets `read_start` in
+`rs_adapter.ReadStartAdapter`, which reads the stranded inputs from the read-start store and
+converts the output to an overlap-count NB, so the scorer scores it unchanged; `input_depth` other
+than native is refused there.
+
 `load_run(run_dir)` is the only loader the scorer (E6) and the guardrail (E4) use. It reads
 `<run_dir>/ckpt.pt` (the pinned dict, `contract.check_ckpt`), rebuilds the model from the saved
 config with the RNG forked (so loading never moves the caller's RNG), loads the state dict and
@@ -213,6 +218,9 @@ def load_run(run_dir, map_location="cpu") -> tuple[C.MiniCandi, dict]:
     if config.get("res_bp", C.RES) < C.RES or config.get("res_in_sub", 1) > 1:
         from minicandi.res_adapter import ResAdapter     # chunk RM: scored at 25 bp
         model = ResAdapter(model, config, run_dir)
+    if config.get("read_start"):
+        from minicandi.rs_adapter import ReadStartAdapter   # t392 C9: overlap-count output
+        model = ReadStartAdapter(model, config, run_dir)
     model.to(map_location)
     model.eval()
     return model, config
