@@ -11,7 +11,7 @@ miniCANDI predicts 25 bp counts. Can a step after the prediction spread each 25 
 
 ## What L6's box_d already does
 
-L6 (`ladder_probe.py counts_route`, line 304) calls `signal_from_counts.signal_track(..., mode="plug_in", pileup="box_d")`.
+L6 (`ladder_probe.py counts_route`, line 305) calls `signal_from_counts.signal_track(..., mode="plug_in", pileup="box_d")`.
 For ChIP-seq, `signal_from_counts.py:536` spreads the 25 bp overlap counts of the treatment and the control with `_spread`. `_spread` calls `box_spread` (line 470), which convolves the counts with a centred box of d bp whose weights sum to 1 (`box_weights`, `box_spread` line 418).
 Line 540 then multiplies the box mean by s = d / (rl + 24) (`SPAN_EXTRA = 24`, line 161) and scores floor(s * m) against MACS2's lambda (`plug_in_neglog10p`, line 287). DNase-seq uses the same spread at lines 523-524.
 
