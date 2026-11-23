@@ -375,3 +375,4 @@ The 256-region scoring (about 900 CPU-h) is outside this plan.
 Wall time: day 1, waves 1 to 4, with the gate result on four measurements; day 2, waves 5 and 6, and the build as soon as the tars are on Fir; day 3, training (about 6 to 7 h per seed, the three in parallel) and scoring (about 2 h); day 3 to 4, the deliverable.
 
 ## Log
+- 2026-11-23T20:48Z wave 1 launch: C1 crux-tests [opus], C2 Nibi staging [opus]

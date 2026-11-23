@@ -6,3 +6,4 @@
 - 2026-11-23T20:43Z plan review done: 23 fixes accepted, sent to planner for amendment; asked foreman (iv) new dataset class; 600 cap = CPUTimeRAW
 - 2026-11-23T20:43Z foreman: (iv) new class yes, not a deviation; 600 measure ok; transfer not started yet
 - 2026-11-23T20:48Z planner amended plan (24 chunks, waves 1-14). Foreman: both transfers started Nibi->Fir (6 tars 1,185.8 GB from tape -> /scratch/mforooz/rs392/tars/; 78 testbed readset folders -> /scratch/mforooz/rs392/work/testbed/). Watch Fir side; report landing/failure.
+- 2026-11-23T20:48Z testbed transfer landed (18813836293 B, 156 files, matches source); reported. Wave 1: worktrees C1, C2 cut from 4712b34e
