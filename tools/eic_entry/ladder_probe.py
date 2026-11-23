@@ -484,6 +484,252 @@ def cmd_peakcheck(a):
 
 
 # --------------------------------------------------------------------------------------------
+# probe 2: read halves, the pipeline's naive-overlap rule, the 25 bp fragment-pileup route
+# --------------------------------------------------------------------------------------------
+def cmd_split(a):
+    """Two random halves of a tagAlign's lines (seeded numpy permutation). Like the pipeline's
+    `encode_task_spr.py::spr_se` (chip-seq-pipeline2 v2.2.2, src/encode_task_spr.py:40-81), the
+    first half gets (N + 1) // 2 lines; the pipeline's own shuffle (GNU shuf seeded by the file's
+    byte size) is not reproduced. Writes <out>.pr1.tagAlign, <out>.pr2.tagAlign (uncompressed)."""
+    t0 = time.time()
+    op = gzip.open if a.ta.endswith(".gz") else open
+    with op(a.ta, "rb") as fh:
+        lines = fh.read().splitlines()
+    n = len(lines)
+    rng = np.random.default_rng(a.seed)
+    first = np.zeros(n, bool)
+    first[rng.permutation(n)[: (n + 1) // 2]] = True
+    for tag, sel in (("pr1", first), ("pr2", ~first)):
+        tmp = f"{a.out}.{tag}.tagAlign.tmp"
+        with open(tmp, "wb") as fh:
+            idx = np.flatnonzero(sel)
+            for i0 in range(0, len(idx), 2_000_000):
+                fh.write(b"\n".join(lines[i] for i in idx[i0: i0 + 2_000_000]) + b"\n")
+        os.replace(tmp, f"{a.out}.{tag}.tagAlign")
+    rep = dict(ta=a.ta, seed=a.seed, n_lines=n, n_pr1=int(first.sum()), n_pr2=int(n - first.sum()),
+               seconds=time.time() - t0)
+    write_json(a.out + ".split.json", rep)
+    log(json.dumps(rep))
+    return 0
+
+
+def _read_peaks(path):
+    """Rows of a BED / narrowPeak file (plain or .gz) as lists of fields (main chromosomes only)."""
+    op = gzip.open if str(path).endswith(".gz") else open
+    rows = []
+    with op(path, "rt") as fh:
+        for line in fh:
+            f = line.rstrip("\n").split("\t")
+            if len(f) >= 3 and f[0] in CHROMS:
+                rows.append(f)
+    return rows
+
+
+def _overlap_keep(A, B):
+    """Port of the naive-overlap filter of the ENCODE pipelines (chip-seq-pipeline2 v2.2.2 and
+    atac-seq-pipeline v2.2.3, identical files, src/encode_task_overlap.py:89-91 and 109-117):
+
+        intersectBed -wo -a A -b B | awk '{s1=$3-$2; s2=$13-$12;
+            if (($21/s1 >= 0.5) || ($21/s2 >= 0.5)) print}' | cut -f 1-10 | sort | uniq
+
+    i.e. keep each row of A that overlaps some row of B by at least half of the A row's length or
+    half of the B row's length (overlap in bp, half-open, > 0). Returns the kept rows of A (each
+    once; `uniq` on identical full rows)."""
+    out, seen = [], set()
+    byc = {}
+    for f in B:
+        byc.setdefault(f[0], []).append((int(f[1]), int(f[2])))
+    idx = {}
+    for c, iv in byc.items():
+        iv.sort()
+        s = np.array([x[0] for x in iv], np.int64)
+        e = np.array([x[1] for x in iv], np.int64)
+        idx[c] = (s, e, int((e - s).max()))
+    for f in A:
+        if f[0] not in idx:
+            continue
+        s, e, lmax = idx[f[0]]
+        a0, a1 = int(f[1]), int(f[2])
+        lo = np.searchsorted(s, a0 - lmax, "left")
+        hi = np.searchsorted(s, a1, "left")
+        bs, be = s[lo:hi], e[lo:hi]
+        ov = np.minimum(be, a1) - np.maximum(bs, a0)
+        ok = ov > 0
+        if not ok.any():
+            continue
+        ov, lb = ov[ok], (be - bs)[ok]
+        if np.any((2 * ov >= (a1 - a0)) | (2 * ov >= lb)):
+            key = "\t".join(f)
+            if key not in seen:
+                seen.add(key)
+                out.append(f)
+    return out
+
+
+def _blacklist_drop(rows, blacklist):
+    """Port of encode_lib_blacklist_filter.py::blacklist_filter (same source tree, lines 62-66):
+    `bedtools intersect -v -a peaks -b blacklist` (drop any peak overlapping a blacklist interval by
+    >= 1 bp) and the score column capped at 1000. The chromosome regex `chr[\\dXY]+` keeps every
+    main chromosome, so it is a no-op here."""
+    bl = {}
+    for f in _read_peaks(blacklist):
+        bl.setdefault(f[0], []).append((int(f[1]), int(f[2])))
+    ix = {}
+    for c, iv in bl.items():
+        iv.sort()
+        ix[c] = (np.array([x[0] for x in iv]), np.array([x[1] for x in iv]), max(x[1] - x[0] for x in iv))
+    out = []
+    for f in rows:
+        if f[0] in ix:
+            s, e, lmax = ix[f[0]]
+            a0, a1 = int(f[1]), int(f[2])
+            lo, hi = np.searchsorted(s, a0 - lmax), np.searchsorted(s, a1)
+            if np.any(e[lo:hi] > a0):
+                continue
+        g = list(f)
+        if len(g) > 4 and g[4].lstrip("-").isdigit() and int(g[4]) > 1000:
+            g[4] = "1000"
+        out.append(g)
+    return out
+
+
+def cmd_overlap(a):
+    """The pipeline's pseudoreplicate overlap set: pooled peaks reproducible in both halves, then
+    blacklist-filtered (encode_task_overlap.py::naive_overlap, main lines 140-147)."""
+    p1, p2, pooled = _read_peaks(a.peak1), _read_peaks(a.peak2), _read_peaks(a.pooled)
+    keep = _overlap_keep(_overlap_keep(pooled, p1), p2)
+    keep = _blacklist_drop(keep, a.blacklist) if a.blacklist else keep
+    keep.sort(key=lambda f: (CHROMS.index(f[0]), int(f[1]), int(f[2])))
+    with open(a.out, "w") as fh:
+        for f in keep:
+            fh.write("\t".join(f) + "\n")
+    rep = dict(peak1=a.peak1, peak2=a.peak2, pooled=a.pooled, blacklist=a.blacklist,
+               n_pr1=len(p1), n_pr2=len(p2), n_pooled=len(pooled), n_overlap=len(keep),
+               bases=int(sum(int(f[2]) - int(f[1]) for f in keep)))
+    write_json(a.out + ".json", rep)
+    log(json.dumps(rep))
+    return 0
+
+
+def mlog10_sf(k, lam):
+    """-log10 P(N >= k), N ~ Poisson(lam), real k >= 0. Verbatim port of Max Libbrecht's sprint 10
+    cac_lib.py::mlog10_sf (sprints/10_2026-11-11_covariate_correction/scripts/testbed/cac_lib.py:183-199)."""
+    from scipy.special import gammainc, gammaln
+
+    k = np.asarray(k, np.float64)
+    lam = np.asarray(lam, np.float64)
+    out = np.zeros(np.broadcast(k, lam).shape)
+    pos = k > 0
+    kk, ll = np.broadcast_to(k, out.shape)[pos], np.broadcast_to(lam, out.shape)[pos]
+    g = gammainc(kk, ll)
+    v = np.empty_like(g)
+    ok = g > 1e-280
+    v[ok] = -np.log10(g[ok])
+    bad = ~ok
+    if bad.any():
+        aa, x = kk[bad], ll[bad]
+        lp = aa * np.log(x) - x - gammaln(aa + 1) - np.log1p(-np.minimum(x / (aa + 1), 0.999))
+        v[bad] = -lp / np.log(10.0)
+    out[pos] = v
+    return np.maximum(out, 0.0)
+
+
+def box(v, nb):
+    """Centred moving sum over nb bins, zeros outside (cac_lib.py::box, lines 150-156)."""
+    nb = max(1, int(nb))
+    cs = np.concatenate([[0.0], np.cumsum(v, dtype=np.float64)])
+    i = np.arange(len(v))
+    lo = np.clip(i - nb // 2, 0, len(v))
+    hi = np.clip(i - nb // 2 + nb, 0, len(v))
+    return cs[hi] - cs[lo]
+
+
+def lam_hat25(d, T, c25, s, t25):
+    """MACS2's local lambda from 25 bp tracks (cac_lib.py::lam_hat25, lines 170-180): c25 / t25 =
+    control / treatment 25 bp overlap counts divided by kappa (read 5' ends per bin)."""
+    lam = np.full(len(t25), d * T / G_HS)
+    if c25 is not None:
+        for w, f in ((d, 1.0), (1000.0, d / 1000.0), (10000.0, d / 10000.0)):
+            lam = np.maximum(lam, s * f * box(c25, max(1, round(w / 25.0))))
+    else:
+        lam = np.maximum(lam, d / 10000.0 * box(t25, 400))
+    return lam
+
+
+KAPPA_CHROMS = ["chr20", "chr13", "chr21", "chr22"]
+
+
+def kappa_of(z):
+    """Mean number of 25 bp bins a read overlaps under the store rule (cac_lib.py Data.kappa, lines
+    110-118): sum of the 25 bp counts / reads, over chr13, chr20, chr21, chr22."""
+    n = sum(len(z[f"{c}_p"]) + len(z[f"{c}_m"]) for c in KAPPA_CHROMS)
+    return sum(float(z[f"{c}_cnt"].sum()) for c in KAPPA_CHROMS) / n
+
+
+def _on_grid(v, n):
+    y = np.zeros(n, np.float64)
+    m = min(n, len(v))
+    y[:m] = v[:m]
+    return y
+
+
+def cmd_fragpile_route(a):
+    """L6f: MACS2's formula on a 25 bp fragment pileup, as Max's sprint 10 testbed computed its "pf"
+    feature (cac_lib.py::pc_features, lines 277-292, and cac_train.py:408-411 "formula on the 25 bp
+    fragment pileup"): pile25 = each read extended to d along its strand (DNase-seq: centred on the
+    5' end), the mean coverage over each 25 bp bin; lambda = lam_hat25 from the control's (no
+    control: the treatment's) 25 bp overlap counts / kappa; score = mlog10_sf(pile25 + 1, lambda) =
+    -log10 P(N > pile25) ("gt", MACS2's convention). Raw -log10 p is written (Max scored asinh of it).
+    Deviation: the pileup is built from 1 bp read 5' ends (Max: 5 bp), i.e. the exact 25 bp mean."""
+    t0 = time.time()
+    sizes = chrom_sizes(a.sizes_from)
+    zt, it = load_starts(a.trt)
+    T = float(it["n_lines"])
+    d = float(a.d)
+    dnase = a.ctl == "none"
+    kt = kappa_of(zt)
+    if not dnase:
+        zc, ic = load_starts(a.ctl)
+        kc = kappa_of(zc)
+        s = T / float(ic["n_lines"])
+    out = {}
+    for c in CHROMS:
+        L = sizes[c]
+        n = ngrid(L)
+        pile = pileup_from_positions(zt[f"{c}_p"], zt[f"{c}_m"], L, int(d), dnase)
+        p25 = bin25_full(pile, L).astype(np.float64)
+        del pile
+        t25 = _on_grid(zt[f"{c}_cnt"].astype(np.float64), n) / kt
+        c25 = None if dnase else _on_grid(zc[f"{c}_cnt"].astype(np.float64), n) / kc
+        lam = lam_hat25(d, T, c25, 0.0 if dnase else s, t25)
+        out[c] = mlog10_sf(p25 + 1.0, lam).astype(np.float32)
+        log(f"{c} done ({time.time() - t0:.0f}s)")
+    save_track(a.out, out)
+    write_json(a.out + ".json", dict(trt=a.trt, ctl=a.ctl, d=d, T=T, kappa_trt=kt,
+                                     kappa_ctl=None if dnase else kc, s=None if dnase else s,
+                                     seconds=time.time() - t0))
+    return 0
+
+
+def cmd_arrdiff(a):
+    """Max |A - B| and the count of differing bins of two challenge .npy tracks, raw grid, all bins."""
+    A, B = load_track_raw(a.a), load_track_raw(a.b)
+    mx, nd, tot = 0.0, 0, 0
+    for c in CHROMS:
+        x, y = A[c].astype(np.float64), B[c].astype(np.float64)
+        if len(x) != len(y):
+            raise SystemExit(f"{c}: length {len(x)} != {len(y)}")
+        dd = np.abs(x - y)
+        mx = max(mx, float(dd.max()))
+        nd += int((dd > 0).sum())
+        tot += len(x)
+    rep = dict(a=a.a, b=a.b, bins=tot, bins_differing=nd, max_abs_diff=mx)
+    write_json(a.out, rep)
+    log(json.dumps(rep))
+    return 0
+
+
+# --------------------------------------------------------------------------------------------
 # compare, entrants, placement
 # --------------------------------------------------------------------------------------------
 def cmd_compare(a):
@@ -563,6 +809,24 @@ def main(argv=None):
         p.add_argument("--out", required=True)
         p.add_argument("--eps", type=float, default=1e-6)
         p.set_defaults(fn=fn)
+    p = sub.add_parser("fragpile_route")
+    p.add_argument("--trt", required=True, help="starts prefix")
+    p.add_argument("--ctl", required=True, help="starts prefix, or none (DNase-seq)")
+    p.add_argument("--d", type=float, required=True)
+    p.add_argument("--sizes-from", required=True); p.add_argument("--out", required=True)
+    p.set_defaults(fn=cmd_fragpile_route)
+    p = sub.add_parser("split")
+    p.add_argument("--ta", required=True); p.add_argument("--out", required=True)
+    p.add_argument("--seed", type=int, default=20261122)
+    p.set_defaults(fn=cmd_split)
+    p = sub.add_parser("overlap")
+    p.add_argument("--peak1", required=True); p.add_argument("--peak2", required=True)
+    p.add_argument("--pooled", required=True); p.add_argument("--blacklist", default="")
+    p.add_argument("--out", required=True)
+    p.set_defaults(fn=cmd_overlap)
+    p = sub.add_parser("arrdiff")
+    p.add_argument("--a", required=True); p.add_argument("--b", required=True); p.add_argument("--out", required=True)
+    p.set_defaults(fn=cmd_arrdiff)
     p = sub.add_parser("qnorm")
     p.add_argument("--x", required=True); p.add_argument("--mask", required=True)
     p.add_argument("--ref", required=True); p.add_argument("--out", required=True)

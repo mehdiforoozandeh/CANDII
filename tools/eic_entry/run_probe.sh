@@ -7,6 +7,7 @@
 #   bash run_probe.sh score <C##M##> [dep]   (on Nibi) only the scoring job
 #   bash run_probe.sh l4o <C##M##>          (on Nibi) extra rung: L3 normalized with the overlap peaks
 #   RUNGS="L4o" bash run_probe.sh score <C##M##> <dep>   score only those rungs
+#   bash run_probe.sh p2 <C##M##>           (on Nibi) probe 2: L7t, L7o, L6f, L7f, checks and scoring
 #   bash run_probe.sh sacct <jobids>         (on Nibi) wall time and peak memory per step
 #
 # Every job is named eicx_*; account def-maxwl, CPU (--gres=none). Outputs under $OUT.
@@ -25,6 +26,7 @@ CQN=$OUT/score_cache/qnorm                 # truth/ and var/ link to the onion q
 CSE=$OUT/score_cache/se_unnormalized
 ONION_CQN=/scratch/mforooz/onion/eic/score_cache/qnorm
 SIZES=$TSE/C19M22.bigwig                   # chromosome sizes (GRCh38) from any truth bigWig
+BL=/scratch/mforooz/EIC_REPRO/003/refcache/f183dcba5d34f959d8b55ed438ee2e22/ENCFF356LFX.bed.gz   # the pipelines' blacklist (metadata.json call inputs)
 ENV='source /etc/profile >/dev/null 2>&1; module load StdEnv/2023 python/3.11 scipy-stack; export PYTHONUNBUFFERED=1 OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK:-1}'
 
 # experiment table: treatment tagAlign | control tagAlign or none | d | peak cap | pipeline stem
@@ -124,6 +126,63 @@ $LP compare --a $OUT/rungs/L4o/$E.npy --b $OUT/rungs/L2/$E.npy --name L4o_vs_L2 
   ;;
 score)
   score_job ${2:?exp} "${3:-}"
+  ;;
+p2)   # probe 2: L7t, L7o, L6f, L7f for one experiment (per-experiment rung folders: no scoring race)
+  E=${2:?exp}; A=${E:3}
+  read -r TRT CTL D CAP PSIG PPEAK < <(conf "$E")
+  X=$OUT/rungs2/$E; H=$OUT/halves; Q=$OUT/qc
+  mkdir -p $X/{L6,L6f,L7t,L7o,L7f,L7chk} $H $OUT/scores2/{qn,se} $OUT/peaks $Q
+  [ "$CTL" != none ] && CTLP=$OUT/starts/$CTL || CTLP=none
+  PO=$RES/$E/overlap_pr_shard0_rep1-pr1_vs_rep1-pr2.overlap.bfilt.narrowPeak.gz
+  PP1=$(ls $RES/$E/call_peak_pr1_shard0_*.bfilt.narrowPeak.gz); PP2=$(ls $RES/$E/call_peak_pr2_shard0_*.bfilt.narrowPeak.gz)
+  PPO=$RES/$E/$PPEAK.narrowPeak.gz
+  RL=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["mean_read_length"])' $OUT/starts/$TRT.json)
+  CP="--max-gap $RL --min-len $D --cap $CAP"
+  J_SP=$(sub eicx_p2split_$E 2 40G 2:00:00 "" "$LP split --ta $TA/$TRT.tagAlign.gz --out $H/$TRT && \
+$LP starts --ta $H/$TRT.pr1.tagAlign --out $OUT/starts/$TRT.pr1 --sizes-from $SIZES && \
+$LP starts --ta $H/$TRT.pr2.tagAlign --out $OUT/starts/$TRT.pr2 --sizes-from $SIZES && rm -f $H/$TRT.pr1.tagAlign $H/$TRT.pr2.tagAlign")
+  J_FU=$(sub eicx_p2full_$E 2 40G 2:00:00 "" "$LP counts_route --trt $OUT/starts/$TRT --ctl $CTLP --d $D --out $X/L6/$E.npy --sizes-from $SIZES && \
+$LP arrdiff --a $X/L6/$E.npy --b $OUT/rungs/L6/$E.npy --out $Q/${E}_L6rerun_arrdiff.json && \
+$LP callpeaks --x $X/L6/$E.npy --out $OUT/peaks/${E}_L6p2.bed $CP && \
+$LP peakcheck --a $OUT/peaks/${E}_L6p2.bed --b $OUT/peaks/${E}_L6.bed --out $Q/${E}_peakcheck_L6p2_vs_L6.json --sizes-from $SIZES && \
+$LP fragpile_route --trt $OUT/starts/$TRT --ctl $CTLP --d $D --out $X/L6f/$E.npy --sizes-from $SIZES && \
+$LP callpeaks --x $X/L6f/$E.npy --out $OUT/peaks/${E}_L6f.bed $CP")
+  HC=""
+  for h in pr1 pr2; do
+    HC="$HC $LP counts_route --trt $OUT/starts/$TRT.$h --ctl $CTLP --d $D --out $H/${E}_L6_$h.npy --sizes-from $SIZES && \
+$LP callpeaks --x $H/${E}_L6_$h.npy --out $OUT/peaks/${E}_L6_$h.bed $CP && \
+$LP fragpile_route --trt $OUT/starts/$TRT.$h --ctl $CTLP --d $D --out $H/${E}_L6f_$h.npy --sizes-from $SIZES && \
+$LP callpeaks --x $H/${E}_L6f_$h.npy --out $OUT/peaks/${E}_L6f_$h.bed $CP &&"
+  done
+  J_HA=$(sub eicx_p2half_$E 2 40G 3:00:00 "$J_SP:$J_FU" "$HC \
+$LP overlap --peak1 $OUT/peaks/${E}_L6_pr1.bed --peak2 $OUT/peaks/${E}_L6_pr2.bed --pooled $OUT/peaks/${E}_L6p2.bed --blacklist $BL --out $OUT/peaks/${E}_L7o.bed && \
+$LP overlap --peak1 $OUT/peaks/${E}_L6f_pr1.bed --peak2 $OUT/peaks/${E}_L6f_pr2.bed --pooled $OUT/peaks/${E}_L6f.bed --blacklist $BL --out $OUT/peaks/${E}_L7f.bed && \
+$LP overlap --peak1 $PP1 --peak2 $PP2 --pooled $PPO --blacklist $BL --out $OUT/peaks/${E}_port_on_pipeline.bed && \
+$LP peakcheck --a $OUT/peaks/${E}_port_on_pipeline.bed --b $PO --out $Q/${E}_peakcheck_port_vs_overlap.json --sizes-from $SIZES && \
+$LP peakcheck --a $OUT/peaks/${E}_L7o.bed --b $PO --out $Q/${E}_peakcheck_L7o_vs_overlap.json --sizes-from $SIZES && \
+$LP peakcheck --a $OUT/peaks/${E}_L7f.bed --b $PO --out $Q/${E}_peakcheck_L7f_vs_overlap.json --sizes-from $SIZES && \
+$LP peakcheck --a $OUT/peaks/${E}_L6f.bed --b $PPO --out $Q/${E}_peakcheck_L6f_vs_pipeline.json --sizes-from $SIZES")
+  J_CT=$(sub eicx_p2ctr_$E 2 8G 0:30:00 "$J_HA" "bash $CODE/tools/eic_entry/overlap_container_check.sh $E $OUT $PP1 $PP2 $PPO $BL")
+  J_QT=$(sub eicx_p2L7t_$E 2 64G 3:00:00 "$J_FU" "$LP qnorm --x $X/L6/$E.npy --mask $PO --ref $REF/ref_$A.npz --out $X/L7t/$E.npy --sizes-from $SIZES")
+  J_QO=$(sub eicx_p2L7o_$E 2 64G 3:00:00 "$J_HA" "$LP qnorm --x $X/L6/$E.npy --mask $OUT/peaks/${E}_L7o.bed --ref $REF/ref_$A.npz --out $X/L7o/$E.npy --sizes-from $SIZES")
+  J_QF=$(sub eicx_p2L7f_$E 2 64G 3:00:00 "$J_HA" "$LP qnorm --x $X/L6f/$E.npy --mask $OUT/peaks/${E}_L7f.bed --ref $REF/ref_$A.npz --out $X/L7f/$E.npy --sizes-from $SIZES")
+  ln -sf $OUT/rungs/L7/$E.npy $X/L7chk/$E.npy
+  SC=""
+  for R in L7t L7o L6f L7f; do
+    SC="$SC $EIC score --truth $TQN --cache $CQN --pred $X/$R --entry $R --out $OUT/scores2/qn/${E}_$R.tsv --workers 1 &&"
+    SC="$SC $EIC score --truth $TSE --cache $CSE --pred $X/$R --entry $R --out $OUT/scores2/se/${E}_$R.tsv --workers 1 &&"
+  done
+  SC="$SC $EIC score --truth $TQN --cache $CQN --pred $X/L7chk --entry L7 --out $OUT/scores2/qn/${E}_L7chk.tsv --workers 1 &&"
+  CMP=""
+  r() { case $1 in L1|L3) echo $OUT/rungs/$1/$E.bigwig ;; L2|L4|L4o|L5|L6|L7) echo $OUT/rungs/$1/$E.npy ;; *) echo $X/$1/$E.npy ;; esac; }
+  for P in "L6f L5" "L6f L3" "L7t L4o" "L7o L4o" "L7f L4o" "L7t L2" "L7o L2" "L7f L2" "L7o L7" "L7t L7"; do
+    read -r P1 P2 <<< "$P"
+    CMP="$CMP $LP compare --a $(r $P1) --b $(r $P2) --name ${P1}_vs_$P2 --out $Q/${E}_${P1}_vs_$P2.json &&"
+  done
+  PL="$LP placement --cache $CQN --truth-name qn --rung L7t=$OUT/scores2/qn/${E}_L7t.tsv L7o=$OUT/scores2/qn/${E}_L7o.tsv L6f=$OUT/scores2/qn/${E}_L6f.tsv L7f=$OUT/scores2/qn/${E}_L7f.tsv --out $OUT/scores2/placement_qn_$E.tsv && \
+$LP placement --cache $CSE --truth-name se --rung L7t=$OUT/scores2/se/${E}_L7t.tsv L7o=$OUT/scores2/se/${E}_L7o.tsv L6f=$OUT/scores2/se/${E}_L6f.tsv L7f=$OUT/scores2/se/${E}_L7f.tsv --out $OUT/scores2/placement_se_$E.tsv"
+  J_SC=$(sub eicx_p2score_$E 2 48G 4:00:00 "$J_QT:$J_QO:$J_QF:$J_FU" "$SC $CMP $PL")
+  echo "p2 $E: split $J_SP full $J_FU half $J_HA ctr $J_CT L7t $J_QT L7o $J_QO L7f $J_QF score $J_SC" | tee -a $OUT/JOBS.txt
   ;;
 sacct)
   shift
