@@ -202,3 +202,7 @@ Every term and metric in use. A new entry lands before its first use in anything
 | b4b7 | part of the app's link address for the foreman session | agent | proposed | 2026-11-23 foreman reply |
 | reran | ran again; past tense of rerun | agent | proposed | 2026-11-23 probe 2 reply |
 | divisor | number another number is divided by | field | proposed | 2026-11-24 postpile reply |
+| C19M22 | EIC blind experiment: cell type 19, H3K4me3 | field | proposed | R10 / entry pipeline reply |
+| C40M17 | EIC blind experiment: cell type 40, H3K27me3 | field | proposed | R10 / entry pipeline reply |
+| C12M02 | EIC blind experiment: cell type 12, DNase-seq | field | proposed | R10 / entry pipeline reply |
+| dab | fragment of git commit hash 8e8dab68, not a word | agent | proposed | entry pipeline reply |
