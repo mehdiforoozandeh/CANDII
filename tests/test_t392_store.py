@@ -5,10 +5,10 @@ and the Interfaces lines of plan chunk C3, before `tools/onion_data/read_starts.
 
 The synthetic measurement imitates one `eic_v1_2` measurement folder: `counts.h5`, `pr1.h5`,
 `pr2.h5` (overlap counts made by `tools/t112/bin25.py::counts_from_tagalign`) and a
-`provenance.json` whose `halves` lists the read files of each half. Assumed (not pinned by the
-plan): `halves` is `{"pr1": [tagAlign paths], "pr2": [...]}` with absolute paths, the grid of a
-chromosome is the shape of the reference dataset, and `depth_reads` is an attribute of
-`counts.h5`. Chromosome lengths here are multiples of 25, so the grid is the same either way.
+`provenance.json` in the eic_v1_2 schema (`tools/onion_data/align_views.py`, the `prov` dict):
+`halves` is `{h: {"tagalign": [paths], "n_lines": n}}` and `chrom_sizes` holds `sizes`. The
+recorded paths are cluster paths under `/scratch/mforooz`; the files sit under `--work-root`
+at the same path below that prefix. `depth_reads` is an attribute of `counts.h5`.
 """
 from __future__ import annotations
 
@@ -29,6 +29,8 @@ for _p in (REPO / "tools", REPO / "tools" / "t112"):
 
 RES = 25
 SIZES = {"chr1": 3000, "chr2": 1500}          # bp, multiples of 25: 120 and 60 bins
+#: where provenance.json records the read files; --work-root replaces the `/scratch/mforooz` prefix
+CLUSTER_WORK = "/scratch/mforooz/onion/work"
 FILES = {"counts": "starts.h5", "pr1": "starts_pr1.h5", "pr2": "starts_pr2.h5"}
 ATTRS = ("schema", "counting_rule", "resolution", "strand_columns", "measurement_id",
          "depth_reads", "n_reads_strand", "n_off_grid", "kernel_counts", "kernel",
@@ -76,7 +78,8 @@ def _write_counts(path: Path, arrays: dict, mid: str, depth: float) -> None:
 def make_measurement(root: Path, mid: str, halves: dict) -> dict:
     """halves: {"pr1": reads, "pr2": reads}. Writes the eic_v1_2-like folder and the tagAligns."""
     import bin25
-    work = root / "work" / mid
+    work_root = root / "wr"
+    work = work_root / "onion" / "work" / mid
     mdir = root / "measurements" / mid
     mdir.mkdir(parents=True, exist_ok=True)
     tas, ov = {}, {}
@@ -87,9 +90,12 @@ def make_measurement(root: Path, mid: str, halves: dict) -> dict:
     _write_counts(mdir / "counts.h5", {c: ov["pr1"][c] + ov["pr2"][c] for c in SIZES}, mid, depth)
     _write_counts(mdir / "pr1.h5", ov["pr1"], mid, float(len(halves["pr1"])))
     _write_counts(mdir / "pr2.h5", ov["pr2"], mid, float(len(halves["pr2"])))
+    recorded = {h: f"{CLUSTER_WORK}/{mid}/{h}.tagAlign.gz" for h in tas}
     (mdir / "provenance.json").write_text(json.dumps(
-        {"measurement_id": mid, "halves": {h: [str(p)] for h, p in tas.items()}}))
-    return {"mdir": mdir, "work": root / "work", "measurements": root / "measurements",
+        {"schema": 1, "measurement_id": mid,
+         "halves": {h: {"tagalign": [recorded[h]], "n_lines": len(halves[h])} for h in tas},
+         "chrom_sizes": {"sizes": SIZES}}))
+    return {"mdir": mdir, "work": work_root, "measurements": root / "measurements",
             "halves": halves, "overlap": ov}
 
 
@@ -140,6 +146,7 @@ def test_one_dataset_per_chromosome_of_shape_bins_by_two(built):
                 assert f[c].shape == (SIZES[c] // RES, 2), (name, c)
                 assert f[c].dtype in (np.uint16, np.uint32)
                 assert f[c].compression == "gzip" and f[c].shuffle
+                assert f[c].chunks == (min(4096, SIZES[c] // RES), 2), (name, c)
 
 
 def test_column_zero_is_plus_and_column_one_is_minus(built):
@@ -269,10 +276,18 @@ def test_verify_fails_when_starts_is_not_pr1_plus_pr2(tmp_path):
                                          "pr2": _random_reads(rng, 200)})
     out = tmp_path / "store"
     assert _run(m, mid, out) == 0
+    old_digest = hashlib.sha256((out / mid / FILES["counts"]).read_bytes()).hexdigest()
     with h5py.File(out / mid / FILES["counts"], "r+") as f:
         v = np.asarray(f["chr1"])
         v[3, 0] += 1
         f["chr1"][...] = v
+    # rewrite the recorded hash, so only the starts = pr1 + pr2 check can catch the edit
+    pp = out / mid / "provenance.json"
+    text = pp.read_text()
+    old = old_digest
+    assert old in text
+    new = hashlib.sha256((out / mid / FILES["counts"]).read_bytes()).hexdigest()
+    pp.write_text(text.replace(old, new))
     assert _cli(["verify", "--out", str(out / mid)]) != 0
 
 
