@@ -4,7 +4,8 @@
 #   sbatch --job-name=rs392_<name> --array=1-<tasks> --output=<logs>/%x_%A_%a.out \
 #       [--time ... --mem ... --cpus-per-task ...] \
 #       <kit>/slurm/t392/rs_recount.sh <kit dir> <plan.tsv> \
-#       --work-root <prefix> --out <store root> [--measurements <eic_v1_2 dirs>] [--reach 8]
+#       --work-root <prefix> --out <store root> [--testbed-root <dir>] \
+#       [--measurements <eic_v1_2 dirs>] [--reach 8]
 #
 # <plan.tsv> has a header with the column `task` and `measurement_id` (tools/t392/build_plan.py).
 # The rows whose `task` equals $SLURM_ARRAY_TASK_ID run, one `read_starts.py run` each. A
@@ -22,18 +23,20 @@
 #SBATCH --gres=none
 
 set -uo pipefail
-USAGE="usage: rs_recount.sh <kit dir> <plan.tsv> --work-root <prefix> --out <store root> [--measurements <dir>] [--reach N]"
+USAGE="usage: rs_recount.sh <kit dir> <plan.tsv> --work-root <prefix> --out <store root> [--testbed-root <dir>] [--measurements <dir>] [--reach N]"
 KIT="${1:?$USAGE}"
 PLAN="${2:?$USAGE}"
 shift 2
 MEAS=/scratch/mforooz/onion/measurements
 WORK_ROOT=""
+TESTBED_ARGS=()
 OUT=""
 REACH=8
 while [ $# -gt 0 ]; do
   case "$1" in
     --work-root) WORK_ROOT="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
+    --testbed-root) TESTBED_ARGS=(--testbed-root "$2"); shift 2 ;;
     --measurements) MEAS="$2"; shift 2 ;;
     --reach) REACH="$2"; shift 2 ;;
     *) echo "unknown argument $1; $USAGE" >&2; exit 2 ;;
@@ -98,7 +101,7 @@ for MID in "${IDS[@]}"; do
     continue
   fi
   python tools/onion_data/read_starts.py run --measurement "$MID" --measurements "$MEAS" \
-      --work-root "$WORK_ROOT" --out "$OUT" --reach "$REACH"
+      --work-root "$WORK_ROOT" "${TESTBED_ARGS[@]}" --out "$OUT" --reach "$REACH"
   r=$?
   read -r PASSED LINE <<<"$(summary "$OUT/$MID")"
   echo "[rs392] $LINE exit=$r"

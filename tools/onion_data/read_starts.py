@@ -56,8 +56,11 @@ RES = 25
 REACH = 8
 SCHEMA = 1
 CHUNKSIZE = 5_000_000
-#: the prefix of the `eic_v1_2` read files that `--work-root` replaces
-WORK_PREFIX = "/scratch/mforooz/onion/work"
+#: the prefix of the `eic_v1_2` read files that `--work-root` replaces (plan C2: the tree extracts
+#: to `<work root>/onion/work/<experiment>/...`)
+WORK_PREFIX = "/scratch/mforooz"
+#: the prefix of the testbed read files that `--testbed-root` replaces
+TESTBED_PREFIX = "/project/def-maxwl/mforooz/ONION/testbed/readsets"
 #: store file -> (half key, reference overlap file)
 FILES = {"starts.h5": ("counts", "counts.h5"),
          "starts_pr1.h5": ("pr1", "pr1.h5"),
@@ -241,9 +244,16 @@ def read_strands(path, chrom: str, start: int, n: int) -> np.ndarray:
     return out
 
 
-def halves_paths(prov: dict, work_root: str | None) -> dict:
+def _swap(p: str, prefix: str, root: str | None) -> str:
+    if root and (p == prefix or p.startswith(prefix + "/")):
+        return str(root).rstrip("/") + p[len(prefix):]
+    return p
+
+
+def halves_paths(prov: dict, work_root: str | None, testbed_root: str | None = None) -> dict:
     """`provenance.json::halves` as {half: [read files]}; both the list form and the nested
-    `{"tagalign": [...]}` form. A path under WORK_PREFIX moves to `work_root`; others stay."""
+    `{"tagalign": [...]}` form. A path under WORK_PREFIX moves to `work_root`, one under
+    TESTBED_PREFIX to `testbed_root`; others stay."""
     out = {}
     for h in HALVES:
         v = prov["halves"][h]
@@ -253,10 +263,8 @@ def halves_paths(prov: dict, work_root: str | None) -> dict:
             v = [v]
         paths = []
         for p in v:
-            p = str(p)
-            if work_root and (p == WORK_PREFIX or p.startswith(WORK_PREFIX + "/")):
-                p = str(work_root).rstrip("/") + p[len(WORK_PREFIX):]
-            paths.append(p)
+            q = _swap(str(p), TESTBED_PREFIX, testbed_root)       # at most one swap per path
+            paths.append(q if q != str(p) else _swap(q, WORK_PREFIX, work_root))
         out[h] = paths
     return out
 
@@ -278,11 +286,12 @@ def _depth(path) -> float | None:
     return None if v is None else float(v)
 
 
-def run(measurement: str, measurements, work_root, out, reach: int = REACH) -> int:
+def run(measurement: str, measurements, work_root, out, reach: int = REACH,
+        testbed_root=None) -> int:
     t0 = time.time()
     mdir = Path(measurements) / measurement
     prov_in = json.loads((mdir / "provenance.json").read_text())
-    reads = halves_paths(prov_in, work_root)
+    reads = halves_paths(prov_in, work_root, testbed_root)
     sizes = grid_sizes(mdir / "counts.h5")
     odir = Path(out) / measurement
     odir.mkdir(parents=True, exist_ok=True)
@@ -379,13 +388,16 @@ def main(argv=None) -> int:
     r.add_argument("--measurements", required=True, help="eic_v1_2 measurement dirs")
     r.add_argument("--work-root", default=None,
                    help=f"replaces the prefix {WORK_PREFIX} of the read files; others unchanged")
+    r.add_argument("--testbed-root", default=None,
+                   help=f"replaces the prefix {TESTBED_PREFIX} of the read files; others unchanged")
     r.add_argument("--out", required=True, help="store root")
     r.add_argument("--reach", type=int, default=REACH)
     v = sub.add_parser("verify")
     v.add_argument("--out", required=True, help="<store root>/<measurement id>")
     a = ap.parse_args(argv)
     if a.cmd == "run":
-        return run(a.measurement, a.measurements, a.work_root, a.out, reach=a.reach)
+        return run(a.measurement, a.measurements, a.work_root, a.out, reach=a.reach,
+                   testbed_root=a.testbed_root)
     return verify(a.out)
 
 
