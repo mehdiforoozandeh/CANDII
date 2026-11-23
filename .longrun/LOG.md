@@ -83,3 +83,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-23T12:21Z D53: full combination p256 3 seeds PASS imp 0.500 cor 0.818 cal 0.685; refresh_data.sh must run under zsh
 - 2026-11-23T12:45Z combo_w2x seed0 p256 submitted: predict 5413521-5413529, metrics 5413530 (114 CPU-h)
 - 2026-11-23T12:49Z deviance p16 combo_w2x seed0 (from deviance session): skill 0.537 floor 0.515, gap 0.947, R 1.062; full combination 3-seed: 0.543, 0.951, 1.059
+- 2026-11-23T13:20Z deviance p16 combo_w2x seed2: skill 0.590 floor 0.514, gap 0.952, R 1.060; seed1 queued
