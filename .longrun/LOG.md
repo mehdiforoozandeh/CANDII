@@ -18,3 +18,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-23T07:47Z recipe session: t184 not started; PI must confirm in that session (task says PI runs submit); blind predictions after final model, ~2026-11-24 01-04 UTC
 - 2026-11-23T07:47Z glossary: reply sent with unregistered terms: clickable
 - 2026-11-23T07:52Z PI confirmed t184 in the recipe session
+- 2026-11-23T07:54Z t184 blocked on Nibi scratch quota (1024 GiB, 691 used, needs ~2.6 TB); PI decides in recipe session; eicx uses 56G
