@@ -168,3 +168,10 @@ Every term and metric in use. A new entry lands before its first use in anything
 | Zenodo | public research-data archive hosting Jacob Schreiber's corrected tracks | field; proposed | 2026-11-22 EIC-entry kickoff |
 | MACS2 | peak caller whose Poisson model produces the signal p-value tracks | field; proposed | 2026-11-22 EIC-entry plan |
 | t184 | task: build miniCANDI's blind-experiment input rows (recipe run gate) | agent; proposed | 2026-11-22 EIC-entry plan |
+| QN | quantile normalization; maps values onto a fixed reference distribution | field; proposed | 2026-11-23 ladder probe |
+| nMSE | mean squared difference divided by the reference track's variance | agent; proposed | 2026-11-23 ladder probe |
+| oracle bound | best score reachable using the blind experiment's own reads | agent; proposed | 2026-11-23 ladder probe |
+| pseudoreplicate-overlap peaks | peaks found in both random halves of the reads | field; proposed | 2026-11-23 ladder probe |
+| read 5' ends | first sequenced base of each read; MACS2 input | field; proposed | 2026-11-23 ladder probe |
+| fragment pileup | coverage after extending each read to fragment length | field; proposed | 2026-11-23 ladder probe |
+| ladder probe | stepwise test from truth track to count route | agent; proposed | 2026-11-23 ladder probe |
