@@ -258,8 +258,9 @@ def test_kernel_times_reads_rebuilds_the_overlap_sum_of_kept_reads(tmp_path):
 
 def test_a_read_whose_span_leaves_the_reach_raises(tmp_path):
     p = _write_tagalign(tmp_path / "long.tagAlign.gz", [("chr1", 0, 400, "+")])   # 17 bins
+    rs = _rs()                                  # outside the raises: a missing module must fail
     with pytest.raises(Exception):
-        _rs().scan([str(p)], {"chr1": 1010}, reach=REACH)
+        rs.scan([str(p)], {"chr1": 1010}, reach=REACH)
 
 
 # --------------------------------------------------------------------------- the gate
