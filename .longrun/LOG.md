@@ -73,3 +73,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-23T08:15Z PI: 'yes rescore' -> asked deviance session (local_2eb1d23b) to rescore rcp_halves_mix_avg_pearson_unet and rcp_combo_w2x_unet at p16_dev and p256_dev, 3 seeds. PI asked: compare all variants of the design evolution and pick the best combination; explain Pearson residual.
 - 2026-11-23T08:18Z deviance session: combo p16_dev jobs 5381558-5381572 (metrics 5381562/67/72) on DEV1; p256_dev chained; combo_w2x on DEV2 auto after DONE; ids in runs_rcp/DEV_SUBMITTED_{p16,p256}.txt
 - 2026-11-23T08:22Z foreman session local_b5c55e32 set up; status sent; PI-facing items go there
+- 2026-11-23T08:24Z PI via foreman on PR 65: 'after the 256 region. but right now there are merge conflicts that need solving.' Deviance session resolving; freeze PR 65 files on our branch until told.

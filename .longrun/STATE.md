@@ -27,4 +27,4 @@ Close the session with one trusted miniCANDI architecture (PI 2026-11-22, after 
 
 ## Open asks to the PI
 Route PI-facing items and milestone status (2-3 lines) to foreman session local_b5c55e32-4e2a-4edc-b4b7-6f0134e8bc43 (setup 2026-11-23).
-- Merge PR 65 (Poisson-deviance scorer) into the recipe branch? Recommended yes.
+- PR 65: PI says merge after the 256-region results; deviance session resolving conflicts first. Do not push PR 65's files until the foreman says resolved.
