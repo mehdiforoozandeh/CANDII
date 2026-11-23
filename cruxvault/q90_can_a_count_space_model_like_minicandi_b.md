@@ -35,8 +35,9 @@ an exact, tested conversion shows how much of the chain's p-value error is the m
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**1 children** · open 0, leaning 0, settled 1, parked 0 · 1 finding(s) on this question
+**2 children** · open 0, leaning 1, settled 1, parked 0 · 1 finding(s) on this question
 
 - `h90` [[h90_max_s_quantile_normalization_rule_and_hi|Max's quantile-normalization rule and his 1 bp MACS2 formula together reproduce the organizers' signal p-value pipeline exactly, so a count route can be converted without a conversion error of its own]] — *settled · strong*
+- `q91` _(Q)_ [[q91_why_does_our_chip_reprocessing_of_the_bl|Why does our ChIP reprocessing of the blind set differ from Jacob Schreiber's SE tracks before the p-value step, when the DNase track is byte-identical?]] — *leaning · moderate*
 - `f391` finding (moderate) [[f391_3_experiments_only_one_per_assay_class_t|3 experiments only, one per assay class; the model-side test needs blind…]]
 <!-- crux:ledger:end -->

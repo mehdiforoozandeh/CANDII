@@ -12,15 +12,13 @@ Exploratory, open. First measured result delivered 2026-11-22: ladder probe on 3
 - Organizers' side is exact: QN by Max's rule equals the MOESM4 truth on every base; the 1 bp MACS2 formula matches our pipeline track (nMSE <= 1.1e-4). 3 of 3.
 - The truth's QN used the pseudoreplicate-overlap peak set. With it, our DNase route equals the truth exactly.
 - 25 bp overlap counts cost nMSE 0.017 (H3K4me3), 0.255 (H3K27me3), 0.021 (DNase) against the exact formula.
-- Our ChIP reprocessing differs from Jacob's before the p-value step (nMSE 0.013, 0.127); cause open.
+- Our ChIP reprocessing differs from Jacob's before the p-value step (nMSE 0.013, 0.127). Likely cause: control reads (treatment matches; gap sits where control sets lambda). Not closable exactly without his control list (results/t390/chip_gap/CHIP_GAP.md).
 - Observed-read count route + QN ranks 1-2 of 26 on MOESM4 measures: an oracle bound on conversion cost only.
 - An entry must use the normalization of the truth it is scored against (QN rungs rank 14-26 on the SE truth).
 - miniCANDI blind predictions do not exist: blind-row build t184 is a PI gate in the recipe run.
 
 ## In flight
 - Build agent (Opus): probe 2 on the same 3 experiments: QN with the overlap peaks (oracle), QN with peaks reproducible across two read halves (fair), fragment-pileup representation. Output cruxvault/results/t390/ladder_probe2/PROBE2.md; Nibi jobs eicx_*; budget <= 20 CPU-h.
-- Read agent (Sonnet): cause of the ChIP reprocessing gap (Max's s04 se vs mehdise caches, run metadata).
-- longrun-auditor: post-compaction audit.
 
 ## Next
 1. Read probe 2; record findings; choose the fair peak rule for the count route.

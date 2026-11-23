@@ -31,6 +31,7 @@ Root: [[candii]]
     - ◌ `h25` [H] [[h25_in_the_counts_log10_p_chain_most_of_the_|In the counts → −log10 p chain, most of the p error comes from f's predicted count distribution, not from the map h]] — *parked*
     - ◐ `q90` [Q] [[q90_can_a_count_space_model_like_minicandi_b|**Can a count-space model like miniCANDI be scored fairly on the EIC board of signal p-value entrants, through an exact count-to-p-value pipeline or a change of the model's output?**]] — *leaning* · moderate
       - ● `h90` [H] [[h90_max_s_quantile_normalization_rule_and_hi|Max's quantile-normalization rule and his 1 bp MACS2 formula together reproduce the organizers' signal p-value pipeline exactly, so a count route can be converted without a conversion error of its own]] — *settled* · strong · supports
+      - ◐ `q91` [Q] [[q91_why_does_our_chip_reprocessing_of_the_bl|**Why does our ChIP reprocessing of the blind set differ from Jacob Schreiber's SE tracks before the p-value step, when the DNase track is byte-identical?**]] — *leaning* · moderate
   - ◐ `q7` [Q] [[q7_why_do_the_covariate_conditioned_g_f_des|**Why do the covariate-conditioned g → f designs miss the depth law on depth-only pairs?**]] — *leaning* · moderate
     - ● `h18` [H] [[h18_the_1_pseudocount_in_x_log_1_counts_make|The +1 pseudocount in x = log(1 + counts) makes the g → f designs miss the depth law]] — *settled* · strong · against (`never-trained depth miss, rung A0 (no +1): 0.46 (NB) / 0.38 (Poisson-mean) median |log2 err| vs trained 0.12`)
     - ◐ `h19` [H] [[h19_g_fits_trained_base_arm_depth_pairs_but_|g fits trained base ↔ arm depth pairs but does not carry the fit over to never-trained arm → arm depth pairs]] — *leaning* · moderate · supports
@@ -127,7 +128,7 @@ Root: [[candii]]
 
 ## Dashboard
 
-- **Questions** (75): open 24 · leaning 41 · settled 10 · parked 0
+- **Questions** (76): open 24 · leaning 42 · settled 10 · parked 0
 - **Hypotheses** (43): open 10 · leaning 19 · settled 8 · parked 6
-- **Confidence**: weak 22 · moderate 38 · strong 18
-- **Findings**: 139
+- **Confidence**: weak 22 · moderate 39 · strong 18
+- **Findings**: 140
