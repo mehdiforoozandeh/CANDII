@@ -197,3 +197,6 @@ Every term and metric in use. A new entry lands before its first use in anything
 | GiB | gibibyte; 2^30 bytes of storage | field | proposed | 2026-11-23 disk reply |
 | nearline | Alliance tape-backed archive storage, slower to read than disk | field | proposed | 2026-11-23 disk reply |
 | outage | period when a cluster or its storage was down | agent | proposed | 2026-11-23 t184 reply |
+| local_b5c55e32 | part of the app's link address for the foreman session | agent | proposed | 2026-11-23 foreman reply |
+| edc | part of the app's link address for the foreman session | agent | proposed | 2026-11-23 foreman reply |
+| b4b7 | part of the app's link address for the foreman session | agent | proposed | 2026-11-23 foreman reply |
