@@ -218,3 +218,4 @@ Every term and metric in use. A new entry lands before its first use in anything
 | GitHub | web host of the repository and its pull requests | app; proposed | 2026-11-23 PR 65 conflicts |
 | mergeable | has no conflicts, so a merge can proceed | git; proposed | 2026-11-23 PR 65 conflicts |
 | ULP | unit in the last place: smallest float step | numerics; proposed | 2026-11-23 PR 65 conflicts |
+| froze | stopped pushing changes to given files for a time | agent; proposed | 2026-11-23 reply |
