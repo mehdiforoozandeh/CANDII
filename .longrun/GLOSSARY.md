@@ -193,3 +193,6 @@ Every term and metric in use. A new entry lands before its first use in anything
 | local_b549bcee | part of the app's link address for the recipe session | agent | proposed | 2026-11-23 t184 reply |
 | a377 | part of the app's link address for the recipe session | agent | proposed | 2026-11-23 t184 reply |
 | ac9f | part of the app's link address for the recipe session | agent | proposed | 2026-11-23 t184 reply |
+| fallback | second option used if the first one fails | agent | proposed | 2026-11-23 disk reply |
+| GiB | gibibyte; 2^30 bytes of storage | field | proposed | 2026-11-23 disk reply |
+| nearline | Alliance tape-backed archive storage, slower to read than disk | field | proposed | 2026-11-23 disk reply |
