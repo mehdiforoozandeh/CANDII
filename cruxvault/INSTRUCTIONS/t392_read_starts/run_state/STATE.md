@@ -6,7 +6,7 @@ Worktree: .claude/worktrees/readstart, branch implementation/t392-read-start-min
 Plan: run_state/plan.md (24 chunks, waves 1-14; amended after review). Chunk worktrees: <repo parent>/.orchestrate-wt/CANDII/t392-<id>, branches chunk/t392-<id>.
 
 In flight:
-- Wave 1: C1 tests (crux-tests agent), C2 Nibi probe staging job rs392_stage (agent submitting).
+- Wave 1: C1 merged (64 tests). C2 retry 1 (Nibi login-node extract). Wave 2: C3, C4, C5 builders + C1 test review running.
 - Transfer Nibi->Fir of 6 tars (1,185,827,906,560 B) to Fir /scratch/mforooz/rs392/tars/: running; watched by scratchpad watch_transfer.sh (local background, 10-min checks). Testbed transfer LANDED 20:48Z (18,813,836,293 B, 156 files), reported.
 CPU-h so far: 0.
 
