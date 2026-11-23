@@ -21,3 +21,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-23T07:54Z t184 blocked on Nibi scratch quota (1024 GiB, 691 used, needs ~2.6 TB); PI decides in recipe session; eicx uses 56G
 - 2026-11-23T07:56Z Nibi scratch: quota -s = 1024G soft, 20480G hard, 691G used; t184 batch 1 (~2.6 TB) fits under hard limit; told recipe session
 - 2026-11-23T08:02Z t184 batch 1 submitted on Nibi 08:01 UTC by recipe session (jobs 28629674-78, 28629699-701); predictions after final model
+- 2026-11-23T08:44Z foreman relayed overnight rules: workers' judgment on compute, report job ids, D8 holds stay, no stopping for questions
