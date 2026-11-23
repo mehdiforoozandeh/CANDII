@@ -148,3 +148,53 @@ Every term and metric in use. A new entry lands before its first use in anything
 | compresses | squeezes a score range into a narrower band | general; proposed | 2026-11-23 t371 brief |
 | isotonic | fitted to be non-decreasing in the predictor | statistics; proposed | 2026-11-23 t371 brief |
 | Spearman | rank correlation between two orderings | statistics; proposed | 2026-11-23 t371 brief |
+| Poisson | count distribution whose variance equals its mean | agent; proposed | 2026-11-22 count-score discussion |
+| deviance | twice the log-likelihood gap to a perfect fit | agent; proposed | 2026-11-22 count-score discussion |
+| binomial | count of successes in n independent yes/no trials | agent; proposed | 2026-11-22 count-score discussion |
+| thinning | keep each read independently with fixed probability | agent; proposed | 2026-11-22 count-score discussion |
+| CRPS | squared distance between predicted and step CDF, summed | agent; proposed | 2026-11-22 count-score discussion |
+| CRPS_depth-only | that score for counts scaled by target-over-source depth | agent; proposed | 2026-11-22 count-score discussion |
+| CRPS_floor | that score of a perfect predictor (oracle floor) | agent; proposed | 2026-11-22 count-score discussion |
+| E_sp | specific error: error on the cell-type-specific signal part | agent; proposed | 2026-11-22 count-score discussion |
+| r_spec | correlation after removing a smooth function of the average | agent; proposed | 2026-11-22 count-score discussion |
+| deviation (PIT) | mean gap between average predictive CDF and uniform | agent; proposed | 2026-11-22 count-score discussion |
+| invariant | unchanged when a quantity, e.g. depth, changes | agent; proposed | 2026-11-22 count-score discussion |
+| additive | parts sum exactly to the total; also "additivity" | agent; proposed | 2026-11-22 metric-family table |
+| additivity | property that component errors sum to the total error | agent; proposed | 2026-11-22 metric-family table |
+| AlphaGenome | DeepMind sequence-to-function genomics model (AG2 = version 2) | agent; proposed | 2026-11-22 metric-family table |
+| invariance | score stays the same when depth changes | agent; proposed | 2026-11-22 metric-family table |
+| outlier | a bin with a value far from the rest; plural "outliers" | agent; proposed | 2026-11-22 metric-family table |
+| outliers | bins with values far from the rest | agent; proposed | 2026-11-22 metric-family table |
+| quadrature | combine as square root of summed squares | agent; proposed | 2026-11-22 metric-family table |
+| penalizes | raises the error score for | agent; proposed | 2026-11-22 metric-family table |
+| predictor's | belonging to a model or baseline that outputs predictions | agent; proposed | 2026-11-22 metric-family table |
+| unifies | puts two metric families on one scale | agent; proposed | 2026-11-22 metric-family table |
+| comparability | ability to set our numbers beside published or earlier ones | agent; proposed | 2026-11-22 six-metric proposal |
+| D9 | long-horizon decision: EIC headline uses the challenge's own metrics | long-horizon decisions.md; proposed | 2026-11-22 six-metric proposal |
+| D_baseline | normalized Poisson deviance of the baseline prediction | agent; proposed | 2026-11-22 six-metric proposal |
+| D_floor | normalized Poisson deviance a perfect predictor gets from read noise | agent; proposed | 2026-11-22 six-metric proposal |
+| D_model | normalized Poisson deviance of the model's predicted mean | agent; proposed | 2026-11-22 six-metric proposal |
+| deduplicated | with repeated copies of one sequenced fragment removed | agent; proposed | 2026-11-22 six-metric proposal |
+| PCR | polymerase chain reaction; amplification that copies DNA fragments | agent; proposed | 2026-11-22 six-metric proposal |
+| stratum | one subgroup of bins, e.g. by assay or count level | agent; proposed | 2026-11-22 six-metric proposal |
+| testbed | small fixed training-and-scoring setup for comparing miniCANDI arms | agent; proposed | 2026-11-22 six-metric proposal |
+| deployable | the version meant for real use, not an evaluation device | agent; proposed | 2026-11-22 control arms |
+| RCP8 | code snapshot id pushed to Fir (agent-facing) | agent; proposed | 2026-11-22 |
+| rcp_halves_mix_pearson_unet | run name of the chosen recipe (agent-facing) | agent; proposed | 2026-11-22 |
+| local_2eb1d23b | id prefix of a linked Claude session (agent-facing) | app; proposed | 2026-11-22 |
+| b735 | fragment of a linked session id (agent-facing) | app; proposed | 2026-11-22 |
+| baf | fragment of a linked session id (agent-facing) | app; proposed | 2026-11-22 |
+| prefix | fixed text at the start of a name | agent; proposed | 2026-11-22 job names |
+| genomic | of the DNA sequence and its positions | agent; proposed | 2026-11-22 calibration regions |
+| reproducible | can be rebuilt exactly from saved inputs | agent; proposed | 2026-11-22 prediction stores |
+| caveat | a limit on how far a result can be trusted | agent; proposed | 2026-11-23 reply |
+| D44 | decision row: train and confirm the full combination | agent (DECISIONS.md); proposed | 2026-11-23 reply |
+| D51 | decision row: final recipe keeps control weight 1 | agent (DECISIONS.md); proposed | 2026-11-23 reply |
+| D52 | decision row: dispersion recalibration ships with the final model | agent (DECISIONS.md); proposed | 2026-11-23 reply |
+| p2x | recipe arm with twice the parameter budget (2 M) | agent (recipe_arms.py); proposed | 2026-11-23 reply |
+| p4x | recipe arm with four times the parameter budget (4 M) | agent (recipe_arms.py); proposed | 2026-11-23 reply |
+| timeout | job stopped by the cluster at its time limit | agent; proposed | 2026-11-23 reply |
+| deletion | removal of files from disk | agent; proposed | 2026-11-23 reply |
+| ENCODE | public consortium database of functional genomics experiments | field term; proposed | 2026-11-23 reply |
+| MOESM2 | EIC supplementary truth table, original uncorrected tracks | EIC paper supplement; proposed | 2026-11-23 reply |
+| t184 | task id: build the blind-experiment input rows | crux taskhub; proposed | 2026-11-23 reply |

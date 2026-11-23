@@ -103,9 +103,18 @@ def _arms() -> dict[str, dict]:
     # Family scale (decision D42): the 256-region recipe (pairs + Pearson-residual input, D43) at
     # 2x and 4x parameters and at 2x training windows. In no stage: runs with STAGE=arms.
     rec = {**hv, **a["mix_pearson"]["keys"]}
+    # Family control on the recipe (gate G5 adopted control_loss_weight 4, 2026-11-22): the
+    # deployable recipe with weight 4, and the held-out-control evaluation of the recipe at
+    # weight 1 and 4 (control_holdout_cells is an evaluation device only).
+    add("rec_ctlw4", "reccontrol", (4,), {**rec, "control_loss_weight": 4.0})
+    add("rec_ctl_holdout", "reccontrol", (4,), {**rec, **ctl})
+    add("rec_ctl_holdout_w4", "reccontrol", (4,), {**rec, **ctl, "control_loss_weight": 4.0})
     add("scale_p2x", "scale", (4,), {**rec, "param_budget": 2.0e6})
     add("scale_p4x", "scale", (4,), {**rec, "param_budget": 4.0e6})
     add("scale_w2x", "scale", (4,), {**rec, "windows_seen": 160000})
+    # D50: the final candidate, the full combination at 2x windows (the best scaling arm).
+    add("combo_w2x", "scale", (4,), {**hv, **a["mix_avg"]["keys"], **a["mix_pearson"]["keys"],
+                                     "windows_seen": 160000})
     return a
 
 
@@ -143,7 +152,8 @@ def config_path(rung: int, arm: str) -> Path:
 
 
 #: training time limits of family scale (U-Net base runs took up to 2.6 h at 1e6 params, 80k windows)
-SCALE_TIME = {"scale_p2x": "08:00:00", "scale_p4x": "16:00:00", "scale_w2x": "08:00:00"}
+SCALE_TIME = {"scale_p2x": "08:00:00", "scale_p4x": "16:00:00", "scale_w2x": "08:00:00",
+              "combo_w2x": "16:00:00"}
 
 
 def train_time(arm: str) -> str:

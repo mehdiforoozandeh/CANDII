@@ -1,5 +1,5 @@
 ---
-id: f142
+id: f143
 type: finding
 schema: 3
 title: All three parts held (rank 0.93 imputation, 0.78 correction; between-arm…
@@ -14,6 +14,6 @@ created: "2026-11-23T00:48:51"
 updated: "2026-11-23T00:48:51"
 ---
 
-# f142 — All three parts held (rank 0.93 imputation, 0.78 correction; between-arm…
+# f143 — All three parts held (rank 0.93 imputation, 0.78 correction; between-arm…
 
 Parent:: [[h48_on_the_same_predictions_each_deviance_te]]

@@ -35,5 +35,7 @@ If the predicted control works on a leave-control-out evaluation, the control ou
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-_(no children yet)_
+**0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+
+- `f142` finding (moderate) [[f142_pre_set_gate_g5_rule_1_holds_on_the_u_ne|Pre-set gate G5 rule 1 holds on the U-Net by a clear margin over seed range;…]]
 <!-- crux:ledger:end -->
