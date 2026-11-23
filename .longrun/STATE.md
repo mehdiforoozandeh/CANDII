@@ -32,5 +32,4 @@ Exploratory, open. First measured result delivered 2026-11-22: ladder probe on 3
 Ping the PI (push notification) when probe 2, MOESM2 or miniCANDI scores land. Foreman session local_b5c55e32-4e2a-4edc-b4b7-6f0134e8bc43 ("Open sessions on project", 2026-11-23): send it every PI-facing item and a 2-3 line status at each milestone. Overnight 2026-11-23 (relayed by foreman): compute by workers' judgment, report each job id to the foreman; 48-experiment batch and Jacob message stay held (D8); do not stop for questions, take the safe default and report it.
 
 ## Open asks to the PI
-- Copy the 51 original-truth bigWigs (~70 GB) to /project/def-maxwl/mforooz/ONION/eic/original_pe? Asked via foreman 2026-11-23; default meanwhile: no copy (/project 4264/4657 GiB).
-- Change miniCANDI's target from 25 bp overlap counts to 25 bp read-start counts (stranded for ChIP, unstranded for DNase)? Post-prediction spreading recovers only 3-12% (postpile). Asked via foreman 2026-11-24; default: score counts as they are.
+- None. D9 (PI yes, 2026-11-23): truth copied and verified (job 28706885, 51/51, SHA-256 match); a read-start-count arm is built in a new session, via the foreman.
