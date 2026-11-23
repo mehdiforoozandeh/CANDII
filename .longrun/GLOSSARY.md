@@ -179,3 +179,7 @@ Every term and metric in use. A new entry lands before its first use in anything
 | p2x | recipe arm with twice the parameter budget (2 M) | agent (recipe_arms.py); proposed | 2026-11-23 reply |
 | p4x | recipe arm with four times the parameter budget (4 M) | agent (recipe_arms.py); proposed | 2026-11-23 reply |
 | timeout | job stopped by the cluster at its time limit | agent; proposed | 2026-11-23 reply |
+| deletion | removal of files from disk | agent; proposed | 2026-11-23 reply |
+| ENCODE | public consortium database of functional genomics experiments | field term; proposed | 2026-11-23 reply |
+| MOESM2 | EIC supplementary truth table, original uncorrected tracks | EIC paper supplement; proposed | 2026-11-23 reply |
+| t184 | task id: build the blind-experiment input rows | crux taskhub; proposed | 2026-11-23 reply |
