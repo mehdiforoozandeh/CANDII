@@ -33,6 +33,8 @@ Ready queue entry 16 (`closeout/ready queue for scaling.md`).
 - Prerequisite: writable Nibi scratch (batch 1 stages 1,227 GB and keeps about 1.4 TB of BAMs). The FASTQs were removed from scratch; the stage step downloads them again. Restore the 6 NOT_APPLICABLE markers before any `build_list.py pending` call.
 - Rule: the 10 outage reruns run on one cluster only.
 
+- 2026-11-23 08:01 UTC: batch 1 submitted on Nibi by the agent after PI approval ("can we do it on nibi while we are still under the 20TB hard quota?"), 72 rows. Jobs: stage 28629674/76/99, 28629702/04/10/12/16/18; build 28629675/77, 28629700/03/05/11/13/17/19; signal 28629678 (ChIP/ATAC), 28629701 (DNase). Submit record: Nibi /project/def-maxwl/mforooz/ONION/logs/closeout_d4_submit_20261123T080124Z.log. Nibi scratch: soft quota 1024G, hard 20480G (quota -s).
+
 ## Output
 
 <!-- required before `done`, and the engine checks it resolves. Either form:

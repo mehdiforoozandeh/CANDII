@@ -18,11 +18,12 @@ Close the session with one trusted miniCANDI architecture (PI 2026-11-22, after 
 - Avocado 5022624 still pending. rcp_rec_ctlw4 seed 2 timed out (2 seeds read; not resubmitted).
 - Ensemble on pairs + average: ens3 missing (only seed0_recal landed); low priority.
 
+- Blind-row build batch 1 on Nibi (submitted 08:01 UTC, 72 rows, ~22,700 CPU-h): stage 28629674/76/99, 28629702/04/10/12/16/18; build 28629675/77, 28629700/03/05/11/13/17/19; signal 28629678 (ChIP/ATAC), 28629701 (DNase). Watch scratch; move BAMs and delete staged FASTQs as rows finish to fall under 1024G soft quota.
+
 ## Next
 1. When combo p256 lands: pareto_select at 256; compare with the recipe.
 2. When combo_w2x p16 lands: if PASS and not worse beyond range than the combination, submit its p256 confirm.
 3. Final architecture decision; update GOALS R1-R4, R8; refresh the deck; tell the deviance session the final arm.
 
 ## Open asks to the PI
-- Blind-row build (PI said start): blocked; Nibi scratch 333 GiB free of 1 TiB vs ~2.6 TB needed; Fir lacks the pipelines. Ask: raise Nibi scratch quota (PI-stated 20 TB) or port to Fir.
 - Merge PR 65 (Poisson-deviance scorer) into the recipe branch? Recommended yes.

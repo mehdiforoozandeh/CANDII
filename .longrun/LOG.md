@@ -69,3 +69,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-23T07:53Z t184 (PI 'Yes, start it'): NOT submitted. Nibi dry run 72 rows OK, but Nibi /scratch quota 1024 GiB with 691 used (diskusage_report) vs ~1.2 TB staging + 1.4 TB BAMs. Fir port refused: pipelines, refs, build lists missing on Fir (closeout_D4b/FIR_PORT.md). Asked PI.
 - 2026-11-23T07:54Z glossary: reply sent with unregistered terms: flagged
 - 2026-11-23T07:56Z Nibi scratch: quota -s shows soft 1024G, hard 20480G (peer fact verified); t184 blocker withdrawn; re-asked PI with cost 22,700 CPU-h
+- 2026-11-23T08:01Z t184 batch 1 SUBMITTED on Nibi 2026-11-23T08:01Z (PI yes, under 20 TiB hard quota): 72 rows; stage 28629674/76/99, 28629702/04/10/12/16/18; build 28629675/77, 28629700/03/05/11/13/17/19; signal 28629678 (ChIP/ATAC), 28629701 (DNase); record /project/def-maxwl/mforooz/ONION/logs/closeout_d4_submit_20261123T080124Z.log; never resubmit (script skips queued rows)
