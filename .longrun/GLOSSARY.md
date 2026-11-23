@@ -185,3 +185,4 @@ Every term and metric in use. A new entry lands before its first use in anything
 | MOESM2 | EIC paper's original leaderboard, paired-end truth (Additional file 2) | field | proposed | D1 |
 | lambda | MACS2 local background read rate behind each p-value | field | proposed | 2026-11-23 ChIP gap reply |
 | shallower | sequenced to fewer reads, i.e. lower depth | agent | proposed | 2026-11-23 ChIP gap reply |
+| Jaccard | shared bases divided by bases in either peak set | field | proposed | 2026-11-23 probe 2 reply |
