@@ -27,6 +27,16 @@ point at the copies. The bytes are the same, so batches, losses and checkpoints 
 to an unstaged run, and a resume may switch staging on or off. Reason (chunk L1a, Nibi
 2026-11-13): an h5 open on Nibi's NFS /scratch took 0.21 s, the LRU of 256 handles reopens most
 files, and a rung-1 batch took 11.4 s; staged on the node's local disk it took 0.17 s.
+Under `read_start` (t392 chunk C8) every count is read from the read-start store, so the
+`counts.h5` and `average_h5` files are not staged. In their place `stage_read_starts` copies each
+`<read_start_store>/<id>/starts.h5` the dataset may read to `<stage dir>/read_starts/<id>/` (its
+`starts_pr1.h5` / `starts_pr2.h5` become symlinks to the originals) and `read_start_average_h5` to
+`<stage dir>/aux/`, and points the dataset at the copies. When the node's free space is below 1.05
+times the bytes to copy, nothing is staged and the log says so; the run then reads the originals
+(same bytes, same batches, slower).
+
+Read starts. `train.py` with a config that sets `read_start` runs `res_dataset.train` (the
+read-start dataset and `read_start.read_start_loss`), so `--stage-dir` reaches it.
 
 Budget. `config["windows_seen"]` is the training budget in windows; steps = ceil(budget /
 batch_size). `--max-windows N` stops this invocation at N windows (checkpointed) and ends it in
@@ -276,6 +286,63 @@ def stage_average(ds: OnionDataset, stage_dir) -> dict | None:
             "seconds": round(time.time() - t0, 1)}
 
 
+def stage_read_starts(ds, stage_dir, threads: int = 8) -> dict:
+    """`--stage-dir` under `read_start`: copy the read-start `starts.h5` of every row `ds` may read
+    and `read_start_average_h5` to local disk and point the DATASET at the copies (module
+    docstring 'Staging'). Returns files, bytes, seconds and `skipped` (a reason, or None). A row
+    whose `starts.h5` is missing at the source is left out (its read fails as it would unstaged)."""
+    from concurrent.futures import ThreadPoolExecutor
+    import shutil
+    from minicandi.rs_dataset import STORE_FILES
+    t0 = time.time()
+    root = Path(stage_dir)
+    src_store = Path(ds.rs_store)
+    mids = [m for m in sorted(ds.allowed) if (src_store / m / STORE_FILES["counts"]).is_file()]
+    avg = ds.rs_average_h5
+    need = sum((src_store / m / STORE_FILES["counts"]).stat().st_size for m in mids) \
+        + (Path(avg).stat().st_size if avg is not None else 0)
+    root.mkdir(parents=True, exist_ok=True)
+    free = shutil.disk_usage(root).free
+    if free < need * 1.05:
+        return {"files": 0, "bytes": 0, "seconds": round(time.time() - t0, 1),
+                "skipped": f"needs {need} bytes, {root} has {free} free"}
+
+    def copy_file(src: Path, dst: Path) -> int:
+        size = src.stat().st_size
+        if not (dst.is_file() and dst.stat().st_size == size):
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            tmp = dst.with_name(dst.name + ".part")
+            shutil.copyfile(src, tmp)
+            if tmp.stat().st_size != size:
+                raise OSError(f"--stage-dir: short copy of {src}")
+            os.replace(tmp, dst)
+        return size
+
+    dst_store = root / "read_starts"
+
+    def copy(mid):
+        size = copy_file(src_store / mid / STORE_FILES["counts"],
+                         dst_store / mid / STORE_FILES["counts"])
+        for which in ("pr1", "pr2"):
+            s_, d_ = src_store / mid / STORE_FILES[which], dst_store / mid / STORE_FILES[which]
+            if s_.exists() and not d_.exists():
+                d_.symlink_to(s_)
+        return size
+
+    with ThreadPoolExecutor(max_workers=max(1, int(threads))) as pool:
+        nbytes = sum(pool.map(copy, mids))
+    ds._close_all()
+    ds.rs_store = dst_store
+    ds.config["read_start_store"] = str(dst_store)
+    if avg is not None:
+        dst = root / "aux" / Path(avg).name
+        nbytes += copy_file(Path(avg), dst)
+        ds.rs_average_h5 = dst
+        ds.config["read_start_average_h5"] = str(dst)
+    return {"files": len(mids) + int(avg is not None), "bytes": int(nbytes),
+            "seconds": round(time.time() - t0, 1), "skipped": None}
+
+
 def full_config(config: dict) -> dict:
     """The config with the train loop's defaults filled in; this is what ckpt.pt stores."""
     cfg = dict(DEFAULTS)
@@ -360,19 +427,30 @@ def _tflops(windows: int, fpw):
     return None if fpw is None else windows * fpw
 
 
-def set_pearson_stats(model, batches: list) -> None:
+def set_pearson_stats(model, batches: list, read_start: bool = False) -> None:
     """Per-track mean rate l_a and NB size r_a (method of moments) of the visible input counts at
-    the 2**24-read reference depth, into every CountTransform of the model."""
+    the 2**24-read reference depth, into every CountTransform of the model. With `read_start`
+    (t392 C8) the counts are the strand channels of `x_counts_sub` [B, L, A, 2] that
+    `read_start.channel_mask()` keeps (channel 1 of ATAC-seq and DNase-seq is left out), so l_a
+    and r_a are per strand channel, the unit the model's count transform sees."""
     s1 = torch.zeros(C.A, dtype=torch.float64)
     s2 = torch.zeros(C.A, dtype=torch.float64)
     n = torch.zeros(C.A, dtype=torch.float64)
+    if read_start:
+        from minicandi.read_start import channel_mask
+        keep = channel_mask()[None, None]                                   # [1, 1, A, 2]
     for b in batches:
-        vis = (b["x_avail"][:, None, :] & ~b["x_bin_mask"]).double()
+        vis = (b["x_avail"][:, None, :] & ~b["x_bin_mask"])
         s = CountTransform.size_factor(b["c_in"][..., C.LOG2_DEPTH_COL]).double()
-        r = b["x_counts"].double() / s
-        s1 += (r * vis).sum((0, 1))
-        s2 += (r * r * vis).sum((0, 1))
-        n += vis.sum((0, 1))
+        if read_start:
+            v = (vis[..., None] & keep).double()                            # [B, L, A, 2]
+            r = b["x_counts_sub"].double() / s[..., None]                   # s [B, 1, A]
+            dims = (0, 1, 3)
+        else:
+            v, r, dims = vis.double(), b["x_counts"].double() / s, (0, 1)
+        s1 += (r * v).sum(dims)
+        s2 += (r * r * v).sum(dims)
+        n += v.sum(dims)
     lam = torch.ones(C.A, dtype=torch.float64)
     size = torch.full((C.A,), 10.0, dtype=torch.float64)
     ok = n > 0
@@ -455,7 +533,15 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     ds = OnionDataset(tables, "train", cfg, seed)
-    if stage_dir:
+    if stage_dir and cfg.get("read_start"):
+        st_ = stage_read_starts(ds, stage_dir)
+        if st_["skipped"]:
+            print(f"read_start: staging skipped ({st_['skipped']}); reading the read-start store "
+                  f"and average in place", flush=True)
+        else:
+            print(f"staged {st_['files']} read-start files (store and average), "
+                  f"{st_['bytes'] / 1e9:.2f} GB, in {st_['seconds']} s to {stage_dir}", flush=True)
+    elif stage_dir:
         st_ = stage_counts(ds, stage_dir)
         print(f"staged {st_['files']} counts files, {st_['bytes'] / 1e9:.2f} GB, in "
               f"{st_['seconds']} s to {stage_dir}", flush=True)
@@ -531,7 +617,8 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
             torch.cuda.reset_peak_memory_stats(dev)
         if cfg.get("count_transform") == "pearson":
             prng = np.random.default_rng([seed, 3])
-            set_pearson_stats(model, [ds.batch(bs, prng) for _ in range(PEARSON_BATCHES)])
+            set_pearson_stats(model, [ds.batch(bs, prng) for _ in range(PEARSON_BATCHES)],
+                              bool(cfg.get("read_start")))
     sha = git_sha()
 
     val = None
@@ -696,8 +783,11 @@ def main(argv=None) -> int:
                          "batches; see 'Staging')")
     a = ap.parse_args(argv)
     config = json.loads(Path(a.config).read_text(encoding="utf-8"))
-    info = train(config, a.tables, a.seed, a.out, a.device, a.max_windows, a.val_every,
-                 a.val_batches, a.log_every, a.ckpt_minutes, a.workers, a.stage_dir)
+    run = train
+    if config.get("read_start"):          # t392 C8: the read-start dataset and loss
+        from minicandi.res_dataset import train as run
+    info = run(config, a.tables, a.seed, a.out, a.device, a.max_windows, a.val_every,
+               a.val_batches, a.log_every, a.ckpt_minutes, a.workers, a.stage_dir)
     print(json.dumps({k: info[k] for k in ("windows_seen", "steps", "param_count",
                                            "flops_per_window", "training_flops", "done")}))
     return 0
