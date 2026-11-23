@@ -70,3 +70,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-23T07:54Z glossary: reply sent with unregistered terms: flagged
 - 2026-11-23T07:56Z Nibi scratch: quota -s shows soft 1024G, hard 20480G (peer fact verified); t184 blocker withdrawn; re-asked PI with cost 22,700 CPU-h
 - 2026-11-23T08:01Z t184 batch 1 SUBMITTED on Nibi 2026-11-23T08:01Z (PI yes, under 20 TiB hard quota): 72 rows; stage 28629674/76/99, 28629702/04/10/12/16/18; build 28629675/77, 28629700/03/05/11/13/17/19; signal 28629678 (ChIP/ATAC), 28629701 (DNase); record /project/def-maxwl/mforooz/ONION/logs/closeout_d4_submit_20261123T080124Z.log; never resubmit (script skips queued rows)
+- 2026-11-23T08:15Z PI: 'yes rescore' -> asked deviance session (local_2eb1d23b) to rescore rcp_halves_mix_avg_pearson_unet and rcp_combo_w2x_unet at p16_dev and p256_dev, 3 seeds. PI asked: compare all variants of the design evolution and pick the best combination; explain Pearson residual.
