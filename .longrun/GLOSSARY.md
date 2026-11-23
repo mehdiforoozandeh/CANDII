@@ -197,3 +197,4 @@ Every term and metric in use. A new entry lands before its first use in anything
 | local_b5c55e32 | id prefix of the foreman Claude session (agent-facing) | session id; proposed | 2026-11-23 reply |
 | b4b7 | fragment of a linked session id (agent-facing) | session id; proposed | 2026-11-23 reply |
 | edc | fragment of a linked session id (agent-facing) | session id; proposed | 2026-11-23 reply |
+| froze | stopped pushing changes to given files for a time | agent; proposed | 2026-11-23 reply |
