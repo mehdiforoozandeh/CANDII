@@ -63,3 +63,5 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-23T05:02Z moved from DECISIONS (history): | D46 | 256-region confirm of halves_headskip_off, 3 seeds (342 CPU-h projected, not 40 as first quoted). | PI 2026-11-22: "ii) yes" | PI | | in force |
 - 2026-11-23T05:02Z moved from DECISIONS (history): | D49 | Arms on the D43 recipe: rec_ctlw4 (deployable), rec_ctl_holdout and rec_ctl_holdout_w4 (held-out control eval), 3 seeds, p16; kit RCP8; control_eval chained (5278907-15). | D48, R8 | agent, under D18 | | in force |
 - 2026-11-23T05:02Z p16 read: combo PASS 0.249, w2x 0.417, headskip_off p256 NEAR; control on recipe w1 0.131 vs w4 0.125; ensemble recal cal 0.625->0.767; submitted combo p256 5356043-70 and combo_w2x 5356071/78/95 on RCP9 (D50-D52)
+- 2026-11-23T05:03Z glossary: reply sent with unregistered terms: flagged
+- 2026-11-23T07:47Z PI 'iii) yes': deleting Fir /scratch/mforooz/onion/pred_store/runs_rcp_ens (ensemble per-seed stores; scores kept under runs_rcp_ens). Peer session 'pval eic comparison' relayed PI approval to start t184 blind-row build; t184 says the PI runs the submit command; asked PI here.

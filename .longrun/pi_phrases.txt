@@ -90,3 +90,6 @@ objectives clearly
 separately measured
 going afk
 working autonomously
+full region
+region results
+deviance metrics

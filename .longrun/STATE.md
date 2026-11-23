@@ -25,4 +25,3 @@ Close the session with one trusted miniCANDI architecture (PI 2026-11-22, after 
 
 ## Open asks to the PI
 - Merge PR 65 (Poisson-deviance scorer) into the recipe branch? Recommended yes.
-- Delete the ensemble per-seed prediction stores on Fir /scratch? Recommended yes.
