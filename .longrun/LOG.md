@@ -81,3 +81,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-23T10:19Z deviance p16 full combination 3/3: mean skill 0.543 (range 0.510-0.575, floor 0.516), gap 0.951, R 1.059; recipe 0.248. p256 deviance jobs 5395488-5395517 (DEV2).
 - 2026-11-23T11:05Z combo_w2x p16 (2 seeds): imp 0.501±0.007, cor 0.811±0.007, cal 0.703±0.070 (= combination within range). p256 confirm submitted: s1 5402493-5402501, s2 5402502-5402512; s0 chained by laptop watch bxaewuxu1 after its p16 (5356076).
 - 2026-11-23T12:21Z D53: full combination p256 3 seeds PASS imp 0.500 cor 0.818 cal 0.685; refresh_data.sh must run under zsh
+- 2026-11-23T12:45Z combo_w2x seed0 p256 submitted: predict 5413521-5413529, metrics 5413530 (114 CPU-h)

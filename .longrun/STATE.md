@@ -14,7 +14,7 @@ Close the session with one trusted miniCANDI architecture (PI 2026-11-22, after 
 - Final candidate = combination at 160k windows (combo_w2x), weight-1 control, plus recalibration.
 
 ## In flight (Fir, kit RCP9)
-- combo_w2x: trained; p16 2 of 3 seeds; p256 confirm s1 5402493-501, s2 5402502-512, s0 auto after its p16 (watch bxaewuxu1).
+- combo_w2x: trained; p16 2 of 3 seeds; p256 confirm s1 5402493-501, s2 5402502-512, s0 5413521-530.
 - Avocado 5022624 still pending. rcp_rec_ctlw4 seed 2 timed out (2 seeds read; not resubmitted).
 - Ensemble on pairs + average: ens3 missing (only seed0_recal landed); low priority.
 
