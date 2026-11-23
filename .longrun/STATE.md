@@ -14,7 +14,7 @@ Close the session with one trusted miniCANDI architecture (PI 2026-11-22, after 
 
 ## In flight (Fir, kit RCP9)
 - Combination p256 confirm: 5356043-5356070 (27 jobs, 342 CPU-h projected).
-- combo_w2x: train 5356071/5356078/5356095 (16 h limit), p16 chained.
+- combo_w2x: trained; p16 2 of 3 seeds; p256 confirm s1 5402493-501, s2 5402502-512, s0 auto after its p16 (watch bxaewuxu1).
 - Avocado 5022624 still pending. rcp_rec_ctlw4 seed 2 timed out (2 seeds read; not resubmitted).
 - Ensemble on pairs + average: ens3 missing (only seed0_recal landed); low priority.
 
