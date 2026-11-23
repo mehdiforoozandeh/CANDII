@@ -28,7 +28,7 @@ Exploratory, open. First measured result delivered 2026-11-22: ladder probe on 3
 4. Fair map for model outputs (training and validation data only, D2); needs blind predictions (t184).
 
 ## PI request
-Ping the PI (push notification) when probe 2, MOESM2 or miniCANDI scores land.
+Ping the PI (push notification) when probe 2, MOESM2 or miniCANDI scores land. Foreman session local_b5c55e32-4e2a-4edc-b4b7-6f0134e8bc43 ("Open sessions on project", 2026-11-23): send it every PI-facing item and a 2-3 line status at each milestone.
 
 ## Open asks to the PI
 None. PI 2026-11-23: blind-row build yes (D6), MOESM2 headline (D7); 48-experiment batch and Jacob message held (D8).
