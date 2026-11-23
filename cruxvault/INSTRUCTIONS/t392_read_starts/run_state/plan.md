@@ -72,7 +72,7 @@ Goal: Put the read files of four probe measurements on Nibi scratch, from one pa
 The measurements: `ENCSR000AKT.pooled.uniform.base` (small ChIP-seq, 2 replicates), `ENCSR000ENE.pooled.uniform.base` (DNase-seq), `ENCSR000AMI.pooled.uniform.mapq0` (the largest read volume of all 2,740, 2.0 GiB, 319 M reads), and one measurement with `lines_per_fragment` 2 whose files are in `onion-work__000`.
 The member paths come from each measurement's `provenance.json::halves` on Nibi `/scratch/mforooz/onion/measurements/` and from the index `/project/def-maxwl/mforooz/ONION/nearline_archive_2026-11-17/index/onion-work__000.txt`.
 The tar is 220.7 GB and is read end to end, so the extraction is not run on a login node. Submit one job `rs392_stage` (1 CPU, 4000M, 03:00:00, `--gres=none`) that runs `tar -xf /nearline/def-maxwl/mforooz/scratch_archive_2026-11-17/onion-work__000.tar -C /scratch/mforooz/rs392/probe/work <members>`. If the job reports that a compute node cannot read `/nearline`, run the same command on the Nibi data-transfer node and record that in the note. About 3 GiB lands on scratch (708 of 1,024 GiB are in use).
-Owns: `cruxvault/results/t392/probe/STAGING.md` (the commands, the member list, the job id, `lfs hsm_state` of the tar before the read, whether a compute node can read `/nearline`)
+Owns: `cruxvault/INSTRUCTIONS/t392_read_starts/run_state/notes/probe/STAGING.md` (the commands, the member list, the job id, `lfs hsm_state` of the tar before the read, whether a compute node can read `/nearline`)
 Interfaces: The extracted tree is `/scratch/mforooz/rs392/probe/work/onion/work/<experiment>/...`, i.e., the provenance path with the prefix `/scratch/mforooz/` replaced by `/scratch/mforooz/rs392/probe/work/`. C3 calls this prefix swap `--work-root`.
 Depends on: none
 Serves: R6, R7
@@ -136,7 +136,7 @@ Test: `$PY -m pytest tests/test_t392_dataset.py tests/test_minicandi_resolution.
 ### C7a recount probe on Nibi (submit)   wave 3
 Goal: Recount the four staged measurements at real scale on Nibi. Nibi, because the tars, the staged files and a copy of the `eic_v1_2` counts are there.
 Steps: confirm C2's Test; push kit `RS1` to Nibi; `sbatch --job-name=rs392_probe --array=1-4 --cpus-per-task=2 --mem=24000M --time=02:00:00 --gres=none` on `slurm/t392/rs_recount.sh` with a 4-row plan, `--work-root /scratch/mforooz/rs392/probe/work/`, store `/scratch/mforooz/rs392/probe/store`.
-Owns: `cruxvault/results/t392/probe/jobs.tsv`
+Owns: `cruxvault/INSTRUCTIONS/t392_read_starts/run_state/notes/probe/jobs.tsv`
 Interfaces: store root `/scratch/mforooz/rs392/probe/store`; logs under `/scratch/mforooz/rs392/probe/logs`.
 Depends on: C2, C3, C5
 Serves: R7, R6
@@ -144,7 +144,7 @@ Test: `hpc run nibi 'squeue -u $USER -n rs392_probe -h | wc -l; ls /scratch/mfor
 
 ### C7b recount probe on Nibi (collect): the first measured result   wave 4
 Goal: Read the gate and the costs of the probe. This is the day-1 result.
-Owns: `cruxvault/results/t392/probe/PROBE.md`, `cruxvault/results/t392/probe/probe.tsv`
+Owns: `cruxvault/INSTRUCTIONS/t392_read_starts/run_state/notes/probe/PROBE.md`, `cruxvault/INSTRUCTIONS/t392_read_starts/run_state/notes/probe/probe.tsv`
 Interfaces: `probe.tsv`, one row per measurement: reads, read GiB, wall s, CPUTimeRAW, peak RSS, store bytes, `n_differing` per file, the two kernel rows, and the named output `conversion_floor_nmse` per file (D9). PROBE.md gives the rate in CPU-h per GiB, the store bytes per read, the projected store size, and the memory to ask on Fir. Fir bills one core per 4,000 MB, so the Fir request is `--mem` = peak RSS x 1.3 rounded up to 4,000 MB and `--cpus-per-task` = that memory / 4,000 MB, and the projected recount spend uses those cores. If the projection is above 180 CPU-h, report to the foreman before C11a. A non-zero `n_differing` stops the run and goes to the foreman (H, stop condition). Send the status table.
 Depends on: C7a
 Serves: R7, R6, R15, R16
@@ -186,7 +186,7 @@ Test: `$PY -m pytest tests/test_docs.py -q -p no:cacheprovider`
 
 ### C10a end-to-end check, sanity tool and the full suite on the cluster (code and submit)   wave 5
 Goal: Prove the whole path on synthetic tables before any training job, write the read-start-truth sanity tool, and submit the full suite on the kit and on the base kit.
-Owns: `tools/t392/sanity.py`, `tests/test_t392_end_to_end.py`, `slurm/t392/rs_tests.sh`, `cruxvault/results/t392/tests/jobs.tsv`
+Owns: `tools/t392/sanity.py`, `tests/test_t392_end_to_end.py`, `slurm/t392/rs_tests.sh`, `cruxvault/INSTRUCTIONS/t392_read_starts/run_state/notes/tests/jobs.tsv`
 Interfaces:
 - `tests/test_t392_end_to_end.py`: synthetic tables (`tools/minicandi/synth.py`) plus a synthetic read-start store; `res_dataset.train` for 16 windows; `registry.load_run` returns the adapter; `score.py` on a synthetic evaluation set writes `scores.json` with finite headline terms.
 - `sanity.py --run <dir> --evalset <json> --out <json>`: on the imputation targets of the pair regions, the inner model's `mu_sub`, `n_sub` against the read-start truth: one mean NB deviance per bin and one Pearson r of log1p mean against log1p truth. A sanity check only (R12).
@@ -197,7 +197,7 @@ Test: `$PY -m pytest tests/test_t392_end_to_end.py -q -p no:cacheprovider`
 
 ### C10b full suite on the cluster (collect)   wave 6
 Goal: Read the two failure lists and the bit-exactness gate.
-Owns: `cruxvault/results/t392/tests/TESTS.md`
+Owns: `cruxvault/INSTRUCTIONS/t392_read_starts/run_state/notes/tests/TESTS.md`
 Interfaces: TESTS.md lists every test that fails on `RS<n>` and passes on `RCP9` (must be none), and the output of `tools/golden.py check`. A new failure goes back to the owning code chunk before C12a.
 Depends on: C10a
 Serves: R5
@@ -208,7 +208,7 @@ Goal: Recount all 2,740 measurements in every view and build the read-start stor
 Waits on: the PI's transfer has landed, i.e., the 6 `onion-work` tars are in `/scratch/mforooz/rs392/tars` with the byte sizes of `status.tsv`, and the testbed read sets are in `/scratch/mforooz/rs392/work/testbed` (156 files). C7b has passed.
 Steps: (1) `build_plan.py` with the Fir paths; (2) 6 jobs `rs392_untar_<k>` (1 CPU, 4000M, 04:00:00), one per tar, each extracts only its plan's members to `/scratch/mforooz/rs392/work`; (3) 7 arrays `rs392_recount_<source>`: one per tar, chained `afterok` on that tar's own untar job, and one for the testbed with no dependency; each `--array=1-<its tasks>%2` while the 6 tar arrays run, so at most 12 to 14 tasks run at once; `--cpus-per-task`, `--mem` and `--time` from PROBE.md; (4) one job `rs392_avg` chained `afterok` on the 7 arrays (all still live at submit), 8 CPUs, 32000M, runs `rs_dataset.build_average_h5` from `/scratch/mforooz/onion/aux/eic_v1_average.h5` into `/scratch/mforooz/rs392/aux/eic_v1_2_read_start_average.h5`.
 The extracted read files stay on Fir scratch.
-Owns: `cruxvault/results/t392/build/jobs.tsv`, `cruxvault/results/t392/build/plan_summary.tsv` (source, measurements, tasks, read GiB)
+Owns: `cruxvault/INSTRUCTIONS/t392_read_starts/run_state/notes/build/jobs.tsv`, `cruxvault/INSTRUCTIONS/t392_read_starts/run_state/notes/build/plan_summary.tsv` (source, measurements, tasks, read GiB)
 Interfaces: Store root `/scratch/mforooz/rs392/store`. Fir file count stands at 831K of 1,000K; the build adds about 18K files.
 Depends on: C7b, C3, C5, C6, the transfer
 Serves: R6, R7
@@ -216,7 +216,7 @@ Test: `hpc run fir 'squeue -u $USER -h -o %j | grep -c "^rs392_"'`
 
 ### C11b full recount and store build on Fir (collect)   wave 6
 Goal: Read the gate on all 8,220 files, the conversion floor and the store size.
-Owns: `cruxvault/results/t392/build/BUILD.md`, `cruxvault/results/t392/build/gate.tsv`, `cruxvault/results/t392/build/floor.tsv`
+Owns: `cruxvault/INSTRUCTIONS/t392_read_starts/run_state/notes/build/BUILD.md`, `cruxvault/INSTRUCTIONS/t392_read_starts/run_state/notes/build/gate.tsv`, `cruxvault/INSTRUCTIONS/t392_read_starts/run_state/notes/build/floor.tsv`
 Interfaces: `gate.tsv`, 8,220 rows: measurement, file, `n_bins`, `n_differing`. `floor.tsv`, the named output of D9, 2,740 rows: measurement, assay, view, `conversion_floor_nmse` of `starts.h5`, `starts_pr1.h5`, `starts_pr2.h5`. BUILD.md holds the summary of the floor (median, 5th and 95th percentile, maximum, per assay class and per view), the store size (`du -s` of the store root, bytes, and the size of the average file), the CPU-h from `jobs.tsv`, and the check that the average file has the same `measurement_ids` and `n_cells` per track as `eic_v1_average.h5`. A failed gate on any file stops the run before training (R7). Send the status table.
 Depends on: C11a
 Serves: R6, R7, R15, R16
@@ -225,7 +225,7 @@ Test: `$PY tools/t392/check.py store --cluster fir --store /scratch/mforooz/rs39
 ### C12a training probe (submit)   wave 7
 Goal: One short training job on the real store before the three seeds.
 Steps: push the current kit to Fir; `sbatch --job-name=rs392_train_probe --time=01:00:00 slurm/t392/rs_train.sh <kit> <config> /project/def-maxwl/mforooz/ONION/tables/eic_v1_2 0 /project/def-maxwl/mforooz/t392/runs/_probe/seed0` with `EXTRA_TRAIN_ARGS="--max-windows 2000"`.
-Owns: `cruxvault/results/t392/train/jobs.tsv` (C12b and C12c append to it, in later waves)
+Owns: `cruxvault/INSTRUCTIONS/t392_read_starts/run_state/notes/train/jobs.tsv` (C12b and C12c append to it, in later waves)
 Interfaces: the probe folder holds `log.jsonl` and `run.json`.
 Depends on: C10b, C11b
 Serves: R8
@@ -234,7 +234,7 @@ Test: `hpc run fir 'ls /project/def-maxwl/mforooz/t392/runs/_probe/seed0'`
 ### C12b training, seeds 0 to 2 (submit)   wave 8
 Goal: Read the probe (seconds per step, peak memory, the Pearson statistics, the parameter count), then submit the three seeds on Fir CPU nodes as the reference (`run.json::device` is `cpu`).
 Steps: three jobs `rs392_train_s<k>` on `slurm/t392/rs_train.sh`, `--time` = 3 x the projected wall, into `/project/def-maxwl/mforooz/t392/runs/rs_halves_mix_avg_pearson_unet/seed<k>`. If the projected spend of the three seeds is above 240 CPU-h, report to the foreman first.
-Owns: `cruxvault/results/t392/train/PROBE.md`
+Owns: `cruxvault/INSTRUCTIONS/t392_read_starts/run_state/notes/train/PROBE.md`
 Interfaces: a job that times out is resubmitted with the same command (it resumes from `ckpt.pt`). The reference is never retrained.
 Depends on: C12a
 Serves: R8, R9, R15
@@ -242,7 +242,7 @@ Test: `hpc run fir 'squeue -u $USER -h -o %j | grep -c "^rs392_train_s"'`
 
 ### C12c training (collect)   wave 9
 Goal: Confirm the three runs and record the spend.
-Owns: `cruxvault/results/t392/train/TRAIN.md`
+Owns: `cruxvault/INSTRUCTIONS/t392_read_starts/run_state/notes/train/TRAIN.md`
 Interfaces: Run folders hold `ckpt.pt`, `run.json`, `log.jsonl`, `DONE`. `run.json` must show `windows_seen` 80000 and the tables hash of `eic_v1_2` (`7a1a0325d00ddff3...`). TRAIN.md holds the final training and held-out loss per seed and the CPU-h. Send the status table.
 Depends on: C12b
 Serves: R8, R15, R16
@@ -251,7 +251,7 @@ Test: `$PY tools/t392/check.py train --cluster fir --runs /project/def-maxwl/mfo
 ### C13a 16-region scoring of the read-start model (submit)   wave 10
 Goal: Score the three read-start seeds on the 16-region evaluation set with the unedited scorer, in the two-phase form, with the reference's settings.
 Steps: (1) read the settings of the reference's scoring from Fir `runs_rcp/rcp_halves_mix_avg_pearson_unet/seed0/p16_sv/scores.json` (`scorer_settings`, `pred_store`, the evaluation-set hash) and from the head of its `predict_*.out` logs, and use the same values (4 shards, CPU predict, the same inference batch, same-view pass on, `REFS_FROM=/project/def-maxwl/mforooz/ONION/eval/eic_v1_2/baselines_p16`); (2) submit with `slurm/minicandi/submit_arms.sh` in its score-only two-phase form: `SEEDS="0 1 2"`, `SCORE_SUBDIR=p16_sv`, `SCORE_SAME_VIEW=1`, `PRED_STORE_ROOT=/scratch/mforooz/rs392/pred_store`, `KEEP_PRED_STORE=1`, `JOB_PREFIX=rs392_`; (3) one job `rs392_sanity_s<k>` per seed on `tools/t392/sanity.py`.
-Owns: `cruxvault/results/t392/score_p16/jobs.tsv` (C14a appends to it, in a later wave)
+Owns: `cruxvault/INSTRUCTIONS/t392_read_starts/run_state/notes/score_p16/jobs.tsv` (C14a appends to it, in a later wave)
 Interfaces: score folders `<runs>/rs_halves_mix_avg_pearson_unet/seed<k>/p16_sv`; the prediction stores are kept for C14a.
 Depends on: C12c, C10b
 Serves: R10, R12
@@ -260,7 +260,7 @@ Test: `hpc run fir 'squeue -u $USER -h -o %j | grep -c "^rs392_"'`
 ### C13b 16-region scoring (collect), and the reference's scores   wave 11
 Goal: The table of the two models on the three headline terms.
 Steps: `select_rule.py arm-summary` takes one `--runs` directory. Make `/project/def-maxwl/mforooz/t392/runs_both/` with two symlinks, to the read-start arm and to Fir `runs_rcp/rcp_halves_mix_avg_pearson_unet`, and run one call with `--sub p16_sv`.
-Owns: `cruxvault/results/t392/score_p16/SCORE.md`, `cruxvault/results/t392/score_p16/arm_summary_p16_sv.tsv`, `cruxvault/results/t392/score_p16/sanity.tsv`
+Owns: `cruxvault/INSTRUCTIONS/t392_read_starts/run_state/notes/score_p16/SCORE.md`, `cruxvault/INSTRUCTIONS/t392_read_starts/run_state/notes/score_p16/arm_summary_p16_sv.tsv`, `cruxvault/INSTRUCTIONS/t392_read_starts/run_state/notes/score_p16/sanity.tsv`
 Interfaces: `arm_summary_p16_sv.tsv` has the rows `rcp_halves_mix_avg_pearson_unet` and `rs_halves_mix_avg_pearson_unet` with `<term>.mean` and `<term>.range` for `imputation_raw`, `correction_v3_raw`, `uncertainty_raw`.
 Stop rules: (a) if the reference row does not reproduce 0.4996, 0.8156, 0.6852 to 4 decimals, stop and report to the foreman; (b) if the share of bins within 8 bins of an open edge is above 0.25% (the expected value is 32 of 16,384 bins = 0.195% at an inference batch of 8), stop and report; (c) sum the spend of every `jobs.tsv` (`check.py spend`) and write it in SCORE.md. Send the status table.
 Depends on: C13a
@@ -282,7 +282,7 @@ Goal: The deviance metrics of PR 65 for the read-start model.
 Gate 1: `gh pr view 65 --repo mehdiforoozandeh/CANDII --json state` shows MERGED, `origin/exp/t370-minicandi-recipe` is merged into the umbrella (D8), and a new kit is pushed.
 Gate 2, the stop rule: `check.py spend` over every `jobs.tsv`, plus the estimate of this chunk (32.5 CPU-h when the kept prediction stores of C13a are accepted, 119.3 CPU-h with a new predict pass). If the sum is above 600 CPU-h, report to the foreman and wait.
 Steps: call `slurm/minicandi/submit_arms.sh` directly, not `slurm/onion_eval/deviance_submit.sh` as it is: runs directory `/project/def-maxwl/mforooz/t392/runs`, arm `rs_halves_mix_avg_pearson_unet=<config json>`, `SEEDS="0 1 2"`, `EXTRA_SCORE_ARGS=--score-deviance`, `SCORE_SUBDIR=p16_dev`, `JOB_PREFIX=rs392_`, `REFS_FROM` and the other scoring settings as the reference's `p16_dev` (Fir `runs_rcp/DEV_SUBMITTED_p16.txt`, jobs 5381558 to 5381572).
-Owns: `cruxvault/results/t392/score_p16/DEVIANCE_SUBMIT.md`
+Owns: `cruxvault/INSTRUCTIONS/t392_read_starts/run_state/notes/score_p16/DEVIANCE_SUBMIT.md`
 Interfaces: score folders `<runs>/rs_halves_mix_avg_pearson_unet/seed<k>/p16_dev`.
 Depends on: C13b, PR 65 merged
 Serves: R11, R15
@@ -290,7 +290,7 @@ Test: `hpc run fir 'squeue -u $USER -h -o %j | grep -c "^rs392_"'`
 
 ### C14b deviance metrics (collect)   wave 13
 Goal: The deviance rows of the two models.
-Owns: `cruxvault/results/t392/score_p16/DEVIANCE.md`, `cruxvault/results/t392/score_p16/deviance_p16.tsv`
+Owns: `cruxvault/INSTRUCTIONS/t392_read_starts/run_state/notes/score_p16/DEVIANCE.md`, `cruxvault/INSTRUCTIONS/t392_read_starts/run_state/notes/score_p16/deviance_p16.tsv`
 Interfaces: `deviance_p16.tsv` has one row per model with skill, gap and R, each with its seed range; the reference row comes from its existing `p16_dev` folders.
 Depends on: C14a
 Serves: R11
@@ -376,3 +376,4 @@ Wall time: day 1, waves 1 to 4, with the gate result on four measurements; day 2
 
 ## Log
 - 2026-11-23T20:48Z wave 1 launch: C1 crux-tests [opus], C2 Nibi staging [opus]
+- 2026-11-23T20:55Z AMENDMENT (foreman, env defect from C2): interim notes of probe/build/train/score_p16/tests move from cruxvault/results/t392/<x>/ (gitignored, unconverted) to run_state/notes/<x>/ (tracked). Only side_by_side and deviance_addendum stay under results/ and get the runall/MANIFEST/! contract. C2: Nibi compute nodes cannot read /nearline; probe extraction runs on login node l1 under nice (GNU tar seeks past members, ~3.1 GiB read). C2 retry 1.
