@@ -196,3 +196,4 @@ Every term and metric in use. A new entry lands before its first use in anything
 | fallback | second option used if the first one fails | agent | proposed | 2026-11-23 disk reply |
 | GiB | gibibyte; 2^30 bytes of storage | field | proposed | 2026-11-23 disk reply |
 | nearline | Alliance tape-backed archive storage, slower to read than disk | field | proposed | 2026-11-23 disk reply |
+| outage | period when a cluster or its storage was down | agent | proposed | 2026-11-23 t184 reply |
