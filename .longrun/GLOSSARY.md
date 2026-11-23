@@ -190,3 +190,6 @@ Every term and metric in use. A new entry lands before its first use in anything
 | auditor | read-only agent that checks the run's records for drift | agent | proposed | 2026-11-23 brief |
 | halved | reduced to one half of its earlier value | agent | proposed | 2026-11-23 brief |
 | log10 | base-10 logarithm | field | proposed | 2026-11-23 process answer |
+| local_b549bcee | part of the app's link address for the recipe session | agent | proposed | 2026-11-23 t184 reply |
+| a377 | part of the app's link address for the recipe session | agent | proposed | 2026-11-23 t184 reply |
+| ac9f | part of the app's link address for the recipe session | agent | proposed | 2026-11-23 t184 reply |
