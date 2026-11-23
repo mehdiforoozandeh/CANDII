@@ -184,6 +184,29 @@ $LP placement --cache $CSE --truth-name se --rung L7t=$OUT/scores2/se/${E}_L7t.t
   J_SC=$(sub eicx_p2score_$E 2 48G 4:00:00 "$J_QT:$J_QO:$J_QF:$J_FU" "$SC $CMP $PL")
   echo "p2 $E: split $J_SP full $J_FU half $J_HA ctr $J_CT L7t $J_QT L7o $J_QO L7f $J_QF score $J_SC" | tee -a $OUT/JOBS.txt
   ;;
+pp)
+  # post-prediction pileup (t390 postpile): variants A B C D of `postpile_route`, each vs L5 and L6f.
+  # CHECK=1 also runs the `exact` variant and holds it bit-equal to L6f (the conversion identity).
+  E=${2:?exp}
+  read -r TRT CTL D CAP PSIG PPEAK < <(conf "$E")
+  [ "$CTL" != none ] && CTLP=$OUT/starts/$CTL || CTLP=none
+  X=$OUT/postpile/$E; Q=$OUT/qc; mkdir -p $X $Q
+  L6F=$OUT/rungs2/$E/L6f/$E.npy; L5=$OUT/rungs/L5/$E.npy
+  CMD="true"
+  if [ "${CHECK:-0}" = 1 ]; then
+    CMD="$CMD && $LP postpile_route --variant exact --trt $OUT/starts/$TRT --ctl $CTLP --d $D --out $X/exact/$E.npy --sizes-from $SIZES && \
+$LP arrdiff --a $X/exact/$E.npy --b $L6F --out $Q/${E}_pp_exact_vs_L6f_arrdiff.json"
+  fi
+  VS="A B C D"; [ "$CTL" = none ] && VS="A B D"      # DNase-seq: C = B by definition (no strand rule)
+  for V in $VS; do
+    CMD="$CMD && $LP postpile_route --variant $V --trt $OUT/starts/$TRT --ctl $CTLP --d $D --out $X/$V/$E.npy --sizes-from $SIZES && \
+$LP compare --a $X/$V/$E.npy --b $L5 --name pp${V}_vs_L5 --out $Q/${E}_pp${V}_vs_L5.json && \
+$LP compare --a $X/$V/$E.npy --b $L6F --name pp${V}_vs_L6f --out $Q/${E}_pp${V}_vs_L6f.json"
+  done
+  CMD="$CMD && $LP compare --a $OUT/rungs/L6/$E.npy --b $L6F --name L6_vs_L6f --out $Q/${E}_L6_vs_L6f.json"
+  J=$(sub eicx_pp_$E 2 40G 3:00:00 "" "$CMD")
+  echo "pp $E: $J" | tee -a $OUT/JOBS.txt
+  ;;
 sacct)
   shift
   sacct -j "$1" -X --format=JobID,JobName%28,State,Elapsed,TotalCPU,ReqMem,AllocCPUS -P

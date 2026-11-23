@@ -711,6 +711,97 @@ def cmd_fragpile_route(a):
     return 0
 
 
+def bin_kernel(d, a):
+    """Expected 25 bp-mean coverage of bin k by one fragment [x + a, x + a + d) whose anchor x is
+    uniform over the 25 integer positions of bin 0: {k: weight}. The weights sum to d / 25."""
+    d, a = int(d), int(a)
+    lo = (a // WIN) - 1
+    hi = (a + d + WIN) // WIN + 1
+    cov = np.zeros((hi - lo) * WIN, np.float64)
+    for o in range(WIN):
+        s = o + a - lo * WIN
+        cov[s: s + d] += 1.0 / WIN
+    w = cov.reshape(-1, WIN).mean(1)
+    return {lo + i: float(v) for i, v in enumerate(w) if v > 0}
+
+
+def apply_kernel(r, K):
+    """out[i] = sum_k K[k] * r[i - k] (a start in bin j adds K[k] to bin j + k), zero past the ends."""
+    n = len(r)
+    out = np.zeros(n, np.float64)
+    for k, w in K.items():
+        if k >= 0:
+            out[k:] += w * r[: n - k]
+        else:
+            out[: n + k] += w * r[-k:]
+    return out
+
+
+def starts_per_bin(pos, n):
+    return np.bincount(np.clip(pos.astype(np.int64) // WIN, 0, n - 1), minlength=n).astype(np.float64)
+
+
+POSTPILE_VARIANTS = ("A", "B", "C", "D", "exact")
+
+
+def cmd_postpile_route(a):
+    """t390 post-prediction pileup: the L6f conversion (lam_hat25, mlog10_sf(pile + 1, lambda),
+    identical lines to cmd_fragpile_route) on a 25 bp pileup ESTIMATED from 25 bp counts.
+
+      A  overlap counts / kappa (measured bins per read) -> estimated starts per bin, centred kernel
+      D  overlap counts / (rl / 25 + 1) (expected bins per read, store rule), centred kernel
+      B  unstranded 5'-end counts per bin (+ : start, - : BED end, as pileup_from_positions),
+         centred kernel (MACS2 symmetric shift)
+      C  stranded 5'-end counts per bin; + extended d forward, - extended d backward (ChIP);
+         DNase-seq has no strand rule in the pipeline (both strands centred), so C = B there
+      exact  the true 1 bp pileup (reproduces L6f; the identity check of the conversion)
+    Kernels: bin_kernel (anchor uniform within its bin): centred a = -(d // 2), + a = 0, - a = -d."""
+    t0 = time.time()
+    sizes = chrom_sizes(a.sizes_from)
+    zt, it = load_starts(a.trt)
+    T = float(it["n_lines"])
+    d = float(a.d)
+    di = int(d)
+    dnase = a.ctl == "none"
+    kt = kappa_of(zt)
+    rl = float(it["mean_read_length"])
+    if not dnase:
+        zc, ic = load_starts(a.ctl)
+        kc = kappa_of(zc)
+        s = T / float(ic["n_lines"])
+    Kc = bin_kernel(di, -(di // 2))
+    Kp, Km = bin_kernel(di, 0), bin_kernel(di, -di)
+    div = {"A": kt, "D": rl / WIN + 1.0}
+    out = {}
+    for c in CHROMS:
+        L = sizes[c]
+        n = ngrid(L)
+        t25 = _on_grid(zt[f"{c}_cnt"].astype(np.float64), n) / kt
+        if a.variant == "exact":
+            pile = pileup_from_positions(zt[f"{c}_p"], zt[f"{c}_m"], L, di, dnase)
+            p25 = bin25_full(pile, L).astype(np.float64)
+            del pile
+        elif a.variant in ("A", "D"):
+            p25 = apply_kernel(_on_grid(zt[f"{c}_cnt"].astype(np.float64), n) / div[a.variant], Kc)
+        elif a.variant == "B" or (a.variant == "C" and dnase):
+            r = starts_per_bin(zt[f"{c}_p"], n) + starts_per_bin(zt[f"{c}_m"], n)
+            p25 = apply_kernel(r, Kc)
+        else:
+            p25 = apply_kernel(starts_per_bin(zt[f"{c}_p"], n), Kp) + \
+                apply_kernel(starts_per_bin(zt[f"{c}_m"], n), Km)
+        c25 = None if dnase else _on_grid(zc[f"{c}_cnt"].astype(np.float64), n) / kc
+        lam = lam_hat25(d, T, c25, 0.0 if dnase else s, t25)
+        out[c] = mlog10_sf(p25 + 1.0, lam).astype(np.float32)
+        log(f"{c} done ({time.time() - t0:.0f}s)")
+    save_track(a.out, out)
+    write_json(a.out + ".json", dict(variant=a.variant, trt=a.trt, ctl=a.ctl, d=d, T=T, kappa_trt=kt,
+                                     read_length=rl, divisor=div.get(a.variant),
+                                     kernel_centred=Kc, kernel_plus=Kp, kernel_minus=Km,
+                                     kappa_ctl=None if dnase else kc, s=None if dnase else s,
+                                     seconds=time.time() - t0))
+    return 0
+
+
 def cmd_arrdiff(a):
     """Max |A - B| and the count of differing bins of two challenge .npy tracks, raw grid, all bins."""
     A, B = load_track_raw(a.a), load_track_raw(a.b)
@@ -815,6 +906,12 @@ def main(argv=None):
     p.add_argument("--d", type=float, required=True)
     p.add_argument("--sizes-from", required=True); p.add_argument("--out", required=True)
     p.set_defaults(fn=cmd_fragpile_route)
+    p = sub.add_parser("postpile_route")
+    p.add_argument("--trt", required=True); p.add_argument("--ctl", required=True)
+    p.add_argument("--d", type=float, required=True); p.add_argument("--variant", required=True,
+                                                                     choices=POSTPILE_VARIANTS)
+    p.add_argument("--sizes-from", required=True); p.add_argument("--out", required=True)
+    p.set_defaults(fn=cmd_postpile_route)
     p = sub.add_parser("split")
     p.add_argument("--ta", required=True); p.add_argument("--out", required=True)
     p.add_argument("--seed", type=int, default=20261122)
