@@ -16,3 +16,5 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-23T06:49Z probe 2 agent handed back with 17 Nibi jobs pending (28605164, 28610164-28610179); C19M22 overlap port exact vs container; split-half Jaccard 0.925/0.954; waiting via squeue poll
 - 2026-11-23T07:46Z PI: yes blind-row build (D6), MOESM2 headline (D7, supersedes D1 headline); hold 48-exp batch and Jacob message (D8)
 - 2026-11-23T07:47Z recipe session: t184 not started; PI must confirm in that session (task says PI runs submit); blind predictions after final model, ~2026-11-24 01-04 UTC
+- 2026-11-23T07:47Z glossary: reply sent with unregistered terms: clickable
+- 2026-11-23T07:52Z PI confirmed t184 in the recipe session
