@@ -172,10 +172,10 @@ Every term and metric in use. A new entry lands before its first use in anything
 | prefix | fixed text at the start of a name | agent; proposed | 2026-11-22 job names |
 | genomic | of the DNA sequence and its positions | agent; proposed | 2026-11-22 calibration regions |
 | reproducible | can be rebuilt exactly from saved inputs | agent; proposed | 2026-11-22 prediction stores |
-| caveat | a limit on how far a result can be trusted | agent | proposed | 2026-11-23 reply |
-| D44 | decision row: train and confirm the full combination | agent (DECISIONS.md) | proposed | 2026-11-23 reply |
-| D51 | decision row: final recipe keeps control weight 1 | agent (DECISIONS.md) | proposed | 2026-11-23 reply |
-| D52 | decision row: dispersion recalibration ships with the final model | agent (DECISIONS.md) | proposed | 2026-11-23 reply |
-| p2x | recipe arm with twice the parameter budget (2 M) | agent (recipe_arms.py) | proposed | 2026-11-23 reply |
-| p4x | recipe arm with four times the parameter budget (4 M) | agent (recipe_arms.py) | proposed | 2026-11-23 reply |
-| timeout | job stopped by the cluster at its time limit | agent | proposed | 2026-11-23 reply |
+| caveat | a limit on how far a result can be trusted | agent; proposed | 2026-11-23 reply |
+| D44 | decision row: train and confirm the full combination | agent (DECISIONS.md); proposed | 2026-11-23 reply |
+| D51 | decision row: final recipe keeps control weight 1 | agent (DECISIONS.md); proposed | 2026-11-23 reply |
+| D52 | decision row: dispersion recalibration ships with the final model | agent (DECISIONS.md); proposed | 2026-11-23 reply |
+| p2x | recipe arm with twice the parameter budget (2 M) | agent (recipe_arms.py); proposed | 2026-11-23 reply |
+| p4x | recipe arm with four times the parameter budget (4 M) | agent (recipe_arms.py); proposed | 2026-11-23 reply |
+| timeout | job stopped by the cluster at its time limit | agent; proposed | 2026-11-23 reply |
