@@ -22,7 +22,7 @@ Close the session with one trusted miniCANDI architecture (PI 2026-11-22, after 
 
 ## Next
 1. When combo_w2x p256 lands (3 seeds): compare with the full combination at 256; read deviance p256 rows.
-2. Send the pval session (local_0e44c034) the blind-prediction paths when the build and final predictions land; copy the foreman.
+2. Send the pval session (local_0e44c034) the predict.py counts/ paths (Nibi or Fir) for C19M22, C40M17, C12M02 when they exist; copy the foreman.
 3. Final architecture decision; update GOALS R1-R4, R8; refresh the deck; tell the deviance session the final arm.
 
 ## Open asks to the PI
