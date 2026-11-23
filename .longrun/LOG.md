@@ -11,3 +11,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-22T21:04Z fact (Max s04): CANDI+tcfloor 1st on MOESM4 (affine b0+b1*CANDI+b2*Average fitted on 133 training experiments; fair per D2) vs uncorrected CANDI 16th; Max's later plan drops tcfloor from challenge rows
 - 2026-11-22T21:06Z spawned ladder probe agent (opus), 3 blind experiments, L1-L7
 - 2026-11-23T06:15Z Ladder probe done (3 blind exps): QN exact, 1bp formula exact, overlap-count cost 0.017/0.255/0.021 nMSE, DNase full route exact with overlap peaks, ChIP reprocessing gap 0.013/0.127 unexplained. Recorded h90/f390 supports strong, q90 f391 moderate, 2 pending. Counters bumped h89 f389.
+- 2026-11-23T06:18Z audit: first audit; fixed glossary status column + 2 rows (count route, conversion floor), R7 partial, D5 peak rule fixed a priori (D2), MOESM2 board added to Next, compute ask (82 CPU-h vs D4) added to STATE
