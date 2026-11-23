@@ -35,7 +35,7 @@ decides which count eval set is reported beside the final miniCANDI recipe
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**1 children** · open 1, leaning 0, settled 0, parked 0
+**1 children** · open 0, leaning 1, settled 0, parked 0
 
-- `h48` [[h48_on_the_same_predictions_each_deviance_te|On the same predictions, each deviance term ranks miniCANDI arms like the current term of its goal and separates arms from seed noise at least as well]] — *open*
+- `h48` [[h48_on_the_same_predictions_each_deviance_te|On the same predictions, each deviance term ranks miniCANDI arms like the current term of its goal and separates arms from seed noise at least as well]] — *leaning · moderate*
 <!-- crux:ledger:end -->

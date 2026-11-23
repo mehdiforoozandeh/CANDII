@@ -132,11 +132,17 @@ def _check(off, on):
     assert "deviance" not in off
     blk = on.pop("deviance")
     assert off == on                     # every other key is unchanged
+    # the synthetic evalset has no scorable imputation assay (the headline count CRPS macro is None
+    # there too), so check the per-assay values whether or not the assay is scorable
+    def vals(k):
+        v = {**blk[k]["per_assay"], **blk[k]["non_scorable_per_assay"]}
+        assert v and all(x is not None and np.isfinite(x) for x in v.values()), (k, blk[k])
+        return v
     for k in ("dev_imputation_skill", "dev_correction_gap_closed", "dev_calibration_ratio",
-              "dev_imputation_floor", "dev_correction_depth_only"):
-        assert blk[k]["macro"] is not None and np.isfinite(blk[k]["macro"]), (k, blk[k])
+              "dev_correction_depth_only"):
+        vals(k)
     assert blk["n_pairs"] > 0 and blk["n_targets"] > 0
-    assert 0 < blk["dev_imputation_floor"]["macro"] < 1
+    assert all(0 < x < 1 for x in vals("dev_imputation_floor").values())
 
 
 def test_switch_adds_only_the_deviance_key_in_process(env):
