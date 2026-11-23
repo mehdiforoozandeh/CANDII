@@ -82,3 +82,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-23T11:05Z combo_w2x p16 (2 seeds): imp 0.501±0.007, cor 0.811±0.007, cal 0.703±0.070 (= combination within range). p256 confirm submitted: s1 5402493-5402501, s2 5402502-5402512; s0 chained by laptop watch bxaewuxu1 after its p16 (5356076).
 - 2026-11-23T12:21Z D53: full combination p256 3 seeds PASS imp 0.500 cor 0.818 cal 0.685; refresh_data.sh must run under zsh
 - 2026-11-23T12:45Z combo_w2x seed0 p256 submitted: predict 5413521-5413529, metrics 5413530 (114 CPU-h)
+- 2026-11-23T12:49Z deviance p16 combo_w2x seed0 (from deviance session): skill 0.537 floor 0.515, gap 0.947, R 1.062; full combination 3-seed: 0.543, 0.951, 1.059
