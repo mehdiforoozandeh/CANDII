@@ -181,6 +181,7 @@ def test_off_grid_minus_read_still_adds_its_overlap_to_kept_bins(tmp_path):
     assert ov[39] == 1 and ov.sum() == 1
     np.testing.assert_array_equal(ov, bin25.counts_from_tagalign(str(p), {"chr1": 1010})["chr1"])
     assert np.asarray(r["n_reads_strand"]).sum() == 0
+    assert int(np.asarray(r["kernel_counts"]).sum()) == 0      # only reads kept on the grid
 
 
 def test_overlap_matches_bin25_on_random_reads(tmp_path):
@@ -226,7 +227,9 @@ def test_several_read_files_add_up(tmp_path):
 def test_kernel_counts_are_the_covered_offsets_per_strand(tmp_path):
     reads = [("chr2", 10, 60, "+"),     # start bin 0, covers offsets 0, 1, 2
              ("chr2", 30, 80, "-"),     # start bin 3, covers bins 1..3: offsets -2, -1, 0
-             ("chr2", 30, 75, "-")]     # start bin 2, covers bins 1..3: offsets -1, 0, +1
+             ("chr2", 30, 75, "-"),     # start bin 2, covers bins 1..3: offsets -1, 0, +1
+             ("chr2", 460, 500, "-")]   # 5' base 499 -> bin 19 (last kept bin of 20); covers
+                                        # bins 18, 19, 20; bin 20 is dropped: offsets -1, 0 only
     p = _write_tagalign(tmp_path / "k.tagAlign.gz", reads)
     r = _rs().scan([str(p)], {"chr2": 500}, reach=REACH)
     k = np.asarray(r["kernel_counts"]).astype(np.int64)
@@ -239,8 +242,10 @@ def test_kernel_counts_are_the_covered_offsets_per_strand(tmp_path):
         exp[1, REACH + off] += 1
     for off in (-1, 0, 1):
         exp[1, REACH + off] += 1
+    for off in (-1, 0):
+        exp[1, REACH + off] += 1
     np.testing.assert_array_equal(k, exp)
-    assert [int(x) for x in np.asarray(r["n_reads_strand"])] == [1, 2]
+    assert [int(x) for x in np.asarray(r["n_reads_strand"])] == [1, 3]
 
 
 def test_kernel_times_reads_rebuilds_the_overlap_sum_of_kept_reads(tmp_path):
@@ -259,7 +264,7 @@ def test_kernel_times_reads_rebuilds_the_overlap_sum_of_kept_reads(tmp_path):
 def test_a_read_whose_span_leaves_the_reach_raises(tmp_path):
     p = _write_tagalign(tmp_path / "long.tagAlign.gz", [("chr1", 0, 400, "+")])   # 17 bins
     rs = _rs()                                  # outside the raises: a missing module must fail
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError, match="reach"):
         rs.scan([str(p)], {"chr1": 1010}, reach=REACH)
 
 

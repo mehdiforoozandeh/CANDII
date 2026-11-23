@@ -232,25 +232,51 @@ def test_average_strands_leaves_the_windows_own_cell_out(env):
         np.testing.assert_allclose(got[:, stranded], want[:, stranded], rtol=1e-4, atol=1e-4)
 
 
+def _ids(attr) -> set:
+    return {x.decode() if isinstance(x, bytes) else str(x) for x in np.atleast_1d(attr)}
+
+
 def test_read_start_average_file_copies_the_sets_of_the_read_count_file(env):
     with h5py.File(env["ref_avg"], "r") as fr, h5py.File(env["rs_avg"], "r") as fs:
         assert set(fs.keys()) == set(fr.keys())
         for track in fr.keys():
             gr, gs = fr[track], fs[track]
             assert int(gs.attrs["n_cells"]) == int(gr.attrs["n_cells"]), track
-            mr = {str(x) for x in np.atleast_1d(gr.attrs["measurement_ids"])}
-            ms = {str(x.decode() if isinstance(x, bytes) else x)
-                  for x in np.atleast_1d(gs.attrs["measurement_ids"])}
-            mr = {x.decode() if isinstance(x, bytes) else x for x in mr}
-            assert ms == mr, track
+            assert _ids(gs.attrs["measurement_ids"]) == _ids(gr.attrs["measurement_ids"]), track
+
+
+def test_read_start_average_copies_a_non_default_set_from_the_reference(env, tmp_path):
+    """The sets are read from the reference file, not recomputed from the tables: drop one
+    measurement of one track in a copy of the reference and the read-start file follows."""
+    import shutil
+    from minicandi.rs_dataset import build_average_h5
+    ref = tmp_path / "eic_v1_average_mod.h5"
+    shutil.copy(env["ref_avg"], ref)
+    track = "H3K27ac"
+    with h5py.File(ref, "r+") as f:
+        g = f[track]
+        mids = sorted(_ids(g.attrs["measurement_ids"]))
+        assert len(mids) >= 2
+        kept = mids[:-1]
+        g.attrs["measurement_ids"] = np.asarray(kept, dtype=h5py.string_dtype())
+        g.attrs["n_cells"] = int(g.attrs["n_cells"]) - 1
+        n_cells = int(g.attrs["n_cells"])
+    out = tmp_path / "rs_average_mod.h5"
+    out = Path(build_average_h5(ref, env["store"], env["tables"], out) or out)
+    with h5py.File(out, "r") as fs:
+        g = fs[track]
+        assert _ids(g.attrs["measurement_ids"]) == set(kept)
+        assert int(g.attrs["n_cells"]) == n_cells
+        want = sum(env["starts"][m]["counts"]["chr1"] * 1e6 / float(env["rows"][m]["depth_reads"])
+                   for m in kept)
+        np.testing.assert_allclose(np.asarray(g["chr1"], np.float64), want, rtol=1e-5)
 
 
 def test_read_start_average_file_holds_summed_strand_rates(env):
     with h5py.File(env["rs_avg"], "r") as fs:
         for track in fs.keys():
             g = fs[track]
-            mids = [x.decode() if isinstance(x, bytes) else str(x)
-                    for x in np.atleast_1d(g.attrs["measurement_ids"])]
+            mids = sorted(_ids(g.attrs["measurement_ids"]))
             for chrom in ("chr1", "chr2"):
                 d = g[chrom]
                 assert d.dtype == np.float32
@@ -289,5 +315,33 @@ def test_window_sequence_per_seed_equals_onion_dataset(env, extra):
     {"res_in_sub": 5}, {"res_out_sub": 5},
 ], ids=lambda e: next(iter(e)))
 def test_read_start_dataset_refuses_what_it_cannot_serve(env, extra):
+    """Built directly, so the point-rule ResDataset's own refusal of average_h5 cannot be what
+    raises (make_dataset would route res_bp / res_*_sub configs there)."""
+    from minicandi.rs_dataset import ReadStartDataset
+    with pytest.raises(ValueError) as e:
+        ReadStartDataset(env["tables"], "train", {**env["cfg"], **extra}, 0)
+    assert "['average_h5']" not in str(e.value)
+
+
+def test_read_start_dataset_refuses_a_store_row(env, tmp_path):
+    import shutil
+    from minicandi.dataset import read_tsv
+    from minicandi.rs_dataset import ReadStartDataset
+    src = Path(env["tables"])
+    dst = src.parent / (src.name + "_storerow")
+    if not dst.exists():
+        shutil.copytree(src, dst)
+    rows = read_tsv(dst / "measurements.tsv")
+    cols = list(rows[0])
+    i = next(k for k, r in enumerate(rows) if r["assay"] == "H3K27ac")
+    rows[i]["counts_path"] = f"store:{tmp_path / 'corpus'}:{rows[i]['cell']}:H3K27ac"
+    with open(dst / "measurements.tsv", "w", encoding="utf-8") as fh:
+        fh.write("\t".join(cols) + "\n")
+        for r in rows:
+            fh.write("\t".join(r[c] for c in cols) + "\n")
+    from minicandi.dataset import OnionDataset
+    base = {k: v for k, v in env["cfg"].items() if not k.startswith("read_start")}
+    OnionDataset(dst, "train", {**base, "average_input": False, "average_h5": None}, 0)
+    # the parent accepts the table, so the refusal below is the read-start dataset's own
     with pytest.raises(ValueError):
-        _make(env, extra)
+        ReadStartDataset(dst, "train", env["cfg"], 0)

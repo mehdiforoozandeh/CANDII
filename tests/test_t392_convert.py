@@ -222,26 +222,53 @@ def test_a_gap_a_new_chromosome_or_new_targets_break_the_run():
 
 
 def test_conversion_of_stitched_windows_equals_conversion_of_their_concatenation():
+    """A shuffled batch: one run of 5 consecutive chr1 windows, a run of 3 after a gap, and one
+    chr2 window placed where it would extend the first run. Each stitched run is converted as one
+    array and scattered back; the reference is the moment match written out in numpy on each
+    run's genomic concatenation."""
+    C = _contract()
     rsm = _rsm()
     rng = np.random.default_rng(5)
-    B, L = 16, 32
+    L, s0 = 16, 1000
+    metas = ([{"cell": "s0", "chrom": "chr1", "start_bin": s0 + i * L, "targets": ["m"]}
+              for i in range(5)]
+             + [{"cell": "s0", "chrom": "chr1", "start_bin": s0 + 5 * L + 7 + i * L,
+                 "targets": ["m"]} for i in range(3)]
+             + [{"cell": "s0", "chrom": "chr2", "start_bin": s0 + 5 * L, "targets": ["m"]}])
+    groups = [list(range(5)), [5, 6, 7], [8]]
+    perm = rng.permutation(len(metas))                 # batch position j holds window perm[j]
+    pos = {int(w): j for j, w in enumerate(perm)}
+    batch_metas = [metas[int(w)] for w in perm]
+    B = len(metas)
     mu_sub = rng.uniform(0.1, 5.0, (B, L, 2))
     n_sub = rng.uniform(0.5, 20.0, (B, L, 2))
-    kernel = torch.tensor(np.stack([_box(0, 3), _box(-3, 0)]))
-    runs = _runs(rsm, _metas(B, L), L)
-    assert runs == [list(range(B))]
-    pieces = []
+    kernel_np = np.stack([_box(0, 3) * 0.8, _box(-3, 0)])
+    kernel = torch.tensor(kernel_np)
+
+    runs = _runs(rsm, batch_metas, L)
+    assert sorted(i for r in runs for i in r) == list(range(B))
+    assert sorted(sorted(r) for r in runs) == sorted(sorted(pos[w] for w in g) for g in groups)
+
+    mu_got = np.zeros((B, L))
+    n_got = np.zeros((B, L))
     for r in runs:
+        r = sorted(r, key=lambda j: batch_metas[j]["start_bin"])
         mu, n = rsm.convert_nb(torch.tensor(mu_sub[r].reshape(-1, 2)),
                                torch.tensor(n_sub[r].reshape(-1, 2)), kernel, True)
-        pieces.append((np.asarray(mu).reshape(len(r), L), np.asarray(n).reshape(len(r), L)))
-    mu_all, n_all = rsm.convert_nb(torch.tensor(mu_sub.reshape(-1, 2)),
-                                   torch.tensor(n_sub.reshape(-1, 2)), kernel, True)
-    np.testing.assert_allclose(pieces[0][0].reshape(-1), np.asarray(mu_all), rtol=1e-6)
-    np.testing.assert_allclose(pieces[0][1].reshape(-1), np.asarray(n_all), rtol=1e-6)
-    # converting the windows one by one differs at the inner window edges (open edges)
-    mu_1, _ = rsm.convert_nb(torch.tensor(mu_sub[1]), torch.tensor(n_sub[1]), kernel, True)
-    assert not np.allclose(np.asarray(mu_1), np.asarray(mu_all).reshape(B, L)[1])
+        mu_got[r] = np.asarray(mu, np.float64).reshape(len(r), L)
+        n_got[r] = np.asarray(n, np.float64).reshape(len(r), L)
+
+    for g in groups:
+        idx = [pos[w] for w in g]                      # genomic order
+        m_cat, n_cat = mu_sub[idx].reshape(-1, 2), n_sub[idx].reshape(-1, 2)
+        mu_want, n_want = _expected_nb(m_cat, n_cat, kernel_np)
+        n_want = np.clip(n_want, C.N_MIN, C.N_MAX)
+        np.testing.assert_allclose(mu_got[idx].reshape(-1), mu_want, rtol=1e-5)
+        np.testing.assert_allclose(n_got[idx].reshape(-1), n_want, rtol=1e-4)
+    # one window converted alone differs from its stitched value at its inner edges
+    j = pos[1]
+    mu_1, _ = rsm.convert_nb(torch.tensor(mu_sub[j]), torch.tensor(n_sub[j]), kernel, True)
+    assert not np.allclose(np.asarray(mu_1, np.float64), mu_got[j])
 
 
 # --------------------------------------------------------------------------- strand_output
@@ -261,3 +288,70 @@ def test_strand_output_uses_channel_zero_alone_for_unstranded_tracks():
     i = C.TRACK_INDEX["H3K27ac"]                       # stranded: the pooled mean is the sum
     np.testing.assert_allclose(out["mu"][..., i].numpy(), mu_sub[..., i, :].sum(-1).numpy(),
                                rtol=1e-5)
+
+
+def test_strand_output_pooled_size_of_a_stranded_track_is_pool_nb():
+    from minicandi.losses import pool_nb
+    rsm, C = _rsm(), _contract()
+    rng = np.random.default_rng(7)
+    mu_sub = torch.tensor(rng.uniform(0.1, 5.0, (2, 8, C.A, 2)), dtype=torch.float32)
+    n_sub = torch.tensor(rng.uniform(0.5, 20.0, (2, 8, C.A, 2)), dtype=torch.float32)
+    out = rsm.strand_output({"mu_sub": mu_sub, "n_sub": n_sub})
+    mu_p, n_p = pool_nb(mu_sub, n_sub, 2, dim=-1)
+    for a in ("H3K27ac", "H3K4me3", C.CONTROL):
+        i = C.TRACK_INDEX[a]
+        torch.testing.assert_close(out["n"][..., i], n_p[..., i, 0], rtol=1e-5, atol=1e-6)
+        torch.testing.assert_close(out["mu"][..., i], mu_p[..., i, 0], rtol=1e-5, atol=1e-6)
+
+
+# --------------------------------------------------------------------------- read_start_loss
+
+def _loss_case(seed=8, B=2, L=16):
+    C = _contract()
+    rng = np.random.default_rng(seed)
+    y_sub = torch.tensor(rng.poisson(2.0, (B, L, C.A, 2)), dtype=torch.int32)
+    for a in ("ATAC-seq", "DNase-seq"):                # the dataset's unstranded layout
+        t = C.TRACK_INDEX[a]
+        y_sub[..., t, 0] += y_sub[..., t, 1]
+        y_sub[..., t, 1] = 0
+    batch = {"y_counts_sub": y_sub, "y_counts": y_sub.sum(-1).to(torch.int32),
+             "y_kind": torch.full((B, C.A), C.KIND_IMPUTE, dtype=torch.int64),
+             "y_avail": torch.ones((B, C.A), dtype=torch.bool),
+             "x_avail": torch.zeros((B, C.A), dtype=torch.bool),
+             "x_bin_mask": torch.zeros((B, L, C.A), dtype=torch.bool)}
+    out = {"mu_sub": torch.tensor(rng.uniform(0.5, 4.0, (B, L, C.A, 2)), dtype=torch.float32),
+           "n_sub": torch.tensor(rng.uniform(1.0, 10.0, (B, L, C.A, 2)), dtype=torch.float32)}
+    return batch, out
+
+
+def _loss(batch, out):
+    rsm = _rsm()
+    full = dict(out)
+    full.update(rsm.strand_output(out))
+    loss, _ = rsm.read_start_loss(full, batch, {})
+    return float(loss)
+
+
+def test_read_start_loss_ignores_channel_one_of_unstranded_tracks():
+    C = _contract()
+    batch, out = _loss_case()
+    base = _loss(batch, out)
+    assert np.isfinite(base)
+    b2 = dict(batch)
+    o2 = {k: v.clone() for k, v in out.items()}
+    b2["y_counts_sub"] = batch["y_counts_sub"].clone()
+    for a in ("ATAC-seq", "DNase-seq"):
+        t = C.TRACK_INDEX[a]
+        o2["mu_sub"][..., t, 1] = 37.0
+        o2["n_sub"][..., t, 1] = 0.05
+        b2["y_counts_sub"][..., t, 1] = 9
+    assert _loss(b2, o2) == pytest.approx(base, rel=1e-6, abs=1e-7)
+
+
+def test_read_start_loss_sees_channel_one_of_a_chip_track():
+    C = _contract()
+    batch, out = _loss_case()
+    base = _loss(batch, out)
+    o2 = {k: v.clone() for k, v in out.items()}
+    o2["mu_sub"][..., C.TRACK_INDEX["H3K27ac"], 1] *= 3.0
+    assert _loss(batch, o2) != pytest.approx(base, rel=1e-6)
