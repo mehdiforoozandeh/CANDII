@@ -67,3 +67,5 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-23T07:47Z PI 'iii) yes': deleting Fir /scratch/mforooz/onion/pred_store/runs_rcp_ens (ensemble per-seed stores; scores kept under runs_rcp_ens). Peer session 'pval eic comparison' relayed PI approval to start t184 blind-row build; t184 says the PI runs the submit command; asked PI here.
 - 2026-11-23T07:47Z glossary: reply sent with unregistered terms: flagged
 - 2026-11-23T07:53Z t184 (PI 'Yes, start it'): NOT submitted. Nibi dry run 72 rows OK, but Nibi /scratch quota 1024 GiB with 691 used (diskusage_report) vs ~1.2 TB staging + 1.4 TB BAMs. Fir port refused: pipelines, refs, build lists missing on Fir (closeout_D4b/FIR_PORT.md). Asked PI.
+- 2026-11-23T07:54Z glossary: reply sent with unregistered terms: flagged
+- 2026-11-23T07:56Z Nibi scratch: quota -s shows soft 1024G, hard 20480G (peer fact verified); t184 blocker withdrawn; re-asked PI with cost 22,700 CPU-h

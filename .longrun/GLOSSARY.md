@@ -189,3 +189,4 @@ Every term and metric in use. A new entry lands before its first use in anything
 | Globus | cluster-to-cluster file transfer service used by Alliance Canada | tool; proposed | 2026-11-23 reply |
 | hg38 | human reference genome assembly GRCh38 | field term; proposed | 2026-11-23 reply |
 | outage | period when a cluster was down and jobs died | agent; proposed | 2026-11-23 reply |
+| nearline | Alliance tape-backed archive storage, slow to recall | cluster term; proposed | 2026-11-23 reply |
