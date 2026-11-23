@@ -18,6 +18,7 @@ Exploratory, open. First measured result delivered 2026-11-22: ladder probe on 3
 - miniCANDI blind predictions do not exist: blind-row build t184 is a PI gate in the recipe run.
 
 ## In flight
+- Entry pipeline DONE (536312a2): `run_entry.sh deploy` then `submit <pred> <cov.tsv> <out> C19M22 C40M17 C12M02`; 12/12 checks bit-exact. Waits on predict.py output from the recipe session.
 - Probe 2 DONE (results/t390/ladder_probe2/PROBE2.md): fragment pileup nMSE 0.0021/0.062/0.00003; half-read peaks within 8.5% of truth peaks.
 
 ## Next

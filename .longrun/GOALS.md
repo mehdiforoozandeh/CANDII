@@ -6,7 +6,7 @@ Provenance: PI doc, PI, agent proposal approved.
 
 | ID | Tier | Requirement (quoted) | Source | Provenance | Status | Evidence |
 |---|---|---|---|---|---|---|
-| R1 | P0 | "figure out a fair and tested way to compare minicandi's outputs in count space against challenge entrants (in p-value space)" | cruxvault/INSTRUCTIONS/eic_entry/goal.md:12 | PI doc | open | |
+| R1 | P0 | "figure out a fair and tested way to compare minicandi's outputs in count space against challenge entrants (in p-value space)" | cruxvault/INSTRUCTIONS/eic_entry/goal.md:12 | PI doc | partial | tested pipeline built, reproduces observed-count rungs bit-exact; no model predictions scored yet (cruxvault/results/t390/entry_pipeline/ENTRY_PIPELINE.md) |
 | R2 | P0 | "exploring how to make our mini-candi enter the EIC entrants ranking. fairly and correctly." | cruxvault/INSTRUCTIONS/eic_entry/goal.md:22 | PI doc | open | |
 | R3 | P0 | "if we are sure that we have the 'count to signal' function/pipeline figured out exactly, then comparing minicandi against challenge entrants will become fair" (the conversion is tested for exactness) | cruxvault/INSTRUCTIONS/eic_entry/goal.md:10 | PI doc | partial | organizers-side transforms exact on 3 of 3 (QN 0 bases differ; formula nMSE <=1.1e-4); conversion floor of the 25 bp count route measured: nMSE 0.017/0.255/0.021 (cruxvault/results/t390/ladder_probe/LADDER_PROBE.md) |
 | R4 | P1 | "figure out the formula by trying to reproduce eic pvalue tracks from their bam" | cruxvault/INSTRUCTIONS/eic_entry/goal.md:10 | PI doc | partial | DNase reproduced byte-identically; ChIP differs from Jacob before the p-value step, nMSE 0.013/0.127, cause open (cruxvault/results/t390/ladder_probe/LADDER_PROBE.md) |
