@@ -387,3 +387,4 @@ Wall time: day 1, waves 1 to 4, with the gate result on four measurements; day 2
 - 2026-11-23T21:04Z C1 fix round accepted and merged (d56a3300). On umbrella: read_starts+store+convert+tools tests 69 passed. C7a launched [opus] (kit RS1, Nibi rs392_probe).
 - 2026-11-23T21:09Z C6 accepted (304 lines; res_dataset routing read in full; 61+31 tests pass; average sets: 305 ids over 36 tracks all in eic_v1_2). Merged. Note for C8: train.py --stage-dir does not stage read_start_store / read_start_average_h5; C8 extends staging (train.py is C8-owned). Interpretation logged: input AND target are read starts (the dataset reads starts for both).
 - 2026-11-23T21:10Z wave 4 launched from 1edb7c02: C8 model, C9 adapter, C16 docs [opus]. Status table + question (read starts in and out, rec yes) sent to foreman.
+- 2026-11-23T21:11Z C16 accepted (111 lines docs; test_docs 2 pass). Merged.
