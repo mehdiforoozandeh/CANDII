@@ -8,3 +8,5 @@ Code for crux task t390 (a fair, tested way to enter a count-space model on the 
 
 Results: `cruxvault/results/t390/ladder_probe/LADDER_PROBE.md`.
 - `run_moesm2.sh`, `moesm2.py`: the MOESM2 board (original 2019 paired-end truth, `eic_score.ORIGINAL_TRUTH`): verify on 3 experiments, score rungs L3/L5/L6/L7, collect. Results: `cruxvault/results/t390/moesm2/MOESM2.md`.
+- `score_entry.py`: the entry pipeline for miniCANDI blind predictions (predict.py's `counts/<track>.h5`): NB mean -> rung-L6 count route -> MOESM2 (raw vs the original truth) and MOESM4 (QN with own peaks vs the qnorm truth) scores, then placement among the 25 entrants (`run`, `collect`); `make-test` and `check` test it on observed counts against rungs L6 / L7.
+- `run_entry.sh`: its Nibi driver. `deploy`, `submit <pred> <cov.tsv> <out>` (one job per track, then collect), `test <out>` (the observed-count check), `sacct`. Results: `cruxvault/results/t390/entry_pipeline/ENTRY_PIPELINE.md`.
