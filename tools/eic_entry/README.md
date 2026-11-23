@@ -7,3 +7,4 @@ Code for crux task t390 (a fair, tested way to enter a count-space model on the 
 - `collect.py`: builds the probe's TSVs and tables from the pulled small files (scores, comparisons, placements, sacct).
 
 Results: `cruxvault/results/t390/ladder_probe/LADDER_PROBE.md`.
+- `run_moesm2.sh`, `moesm2.py`: the MOESM2 board (original 2019 paired-end truth, `eic_score.ORIGINAL_TRUTH`): verify on 3 experiments, score rungs L3/L5/L6/L7, collect. Results: `cruxvault/results/t390/moesm2/MOESM2.md`.
