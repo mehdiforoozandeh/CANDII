@@ -73,3 +73,5 @@ pearson residual
 terse mode
 winning additions
 winning recipe
+going afk
+working autonomously

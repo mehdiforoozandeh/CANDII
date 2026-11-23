@@ -47,3 +47,5 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-22T19:55Z moved from DECISIONS (history): | D38 | After the Fir fault (2026-11-21 23:25-23:56 UTC, 251 jobs killed at start), resubmit everything on kit RCP5 with a 6 h training limit (8 h for CNN and average arms); RCP5 supersedes RCP4; Average entry runs with the KIT=RCP2 export workaround. | agent, 2026-11-22 01:25 UTC | agent | | in force |
 - 2026-11-22T19:55Z moved from DECISIONS (history): | D34 | No blind-row build and no blind pass this run. | PI chat 2026-11-21: "iii) no" | PI | confirms D26 | in force |
 - 2026-11-22T19:55Z After talk (PI): submitted D44 full combo, D45 scaling (RCP7), D46 headskip_off p256, D48 control_eval x27; D47 ensemble builder spawned; watch byejoej5t.
+- 2026-11-22T21:13Z glossary: reply sent with unregistered terms: flagged, spearman
+- 2026-11-23T07:35Z glossary: reply sent with unregistered terms: narrower, predictor

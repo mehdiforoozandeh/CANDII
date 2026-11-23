@@ -133,3 +133,18 @@ Every term and metric in use. A new entry lands before its first use in anything
 | G5 | pre-set pass rule for held-out control prediction (plan C21) | agent; proposed | 2026-11-22 |
 | ledger | GOALS.md table: one row per PI requirement | longrun skill; proposed | 2026-11-22 |
 | P0 | top priority tier: the run fails without it | longrun skill; proposed | 2026-11-22 |
+| Poisson | count distribution whose variance equals its mean | agent; proposed | 2026-11-22 t371 status |
+| deviance | twice the log-likelihood gap to a perfect fit | agent; proposed | 2026-11-22 t371 status |
+| pseudoreplicate | one random half of an experiment's reads | agent; proposed | 2026-11-22 t371 status |
+| lookup | precomputed value table read instead of recomputing | agent; proposed | 2026-11-22 t371 status |
+| endpoints | the 0 and 1 reference points of a gap scale | agent; proposed | 2026-11-22 t371 status |
+| t371 | crux task: deviance eval set beside the headline metrics | agent; proposed | 2026-11-22 t371 status |
+| DEV1 | Fir code kit holding the deviance eval code | agent; proposed | 2026-11-22 t371 status |
+| local_b549bcee | app session id: miniCANDI architecture optimization (link fragment) | app; proposed | 2026-11-22 t371 status |
+| a377 | fragment of a session id in a link | app; proposed | 2026-11-22 t371 status |
+| ac9f | fragment of a session id in a link | app; proposed | 2026-11-22 t371 status |
+| local_0e44c034 | app session id: Poisson deviance metric fork (link fragment) | app; proposed | 2026-11-22 t371 status |
+| ebb0 | fragment of a session id in a link | app; proposed | 2026-11-22 t371 status |
+| compresses | squeezes a score range into a narrower band | general; proposed | 2026-11-23 t371 brief |
+| isotonic | fitted to be non-decreasing in the predictor | statistics; proposed | 2026-11-23 t371 brief |
+| Spearman | rank correlation between two orderings | statistics; proposed | 2026-11-23 t371 brief |

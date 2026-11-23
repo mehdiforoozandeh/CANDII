@@ -181,3 +181,8 @@ trust
 wanna
 well
 yes
+afk
+autonomously
+few
+goals
+specified
