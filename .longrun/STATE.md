@@ -5,26 +5,24 @@ Rewritten, never appended. Cap: 5 KB.
 ## Goal now
 Close the session with one trusted miniCANDI architecture (PI 2026-11-22, after the talk): the recipe must Pareto-dominate the three base models on imputation, correction and calibration on eic_v1_2 (D1); priority 2 is ChIP-control prediction (D18). Task t370, branch exp/t370-minicandi-recipe (PR 63), worktree .claude/worktrees/recipe.
 
-## Where the recipe stands
-- 256 regions (D43, final so far): pairs + Pearson-residual input U-Net, PASS, 3 seeds (imp 0.445, cor 0.774, cal 0.625). Runner-up pairs + average input (PASS).
-- Control (G5, D48): works on the U-Net; weight 4 adopted by rule.
-- Pairs + head skip off (D41, 16 regions): copy gain 0.013 vs 0.205; correction 0.699 vs 0.754, inside the pairs range 0.058; NEAR.
-- Talk done 2026-11-22. Deck https://claude.ai/artifact/Jhi5EjXAF5d1gRoTktaU97 (v3).
+## Where the recipe stands (2026-11-23 05:05 UTC)
+- 256 regions (D43): pairs + Pearson-residual input U-Net, PASS (imp 0.445, cor 0.774, cal 0.625).
+- 16 regions (D50): full combination pairs + average + Pearson PASS, score 0.249 (imp 0.500, cor 0.816, cal 0.685), the best combination; scale_w2x score 0.417. Head skip off confirmed NEAR at 256 regions (cor 0.674): head skip stays.
+- Control on the recipe (D51): works (skill 0.131); weight 1 kept.
+- Recalibration (D52): calibration 0.625 -> 0.767 (ensemble) / 0.749 (one seed) at 256 regions; ships with the final.
+- Final candidate = combination at 160k windows (combo_w2x), weight-1 control, plus recalibration.
 
-## In flight (Fir, kit RCP7)
-- D44 full combo halves_mix_avg_pearson: train 5264674/80/87 + p16 scoring.
-- D45 scaling: rcp_scale_p2x/p4x/w2x_unet, 3 seeds, train 5264693-5264764 + p16.
-- D46 p256 confirm of rcp_halves_headskip_off_unet, 3 seeds (342 CPU-h projected).
-- D49 recipe control arms (RCP8): rcp_rec_ctlw4/_ctl_holdout/_ctl_holdout_w4_unet, train 5278807-5278855 + p16; control_eval chained 5278907-15.
-- D47 ensemble + recalibration: builder agent on chunk/t370-ens (worktree .orchestrate-wt/CANDII/t370-ens); slip pending.
-- Avocado 5022624 still pending.
-- Laptop watch byejoej5t (10 h): exits when the combo p16 or all 27 control evals land.
+## In flight (Fir, kit RCP9)
+- Combination p256 confirm: 5356043-5356070 (27 jobs, 342 CPU-h projected).
+- combo_w2x: train 5356071/5356078/5356095 (16 h limit), p16 chained.
+- Avocado 5022624 still pending. rcp_rec_ctlw4 seed 2 timed out (2 seeds read; not resubmitted).
+- Ensemble on pairs + average: ens3 missing (only seed0_recal landed); low priority.
 
 ## Next
-1. When p16 of D44/D45 lands: pareto_select; submit p256 confirm for D44 and any scaling arm that PASSes.
-2. G5 read done (D48). When D49 lands: rerun control_eval.py summary on results/control/raw; compare recipe at weight 1 vs 4.
-3. Review the ensemble slip; read its scores against single seeds.
-4. Final pick of the architecture (new decision); update GOALS R1-R4, R8; refresh the deck.
+1. When combo p256 lands: pareto_select at 256; compare with the recipe.
+2. When combo_w2x p16 lands: if PASS and not worse beyond range than the combination, submit its p256 confirm.
+3. Final architecture decision; update GOALS R1-R4, R8; refresh the deck; tell the deviance session the final arm.
 
 ## Open asks to the PI
-None.
+- Merge PR 65 (Poisson-deviance scorer) into the recipe branch? Recommended yes.
+- Delete the ensemble per-seed prediction stores on Fir /scratch? Recommended yes.
