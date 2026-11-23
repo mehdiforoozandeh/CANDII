@@ -179,7 +179,7 @@ $LP peakcheck --a $OUT/peaks/${E}_L6f.bed --b $PPO --out $Q/${E}_peakcheck_L6f_v
     read -r P1 P2 <<< "$P"
     CMP="$CMP $LP compare --a $(r $P1) --b $(r $P2) --name ${P1}_vs_$P2 --out $Q/${E}_${P1}_vs_$P2.json &&"
   done
-  PL="$LP placement --cache $CQN --truth-name qn --rung L7t=$OUT/scores2/qn/${E}_L7t.tsv L7o=$OUT/scores2/qn/${E}_L7o.tsv L6f=$OUT/scores2/qn/${E}_L6f.tsv L7f=$OUT/scores2/qn/${E}_L7f.tsv --out $OUT/scores2/placement_qn_$E.tsv && \
+  PL="$LP placement --cache $ONION_CQN --truth-name qn --rung L7t=$OUT/scores2/qn/${E}_L7t.tsv L7o=$OUT/scores2/qn/${E}_L7o.tsv L6f=$OUT/scores2/qn/${E}_L6f.tsv L7f=$OUT/scores2/qn/${E}_L7f.tsv --out $OUT/scores2/placement_qn_$E.tsv && \
 $LP placement --cache $CSE --truth-name se --rung L7t=$OUT/scores2/se/${E}_L7t.tsv L7o=$OUT/scores2/se/${E}_L7o.tsv L6f=$OUT/scores2/se/${E}_L6f.tsv L7f=$OUT/scores2/se/${E}_L7f.tsv --out $OUT/scores2/placement_se_$E.tsv"
   J_SC=$(sub eicx_p2score_$E 2 48G 4:00:00 "$J_QT:$J_QO:$J_QF:$J_FU" "$SC $CMP $PL")
   echo "p2 $E: split $J_SP full $J_FU half $J_HA ctr $J_CT L7t $J_QT L7o $J_QO L7f $J_QF score $J_SC" | tee -a $OUT/JOBS.txt
