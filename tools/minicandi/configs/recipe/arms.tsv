@@ -64,3 +64,4 @@ rec_ctl_holdout_w4	reccontrol	4	unet	rcp_rec_ctl_holdout_w4_unet	tools/minicandi
 scale_p2x	scale	4	unet	rcp_scale_p2x_unet	tools/minicandi/configs/recipe/scale/rung4/scale_p2x.json	{"count_transform":"pearson","param_budget":2000000.0,"train_halves":"pairs"}	08:00:00	
 scale_p4x	scale	4	unet	rcp_scale_p4x_unet	tools/minicandi/configs/recipe/scale/rung4/scale_p4x.json	{"count_transform":"pearson","param_budget":4000000.0,"train_halves":"pairs"}	16:00:00	
 scale_w2x	scale	4	unet	rcp_scale_w2x_unet	tools/minicandi/configs/recipe/scale/rung4/scale_w2x.json	{"count_transform":"pearson","train_halves":"pairs","windows_seen":160000}	08:00:00	
+combo_w2x	scale	4	unet	rcp_combo_w2x_unet	tools/minicandi/configs/recipe/scale/rung4/combo_w2x.json	{"average_h5":"/scratch/mforooz/onion/aux/eic_v1_average.h5","average_input":true,"count_transform":"pearson","train_halves":"pairs","windows_seen":160000}	16:00:00	

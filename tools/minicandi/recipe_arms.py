@@ -112,6 +112,9 @@ def _arms() -> dict[str, dict]:
     add("scale_p2x", "scale", (4,), {**rec, "param_budget": 2.0e6})
     add("scale_p4x", "scale", (4,), {**rec, "param_budget": 4.0e6})
     add("scale_w2x", "scale", (4,), {**rec, "windows_seen": 160000})
+    # D50: the final candidate, the full combination at 2x windows (the best scaling arm).
+    add("combo_w2x", "scale", (4,), {**hv, **a["mix_avg"]["keys"], **a["mix_pearson"]["keys"],
+                                     "windows_seen": 160000})
     return a
 
 
@@ -149,7 +152,8 @@ def config_path(rung: int, arm: str) -> Path:
 
 
 #: training time limits of family scale (U-Net base runs took up to 2.6 h at 1e6 params, 80k windows)
-SCALE_TIME = {"scale_p2x": "08:00:00", "scale_p4x": "16:00:00", "scale_w2x": "08:00:00"}
+SCALE_TIME = {"scale_p2x": "08:00:00", "scale_p4x": "16:00:00", "scale_w2x": "08:00:00",
+              "combo_w2x": "16:00:00"}
 
 
 def train_time(arm: str) -> str:

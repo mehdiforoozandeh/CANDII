@@ -71,7 +71,8 @@ PINNED["reccontrol"] = {"rec_ctlw4": {**_REC, "control_loss_weight": 4.0},   # g
                         "rec_ctl_holdout_w4": {**_REC, **_CTL, "control_loss_weight": 4.0}}
 PINNED["scale"] = {"scale_p2x": {**_REC, "param_budget": 2.0e6},   # D42
                    "scale_p4x": {**_REC, "param_budget": 4.0e6},
-                   "scale_w2x": {**_REC, "windows_seen": 160000}}
+                   "scale_w2x": {**_REC, "windows_seen": 160000},
+                   "combo_w2x": {**PINNED["combo"]["halves_mix_avg_pearson"], "windows_seen": 160000}}   # D50
 PINNED_MODELS = {"combo": (4,), "scale": (4,), "reccontrol": (4,), "skip": (4,), "placement": (2, 3, 4), "nocov": (2, 3, 4), "cac": (2, 3, 4),
                  "probe": (4,), "halves": (2, 3, 4), "control": (2, 3, 4)}
 #: the mix arms of the plan, per model
@@ -126,7 +127,8 @@ def test_train_time_and_run_names():
     assert long == {"mix_avg", "cac_cnn", "cac_cnn_corefilm_off", "halves_mix_avg",
                     "halves_mix_avg_pearson", "scale_p2x", "scale_w2x"}
     assert RA.train_time("scale_p4x") == "16:00:00"   # D42
-    assert all(RA.train_time(a) == "03:00:00" for a in set(RA.ARMS) - long - {"scale_p4x"})
+    assert RA.train_time("combo_w2x") == "16:00:00"   # D50
+    assert all(RA.train_time(a) == "03:00:00" for a in set(RA.ARMS) - long - {"scale_p4x", "combo_w2x"})
     for arm, x in RA.ARMS.items():
         for r in x["models"]:
             assert RA.run_name(r, arm) == f"rcp_{arm}_{RA.MODELS[r]}"
