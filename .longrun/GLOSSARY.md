@@ -194,3 +194,6 @@ Every term and metric in use. A new entry lands before its first use in anything
 | ids | identifiers, e.g. cluster job numbers | agent; proposed | 2026-11-23 reply |
 | r_a | per-assay negative-binomial dispersion fit on training data | components.py:394; proposed | 2026-11-23 reply |
 | tightest | smallest range across seeds | agent; proposed | 2026-11-23 reply |
+| local_b5c55e32 | id prefix of the foreman Claude session (agent-facing) | session id; proposed | 2026-11-23 reply |
+| b4b7 | fragment of a linked session id (agent-facing) | session id; proposed | 2026-11-23 reply |
+| edc | fragment of a linked session id (agent-facing) | session id; proposed | 2026-11-23 reply |
