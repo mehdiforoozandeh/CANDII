@@ -200,3 +200,6 @@ Every term and metric in use. A new entry lands before its first use in anything
 | froze | stopped pushing changes to given files for a time | agent; proposed | 2026-11-23 reply |
 | pileup | per-bin count of sequenced fragments covering each position | field term; proposed | 2026-11-23 reply |
 | D53 | decision row: full combination confirmed at 256 regions | agent; proposed | 2026-11-23 |
+| C19M22 | EIC blind track id: cell number, assay number | EIC challenge; proposed | 2026-11-23 |
+| C40M17 | EIC blind track id: cell number, assay number | EIC challenge; proposed | 2026-11-23 |
+| C12M02 | EIC blind track id: cell number, assay number | EIC challenge; proposed | 2026-11-23 |
