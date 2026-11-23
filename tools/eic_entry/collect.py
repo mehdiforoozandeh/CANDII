@@ -15,7 +15,7 @@ import os
 import sys
 
 MEAS = ["mse", "gwcorr", "gwspear", "mseprom", "msegene", "mseenh", "msevar", "mse1obs", "mse1imp"]
-RUNGS = ["L1", "L2", "L3", "L4", "L5", "L6", "L7"]
+RUNGS = ["L1", "L2", "L3", "L4", "L4o", "L5", "L6", "L7"]
 
 
 def rtsv(p):

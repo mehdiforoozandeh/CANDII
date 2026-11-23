@@ -5,6 +5,8 @@
 #   bash run_probe.sh setup                  (on Nibi) SE-truth score cache + entrant SE scores
 #   bash run_probe.sh exp <C##M##> [dep]     (on Nibi) the chain for one experiment
 #   bash run_probe.sh score <C##M##> [dep]   (on Nibi) only the scoring job
+#   bash run_probe.sh l4o <C##M##>          (on Nibi) extra rung: L3 normalized with the overlap peaks
+#   RUNGS="L4o" bash run_probe.sh score <C##M##> <dep>   score only those rungs
 #   bash run_probe.sh sacct <jobids>         (on Nibi) wall time and peak memory per step
 #
 # Every job is named eicx_*; account def-maxwl, CPU (--gres=none). Outputs under $OUT.
@@ -51,11 +53,12 @@ sub() {   # sub <name> <cpus> <mem> <time> <dependency or ""> <command>
 
 score_job() {   # score_job <exp> <dependency>: every rung vs both truths, then the rung comparisons
   local E=$1 ALL=$2 R P N X Y fx fy SC="" CMP=""
-  for R in L1 L2 L3 L4 L5 L6 L7; do
+  for R in ${RUNGS:-L1 L2 L3 L4 L5 L6 L7}; do
     SC="$SC $EIC score --truth $TQN --cache $CQN --pred $OUT/rungs/$R --entry $R --out $OUT/scores/qn/$R.tsv --workers 1 &&"
     SC="$SC $EIC score --truth $TSE --cache $CSE --pred $OUT/rungs/$R --entry $R --out $OUT/scores/se/$R.tsv --workers 1 &&"
   done
   CMP=""
+  [ -n "${RUNGS:-}" ] && { sub eicx_score_$E 2 48G 6:00:00 "$ALL" "$SC true"; return; }
   for P in "L5_vs_L3 L5 L3" "L6_vs_L5 L6 L5" "L3_vs_L1 L3 L1" "L4_vs_L2 L4 L2" "L7_vs_L4 L7 L4" "L6_vs_L3 L6 L3"; do
     read -r N X Y <<< "$P"
     fx=$OUT/rungs/$X/$E.npy; [ -e $OUT/rungs/$X/$E.bigwig ] && fx=$OUT/rungs/$X/$E.bigwig
@@ -108,6 +111,16 @@ $LP peakcheck --a $OUT/peaks/${E}_L6.bed --b $RES/$E/$PPEAK.narrowPeak.gz --out 
   ALL=$J_L2:$J_L4:$J_L5:$J_L7${DEP:+:$DEP}
   J_SCORE=$(score_job $E $ALL)
   echo "exp $E: starts $DEPS L2 $J_L2 L4 $J_L4 L5 $J_L5 L6 $J_L6 L7 $J_L7 score $J_SCORE" | tee -a $OUT/JOBS.txt
+  ;;
+l4o)   # L4o: L3 normalized with the pipeline's pseudoreplicate-overlap peaks (the set Jacob's .bed.gz matches)
+  E=${2:?exp}; A=${E:3}
+  read -r TRT CTL D CAP PSIG PPEAK < <(conf "$E")
+  mkdir -p $OUT/rungs/L4o
+  PO=$RES/$E/overlap_pr_shard0_rep1-pr1_vs_rep1-pr2.overlap.bfilt.narrowPeak.gz
+  J=$(sub eicx_L4o_$E 2 64G 3:00:00 "" "$LP qnorm --x $RES/$E/$PSIG.pval.signal.bigwig --mask $PO --ref $REF/ref_$A.npz --out $OUT/rungs/L4o/$E.npy --sizes-from $SIZES && \
+$LP peakcheck --a $ZEN/blind_se_reprocessed/$E.bed.gz --b $PO --out $OUT/qc/${E}_peakcheck_jacob_vs_overlap.json --sizes-from $SIZES && \
+$LP compare --a $OUT/rungs/L4o/$E.npy --b $OUT/rungs/L2/$E.npy --name L4o_vs_L2 --out $OUT/qc/${E}_L4o_vs_L2.json")
+  echo $J
   ;;
 score)
   score_job ${2:?exp} "${3:-}"
