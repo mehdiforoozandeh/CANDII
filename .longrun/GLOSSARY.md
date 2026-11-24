@@ -205,3 +205,8 @@ Every term and metric in use. A new entry lands before its first use in anything
 | C12M02 | EIC blind track id: cell number, assay number | EIC challenge; proposed | 2026-11-23 |
 | dataset | collection of data used for training or evaluation | field: MeSH | admitted | 2026-11-23 |
 | negative binomial | count distribution with mean and extra spread (overdispersion) | field: Europe PMC, 441 titles | admitted | 2026-11-23 |
+| MD5 | hash computed from file contents to verify identical copies | English word, Zipf 2.3 | admitted | 2026-11-24 |
+| Caper | ENCODE's workflow runner for its standard processing pipelines | field: MeSH | admitted | 2026-11-24 |
+| ATAC-seq | assay for open chromatin by transposase insertion | field: MeSH | admitted | 2026-11-24 |
+| chromosome | DNA molecule; the genome is split into 23 pairs | field: MeSH | admitted | 2026-11-24 |
+| C24M25 | EIC validation track id: cell number, assay number | coinage: 0 titles in Europe PMC and OpenAlex | rejected | 2026-11-24 |

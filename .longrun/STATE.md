@@ -15,6 +15,10 @@ Close the session with one trusted miniCANDI architecture (PI 2026-11-22, after 
 
 - Blind-row build batch 1 RESUBMITTED on Nibi 2026-11-24 01:52 UTC (kits KF4H/KX4H, honest client header): stage 28737208/10/14/44/46/63/66/68/74; build 28737209/11/15/45/47/64/67/69/75; signal 28737212, 28737239. Never resubmit. Watch the first stage tasks; move BAMs and delete staged FASTQs as rows finish (soft quota 1024G).
 
+- Stage done 2026-11-24 06:24 UTC (72/72, limits cut to 2 h); build waits out NibiMaintenance (to ~2026-11-25 21:00 UTC).
+- Recal fit for the final model: Fir 5673958 -> runs_rcp_ens/rcp_combo_w2x_unet/recal/factors.json.
+- EIC val dry run, seed0, 7 cells (8 targets: blind assays): Fir array 5674003 -> runs_rcp/eic_val/rcp_combo_w2x_unet_s0. Then apply seed0 factors (n/c) to counts/, send both paths to the pval session.
+
 ## Next
 1. Refresh the deck with the final architecture; tell the deviance session the final arm.
 2. Blind pass: when the Nibi build lands, predict with rcp_combo_w2x_unet (+recalibration).

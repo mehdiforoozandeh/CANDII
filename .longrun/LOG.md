@@ -110,3 +110,28 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-24T01:38Z glossary: admitted 'MD5' (English word, Zipf 2.3)
 - 2026-11-24T01:43Z glossary: blocked reply with ids
 - 2026-11-24T01:52Z t184 batch 1 RESUBMITTED on Nibi 2026-11-24T01:52Z (PI 'Yes, change the header'), kits KF4H/KX4H (honest USER_AGENT, repo 8e9c4af2; submitter 55cdf946): 72 rows; stage 28737208/10/14/44/46/63/66/68/74; build 28737209/11/15/45/47/64/67/69/75; signal 28737212, 28737239; record /project/def-maxwl/mforooz/ONION/logs/closeout_d4_submit_20261124T015213Z.log. Header test on rows 496/501/530 matched the catalog (6/6, 8/8, 4/4 files, MD5 equal). Never resubmit.
+- 2026-11-24T01:53Z glossary: blocked reply with atac, cdf, encode, fastq, kf4h, kx4h
+- 2026-11-24T01:53Z glossary: blocked reply with chromatin
+- 2026-11-24T03:53Z t184 batch 1: no stage task started by 03:48 UTC; all 9 stage arrays PD (ReqNodeNotAvail, Reserved for maintenance). No HTTP errors. Waiting; nothing resubmitted.
+- 2026-11-24T03:57Z t184 batch 1: at the foreman's request, lowered the 9 stage arrays' TimeLimit 12:00:00 -> 02:00:00 (scontrol update; longest of 624 completed stage tasks was 21.5 min) so they fit before NibiMaintenance (12:50 UTC). 10 stage tasks running at 03:57 UTC. Build and signal jobs unchanged.
+- 2026-11-24T03:57Z glossary: blocked reply with ids
+- 2026-11-24T06:24Z t184 batch 1: all 72 stage tasks COMPLETED by 06:24 UTC (longest 22 min 16 s). Build arrays pending (limits 3 d and 7 d), cannot start before NibiMaintenance ends; signal passes wait on dependency.
+- 2026-11-24T06:24Z glossary: blocked reply with timeouts, watcher
+- 2026-11-24T06:28Z Fir path for t184 batch 1 assessed (foreman relayed Mehdi 'faster on Fir?'): not started. Fir lacks Caper venv, chip/atac sifs+refs (Nibi 003_pipeline 696G), dnase pipeline (15G), catalog, build lists, KF4H/KX4H; submitter Nibi-only; Fir /scratch 963K/1000K files; fairshare 0.14. Nibi starts by itself ~2026-11-25 21:00 UTC.
+- 2026-11-24T06:28Z glossary: blocked reply with atac, blocker, caper, cleanup, encode
+- 2026-11-24T06:28Z glossary: admitted 'Caper' (field: MeSH)
+- 2026-11-24T06:28Z glossary: admitted 'ATAC-seq' (field: MeSH)
+- 2026-11-24T06:37Z EIC dry run (foreman, Mehdi approved): final model seed0 on 7 validation cells matching blind assays (C02,C03,C10,C16,C20,C24,C45; 8 targets; est 65-90 CPU-h). chr21 probe Fir 5672498 (cell index 4). Recal factors not fitted for combo_w2x. Write-up: deck v5 + recipe_components.md, commit 022ef001.
+- 2026-11-24T06:38Z glossary: blocked reply with uncalibrated
+- 2026-11-24T06:38Z glossary: blocked reply with dispersion
+- 2026-11-24T06:39Z Recal fit for combo_w2x: Fir 5673958 (est 0.8 CPU-h) -> runs_rcp_ens/rcp_combo_w2x_unet/recal/factors.json. EIC val 7 cells seed0: Fir array 5674003 (indices 0,1,4,7,10,12,21) -> runs_rcp/eic_val/rcp_combo_w2x_unet_s0. Probe 5672498 cancelled. Never resubmit.
+- 2026-11-24T06:39Z glossary: blocked reply with dispersion, pval
+- 2026-11-24T08:25Z Deviance session: rescoring done at 256 regions, 3 seeds. combo_w2x skill 0.562 [0.053], gap 0.951 [0.004], R 1.067 [0.018]; avg+pearson 0.543/0.951/1.058; pearson 0.264/0.949/1.034. Final has the highest deviance skill; R furthest from 1 (no recalibration in that scoring). Source: deviance doc on exp/t371 commit 78c729f7.
+- 2026-11-24T08:25Z glossary: blocked reply with dispersion, furthest
+- 2026-11-24T11:04Z Recal fit 5673958 COMPLETED (23:33). Val array 5674003: 6/7 tasks COMPLETED (~2h10m each); task 12 (C24, 2 targets) RUNNING, C24M25 on chr3 at 11:04 UTC, ETA ~12:30 UTC. Sent pval session the out dir runs_rcp/eic_val/rcp_combo_w2x_unet_s0 (7/8 ready, uncalibrated); copied foreman.
+- 2026-11-24T11:04Z glossary: blocked reply with c24m25, chromosome, pval, recalibrated, uncalibrated
+- 2026-11-24T11:04Z glossary: admitted 'chromosome' (field: MeSH)
+- 2026-11-24T11:05Z glossary: rejected 'C24M25' (coinage: 0 titles in Europe PMC and OpenAlex)
+- 2026-11-24T11:07Z pval session scoring 7 val tracks: Fir 5706614-20, collect 5706621 -> /scratch/mforooz/eicx/val/rcp_combo_w2x_unet_s0_raw. Queued Fir 5706801 (afterok 5674003): apply_recal_val.py writes runs_rcp/eic_val/rcp_combo_w2x_unet_s0_recal/counts (n/c, seed0 factors). Flag: seed0 factors hit the grid edge (log2 -4.5) for DNase-seq, H2AFZ, H2AK5ac, H3K27ac, H3K4ac, H4K8ac and +4.125 H4K91ac; 7/22 at bound. Val targets: DNase at bound; H3K27me3 +1.688, H3K4me3 +2.5, H3K79me2 -0.188 inside.
+- 2026-11-24T11:07Z glossary: blocked reply with pval, recalibrated, refit
+- 2026-11-24T11:07Z pval session: recal changes only n, so mean mode scores raw = recal; it will score both copies in MODE=expectation (uses n) as a matched pair, plus raw in mean mode; DNase flagged.
