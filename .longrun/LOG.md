@@ -37,3 +37,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-24T06:34Z glossary: blocked reply with log10
 - 2026-11-24T10:24Z glossary: blocked reply with nmse, nudged
 - 2026-11-24T11:01Z span fix DONE (0f957f05, 2323bd9f, bf929823): SPAN_EXTRA 24->25; L6 nMSE vs L5 +2.0/-0.7/-0.4%; no combined rank changed; entry vs new rungs 0 bins differ; 2.67 CPU-h; 3 'failed' tests = checks vs old constant
+- 2026-11-24T11:02Z validation dry run DONE (2ec84e73, d9b81c7b): 42/45 val tracks, MOESM6 placement, msevar unranked (weights not reproduced); runs on Fir+Nibi; Nibi 1.84 CPU-h, Fir 4.45 CPU-h (5703770/1/80)

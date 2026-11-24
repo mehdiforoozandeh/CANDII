@@ -29,7 +29,7 @@ Root: [[candii]]
   - ● `q5` [Q] [[q5_does_a_depth_offset_on_f_the_source_dept|**Does a depth offset on f (the source depth removed before f, the target depth added after) change how well a covariate-conditioned g → f translates a track's raw counts across a covariate change?**]] — *settled* · strong
   - ● `q6` [Q] [[q6_how_closely_does_a_map_h_reproduce_the_l|**How closely does a map h reproduce the −log10 p track from a predicted count distribution and its matched control, as h's complexity and inputs grow?**]] — *settled* · strong
     - ◌ `h25` [H] [[h25_in_the_counts_log10_p_chain_most_of_the_|In the counts → −log10 p chain, most of the p error comes from f's predicted count distribution, not from the map h]] — *parked*
-    - ● `q90` [Q] [[q90_can_a_count_space_model_like_minicandi_b|**Can a count-space model like miniCANDI be scored fairly on the EIC board of signal p-value entrants, through an exact count-to-p-value pipeline or a change of the model's output?**]] — *settled* · strong
+    - ◐ `q90` [Q] [[q90_can_a_count_space_model_like_minicandi_b|**Can a count-space model like miniCANDI be scored fairly on the EIC board of signal p-value entrants, through an exact count-to-p-value pipeline or a change of the model's output?**]] — *leaning* · moderate
       - ● `h90` [H] [[h90_max_s_quantile_normalization_rule_and_hi|Max's quantile-normalization rule and his 1 bp MACS2 formula together reproduce the organizers' signal p-value pipeline exactly, so a count route can be converted without a conversion error of its own]] — *settled* · strong · supports
       - ◐ `h91` [H] [[h91_peaks_kept_by_the_encode_naive_overlap_r|Peaks kept by the ENCODE naive-overlap rule across two halves of the reads (an entrant-side analogue of the pseudoreplicate-overlap set) bring the count route's normalized score close to the score it gets with the truth's own peaks]] — *leaning* · moderate · supports
       - ◐ `q91` [Q] [[q91_why_does_our_chip_reprocessing_of_the_bl|**Why does our ChIP reprocessing of the blind set differ from Jacob Schreiber's SE tracks before the p-value step, when the DNase track is byte-identical?**]] — *leaning* · moderate
@@ -129,7 +129,7 @@ Root: [[candii]]
 
 ## Dashboard
 
-- **Questions** (76): open 24 · leaning 41 · settled 11 · parked 0
+- **Questions** (76): open 24 · leaning 42 · settled 10 · parked 0
 - **Hypotheses** (44): open 10 · leaning 20 · settled 8 · parked 6
-- **Confidence**: weak 22 · moderate 39 · strong 19
-- **Findings**: 146
+- **Confidence**: weak 22 · moderate 40 · strong 18
+- **Findings**: 147

@@ -4,7 +4,7 @@ type: finding
 schema: 3
 title: The count-to-signal code assumed (rl+24)/25 bins per read; the store rule…
 parent: q90
-confidence: strong
+confidence: moderate
 evidence: results/t390/span_fix/SPAN_FIX.md
 created: "2026-11-24T04:01:51"
 updated: "2026-11-24T04:01:51"
