@@ -16,3 +16,7 @@
 | D12 | 2026-11-23 | 600 CPU-h cap counts CPUTimeRAW (cores x hours), same measure as reference figures; check spend before deviance pass | agent; told foreman | agent | |
 | D13 | 2026-11-23 | Never git add .longrun/; the glossary hook writes there uncommitted | plan review | agent | |
 | D14 | 2026-11-23 | New read-start dataset class accepts average_h5; 1 bp ResDataset keeps refusal. Not a deviation. | foreman: "new class, yes ... not a deviation" | foreman (author of the instruction) | |
+| D15 | 2026-11-23 | Chromosome grid per measurement from the eic_v1_2 h5 keys (chrY fix); rerun the same 4-measurement probe on kit RS3; any differing bin stops again; on pass, build on Fir once tars land | PI via foreman: "yes" | PI | |
+| D16 | 2026-11-23 | Read starts in and out: inputs, average input and targets are read starts; only the output is converted for scoring | PI via foreman: "yes" | PI | |
+| D17 | 2026-11-23 | Comparison stays at 1x windows on both sides, though the PI picked the 2x-windows full combination as final | foreman relay | PI | |
+| D18 | 2026-11-23 | Interim notes in run_state/notes/<x>/; Nibi /nearline reads on the login node under nice; --testbed-root swap; store chunks (min(4096,n_bins),2) | plan Log amendments | foreman/agent | plan §results paths |
