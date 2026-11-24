@@ -9,6 +9,9 @@
 #   RUNGS="L4o" bash run_probe.sh score <C##M##> <dep>   score only those rungs
 #   bash run_probe.sh p2 <C##M##>           (on Nibi) probe 2: L7t, L7o, L6f, L7f, checks and scoring
 #   bash run_probe.sh sacct <jobids>         (on Nibi) wall time and peak memory per step
+#   bash run_probe.sh sf <C##M##> <dep>      (on Nibi) t390 span_fix: the ladder comparisons and qn/se
+#        scores of the entry-pipeline test tracks built with SPAN_EXTRA = 25 (raw = L6, qn = L7) under
+#        $SF/entry (`ENTRY_ROOT=$SF bash run_entry.sh test $SF/entry <exp>`, job <dep>); old rungs read only
 #
 # Every job is named eicx_*; account def-maxwl, CPU (--gres=none). Outputs under $OUT.
 set -euo pipefail
@@ -206,6 +209,46 @@ $LP compare --a $X/$V/$E.npy --b $L6F --name pp${V}_vs_L6f --out $Q/${E}_pp${V}_
   CMD="$CMD && $LP compare --a $OUT/rungs/L6/$E.npy --b $L6F --name L6_vs_L6f --out $Q/${E}_L6_vs_L6f.json"
   J=$(sub eicx_pp_$E 2 40G 3:00:00 "" "$CMD")
   echo "pp $E: $J" | tee -a $OUT/JOBS.txt
+  ;;
+sf)
+  E=${2:?exp}; DEP=${3:-}
+  SF=/scratch/mforooz/eicx/spanfix; LPS="python $SF/code/tools/eic_entry/ladder_probe.py"; T=$SF/entry
+  L6N=$T/raw/$E/$E.npy; L7N=$T/qn/$E/$E.npy; Q=$SF/qc; CS=$SF/score_cache/se
+  mkdir -p $Q $SF/scores/{qn,se} $SF/logs $CS
+  for s in truth var; do [ -e $CS/$s ] || ln -s $CSE/$s $CS/$s; done
+  C="$LPS compare --a $L6N --b $OUT/rungs/L5/$E.npy --name L6_vs_L5 --out $Q/${E}_L6_vs_L5.json && \
+$LPS compare --a $L6N --b $OUT/rungs/L3/$E.bigwig --name L6_vs_L3 --out $Q/${E}_L6_vs_L3.json && \
+$LPS compare --a $L6N --b $OUT/rungs/L6/$E.npy --name L6_vs_L6old --out $Q/${E}_L6_vs_L6old.json && \
+$LPS arrdiff --a $L6N --b $OUT/rungs/L6/$E.npy --out $Q/${E}_L6_vs_L6old_arrdiff.json && \
+$LPS compare --a $L7N --b $OUT/rungs/L4/$E.npy --name L7_vs_L4 --out $Q/${E}_L7_vs_L4.json && \
+$LPS compare --a $L7N --b $OUT/rungs/L7/$E.npy --name L7_vs_L7old --out $Q/${E}_L7_vs_L7old.json && \
+$LPS peakcheck --a $T/peaks/$E.bed --b $OUT/peaks/${E}_L6.bed --out $Q/${E}_peakcheck_L6new_vs_L6old.json --sizes-from $SIZES && \
+$LPS eic_score score --truth $TQN --cache $T/score_cache/moesm4 --pred $T/raw/$E --entry L6 --out $SF/scores/qn/${E}_L6.tsv --workers 1 && \
+$LPS eic_score score --truth $TSE --cache $CS --pred $T/raw/$E --entry L6 --out $SF/scores/se/${E}_L6.tsv --workers 1 && \
+$LPS eic_score score --truth $TSE --cache $CS --pred $T/qn/$E --entry L7 --out $SF/scores/se/${E}_L7.tsv --workers 1 && \
+$LPS placement --cache $ONION_CQN --truth-name qn --rung L6=$SF/scores/qn/${E}_L6.tsv L7=$T/scores/moesm4_$E.tsv --out $SF/scores/placement_qn_$E.tsv && \
+$LPS placement --cache $CSE --truth-name se --rung L6=$SF/scores/se/${E}_L6.tsv L7=$SF/scores/se/${E}_L7.tsv --out $SF/scores/placement_se_$E.tsv"
+  local_d=(); [ -n "$DEP" ] && local_d=(--dependency=afterany:$DEP)
+  J=$(sbatch --parsable --account=def-maxwl --gres=none --job-name=eicx_sf_$E --cpus-per-task=2 --mem=48G \
+    --time=2:00:00 --output="$SF/logs/%x_%j.out" "${local_d[@]}" --wrap="$ENV; set -euo pipefail; $C")
+  echo "sf $E: $J" | tee -a $SF/JOBS.txt
+  ;;
+sfid)  # span_fix identity: new code with SPAN_EXTRA patched back to 24 == old L6; new code == entry raw
+  E=${2:?exp}; DEP=${3:-}
+  read -r TRT CTL D CAP PSIG PPEAK < <(conf "$E")
+  [ "$CTL" != none ] && CTLP=$OUT/starts/$CTL || CTLP=none
+  SF=/scratch/mforooz/eicx/spanfix; LPS="python $SF/code/tools/eic_entry/ladder_probe.py"; X=$SF/ident; Q=$SF/qc
+  mkdir -p $X $Q $SF/logs
+  A="counts_route --trt $OUT/starts/$TRT --ctl $CTLP --d $D --sizes-from $SIZES"
+  C="python -c 'import sys; sys.path.insert(0, \"$SF/code/tools/eic_entry\"); import ladder_probe as L; \
+from onion_eval import signal_from_counts as S; S.SPAN_EXTRA = 24; sys.exit(L.main(sys.argv[1:]))' $A --out $X/${E}_L6_span24.npy && \
+$LPS arrdiff --a $X/${E}_L6_span24.npy --b $OUT/rungs/L6/$E.npy --out $Q/${E}_ident_span24_vs_L6old.json && \
+$LPS $A --out $X/${E}_L6_span25.npy && \
+$LPS arrdiff --a $X/${E}_L6_span25.npy --b $SF/entry/raw/$E/$E.npy --out $Q/${E}_ident_span25_vs_entryraw.json"
+  local_d=(); [ -n "$DEP" ] && local_d=(--dependency=afterany:$DEP)
+  J=$(sbatch --parsable --account=def-maxwl --gres=none --job-name=eicx_sfid_$E --cpus-per-task=2 --mem=48G \
+    --time=1:00:00 --output="$SF/logs/%x_%j.out" "${local_d[@]}" --wrap="$ENV; set -euo pipefail; $C")
+  echo "sfid $E: $J" | tee -a $SF/JOBS.txt
   ;;
 sacct)
   shift
