@@ -342,3 +342,97 @@ def test_load_run_wraps_a_read_start_run(env, tmp_path):
     plain = {k: v for k, v in cfg.items() if k != "read_start"}
     torch.save(C.make_ckpt(model, plain, 0, "x", "x"), run / "ckpt.pt")
     assert not isinstance(load_run(run)[0], ReadStartAdapter)
+
+
+# --------------------------------------------------------------------------- staging (chunk C13fix)
+
+
+def _forward_all(ad, batches):
+    outs = []
+    with torch.no_grad():
+        for b in batches:
+            o = ad(b)
+            outs.append((o["mu"].clone(), o["n"].clone(), ad.inner.seen["x_counts_sub"].clone(),
+                         ad.inner.seen["avg_sub"].clone()))
+    return outs
+
+
+def test_staged_read_starts_give_bit_identical_outputs(env, imp_batch, cell, tmp_path):
+    m = _ids(env, cell)
+    pair = _batch(env, [0, L, 3 * L], [m["H3K27ac"]], [m["H3K27ac"]], input_file="pr1",
+                  target_file="pr2")
+    ref = _forward_all(_adapter(env), [imp_batch, pair])
+    ad = _adapter(env)
+    info = ad.stage_read_starts(sorted(m.values()), tmp_path / "stage")
+    assert info["skipped"] is None and info["files"] > 0 and info["bytes"] > 0
+    got = _forward_all(ad, [imp_batch, pair])
+    for a, b in zip(ref, got):
+        for x, y in zip(a, b):
+            assert torch.equal(x, y)
+    assert str(ad.ds.rs_store).startswith(str(tmp_path / "stage"))
+    assert str(ad.ds.rs_average_h5).startswith(str(tmp_path / "stage"))
+    assert str(ad.store).startswith(str(tmp_path / "stage"))
+    assert ad.config["read_start_store"] == env["cfg"]["read_start_store"]   # the run's config
+    for mid in m.values():                     # every file of a needed measurement is a copy
+        for f in STORE_FILES.values():
+            p = ad.ds.rs_store / mid / f
+            assert p.is_file() and not p.is_symlink() and not p.parent.is_symlink()
+            assert p.read_bytes() == (env["store"] / mid / f).read_bytes()
+    assert not ad.ds.rs_average_h5.is_symlink()
+    assert ad.ds.rs_average_h5.read_bytes() == Path(env["cfg"]["read_start_average_h5"]).read_bytes()
+
+
+def test_unstaged_measurements_are_read_through_links(env, cell, tmp_path):
+    cells = sorted({c for c, _ in env["by"]})
+    other = _ids(env, cells[1])
+    b = _batch(env, [0, L], [other["H3K27ac"]], [other["DNase-seq"]], chrom="chr2")
+    ref = _forward_all(_adapter(env), [b])
+    ad = _adapter(env)
+    ad.stage_read_starts(sorted(_ids(env, cell).values()), tmp_path / "stage")
+    assert (ad.ds.rs_store / other["H3K27ac"]).is_symlink()
+    got = _forward_all(ad, [b])
+    for x, y in zip(ref[0], got[0]):
+        assert torch.equal(x, y)
+
+
+def test_staging_also_copies_the_average_sources_of_the_cell(env, cell, tmp_path):
+    """The leave-one-cell-out average reads the window cell's own training measurement of every
+    track, so staging one measurement of a cell copies those too."""
+    m = _ids(env, cell)
+    ad = _adapter(env)
+    ad.stage_read_starts([m["H3K4me3"]], tmp_path / "stage")
+    own = [x for (c, _), x in ad.ds.train_base.items() if c == cell]
+    assert own
+    for mid in own + [m["H3K4me3"]]:
+        assert not (ad.ds.rs_store / mid).is_symlink()
+
+
+def test_staging_is_skipped_without_space(env, cell, tmp_path, monkeypatch):
+    import shutil
+    from collections import namedtuple
+    du = namedtuple("du", "total used free")
+    monkeypatch.setattr(shutil, "disk_usage", lambda p: du(1, 1, 0))
+    ad = _adapter(env)
+    info = ad.stage_read_starts(sorted(_ids(env, cell).values()), tmp_path / "stage")
+    assert info["skipped"] and info["files"] == 0
+    assert ad.ds.rs_store == env["store"] and ad.store == env["store"]
+
+
+def test_predict_store_stage_calls_the_adapter_hook(env, cell, tmp_path):
+    """tools/onion_eval/predict_store.py `_stage` stages a read-start run's own files; a model
+    without the hook (every read-count run) gets the old result, key for key."""
+    import types
+    sys.path.insert(0, str(REPO / "tools" / "onion_eval"))
+    import predict_store as P
+    m = _ids(env, cell)
+    reqs = [{"job": {"target": m["H3K4me3"], "inputs": [m["H3K27ac"], m["ATAC-seq"]]}}]
+
+    def scorer(model):
+        return types.SimpleNamespace(ds=_scorer_ds(env), model=model, _region=None, _rc={})
+    plain = P._stage(scorer(Stub()), reqs, tmp_path / "a", lambda *x: None)
+    assert set(plain) == {"directories", "bytes_copied", "seconds"}
+    ad = _adapter(env)
+    info = P._stage(scorer(ad), reqs, tmp_path / "b", lambda *x: None)
+    assert set(info) == {"directories", "bytes_copied", "seconds", "read_starts"}
+    assert info["read_starts"]["skipped"] is None
+    assert str(ad.ds.rs_store).startswith(str(tmp_path / "b"))

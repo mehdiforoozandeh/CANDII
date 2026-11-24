@@ -449,6 +449,11 @@ def _stage(scorer, reqs, root: Path, log) -> dict:
     scorer.ds._close_all() if hasattr(scorer.ds, "_close_all") else None
     scorer._region, scorer._rc = None, {}
     info = {"directories": len(dirs), "bytes_copied": nbytes, "seconds": round(time.time() - t0, 1)}
+    # t392 C13fix: a read-start run (rs_adapter.ReadStartAdapter) reads its own store and average
+    # through the model; a model without the hook (every read-count run) stages nothing more.
+    rs_stage = getattr(getattr(scorer, "model", None), "stage_read_starts", None)
+    if callable(rs_stage):
+        info["read_starts"] = rs_stage(sorted(x for x in mids if x in rows), root / "rs392")
     log(f"bench: staged {info}")
     return info
 

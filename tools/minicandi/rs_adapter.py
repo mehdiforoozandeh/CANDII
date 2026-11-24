@@ -190,6 +190,78 @@ class ReadStartAdapter(C.MiniCandi):
         self._log_edges()
         return {"n": n, "mu": mu}
 
+    # ---------------------------------------------------------------- staging
+
+    def stage_read_starts(self, mids, root, threads: int = 8) -> dict:
+        """Copy to local disk the read-start files that the windows of measurements `mids` read,
+        and point this adapter's dataset at the copies (chunk C13fix). Byte copies, so every value
+        read is the same.
+
+        Copied: `starts.h5`, `starts_pr1.h5` and `starts_pr2.h5` of every measurement in `mids`
+        and of every average source (`train_base`) of their cells (the leave-one-cell-out average
+        reads the window cell's own measurement), and `read_start_average_h5`. Every other
+        measurement directory of the store is a symbolic link to the original, so a read outside
+        the set is still correct. The run's config keeps the original paths. When the free space
+        under `root` is below 1.05 times the bytes to copy, nothing changes and `skipped` gives
+        the reason. Returns files, bytes, seconds, measurements and skipped."""
+        import shutil
+        import time
+        from concurrent.futures import ThreadPoolExecutor
+        from minicandi.rs_dataset import STORE_FILES
+        t0 = time.time()
+        ds = self.ds
+        src_store, avg = Path(ds.rs_store), ds.rs_average_h5
+        need = {m for m in mids if m in ds.rows}
+        if avg is not None and self.config.get("average_input"):
+            cells = {ds.rows[m]["cell"] for m in need}
+            need |= {m for (c, _), m in ds.train_base.items() if c in cells}
+        files = [(m, f) for m in sorted(need) for f in STORE_FILES.values()
+                 if (src_store / m / f).is_file()]
+        nbytes = sum((src_store / m / f).stat().st_size for m, f in files)
+        nbytes += Path(avg).stat().st_size if avg is not None else 0
+        root = Path(root)
+        root.mkdir(parents=True, exist_ok=True)
+        free = shutil.disk_usage(root).free
+        if free < nbytes * 1.05:
+            return {"files": 0, "bytes": 0, "seconds": round(time.time() - t0, 1),
+                    "measurements": 0, "skipped": f"needs {nbytes} bytes, {root} has {free} free"}
+
+        def copy_file(src: Path, dst: Path) -> int:
+            size = src.stat().st_size
+            if not (dst.is_file() and dst.stat().st_size == size):
+                tmp = dst.with_name(dst.name + ".part")
+                shutil.copyfile(src, tmp)
+                if tmp.stat().st_size != size:
+                    raise OSError(f"stage_read_starts: short copy of {src}")
+                os.replace(tmp, dst)
+            return size
+
+        dst_store = root / "read_starts"
+        dst_store.mkdir(exist_ok=True)
+        for d in src_store.iterdir():
+            dst = dst_store / d.name
+            if d.name in need:
+                dst.mkdir(exist_ok=True)
+                for f in d.iterdir():
+                    if f.name not in STORE_FILES.values() and not (dst / f.name).exists():
+                        (dst / f.name).symlink_to(f)
+            elif not (dst.exists() or dst.is_symlink()):
+                dst.symlink_to(d)
+        with ThreadPoolExecutor(max_workers=max(1, int(threads))) as pool:
+            copied = sum(pool.map(lambda mf: copy_file(src_store / mf[0] / mf[1],
+                                                       dst_store / mf[0] / mf[1]), files))
+        ds._close_all()
+        ds.rs_store = dst_store
+        ds.config["read_start_store"] = str(dst_store)
+        self.store = dst_store
+        if avg is not None:
+            dst = root / "aux" / Path(avg).name
+            dst.parent.mkdir(exist_ok=True)
+            copied += copy_file(Path(avg), dst)
+            ds.rs_average_h5 = dst
+        return {"files": len(files) + (avg is not None), "bytes": int(copied),
+                "seconds": round(time.time() - t0, 1), "measurements": len(need), "skipped": None}
+
     def _log_edges(self) -> None:
         path = os.environ.get(EDGE_LOG_ENV)
         if not path:
