@@ -104,7 +104,8 @@ FIXES = {"rcp_cac_cnn_unet": "covariate correction layers (CNN)",
          "rcp_mix_fixdepth_unet": "fixed input depth",
          "rcp_nocov_unet": "no covariates"}
 CONFIRM = ["rcp_halves_unet", "rcp_halves_headskip_film_unet", "rcp_halves_mix_pearson_unet",
-           "rcp_halves_mix_avg_unet", "rcp_halves_headskip_off_unet"]
+           "rcp_halves_mix_avg_unet", "rcp_halves_headskip_off_unet",
+           "rcp_halves_mix_avg_pearson_unet", "rcp_combo_w2x_unet"]
 
 # copy gain per run: mean and range over seeds
 cg = {}
