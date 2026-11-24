@@ -225,3 +225,4 @@ Every term and metric in use. A new entry lands before its first use in anything
 | launchers | scripts that build and submit cluster jobs | repo (tests/test_score_launchers.py); proposed | 2026-11-23 PR 65 test status |
 | diagnose | find the cause of a failure | common; proposed | 2026-11-23 PR 65 test diff |
 | git | version-control tool that records the history of code | common; proposed | 2026-11-23 PR 65 test diff |
+| scheduler | cluster software that decides when queued jobs start | English word, Zipf 2.6 | admitted | 2026-11-24 |

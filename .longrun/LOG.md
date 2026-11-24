@@ -82,3 +82,7 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-23T09:31Z pval session: post-hoc spread of overlap counts recovers 3/12/3% of pileup gain; read starts 92-95%. Priced a read-start pilot to foreman: res_dataset.py on the 512-region point-rule store, pairs+Pearson (average input refused), ~200-300 CPU-h, half a day; store location on Fir not found at depth 3. PI decides in the morning; not started.
 - 2026-11-23T09:32Z point-rule store located: Nibi /project/def-maxwl/mforooz/ONION/CO-A7/res_store (6.8G), tables CO-A7/tables/eic_res_v1, evalset CO-A7/eval/eic_res_v1; 768 regions (512 train, 256 eval); 412 base-view measurements, 43 with pr halves, 73 pairs; no counterfactual views. Sent to foreman.
 - 2026-11-23T10:03Z deviance p16, full combination: s1 skill 0.510 (floor 0.517), corr gap 0.952, R 1.074; s2 skill 0.575 (floor 0.516), gap 0.952, R 1.034; recipe pairs+Pearson skill 0.248. s0 metrics 5381562 running.
+- 2026-11-23T20:11Z glossary: blocked reply with github, mergeable
+- 2026-11-23T22:25Z glossary: blocked reply with watcher
+- 2026-11-24T01:25Z glossary: blocked reply with scheduler
+- 2026-11-24T01:25Z glossary: admitted 'scheduler' (English word, Zipf 2.6)
