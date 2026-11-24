@@ -383,16 +383,19 @@ def collect_validation(out):
         mine_rows += [dict(boots[b], team_id="entry", cell=exp[:3], assay=exp[3:], bootstrap_id=b)
                       for b in range(10)]
     done = {r["cell"] + r["assay"] for r in mine_rows}
-    if done == set(pub):                     # the organizers' leaderboard needs every experiment
+    missing = sorted(set(pub) - done)
+    if done:                                 # the organizers' rule: a missing experiment counts 0.5, the worst
         allrows = [r for e in pub.values() for t in e.values() for r in t.values()] + mine_rows
         pos = [d for d in E.global_ranks(allrows, VAL_MEASURES) if d["team_id"] == "entry"][0]
         rows.append(["validation", "all", "raw", "leaderboard_position", pos["position"], "", 11, "", "",
-                     "", f"rank_stat {pos['rank_stat']:g} score_mean {pos['score_mean']:.6g}"])
+                     "", f"rank_stat {pos['rank_stat']:g} score_mean {pos['score_mean']:.6g}; "
+                         f"{len(done)} of {len(pub)} scored, unscored count as worst: {' '.join(missing)}"])
         lead = (f"Leaderboard position among the 10 round-1 entries plus this one: {pos['position']} of 11 "
-                f"(rank_stat {pos['rank_stat']:g}).")
+                f"(rank_stat {pos['rank_stat']:g}). {len(done)} of {len(pub)} validation experiments scored; "
+                f"the {len(missing)} unscored count as the worst under the organizers' rule"
+                + (f": {' '.join(missing)}." if missing else "."))
     else:
-        lead = (f"No leaderboard position: {len(done)} of {len(pub)} validation experiments scored "
-                "(the organizers' statistic counts a missing experiment as the worst).")
+        lead = "No validation experiment scored."
     with open(out / "board_validation.tsv", "w", newline="") as fh:
         w = csv.writer(fh, delimiter="\t", lineterminator="\n")
         w.writerow(["board", "experiment", "track", "measure", "value", "rank_among_entrants",
