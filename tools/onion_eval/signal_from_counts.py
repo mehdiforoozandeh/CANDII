@@ -43,8 +43,8 @@ Routes
     filter and its mappable-region restriction of cut sites.
 
 Counts to the caller's units (PI decision 2026-10-11, `tools/t125/hmap/caller.py`): a read of length
-rl touches (rl + 24) / 25 bins on average, so the tags behind a binned count are count * 25 / (rl + 24)
-and the MACS2 pileup (tags extended to d) is count * d / (rl + 24). The bin's own pileup is the
+rl touches (rl + 25) / 25 bins on average, so the tags behind a binned count are count * 25 / (rl + 25)
+and the MACS2 pileup (tags extended to d) is count * d / (rl + 25). The bin's own pileup is the
 "bin" variant of that decision.
 
 From the NB to one signal value (`mode`, PI ruling 20 of 2026-11-11; SIGNAL_MODES):
@@ -77,7 +77,7 @@ dependence forms (`dependence`, recorded as `signal_box_dependence`): `comonoton
 bins' over-dispersion moves together, the UPPER variance bound, n_s = m^2 / (sum w mu / sqrt n)^2)
 or `independent` (the LOWER bound when neighbouring bins are not negatively correlated,
 n_s = m^2 / sum w^2 mu^2 / n); see `_spread`. Either NB has mean s * m and size n_s on the
-pileup scale (`_score_pileup`; s = d / (rl + 24)): the pileup counts fragments, so its Poisson
+pileup scale (`_score_pileup`; s = d / (rl + 25)): the pileup counts fragments, so its Poisson
 part is s * m. The -log10 p score is convex in the count, so the comonotone form gives the LARGER
 expected score (more confident peaks). Default comonotone because over-dispersion is enrichment
 that is smooth at the fragment scale (d is 4 to 16 bins); independence across bins one fragment
@@ -158,7 +158,12 @@ __all__ = [
 LAMBDA_SOURCES = ("observed_control", "predicted_control", "local_background", "hotspot2_density")
 
 BIN = 25
-SPAN_EXTRA = BIN - 1           # a read of length rl touches (rl + 24) / 25 bins on average
+#: a read of length rl touches (rl + SPAN_EXTRA) / 25 bins on average. The store count rule adds 1 to
+#: bins start//25 .. end//25 INCLUSIVE with a half-open BED end = start + rl (`tools/t112/bin25.py`
+#: `counts_from_tagalign`; `tools/t112/records.py` COUNT_RULE). Over a uniform start phase the mean
+#: of end//25 - start//25 is rl/25, so the mean bins touched is rl/25 + 1 = (rl + 25)/25. Was BIN - 1
+#: (= 24) until t390 span_fix: a ~1% scale error (measured kappa 5.0401 vs (101+24)/25 = 5.0).
+SPAN_EXTRA = BIN
 #: atac.wdl v2.2.3 `Int smooth_win = 150`; the signal task sets `--extsize smooth_win`, `--shift -75`.
 ATAC_SMOOTH_WIN = 150
 #: hotspot2 v2.1 `density-peaks.bash`: `bins=150`, `step=20`.
@@ -204,7 +209,7 @@ def route_of(assay_class: str) -> str:
 
 
 def pileup_from_counts(counts, d: float, read_length: float) -> np.ndarray:
-    """MACS2 pileup (tags extended to `d` bp) from read-span bin counts: count * d / (rl + 24)."""
+    """MACS2 pileup (tags extended to `d` bp) from read-span bin counts: count * d / (rl + 25)."""
     if not read_length > 0 or not d > 0:
         raise ValueError(f"read_length and d must be > 0, got {read_length}, {d}")
     return np.asarray(counts, dtype=np.float64) * float(d) / (float(read_length) + SPAN_EXTRA)
@@ -241,7 +246,7 @@ def macs2_lambda(*, lambda_bg: float, treat_pileup=None, control_pileup=None,
 def nb_expected_neglog10p(mu, n, scale: float, lam, *, tail: float = NB_TAIL) -> np.ndarray:
     """E over k ~ NB(n, mu) of -log10 P(Poisson(lam) > floor(k * scale)), per bin, float64.
 
-    `scale` turns a count into pileup units (d / (rl + 24)). k runs over the NB's [tail, 1 - tail]
+    `scale` turns a count into pileup units (d / (rl + 25)). k runs over the NB's [tail, 1 - tail]
     quantile range; the sum is divided by the mass kept.
     """
     mu = np.asarray(mu, dtype=np.float64)
@@ -292,7 +297,7 @@ def _score_pileup(mu, n, scale, lam, mode, pileup):
     """The MACS2 score of the NB at the pileup scale.
 
     `box_d` (E2, second review): the pileup is a count of FRAGMENTS with mean s * m (s = d / (rl +
-    24), m the spread read-span mean), so its NB has mean s * m and the same size n:
+    25), m the spread read-span mean), so its NB has mean s * m and the same size n:
     Var = s m + (s m)^2 / n, i.e. Poisson part s m and over-dispersion part (s m)^2 / n (relative
     over-dispersion unchanged). It is scored at scale 1. A simulation of Gamma-Poisson read starts
     with extended fragments matches this (tests: test_box_d_pileup_variance_by_simulation).
@@ -315,7 +320,7 @@ def hotspot2_normalized_density(mu, *, read_length: float, depth_reads: float) -
     """hotspot2 density normalized per million reads, per 25 bp bin.
 
     Cleavages in the 150 bp window centred on the bin: the window covers bins i-2..i+2 wholly and half
-    of bins i-3 and i+3; one cleavage per read, so tags = counts * 25 / (rl + 24). Then
+    of bins i-3 and i+3; one cleavage per read, so tags = counts * 25 / (rl + 25). Then
     * 1e6 / depth_reads (`normalize_bed_values`). Zero outside the stretch.
     """
     if not depth_reads > 0:

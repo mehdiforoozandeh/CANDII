@@ -44,9 +44,11 @@ VOLATILE = ("wall_seconds", "timing_seconds", "torch_threads", "evalset_sha256")
 #: (pit_deviation_per_stratum, predicted_over_replicate_variance_robust, selection.composite_status,
 #: per table); E2 checked that no value of the b647359 outputs changed (suffstats and the ledger are
 #: equal to the old pins). linux keeps the b647359 pins and needs a Nibi run to re-pin.
+#: darwin scores RE-PINNED 2026-11-23 (t390 span_fix): SPAN_EXTRA 24 -> 25 rescales the signal and
+#: native spaces by (rl + 24) / (rl + 25); suffstats and the ledger are unchanged (equal to the old pins).
 #: darwin: the laptop (candii env); linux: Nibi (kit venv of b647359, check job 27085822)
 _DIGESTS = {
-    "darwin": {"blind_model": {"ledger": "b25b2d2fc5c4dccd4f04c1fe4712816029f1b8901efd4796f95961b2fd866c5e", "scores": "4c9b3ebaf33e1af43ce2e58eb7c7be2e392d7b2f74efcd504c08a2e1eafb6f1a", "suff": "83644d763ee69406fe4c926b65b2f5b013b94cdddd640722416abd1249dacda6"}, "val_model_auto": {"scores": "950672871e9cab8210de4e6601bcab8d8e775befda504c6d4490ea3882505fa4", "suff": "9ee72dcc3357e39e42ff641c15446074db09a22fce44d510db1634ad709633d1"}, "val_pa_pc": {"scores": "70151035b59b55856fe6fd7f94ea384e7b5c7f283e5a06fa60081ec4bc8863fa", "suff": "1a0858e4863ed754d54e6d8705dccc76bf7db00c9c789cd612f952c02e5811d1"}},
+    "darwin": {"blind_model": {"ledger": "b25b2d2fc5c4dccd4f04c1fe4712816029f1b8901efd4796f95961b2fd866c5e", "scores": "8a33b7509c6fe65408438577e40a9e741b24ab7046c20030dae02aea41fb323e", "suff": "83644d763ee69406fe4c926b65b2f5b013b94cdddd640722416abd1249dacda6"}, "val_model_auto": {"scores": "68a79d2c62098a3f7fcf9389eddaef2db3b3f267f4001f18c38c98fd79dc9e0e", "suff": "9ee72dcc3357e39e42ff641c15446074db09a22fce44d510db1634ad709633d1"}, "val_pa_pc": {"scores": "7ce5bd160a11cdc93774d1b41a6a5161a28f4f0812849c09b44b0ac0cb001240", "suff": "1a0858e4863ed754d54e6d8705dccc76bf7db00c9c789cd612f952c02e5811d1"}},
     "linux": {"blind_model": {"ledger": "b25b2d2fc5c4dccd4f04c1fe4712816029f1b8901efd4796f95961b2fd866c5e", "scores": "7909275118388962f4233f67585e79e1962a5fb045a72561c7425b103c17294f", "suff": "e9dd2f2d96997038732e312e72576d08aadf36620785b4cc194146edc6050ed0"}, "val_model_auto": {"scores": "88bfbed5a68249471e37e694aad141b852c071859a96a2ac48747346c3720dcf", "suff": "5f82184561440093995da633a6940b0fe957ef80cc9ca8b6b02a12fef303ebdd"}, "val_pa_pc": {"scores": "e9cc9a10d89c110f6e9e9297d69ca06cea74eb195ded6ff4fc97a74cbb94e80d", "suff": "4b2e21028af03d8f8b6acdd884f37f6bef88bc8755aa903d7d28748f62d7a08e"}},
 }
 BASE_DIGESTS = _DIGESTS.get(sys.platform, _DIGESTS["linux"])
@@ -275,7 +277,7 @@ def test_run_dump_interface_f(dumped):
                                                                             regions)), rtol=1e-6)
             y = _h5_regions(cdir / "counts.h5", regions)
             if row["assay"] == "DNase-seq":
-                nt = y * 25 / (float(row["read_length"]) + 24) * 1e8 / float(row["depth_reads"])
+                nt = y * 25 / (float(row["read_length"]) + 25) * 1e8 / float(row["depth_reads"])
                 np.testing.assert_allclose(arr["native_truth"], nt, rtol=1e-5)
             elif row["control_measurement_id"]:
                 crow = rows[row["control_measurement_id"]]

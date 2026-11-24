@@ -106,8 +106,24 @@ def test_with_control_lambda_restates_pval_from_counts_with_control():
     assert np.array_equal(log10_upper_tail(obs, lam).astype(np.float32), want)
 
 
+# Known answers below use rl + 25 bins per read (store rule, test_span_extra_matches_the_bin25_rule).
+# They used rl + 24 until t390 span_fix; that constant was ~1% off the store's count rule.
 def test_pileup_conversion_is_count_times_d_over_read_span():
-    assert S.pileup_from_counts(np.array([10.0]), 150, 76)[0] == pytest.approx(10 * 150 / 100)
+    assert S.pileup_from_counts(np.array([10.0]), 150, 76)[0] == pytest.approx(10 * 150 / 101)
+
+
+def test_span_extra_matches_the_bin25_rule():
+    """SPAN_EXTRA is tied to the store count rule (`t112/bin25.py::counts_from_tagalign`: +1 to
+    bins start//25 .. end//25 inclusive, BED end = start + rl). Reads at all 25 start phases touch
+    (rl + SPAN_EXTRA) / 25 bins on average."""
+    from t112.bin25 import counts_from_tagalign
+    import io
+    for rl in (25, 36, 50, 75, 76, 100, 101):
+        start = 1000 + np.arange(25)
+        ta = "".join(f"chr1\t{s}\t{s + rl}\n" for s in start)
+        c = counts_from_tagalign(io.StringIO(ta), {"chr1": 5000})["chr1"]
+        assert c.sum() / 25 == pytest.approx((rl + S.SPAN_EXTRA) / S.BIN, abs=1e-12), rl
+    assert S.SPAN_EXTRA == S.BIN
 
 
 # ------------------------------------------------------------------------------------- routes
@@ -120,9 +136,9 @@ def test_chip_route_end_to_end_on_a_hand_case():
     sig, src = S.signal_track(mu, 1e12, "narrow_histone", ctrl, CHIP_COV, pileup="inbin")
     assert src == "observed_control" and sig.dtype == np.float32 and sig.shape == (L,)
     r = 2.0e7 / 3.0e7
-    lam = max(180 * 2.0e7 / MACS2_GSIZE_HS, r * 2.0 * 180 / (50 + 24))
+    lam = max(180 * 2.0e7 / MACS2_GSIZE_HS, r * 2.0 * 180 / (50 + 25))
     # middle bins: the 1 kb and 10 kb windows are full, so their means equal the flat pileup
-    want = _nb_sample_mean(5.0, 1e12, lambda k: -np.log10(poisson.sf(np.floor(k * 3.0), lam)))
+    want = _nb_sample_mean(5.0, 1e12, lambda k: -np.log10(poisson.sf(np.floor(k * 180 / 61), lam)))
     assert sig[L // 2] == pytest.approx(want, rel=1e-5)
 
 
@@ -144,9 +160,9 @@ def test_atac_route_uses_d_150_and_no_control():
     mu = np.full(L, 4.0)
     sig, src = S.signal_track(mu, 1e12, "accessibility_atac", None, ATAC_COV, pileup="inbin")
     assert src == "local_background"
-    pile = 4.0 * 150 / (76 + 24)                       # = 6.0
+    pile = 4.0 * 150 / (76 + 25)
     lam = max(150 * 5.0e7 / MACS2_GSIZE_HS, pile)      # flat track: local mean = pileup
-    want = _nb_sample_mean(4.0, 1e12, lambda k: -np.log10(poisson.sf(np.floor(k * 1.5), lam)))
+    want = _nb_sample_mean(4.0, 1e12, lambda k: -np.log10(poisson.sf(np.floor(k * 150 / 101), lam)))
     assert sig[L // 2] == pytest.approx(want, rel=1e-5)
     with pytest.raises(ValueError, match="no control"):
         S.signal_track(mu, 4.0, "ATAC-seq", np.ones(L), ATAC_COV)
@@ -163,7 +179,7 @@ def test_atac_signal_rises_with_the_predicted_count_at_a_peak():
 
 def test_dnase_route_is_hotspot2_normalized_density():
     mu = np.zeros(40)
-    mu[20] = 60.0                                      # 60 * 25 / 60 = 25 tags in bin 20
+    mu[20] = 61.0                                      # 61 * 25 / (36 + 25) = 25 tags in bin 20
     sig, src = S.signal_track(mu, 3.0, "accessibility_dnase", None, DNASE_COV,
                               dnase_route="hotspot2_density")
     assert src == "hotspot2_density"
@@ -175,7 +191,7 @@ def test_dnase_route_is_hotspot2_normalized_density():
     # a flat track: the window holds exactly 150 bp of tags
     flat, _ = S.signal_track(np.full(40, 6.0), 3.0, "DNase-seq", None, DNASE_COV,
                              dnase_route="hotspot2_density")
-    assert flat[20] == pytest.approx(6.0 * 25 / 60 * 6 * per_m, rel=1e-6)
+    assert flat[20] == pytest.approx(6.0 * 25 / 61 * 6 * per_m, rel=1e-6)
 
 
 def test_every_label_is_one_of_the_four():
@@ -461,7 +477,7 @@ def test_box_d_route_equals_inbin_on_the_spread_hand_case():
     ctl = np.array([1.0, 1.0, 2.0, 1.0, 1.0, 1.0, 3.0, 1.0])
     cov = dict(depth_reads=2.0e7, read_length=36, frag_len=90, control_depth_reads=2.5e7,
                control_read_length=36)
-    s_ = 90.0 / 60.0
+    s_ = 90.0 / (36 + 25)
     lam = S.macs2_lambda(lambda_bg=90 * 2.0e7 / 2.7e9,
                          control_pileup=S.pileup_from_counts(box_spread(ctl, 90), 90, 36),
                          ratio_treat2control=2.0e7 / 2.5e7)
@@ -506,7 +522,7 @@ def test_box_d_pileup_variance_by_simulation():
     weights only approximate the true start kernel, so within 30%, and much closer than in-bin."""
     from onion_eval.signal_from_counts import box_weights
     d, rl = 200, 36
-    s_ = d / (rl + 24)
+    s_ = d / (rl + 25)
     for dep, n, tol in (("comonotone", 1000.0, 0.06), ("comonotone", 2.0, 0.06),
                         ("independent", 2.0, 0.30)):
         c, cov = _simulate_pileup(0.02, n, d, rl, dep, R=60_000)
