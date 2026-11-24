@@ -95,3 +95,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-23T19:58Z glossary: admitted 'negative binomial' (field: Europe PMC, 441 titles)
 - 2026-11-23T19:58Z glossary: blocked reply with poisson
 - 2026-11-24T01:05Z D54: combo_w2x p256 3 seeds PASS imp 0.503 cor 0.818 cal 0.717 score 0.451; equal to full combination within range
+- 2026-11-24T01:05Z moved to history (superseded by D53/D54): | D50 | p16 read (2026-11-23 05:00 UTC, 3 seeds): full combination pairs + average + Pearson PASS, score 0.249 (imp 0.500, cor 0.816, cal 0.685); scale_w2x highest score 0.417 (imp 0.462, cor 0.785, cal 0.712); scale_p2x/p4x PASS with no gain beyond range, not confirmed. Head skip off at 256 regions NEAR (cor 0.674 vs 0.774): head skip stays. Submitted (kit RCP9): combination p256 5356043-70; fina
