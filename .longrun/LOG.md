@@ -144,3 +144,6 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-24T11:07Z glossary: blocked reply with pval, recalibrated, refit
 - 2026-11-24T11:07Z pval session: recal changes only n, so mean mode scores raw = recal; it will score both copies in MODE=expectation (uses n) as a matched pair, plus raw in mean mode; DNase flagged.
 - 2026-11-24T08:25Z glossary: blocked reply with furthest
+- 2026-11-24T18:02Z Val array 5674003 all 7 tasks COMPLETED; task 12 took 5:00:43. Cost: 8 CPU x 18.04 h summed elapsed = 144.3 CPU-h (priced 65-90). Fit 5673958: 4 CPU x 0.39 h = 1.6 CPU-h (CPU job, not GPU). Recal copy 5706801 TIMEOUT on node fc30557, 0 CPU-s, no output (node fault, batch step cancelled 0:9). Rerun as 5733577 with --exclude=fc30557. Told pval session all 8 raw targets ready.
+- 2026-11-24T18:02Z glossary: blocked reply with froze, gpu, reran
+- 2026-11-24T18:04Z Recal copy 5733577 COMPLETED (44 s, node fc30612): runs_rcp/eic_val/rcp_combo_w2x_unet_s0_recal/counts, 8 files, 0 clipped; factors H3K4me3 5.657, H3K27me3 3.221, H3K79me2 0.878, DNase 0.0442 (edge). Path sent to pval session.
