@@ -29,7 +29,7 @@ PS_ROOT=/scratch/mforooz/rs392/pred_store
 REFS=/project/def-maxwl/mforooz/ONION/eval/eic_v1_2/baselines_p16
 # the exclude list of the reference's p16_sv jobs (sacct 5264675)
 EXCL=fc10713,fc10715,fc30601,fc30568,fc30605,fc30564,fc30654,fc30435,fc30562,fc30355,fc30570,fc30455,fc30659,fc30565,fc30613,fc30649
-NSH=4; PB=8; PTIME=01:20:00; MTIME=00:55:00
+NSH=4; PB=8; PTIME=${PTIME:-01:20:00}; MTIME=${MTIME:-00:55:00}
 STIME=00:30:00; SCPU=4; SMEM=16000
 DRY="${DRY_RUN:-0}"
 read -r -a SL <<< "${SEEDS:?set SEEDS}"
