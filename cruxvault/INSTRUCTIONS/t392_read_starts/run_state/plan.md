@@ -400,3 +400,4 @@ Wall time: day 1, waves 1 to 4, with the gate result on four measurements; day 2
 - 2026-11-24T06:50Z Foreman file-count warning: Fir /scratch 964K/1000K files. rs392 holds 18.3K (work 7,340; store 10,707). ~113K came from elsewhere. Plan: delete own extracts per tar after its gate passes (tars stay). Told foreman.
 - 2026-11-24 PHASE2_DESIGN.md written (design only, PI-approved via foreman; no compute, no code). PR 64 summary by a sonnet reader.
 - 2026-11-24 C10b accepted: suite RS2 66 failures, RCP9 471; 0 new in RS2 (notes/tests/SUITE.md). Suite spend 36.8 CPU-h; run spend now 0.84 + 36.8 = 37.6 CPU-h plus the build.
+- 2026-11-24T07:30Z store build done (avg COMPLETED, 0 failed jobs). check.py store: 2740/2740 measurements, 8220/8220 files, 0 differing bins. C11b launched [opus].
