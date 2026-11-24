@@ -138,8 +138,10 @@ A first Phase 2 pass on the 3 PR 64 experiments, with 3 seeds, costs about 3 × 
 4. Convert the Phase 1 predictions; score the plug-in and the expected p-value with the PR 64 scorer.
 5. Monte Carlo and PIT for the calibration claim.
 
-## 10. Open choices for the PI
+## 10. Choices decided by the PI (2026-11-24)
 
-1. Score the expected p-value E[g] as the headline, and report the plug-in beside it. (Recommended: yes, because it is the squared-error-optimal estimate.)
-2. For zero-shot experiments, take d from the predicted strand cross-correlation, with the assay median as the fallback. (Recommended: yes.)
-3. For the predicted-control path, use the recipe's predicted control. Alternatively, use the generic-control rule, which PR 64 has not implemented. (Recommended: predicted control.)
+The PI decided these on 2026-11-24 ("yes"; relayed by the foreman). Phase 2 stays on hold until the Phase 1 result is reported.
+
+1. Headline: the expected p-value E[g]. The plug-in p-value is reported beside it.
+2. Fragment length d for zero-shot experiments: two arms, both reported. The default arm takes d from the cross-correlation of the predicted strands. The second arm takes the assay median. The pipeline value serves as a reference where it exists.
+3. Zero-shot control: the recipe's predicted control. The observed-control path still runs first, where control reads exist.
