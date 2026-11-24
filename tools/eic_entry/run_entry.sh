@@ -63,8 +63,9 @@ submit)
   TR=("$@"); [ ${#TR[@]} -gt 0 ] || TR=($(awk -F'\t' 'NR > 1 {print $1}' "$COV"))
   mkdir -p "$OUT/logs"; cp "$COV" "$OUT/covariates.tsv"
   IDS=""
+  MEM=48G; [ "${BOARD:-}" = validation ] && MEM=24G   # measured peaks: validation 16 GB, blind (with QN) 23-25 GB
   for T in "${TR[@]}"; do
-    J=$(sub "$OUT" eicx_entry_$T 48G 2:00:00 "" "$SE run --pred $PRED --cov $OUT/covariates.tsv --track $T --out $OUT ${MODE:+--mode $MODE} ${BOARD:+--board $BOARD}")
+    J=$(sub "$OUT" eicx_entry_$T $MEM 2:00:00 "" "$SE run --pred $PRED --cov $OUT/covariates.tsv --track $T --out $OUT ${MODE:+--mode $MODE} ${BOARD:+--board $BOARD}")
     IDS=${IDS:+$IDS:}$J; echo "$T $J" | tee -a "$OUT/JOBS.txt"
   done
   echo "collect $(collect "$OUT" "$IDS")" | tee -a "$OUT/JOBS.txt"
