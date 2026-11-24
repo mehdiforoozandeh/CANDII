@@ -46,3 +46,9 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-24T11:05Z glossary: rejected 'C24M25' (coinage: 0 titles in Europe PMC and OpenAlex)
 - 2026-11-24T11:07Z recal copy: Fir job 5706801 -> runs_rcp/eic_val/rcp_combo_w2x_unet_s0_recal; changes n only (mu same), so plug_in scores are identical; recal must be scored with MODE=expectation, paired with raw in expectation mode. DNase factor at grid edge (log2 -4.5).
 - 2026-11-24T11:17Z SCORES LANDED: validation 7/45, rcp_combo_w2x_unet s0 raw mean mode; combined rank of 11: 4.3/2.1/1/2/1/5/1; Fir 5706614-21, about 2.6 CPU-h (22 min x 7 CPUs)
+- 2026-11-24T11:17Z glossary: blocked reply with c02m22, c03m02, c10m17, c16m17, c20m22, c24m17, c45m22, msevar, nmse
+- 2026-11-24T18:02Z Fir: C24M25 raw mean 5733708 + collect 5733709; raw expectation mode 8 tracks 5733710-14,5733772,5733848,5733849 + collect 5733850 (out rcp_combo_w2x_unet_s0_raw_exp); recal copy rerun by recipe session
+- 2026-11-24T18:04Z recal copy (Fir 5733577) scoring in expectation mode, out rcp_combo_w2x_unet_s0_recal_exp
+- 2026-11-24T18:19Z cancel-own.sh cancel on fir: 5734182 5734183 5734184 5734185 5734186 5734188 5734189 5734190 5734191
+- 2026-11-24T18:19Z foreman: PI 'Yes, fix' hmap span (t125/hmap 24->25, PR 64, bit-exact check with 24); recal pair waits for wider-grid refit -> cancelled recal_exp jobs 5734182-5734191
+- 2026-11-24T18:35Z 8/8 val tracks scored: mean mode rank1 on 4 (C10M17 C20M22 C24M25 C45M22), 2 C16M17, 2.1 C03M02, 4.3 C02M22, 5 C24M17; expectation mode no better (C16M17 2->4, mse up on 6/8); exp mode cost ~16 CPU-h (137 min x 7 CPUs)
