@@ -118,3 +118,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-24T01:38Z glossary: admitted 'MD5' (English word, Zipf 2.3)
 - 2026-11-24T01:43Z glossary: blocked reply with ids
 - 2026-11-24T01:52Z t184 batch 1 RESUBMITTED on Nibi 2026-11-24T01:52Z (PI 'Yes, change the header'), kits KF4H/KX4H (honest USER_AGENT, repo 8e9c4af2; submitter 55cdf946): 72 rows; stage 28737208/10/14/44/46/63/66/68/74; build 28737209/11/15/45/47/64/67/69/75; signal 28737212, 28737239; record /project/def-maxwl/mforooz/ONION/logs/closeout_d4_submit_20261124T015213Z.log. Header test on rows 496/501/530 matched the catalog (6/6, 8/8, 4/4 files, MD5 equal). Never resubmit.
+- 2026-11-24T08:25Z glossary: blocked reply with furthest
