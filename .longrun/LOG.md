@@ -38,3 +38,11 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-24T10:24Z glossary: blocked reply with nmse, nudged
 - 2026-11-24T11:01Z span fix DONE (0f957f05, 2323bd9f, bf929823): SPAN_EXTRA 24->25; L6 nMSE vs L5 +2.0/-0.7/-0.4%; no combined rank changed; entry vs new rungs 0 bins differ; 2.67 CPU-h; 3 'failed' tests = checks vs old constant
 - 2026-11-24T11:02Z validation dry run DONE (2ec84e73, d9b81c7b): 42/45 val tracks, MOESM6 placement, msevar unranked (weights not reproduced); runs on Fir+Nibi; Nibi 1.84 CPU-h, Fir 4.45 CPU-h (5703770/1/80)
+- 2026-11-24T11:02Z glossary: blocked reply with c12m02, c19m22, c40m17, macs2, msevar, nmse
+- 2026-11-24T11:02Z glossary: rejected 'msevar' (coinage: 0 titles in Europe PMC and OpenAlex)
+- 2026-11-24T11:04Z foreman: validation jobs 24G (committed, deployed fir); keep C25M26/C34M02/C50M02 listed missing, build only on PI word; recipe session sends Fir path directly
+- 2026-11-24T11:04Z validation predictions (rcp_combo_w2x_unet s0, uncalibrated) scoring on Fir: 7 tracks 5706614-5706620, collect 5706621, out /scratch/mforooz/eicx/val/rcp_combo_w2x_unet_s0_raw; C24M25 after ~12:30 UTC
+- 2026-11-24T11:04Z glossary: blocked reply with c24m25
+- 2026-11-24T11:05Z glossary: rejected 'C24M25' (coinage: 0 titles in Europe PMC and OpenAlex)
+- 2026-11-24T11:07Z recal copy: Fir job 5706801 -> runs_rcp/eic_val/rcp_combo_w2x_unet_s0_recal; changes n only (mu same), so plug_in scores are identical; recal must be scored with MODE=expectation, paired with raw in expectation mode. DNase factor at grid edge (log2 -4.5).
+- 2026-11-24T11:17Z SCORES LANDED: validation 7/45, rcp_combo_w2x_unet s0 raw mean mode; combined rank of 11: 4.3/2.1/1/2/1/5/1; Fir 5706614-21, about 2.6 CPU-h (22 min x 7 CPUs)
