@@ -75,6 +75,8 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t367` [visualization] Onion: trace the typed numbers of the supervisor deck of 2026-11-18 to vault files
 - `t368` [implementation] Onion: pointwise MLP under the corrected composite: composite version 3, same-view pass, unscored seeds — refs [[q48_which_minicandi_design_choices_move_impu\|q48]], [[q39_do_the_context_rungs_2_to_6_convolution_\|q39]]
 - `t370` [implementation] miniCANDI recipe: a Pareto-dominant recipe on imputation, correction and calibration (conditioned skips, pre/post CAC layers, FiLM placement, control prediction, EIC comparison) — refs [[q75_can_one_minicandi_recipe_match_or_beat_t\|q75]], [[h44_a_u_net_whose_count_skips_are_film_modul\|h44]], [[h45_pre_and_post_cac_layers_in_the_testbed_g\|h45]], [[h46_where_film_injects_the_covariates_encode\|h46]], [[q76_can_minicandi_predict_the_chip_seq_contr\|q76]], [[q73_how_does_the_final_minicandi_score_on_th\|q73]]
+- `t371` [implementation] Deviance-based eval set beside the current headline metrics: Poisson deviance skill for imputation and correction, deviance calibration ratio, tested for ranking and depth behaviour
+- `t391` [implementation] Make the full test suite green when run from a Fir code kit: fix the 68 failures already on exp/t370 base cd3b4c74 (no git checkout or GIT_SHA in the kit; hashes recorded off Fir; launcher dry runs; stale import gate missing minicandi.trunk_film; environment: bash on PATH, torchview)
 
 ## Blocked
 
@@ -179,6 +181,8 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t368` [implementation] Onion: pointwise MLP under the corrected composite: composite version 3, same-view pass, unscored seeds — refs [[q48_which_minicandi_design_choices_move_impu\|q48]], [[q39_do_the_context_rungs_2_to_6_convolution_\|q39]] — *open*
 - `t369` [implementation] Scale miniCANDI from the settled design: choose the architecture and the data version, then scale data, context and model size — refs [[q48_which_minicandi_design_choices_move_impu\|q48]], [[q13_how_many_training_windows_and_how_much_d\|q13]] — *blocked*
 - `t370` [implementation] miniCANDI recipe: a Pareto-dominant recipe on imputation, correction and calibration (conditioned skips, pre/post CAC layers, FiLM placement, control prediction, EIC comparison) — refs [[q75_can_one_minicandi_recipe_match_or_beat_t\|q75]], [[h44_a_u_net_whose_count_skips_are_film_modul\|h44]], [[h45_pre_and_post_cac_layers_in_the_testbed_g\|h45]], [[h46_where_film_injects_the_covariates_encode\|h46]], [[q76_can_minicandi_predict_the_chip_seq_contr\|q76]], [[q73_how_does_the_final_minicandi_score_on_th\|q73]] — *open*
+- `t371` [implementation] Deviance-based eval set beside the current headline metrics: Poisson deviance skill for imputation and correction, deviance calibration ratio, tested for ranking and depth behaviour — *open*
+- `t391` [implementation] Make the full test suite green when run from a Fir code kit: fix the 68 failures already on exp/t370 base cd3b4c74 (no git checkout or GIT_SHA in the kit; hashes recorded off Fir; launcher dry runs; stale import gate missing minicandi.trunk_film; environment: bash on PATH, torchview) — *open*
 
 ### visualization
 
