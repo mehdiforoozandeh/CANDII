@@ -250,6 +250,26 @@ $LPS arrdiff --a $X/${E}_L6_span25.npy --b $SF/entry/raw/$E/$E.npy --out $Q/${E}
     --time=1:00:00 --output="$SF/logs/%x_%j.out" "${local_d[@]}" --wrap="$ENV; set -euo pipefail; $C")
   echo "sfid $E: $J" | tee -a $SF/JOBS.txt
   ;;
+sfid2)  # span_fix: an independent new L6/L7 (sfid's span25 L6, ladder callpeaks + qnorm); the entry
+        # pipeline's check against them (score refs none); the check against the old rungs is kept in qc/
+  E=${2:?exp}; A=${E:3}
+  read -r TRT CTL D CAP PSIG PPEAK < <(conf "$E")
+  SF=/scratch/mforooz/eicx/spanfix; LPS="python $SF/code/tools/eic_entry/ladder_probe.py"; X=$SF/ident; Q=$SF/qc
+  mkdir -p $X/L6 $X/L7
+  ln -sf $X/${E}_L6_span25.npy $X/L6/$E.npy
+  RL=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["mean_read_length"])' $OUT/starts/$TRT.json)
+  HENV='virtualenv -q --no-download --system-site-packages $SLURM_TMPDIR/venv; source $SLURM_TMPDIR/venv/bin/activate; pip install -q --no-index h5py'
+  C="$HENV && $LPS callpeaks --x $X/L6/$E.npy --out $X/${E}_L6.bed --max-gap $RL --min-len $D --cap $CAP && \
+$LPS peakcheck --a $X/${E}_L6.bed --b $SF/entry/peaks/$E.bed --out $Q/${E}_ident_peaks_vs_entry.json --sizes-from $SIZES && \
+$LPS qnorm --x $X/L6/$E.npy --mask $X/${E}_L6.bed --ref $REF/ref_$A.npz --out $X/L7/$E.npy --sizes-from $SIZES && \
+cp $SF/entry/check_$E.tsv $Q/${E}_entrycheck_vs_oldrungs.tsv && \
+{ python $SF/code/tools/eic_entry/score_entry.py check --track $E --out $SF/entry --ref-l6 $X/L6 --ref-l7 $X/L7 \
+--ref-moesm2 none --ref-moesm4 none; rc=\$?; cp $SF/entry/check_$E.tsv $Q/${E}_entrycheck_vs_newrungs.tsv; \
+cp $Q/${E}_entrycheck_vs_oldrungs.tsv $SF/entry/check_$E.tsv; exit \$rc; }"
+  J=$(sbatch --parsable --account=def-maxwl --gres=none --job-name=eicx_sfid2_$E --cpus-per-task=2 --mem=64G \
+    --time=1:00:00 --output="$SF/logs/%x_%j.out" --wrap="$ENV; set -euo pipefail; $C")
+  echo "sfid2 $E: $J" | tee -a $SF/JOBS.txt
+  ;;
 sacct)
   shift
   sacct -j "$1" -X --format=JobID,JobName%28,State,Elapsed,TotalCPU,ReqMem,AllocCPUS -P

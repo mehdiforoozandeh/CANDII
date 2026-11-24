@@ -635,12 +635,14 @@ def _arrdiff(x, y):
 def cmd_check(a):
     """Pipeline vs the ladder: raw = rung L6, qn = rung L7 (arrays), and their board scores."""
     out, t = Path(a.out), a.track
+    ref_l6, ref_l7 = Path(a.ref_l6), Path(a.ref_l7)
+    ref_scores = {b: Path(p) for b, p in (("moesm2", a.ref_moesm2), ("moesm4", a.ref_moesm4)) if p != "none"}
     rows = []
-    for name, mine, ref in (("raw vs rung L6 (array)", out / "raw" / t / f"{t}.npy", REF_L6 / f"{t}.npy"),
-                            ("qn vs rung L7 (array)", out / "qn" / t / f"{t}.npy", REF_L7 / f"{t}.npy")):
+    for name, mine, ref in (("raw vs rung L6 (array)", out / "raw" / t / f"{t}.npy", ref_l6 / f"{t}.npy"),
+                            ("qn vs rung L7 (array)", out / "qn" / t / f"{t}.npy", ref_l7 / f"{t}.npy")):
         nd, tot, mx = _arrdiff(mine, ref)
         rows.append([t, name, f"{tot} bins", f"{nd} differ", f"max abs {mx:.3g}", nd == 0])
-    for board, ref in REF_SCORES.items():
+    for board, ref in ref_scores.items():
         mine = {r["chrom_set"]: r for r in E.read_score_rows(out / "scores" / f"{board}_{t}.tsv")}
         theirs = {r["chrom_set"]: r for r in E.read_score_rows(ref) if r["experiment"] == t}
         rel = [abs(mine[s][m] - theirs[s][m]) / max(abs(theirs[s][m]), 1e-12)
@@ -683,6 +685,10 @@ def main(argv=None):
     p.set_defaults(fn=cmd_make_test)
     p = sp.add_parser("check", help="pipeline vs rungs L6 / L7 (test)")
     p.add_argument("--track", required=True, choices=sorted(TEST)); p.add_argument("--out", required=True)
+    # references (t390 span_fix): default the probe-1 rungs; a folder of <exp>.npy, a score TSV or none
+    p.add_argument("--ref-l6", default=str(REF_L6)); p.add_argument("--ref-l7", default=str(REF_L7))
+    p.add_argument("--ref-moesm2", default=str(REF_SCORES["moesm2"]), help="score TSV, or none")
+    p.add_argument("--ref-moesm4", default=str(REF_SCORES["moesm4"]), help="score TSV, or none")
     p.set_defaults(fn=cmd_check)
     p = sp.add_parser("val-cov", help="covariates TSV of the validation tracks")
     p.add_argument("--cov", required=True)

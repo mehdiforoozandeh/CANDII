@@ -1,0 +1,7 @@
+board	experiment	rung	combined_before	range_before	combined_after	range_after	of
+moesm2	C19M22	L6 (raw)	15	min 15 max 15 over bootstraps 0-9	15	min 15 max 15 over bootstraps 0-9	26
+moesm2	C40M17	L6 (raw)	1	min 1 max 1 over bootstraps 0-9	1	min 1 max 1 over bootstraps 0-9	26
+moesm2	C12M02	L6 (raw)	17.1	min 17 max 18 over bootstraps 0-9	17.1	min 17 max 18 over bootstraps 0-9	26
+moesm4	C19M22	L7 (qn)	1	min 1 max 1 over bootstraps 0-9	1	min 1 max 1 over bootstraps 0-9	26
+moesm4	C40M17	L7 (qn)	1	min 1 max 1 over bootstraps 0-9	1	min 1 max 1 over bootstraps 0-9	26
+moesm4	C12M02	L7 (qn)	1	min 1 max 1 over bootstraps 0-9	1	min 1 max 1 over bootstraps 0-9	26

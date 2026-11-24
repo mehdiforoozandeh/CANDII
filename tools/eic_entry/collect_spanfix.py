@@ -42,7 +42,7 @@ def _g(x):
 
 
 def main(src, dst):
-    src, dst = Path(src), Path(dst)
+    src, dst = Path(src), Path(dst).resolve()
     old = dst.parent
 
     # 1. nMSE against the exact formula (L5), the pipeline track (L3), and L4 for the QN rung
@@ -102,15 +102,21 @@ def main(src, dst):
     rows = []
     for p in sorted((src / "qc").glob("*_ident_*.json")) + sorted((src / "qc").glob("*_arrdiff.json")):
         a = json.loads(p.read_text())
+        if "bins" not in a:                   # a peakcheck report (handled below)
+            continue
         rows.append([p.name.split("_")[0], p.stem.split("_", 1)[1], a["bins"], a["bins_differing"],
                      _g(a["max_abs_diff"])])
-    for p in sorted((src / "qc").glob("*_peakcheck_*.json")):
+    for p in sorted((src / "qc").glob("*_peakcheck_*.json")) + sorted((src / "qc").glob("*_ident_peaks_*.json")):
         a = json.loads(p.read_text())
         rows.append([p.name.split("_")[0], p.stem.split("_", 1)[1], a["bases_a"],
                      f"jaccard {a['jaccard']:.6f}", f"bases_b {a['bases_b']}"])
     for e in EXPS:
         for r in _rd(src / "entry" / f"check_{e}.tsv"):
-            rows.append([e, "entry check: " + r["check"], r["n"], r["result"], r["detail"]])
+            rows.append([e, "entry check vs OLD rungs: " + r["check"], r["n"], r["result"], r["detail"]])
+    for p in sorted((src / "qc").glob("*_entrycheck_vs_newrungs.tsv")):
+        for r in _rd(p):
+            rows.append([r["experiment"], "entry check vs NEW rungs (ident/): " + r["check"], r["n"],
+                         r["result"], r["detail"]])
     _w(dst / "checks.tsv", ["experiment", "check", "n", "result", "detail"], rows)
 
     # 5. resources (sacct, one row per job)
