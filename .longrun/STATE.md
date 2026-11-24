@@ -13,7 +13,7 @@ Close the session with one trusted miniCANDI architecture (PI 2026-11-22, after 
 - Avocado 5022624 still pending. rcp_rec_ctlw4 seed 2 timed out (2 seeds read; not resubmitted).
 - Ensemble on pairs + average: ens3 missing (only seed0_recal landed); low priority.
 
-- Blind-row build batch 1 on Nibi (submitted 08:01 UTC, 72 rows, ~22,700 CPU-h): stage 28629674/76/99, 28629702/04/10/12/16/18; build 28629675/77, 28629700/03/05/11/13/17/19; signal 28629678 (ChIP/ATAC), 28629701 (DNase). Watch scratch; move BAMs and delete staged FASTQs as rows finish to fall under 1024G soft quota.
+- Blind-row build batch 1 on Nibi FAILED at staging (ENCODE portal search returns HTTP 405 to the stage code); 0 CPU-h used; builds cancelled; signal passes 28629678/701 stuck pending. Waits for Mehdi: fix route for the FASTQ lookup.
 
 ## Next
 1. Refresh the deck with the final architecture; tell the deviance session the final arm.
