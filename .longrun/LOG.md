@@ -31,3 +31,9 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-23T20:11Z glossary: admitted 'SHA-256' (field: Europe PMC, 10 titles)
 - 2026-11-23T20:11Z glossary: blocked reply with gigabyte
 - 2026-11-23T20:47Z copy DONE: job 28706885 COMPLETED 25:58; 51/51 files, sizes and sha256 match; 65G at /project/def-maxwl/mforooz/ONION/eic/original_pe (SHA256SUMS beside)
+- 2026-11-24T01:22Z foreman: blind predictions delayed; t184 batch 1 failed at staging (ENCODE file-search HTTP 405); fix + resubmit wait on PI; no action here
+- 2026-11-24T06:34Z foreman (PI-approved unblocked work): (1) validation dry run prep, (2) span fix rl+24 -> rl+25 in signal_from_counts.py with rerun of L6/L7. Two opus agents started.
+- 2026-11-24T06:34Z glossary: blocked reply with converter, nmse
+- 2026-11-24T06:34Z glossary: blocked reply with log10
+- 2026-11-24T10:24Z glossary: blocked reply with nmse, nudged
+- 2026-11-24T11:01Z span fix DONE (0f957f05, 2323bd9f, bf929823): SPAN_EXTRA 24->25; L6 nMSE vs L5 +2.0/-0.7/-0.4%; no combined rank changed; entry vs new rungs 0 bins differ; 2.67 CPU-h; 3 'failed' tests = checks vs old constant

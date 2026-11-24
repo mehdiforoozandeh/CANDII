@@ -67,9 +67,9 @@ At 6 of 8 designs (A, C, D, A2, C2, D2), aggregated 2026-10-25; the PI stopped c
 - [Deck](presentations/t125-eta-h/index.html) — published https://claude.ai/artifact/AfLpe1acvSC9i43jg28AqS; vault copy [DECK.md](presentations/t125-eta-h/DECK.md)
 
 <!-- crux:ledger:start -->
-**2 children** · open 0, leaning 1, settled 0, parked 1 · 1 finding(s) on this question
+**2 children** · open 0, leaning 0, settled 1, parked 1 · 1 finding(s) on this question
 
 - `h25` [[h25_in_the_counts_log10_p_chain_most_of_the_|In the counts → −log10 p chain, most of the p error comes from f's predicted count distribution, not from the map h]] — *parked*
-- `q90` _(Q)_ [[q90_can_a_count_space_model_like_minicandi_b|Can a count-space model like miniCANDI be scored fairly on the EIC board of signal p-value entrants, through an exact count-to-p-value pipeline or a change of the model's output?]] — *leaning · moderate*
+- `q90` _(Q)_ [[q90_can_a_count_space_model_like_minicandi_b|Can a count-space model like miniCANDI be scored fairly on the EIC board of signal p-value entrants, through an exact count-to-p-value pipeline or a change of the model's output?]] — *settled · strong*
 - `f18` finding (strong) [[f18_clear_margins_over_seed_wobble_but_one_t|Clear margins over seed wobble, but one track and one f seed, and two of…]]
 <!-- crux:ledger:end -->
