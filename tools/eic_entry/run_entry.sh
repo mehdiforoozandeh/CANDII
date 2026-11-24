@@ -78,7 +78,7 @@ $SE run --pred $OUT/pred --cov $OUT/cov/$T.tsv --track $T --out $OUT && $SE chec
   ;;
 val-prep)
   mkdir -p "$VAL/logs"
-  J=$(sub "$VAL" eicx_val_prep 48G 3:00:00 "" "$SE val-cov --cov $VAL/cov.tsv && $SE prep-val --workers 2")
+  J=$(sub "$VAL" eicx_val_prep 64G 3:00:00 "" "$SE val-cov --cov $VAL/cov.tsv && $SE prep-val --workers 2")
   echo "val-prep $J" | tee -a "$VAL/JOBS.txt"
   ;;
 val-test)

@@ -1,0 +1,34 @@
+board	experiment	track	measure	value	rank_among_entrants	n_entrants	best_entrant	median_entrant	worst_entrant	note
+validation	C03M02	raw	nmse	0.3410447207						mse(all23) / var(truth), blacklist bins deleted
+validation	C03M02	raw	mse	9.201736855	1	10	13.41218202	33.29989667	173.4590988	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C03M02	raw	gwcorr	0.9249228611	1	10	0.8566964702	0.6219699662	0.09934707168	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C03M02	raw	gwspear	0.8968639443	1	10	0.4652738075	0.3279118785	0.03779529046	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C03M02	raw	mseprom	162.8566995	2	10	135.6143657	749.2453002	3975.786851	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C03M02	raw	msegene	11.15590925	1	10	16.73343514	59.85168901	275.688093	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C03M02	raw	mseenh	45.77472538	1	10	94.42820517	269.3966838	2756.4592	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C03M02	raw	msevar	23220.07055		10		45541527.25		not ranked: MOESM6's msevar weights are not reproduced
+validation	C03M02	raw	mse1obs	916.429207	1	10	1096.058068	2840.979473	12491.58319	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C03M02	raw	mse1imp	903.3643576	1	10	1032.158445	2733.354427	17100.10083	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C03M02	raw	combined_rank	1		11				min 1 max 1 over bootstraps 0-9
+validation	C12M32	raw	nmse	0.4865976929						mse(all23) / var(truth), blacklist bins deleted
+validation	C12M32	raw	mse	0.4451153553	1	10	0.6771378181	0.7682908986	0.9109958893	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M32	raw	gwcorr	0.8800232176	1	10	0.5735312709	0.4712906961	0.1324938138	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M32	raw	gwspear	0.6880075555	1	10	0.3244281139	0.2639625447	0.1095628637	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M32	raw	mseprom	0.8991079767	1	10	1.433702185	1.833238452	2.104772412	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M32	raw	msegene	0.7428736452	1	10	1.115232659	1.2506139	1.533669553	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M32	raw	mseenh	1.209491182	1	10	2.487191414	2.68103918	3.356390298	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M32	raw	msevar	22.29631804		10		67.59590673		not ranked: MOESM6's msevar weights are not reproduced
+validation	C12M32	raw	mse1obs	20.12063026	1	10	38.74388824	45.33571108	68.84437553	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M32	raw	mse1imp	27.51614321	10	10	4.136269153	21.23989362	32.16685188	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M32	raw	combined_rank	1		11				min 1 max 1 over bootstraps 0-9
+validation	C17M04	raw	nmse	0.7981051482						mse(all23) / var(truth), blacklist bins deleted
+validation	C17M04	raw	mse	0.2336828124	2	10	0.2204152842	0.3376398532	0.5790377594	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M04	raw	gwcorr	0.7485362042	1	10	0.5204846247	0.3017081812	0.1317619667	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M04	raw	gwspear	0.5587121448	1	10	0.4026504617	0.2744853419	0.09094453635	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M04	raw	mseprom	0.4884781424	2	10	0.4478317844	0.7077782772	1.254821093	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M04	raw	msegene	0.2748932784	2	10	0.2623164891	0.4100647623	0.7040743052	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M04	raw	mseenh	0.7784572168	2	10	0.7218207934	1.319132265	2.114114151	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M04	raw	msevar	nan		10		19.58039378		not ranked: MOESM6's msevar weights are not reproduced
+validation	C17M04	raw	mse1obs	4.401954629	1	10	10.78357166	11.81477809	15.24244299	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M04	raw	mse1imp	8.756353107	6	10	0.8291747086	8.613167721	22.14747555	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M04	raw	combined_rank	2		11				min 2 max 2 over bootstraps 0-9
