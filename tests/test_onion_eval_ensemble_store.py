@@ -58,7 +58,7 @@ def test_recalibrate_scales_the_dispersion():
         ES.recalibrate(n, 0.0)
 
 
-@pytest.mark.parametrize("c_true", [1.0, 3.0, 0.5])
+@pytest.mark.parametrize("c_true", [1.0, 3.0, 0.5, 64.0, 1 / 64])
 def test_fit_factor_recovers_the_dispersion_scale(c_true):
     rng = np.random.default_rng(7)
     mu = rng.gamma(2.0, 3.0, size=60000)

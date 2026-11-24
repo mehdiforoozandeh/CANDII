@@ -57,6 +57,8 @@ FIT_REGIMES = ("leave_one_assay_out",)
 #: log2 of the dispersion factor: a coarse grid, then a fine grid around the coarse optimum
 COARSE = np.arange(-4.0, 4.0 + 1e-9, 0.5)
 FINE_HALF, FINE_STEP = 0.5, 1.0 / 32
+#: the coarse grid grows by COARSE step while its optimum sits on an end, up to this |log2|
+COARSE_CAP = 16.0
 N_MAX = 1e30                  # n of a bin whose members agree exactly (V - m = 0)
 COMBINED = "COMBINED.json"
 #: STORE.json keys that every member must share (identity apart from the run and its checkpoint)
@@ -96,7 +98,8 @@ def pit_dev(n, mu, y) -> float:
 
 def fit_factor(n, mu, y) -> dict:
     """The dispersion factor c (n' = n / c) with the least pooled PIT deviation: a coarse log2 grid
-    (COARSE), then a step of FINE_STEP within FINE_HALF of the coarse optimum. A tie goes to the
+    (COARSE, extended one step at a time while the optimum sits on an end, up to |log2| =
+    COARSE_CAP), then a step of FINE_STEP within FINE_HALF of the coarse optimum. A tie goes to the
     factor nearest 1. Returns {factor, log2_factor, pit_at_1, pit_at_factor, at_bound}."""
     seen = {}
 
@@ -108,12 +111,20 @@ def fit_factor(n, mu, y) -> dict:
 
     def best(grid):
         return min(grid, key=lambda l2: (dev(l2), abs(l2)))
+    step = float(COARSE[1] - COARSE[0])
+    lo, hi = float(COARSE[0]), float(COARSE[-1])
     b0 = best(COARSE)
+    while b0 <= lo + 1e-9 and lo > -COARSE_CAP + 1e-9:     # optimum on the low end: extend down
+        lo -= step
+        b0 = best([lo, b0])
+    while b0 >= hi - 1e-9 and hi < COARSE_CAP - 1e-9:      # optimum on the high end: extend up
+        hi += step
+        b0 = best([b0, hi])
     fine = np.arange(b0 - FINE_HALF, b0 + FINE_HALF + 1e-9, FINE_STEP)
     b = best(np.concatenate([fine, [b0, 0.0]]))
     return {"factor": float(2.0 ** b), "log2_factor": float(b), "pit_at_1": dev(0.0),
-            "pit_at_factor": dev(b), "at_bound": bool(abs(b) >= COARSE[-1] - 1e-9),
-            "n_evaluations": len(seen)}
+            "pit_at_factor": dev(b), "at_bound": bool(abs(b0) >= COARSE_CAP - 1e-9),
+            "coarse_range": [lo, hi], "n_evaluations": len(seen)}
 
 
 # ------------------------------------------------------------------------------------ combine
@@ -372,7 +383,8 @@ def fit(argv=None) -> int:
            "evalset_items": str(Path(a.evalset).resolve()),
            "evalset_sha256_items": S.sha256_file(a.evalset),
            "excluded_evalsets": [str(Path(p).resolve()) for p in a.exclude_evalset],
-           "grid": {"coarse_log2": [float(x) for x in COARSE], "fine_half": FINE_HALF,
+           "grid": {"coarse_log2": [float(x) for x in COARSE], "coarse_cap": COARSE_CAP,
+                    "fine_half": FINE_HALF,
                     "fine_step": FINE_STEP},
            "factor_sets": sets, "target_assay": target_assay,
            "seconds": {"forward": round(t_fwd, 1), "total": round(time.time() - t0, 1)}}
