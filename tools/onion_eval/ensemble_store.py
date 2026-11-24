@@ -15,7 +15,7 @@ members' `ctl_mu`.
 Recalibration (`recalibrate`). One factor c per assay multiplies the NB dispersion alpha = 1 / n:
 n' = n / c, so the variance becomes mu + c mu^2 / n (c > 1 widens). The factor is applied to the
 imputation items of the regimes it was fitted on (`FIT_REGIMES`), never to a pair, a control item
-or another regime.
+or another regime. A pair takes a factor only from the separate, opt-in pair factors (below).
 
 Fit (`fit`, command `fit`). The factor of an assay minimizes the pooled PIT deviation of that
 assay (`metrics.pit_deviation(...)["pooled"]`, the quantity score.py's uncertainty term averages
@@ -30,8 +30,21 @@ cells and inputs as the scored items, on other genomic regions). The scored regi
     -> <out>/calibration_evalset.json, <out>/factors.json
 
     python tools/onion_eval/ensemble_store.py combine --members <store> [<store> ...]
-        --out <new store> [--factors <factors.json> --factor-set ensemble|seed0] [--record <json>]
+        --out <new store> [--factors <factors.json> --factor-set ensemble|seed0|seed1|...]
+        [--pair-factors <pair_factors.json> --pair-factor-set <name>] [--record <json>]
     -> <new store>/{STORE.json, <sha1>.npz, PREDICTED_0of1.json, guardrail.json, COMBINED.json}
+
+Factor sets of `fit`: `seed<k>` for each run k (fitted on that run's own (n, mu)) and, with two or
+more runs, `ensemble` (fitted on the moment-matched NB).
+
+Pair factors (opt-in; without the two flags every output is the one before). A pair request
+`pair/<pair key>` (`score._pair_key`: the pair id, or `<source>><target>`) takes the factor of its
+TARGET assay. A store file holds no assay, so the factors file maps each pair key to its target
+assay: `{"factor_sets": {<set>: {<assay>: {"factor": c}}}, "pair_target_assay": {<pair key>:
+<assay>}}` (`recal_study.py analyze` writes it as <prefix>.pair_factors.json, the map from the
+Scorer's correction, replicate and same-view pair jobs, the assay from the target's measurement
+row). A pair key not in the map is left as it is and counted (`n_pairs_not_in_map`); a mapped pair
+whose assay has no factor in the set is refused.
 
 The combined STORE.json keeps the first member's identity (run, ckpt_sha256), so the metric phase
 is called with `--run <first member's run dir>`; its `ensemble` key names every member. The
@@ -96,6 +109,30 @@ def pit_dev(n, mu, y) -> float:
     return float(Mx.pit_deviation(n, mu, y)["pooled"])
 
 
+def fit_index(y, nk, mk, max_bins: int, seed: int = 0):
+    """(ok mask, used bin indices) of a pooled assay: bins whose y and every run's n, mu are finite
+    with n > 0, then a seeded subsample of at most `max_bins` (the rule `fit` uses)."""
+    ok = np.isfinite(y) & np.isfinite(nk).all(0) & np.isfinite(mk).all(0) & (nk > 0).all(0)
+    idx = np.flatnonzero(ok)
+    if idx.size > max_bins:
+        idx = np.sort(np.random.default_rng(seed).choice(idx, size=max_bins, replace=False))
+    return ok, idx
+
+
+def assay_factor_sets(y, nk, mk, max_bins: int) -> tuple:
+    """The fitted factors of one pooled assay: ({"seed<k>": fit_factor result, ..., "ensemble":
+    result when K > 1}, {"bins", "finite", "used"}); y [B], nk, mk [K, B]."""
+    y = np.asarray(y, np.float64)
+    nk = np.asarray(nk, np.float64)
+    mk = np.asarray(mk, np.float64)
+    ok, idx = fit_index(y, nk, mk, max_bins)
+    variants = {f"seed{k}": (nk[k, idx], mk[k, idx]) for k in range(nk.shape[0])}
+    if nk.shape[0] > 1:
+        variants["ensemble"] = moment_match(nk[:, idx], mk[:, idx])
+    res = {v: fit_factor(n, mu, y[idx]) for v, (n, mu) in variants.items()}
+    return res, {"bins": int(y.size), "finite": int(ok.sum()), "used": int(idx.size)}
+
+
 def fit_factor(n, mu, y) -> dict:
     """The dispersion factor c (n' = n / c) with the least pooled PIT deviation: a coarse log2 grid
     (COARSE, extended one step at a time while the optimum sits on an end, up to |log2| =
@@ -154,9 +191,22 @@ def target_factors(factors: dict, factor_set: str) -> dict:
     return {t: float(fs[a]["factor"]) for t, a in factors["target_assay"].items() if a in fs}
 
 
-def combine(members, out, *, factors=None, factor_set=None, record=None, log=print) -> dict:
+def pair_factors_of(pdoc: dict, factor_set: str) -> tuple:
+    """({pair key: c}, {pair key: assay}) of one factor set of a pair factors file (module
+    docstring); refuses a mapped pair whose target assay has no factor in the set."""
+    fs = pdoc["factor_sets"].get(factor_set)
+    if fs is None:
+        raise ValueError(f"no factor set {factor_set!r} in the pair factors file "
+                         f"({', '.join(sorted(pdoc['factor_sets']))})")
+    amap = dict(pdoc["pair_target_assay"])
+    return {k: float(fs[a]["factor"]) for k, a in amap.items() if a in fs}, amap
+
+
+def combine(members, out, *, factors=None, factor_set=None, record=None, log=print,
+            pair_factors=None, pair_factor_set=None) -> dict:
     """Write the combined store of `members` (moment matching when there are two or more) with the
-    dispersion factors of `factor_set` applied (module docstring). Skips a store that holds
+    dispersion factors of `factor_set` applied (module docstring), and with `pair_factors` the
+    pair factors of `pair_factor_set` on the pair requests. Skips a store that holds
     COMBINED.json; refuses an out dir that holds anything else."""
     from onion_eval import predict_store as P
     members = [Path(m) for m in members]
@@ -165,6 +215,8 @@ def combine(members, out, *, factors=None, factor_set=None, record=None, log=pri
         raise ValueError("combine needs at least one member store")
     if (factors is None) != (factor_set is None):
         raise ValueError("--factors and --factor-set go together")
+    if (pair_factors is None) != (pair_factor_set is None):
+        raise ValueError("--pair-factors and --pair-factor-set go together")
     if (out / COMBINED).is_file():
         log(f"combine: skip, {out / COMBINED} exists")
         return _read_json(out / COMBINED)
@@ -182,6 +234,14 @@ def combine(members, out, *, factors=None, factor_set=None, record=None, log=pri
         fac_info = {"file": str(Path(factors).resolve()), "factor_set": factor_set,
                     "regimes": list(fdoc["regimes"]),
                     "per_assay": {a: v["factor"] for a, v in fdoc["factor_sets"][factor_set].items()}}
+    pf, pmap, pfac_info = {}, {}, None
+    if pair_factors is not None:
+        pdoc = _read_json(pair_factors)
+        pf, pmap = pair_factors_of(pdoc, pair_factor_set)
+        pfac_info = {"file": str(Path(pair_factors).resolve()), "factor_set": pair_factor_set,
+                     "applies_to": "pair/<key> requests, by the pair's target assay",
+                     "per_assay": {a: v["factor"]
+                                   for a, v in pdoc["factor_sets"][pair_factor_set].items()}}
     files = sorted(p.name for p in members[0].glob("*.npz"))
     if len(files) != int(heads[0]["n_requests_total"]):
         raise ValueError(f"{members[0]}: {len(files)} request files, the store lists "
@@ -198,9 +258,11 @@ def combine(members, out, *, factors=None, factor_set=None, record=None, log=pri
                         "method": ("moment matching: mean of means; mean of variances plus "
                                    "variance of means" if len(members) > 1 else "single member"),
                         "dispersion": fac_info}
+    if pfac_info is not None:
+        head["ensemble"]["pair_dispersion"] = pfac_info
     (out / "STORE.json").write_text(json.dumps(head, indent=1, sort_keys=True) + "\n",
                                     encoding="utf-8")
-    n_fac = 0
+    n_fac = n_pfac = n_unmapped = 0
     t0 = time.time()
     for k, f in enumerate(files):
         arrs = []
@@ -220,6 +282,16 @@ def combine(members, out, *, factors=None, factor_set=None, record=None, log=pri
                 raise ValueError(f"{key}: no dispersion factor for this target in {factors}")
             n = recalibrate(n, tf[parts[1]])
             n_fac += 1
+        if pair_factors is not None and parts[0] == "pair":
+            pk = key[len("pair/"):]
+            if pk not in pmap:
+                n_unmapped += 1
+            elif pk not in pf:
+                raise ValueError(f"{key}: no pair dispersion factor for assay {pmap[pk]!r} in "
+                                 f"{pair_factors}")
+            else:
+                n = recalibrate(n, pf[pk])
+                n_pfac += 1
         res = {"n": np.minimum(n, np.finfo(np.float32).max).astype(np.float32),
                "mu": mu.astype(np.float32)}
         if "ctl_mu" in arrs[0]:
@@ -229,6 +301,8 @@ def combine(members, out, *, factors=None, factor_set=None, record=None, log=pri
             log(f"combine: {k + 1}/{len(files)} requests ({time.time() - t0:.0f} s)")
     if factors is not None and n_fac == 0:
         raise ValueError("no request took a dispersion factor: the factors match no item")
+    if pair_factors is not None and n_pfac == 0:
+        raise ValueError("no pair request took a pair dispersion factor: the map matches no pair")
     g = members[0] / P.GUARDRAIL_FILE
     if g.is_file():
         shutil.copyfile(g, out / P.GUARDRAIL_FILE)
@@ -239,11 +313,15 @@ def combine(members, out, *, factors=None, factor_set=None, record=None, log=pri
     info = {"store": str(out.resolve()), **head["ensemble"], "n_requests": len(files),
             "n_requests_recalibrated": n_fac, "seconds": round(time.time() - t0, 1),
             "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    if pair_factors is not None:
+        info.update(n_pairs_recalibrated=n_pfac, n_pairs_not_in_map=n_unmapped)
     P._write_json(out / COMBINED, info)
     if record:
         Path(record).parent.mkdir(parents=True, exist_ok=True)
         P._write_json(Path(record), info)
     log(f"combine: {len(files)} requests from {len(members)} member(s), {n_fac} recalibrated -> {out}")
+    if pair_factors is not None:
+        log(f"combine: {n_pfac} pair requests recalibrated, {n_unmapped} pair keys not in the map")
     return info
 
 
@@ -351,23 +429,17 @@ def fit(argv=None) -> int:
             d["mu"][k].append(np.concatenate(mus[k]).astype(np.float32))
         log(f"fit: item {ji + 1}/{len(items)} {job['target']} ({time.time() - tm:.0f} s)")
     t_fwd = time.time() - tm
-    sets = {"seed0": {}, **({"ensemble": {}} if len(preds) > 1 else {})}
+    sets = {f"seed{k}": {} for k in range(len(preds))}
+    if len(preds) > 1:
+        sets["ensemble"] = {}
     n_bins = {}
     for assay in sorted(by_assay):
         d = by_assay[assay]
         y = np.concatenate(d["y"]).astype(np.float64)
         nk = np.stack([np.concatenate(x) for x in d["n"]]).astype(np.float64)
         mk = np.stack([np.concatenate(x) for x in d["mu"]]).astype(np.float64)
-        ok = np.isfinite(y) & np.isfinite(nk).all(0) & np.isfinite(mk).all(0) & (nk > 0).all(0)
-        idx = np.flatnonzero(ok)
-        if idx.size > a.max_bins:
-            idx = np.sort(np.random.default_rng(0).choice(idx, size=a.max_bins, replace=False))
-        n_bins[assay] = {"bins": int(y.size), "finite": int(ok.sum()), "used": int(idx.size)}
-        variants = {"seed0": (nk[0, idx], mk[0, idx])}
-        if len(preds) > 1:
-            variants["ensemble"] = moment_match(nk[:, idx], mk[:, idx])
-        for v, (n, mu) in variants.items():
-            r = fit_factor(n, mu, y[idx])
+        res, n_bins[assay] = assay_factor_sets(y, nk, mk, a.max_bins)
+        for v, r in res.items():
             sets[v][assay] = r
             log(f"fit: {assay} {v}: factor {r['factor']:.4g}; PIT deviation {r['pit_at_1']:.5f} "
                 f"at 1, {r['pit_at_factor']:.5f} at the factor")
@@ -403,9 +475,14 @@ def combine_cli(argv=None) -> int:
     ap.add_argument("--factors", default=None)
     ap.add_argument("--factor-set", default=None)
     ap.add_argument("--record", default=None, help="also write the COMBINED.json record here")
+    ap.add_argument("--pair-factors", default=None,
+                    help="pair factors file (recal_study.py analyze): factors on pair/<key> "
+                         "requests by the pair's target assay")
+    ap.add_argument("--pair-factor-set", default=None)
     a = ap.parse_args(argv)
     try:
-        combine(a.members, a.out, factors=a.factors, factor_set=a.factor_set, record=a.record)
+        combine(a.members, a.out, factors=a.factors, factor_set=a.factor_set, record=a.record,
+                pair_factors=a.pair_factors, pair_factor_set=a.pair_factor_set)
     except ValueError as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2
