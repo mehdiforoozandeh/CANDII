@@ -226,3 +226,9 @@ Every term and metric in use. A new entry lands before its first use in anything
 | diagnose | find the cause of a failure | common; proposed | 2026-11-23 PR 65 test diff |
 | git | version-control tool that records the history of code | common; proposed | 2026-11-23 PR 65 test diff |
 | scheduler | cluster software that decides when queued jobs start | English word, Zipf 2.6 | admitted | 2026-11-24 |
+| D53 | decision row: full combination confirmed at 256 regions | agent; proposed | 2026-11-23 |
+| C19M22 | EIC blind track id: cell number, assay number | EIC challenge; proposed | 2026-11-23 |
+| C40M17 | EIC blind track id: cell number, assay number | EIC challenge; proposed | 2026-11-23 |
+| C12M02 | EIC blind track id: cell number, assay number | EIC challenge; proposed | 2026-11-23 |
+| dataset | collection of data used for training or evaluation | field: MeSH | admitted | 2026-11-23 |
+| negative binomial | count distribution with mean and extra spread (overdispersion) | field: Europe PMC, 441 titles | admitted | 2026-11-23 |

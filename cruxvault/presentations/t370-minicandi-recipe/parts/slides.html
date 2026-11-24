@@ -171,7 +171,7 @@
 
   <!-- 11 · RESULTS · (c) 256-region confirmation
        job      one claim, one figure as its evidence
-       claim    at 256 regions two combinations PASS; the plain pairs U-Net is NEAR
+       claim    at 256 regions the full combination PASSes at 1x and 2x windows; the 2x version is the final architecture
        source   data/pareto_p256_sv.tsv (pareto_select.py), data/deck_arms_p256_sv.tsv
        numbers  DATA.confirm, DATA.floor256
        cut      second bullet -->
@@ -182,6 +182,38 @@
       <div class="fig wide tall" id="figConfirm"></div>
       <ul class="pts" id="tConfList"></ul>
       <aside class="notes"><p>This is the confirmation set: correction on two hundred and fifty-six regions. Each panel is one objective, with the floor dotted and the best base dashed. The class on the right is the Pareto rule's output, read from the selection script. An arm with fewer than three seeds scored is marked; its class can still change.</p></aside>
+    </div>
+  </section>
+
+  <!-- 11b · RESULTS · what each component adds
+       job      one claim, one grid as its evidence
+       claim    pairs carry correction; average carries imputation; Pearson adds on top only with average; 2x windows narrows the imputation seed range
+       source   data/deck_base_p256_sv.tsv, data/deck_arms_p256_sv.tsv
+       numbers  DATA.comp, DATA.floor256
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>what each component adds (<span data-src="literal">256</span> regions)</div>
+      <h2>Pairs give correction, the average input gives imputation, and the two inputs together give all three</h2>
+      <div class="fig wide" id="figComp"></div>
+      <p class="small">Each cell: mean over <span data-src="literal">3</span> seeds, seed range in brackets, change from the row above (from pairs for the two single-input rows). Values in the recipe color are at or above the best base model; changes in that color are gains.</p>
+      <aside class="notes"><p>Read top to bottom. The pairs alone lift correction past the best base model but leave imputation below the U-Net base. The Pearson input alone adds almost nothing. The average input lifts imputation and correction but costs calibration. Both inputs together are the first row that clears all three bars. Twice the windows changes the means very little; it narrows the imputation seed range and raises calibration, inside the seed range.</p></aside>
+    </div>
+  </section>
+
+  <!-- 11c · RESULTS · recalibration
+       job      one claim, one figure as its evidence
+       claim    per-assay dispersion recalibration lifts calibration and leaves imputation and correction unchanged
+       source   data/ens_p256_sv.tsv
+       numbers  DATA.recal
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>recalibration after training</div>
+      <h2>One dispersion factor per assay lifts calibration and leaves imputation and correction unchanged</h2>
+      <div class="fig wide" id="figRecal"></div>
+      <ul class="pts" id="tRecalLi"></ul>
+      <aside class="notes"><p>Recalibration multiplies the negative binomial dispersion by one factor per assay, fitted on calibration regions after training. The mean prediction does not change, so imputation and correction cannot change. This was measured on the pairs plus Pearson model, as a three-seed ensemble before and after the factors. The factors for the final architecture are not fitted yet. The calibration regions share cells and tracks with the scored set, so this gain is an upper estimate.</p></aside>
     </div>
   </section>
 
