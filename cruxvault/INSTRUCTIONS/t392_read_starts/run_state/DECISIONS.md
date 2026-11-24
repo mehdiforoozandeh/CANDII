@@ -20,3 +20,6 @@
 | D16 | 2026-11-23 | Read starts in and out: inputs, average input and targets are read starts; only the output is converted for scoring | PI via foreman: "yes" | PI | |
 | D17 | 2026-11-23 | Comparison stays at 1x windows on both sides, though the PI picked the 2x-windows full combination as final | foreman relay | PI | |
 | D18 | 2026-11-23 | Interim notes in run_state/notes/<x>/; Nibi /nearline reads on the login node under nice; --testbed-root swap; store chunks (min(4096,n_bins),2) | plan Log amendments | foreman/agent | plan §results paths |
+| D19 | 2026-11-24 | Store build time requests: 00:30:00 per recount task, 04:00:00 for the average job (288 CPU-h requested; used 79.0) | agent, over the 300 CPU-h chunk cap | agent | notes/build/BUILD.md |
+| D20 | 2026-11-24 | Own unpacked tagAligns are deleted after the gate passes (tars kept); Fir pytest basetemp is node-local ($SLURM_TMPDIR) | foreman: file-count warning, Mehdi's yes on pytest folders | foreman | slurm/t392/rs_tests.sh |
+| D21 | 2026-11-24 | Training: rs_train.sh passes extra args (kit RS4); seed 0 first, seeds 1-2 released only if seed 0 projects <= ~80 CPU-h; read at ~1 h. Seeds 1-2 sat held (not resubmitted) after the foreman's --hold correction; released 09:40Z on a 68 CPU-h projection | PI via foreman | PI | notes/train/jobs.tsv |
