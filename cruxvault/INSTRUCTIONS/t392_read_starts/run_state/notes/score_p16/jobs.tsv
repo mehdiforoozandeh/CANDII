@@ -17,3 +17,9 @@ job_id	name	cluster	kit	submitted_utc	cpus	mem	time_limit	out
 5851878	rs392_sanity_s1	fir	RS5	2026-11-24T21:00Z	4	16000M	00:30:00	sanity seed1
 5851883	rs392_rs_halves_mix_avg_pearson_unet_s2	fir	RS5	2026-11-24T21:00Z	16	64000M	00:55:00	metrics seed2 p16_sv
 5851884	rs392_sanity_s2	fir	RS5	2026-11-24T21:00Z	4	16000M	00:30:00	sanity seed2
+5874564	rs392_rs_halves_mix_avg_pearson_unet_s0	fir	RS7	2026-11-25T01:20Z	8	32000M	02:00:00	predict 0of4 seed0 p16_sv (resubmit)
+5874565	rs392_rs_halves_mix_avg_pearson_unet_s0	fir	RS7	2026-11-25T01:20Z	8	32000M	02:00:00	predict 1of4 seed0 p16_sv (resubmit)
+5874567	rs392_rs_halves_mix_avg_pearson_unet_s0	fir	RS7	2026-11-25T01:20Z	8	32000M	02:00:00	predict 2of4 seed0 p16_sv (resubmit)
+5874568	rs392_rs_halves_mix_avg_pearson_unet_s0	fir	RS7	2026-11-25T01:20Z	8	32000M	02:00:00	predict 3of4 seed0 p16_sv (resubmit)
+5874569	rs392_rs_halves_mix_avg_pearson_unet_s0	fir	RS7	2026-11-25T01:20Z	16	64000M	00:55:00	metrics seed0 p16_sv
+5874570	rs392_sanity_s0	fir	RS7	2026-11-25T01:20Z	4	16000M	00:30:00	sanity seed0 (repeat)
