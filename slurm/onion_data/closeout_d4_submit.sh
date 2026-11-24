@@ -28,7 +28,9 @@ BATCHES="${*:-}"
 [ -n "$BATCHES" ] || { echo "usage: closeout_d4_submit.sh <batch...>  (1, 2, 3 or '2 3')"; exit 2; }
 
 O=/project/def-maxwl/mforooz/ONION
-KF4=/project/def-maxwl/mforooz/onion_kit/KF4; KX4=/project/def-maxwl/mforooz/onion_kit/KX4
+# KF4H/KX4H = KF4/KX4 plus one line: an honest USER_AGENT (repo 8e9c4af2). ENCODE answered 405 to the
+# browser-style header on 2026-11-23 and every batch-1 stage task failed; PI approved the change 2026-11-24.
+KF4=/project/def-maxwl/mforooz/onion_kit/KF4H; KX4=/project/def-maxwl/mforooz/onion_kit/KX4H
 B=$O/eic/build_list.tsv; BX=$O/eic/other_experiment_build_list.tsv
 M=/scratch/mforooz/onion/measurements; W=/scratch/mforooz/onion/work
 B_SHA=33c077f464138c57cbe31827857061b1524a22ed571d00a7ab8b7de81ddc0b83
@@ -53,6 +55,7 @@ die() { echo "REFUSED: $*"; exit 3; }
 case "$(hostname)" in *nibi*) ;; *) die "run this on a Nibi login node";; esac
 grep -q "git=0d578dc" "$KF4/.kit_stamp" || die "kit KF4 is not git 0d578dc"
 grep -q "git=2f79ec4" "$KX4/.kit_stamp" || die "kit KX4 is not git 2f79ec4"
+for k in "$KF4" "$KX4"; do grep -q "patch=USER_AGENT" "$k/.kit_stamp" || die "kit $k lacks the USER_AGENT patch"; done
 [ "$(sha256sum "$B" | cut -d' ' -f1)" = "$B_SHA" ] || die "build_list.tsv changed"
 [ "$(sha256sum "$BX" | cut -d' ' -f1)" = "$BX_SHA" ] || die "other_experiment_build_list.tsv changed"
 

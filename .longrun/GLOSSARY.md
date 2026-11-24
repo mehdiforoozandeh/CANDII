@@ -133,6 +133,21 @@ Every term and metric in use. A new entry lands before its first use in anything
 | G5 | pre-set pass rule for held-out control prediction (plan C21) | agent; proposed | 2026-11-22 |
 | ledger | GOALS.md table: one row per PI requirement | longrun skill; proposed | 2026-11-22 |
 | P0 | top priority tier: the run fails without it | longrun skill; proposed | 2026-11-22 |
+| Poisson | count distribution whose variance equals its mean | agent; proposed | 2026-11-22 t371 status |
+| deviance | twice the log-likelihood gap to a perfect fit | agent; proposed | 2026-11-22 t371 status |
+| pseudoreplicate | one random half of an experiment's reads | agent; proposed | 2026-11-22 t371 status |
+| lookup | precomputed value table read instead of recomputing | agent; proposed | 2026-11-22 t371 status |
+| endpoints | the 0 and 1 reference points of a gap scale | agent; proposed | 2026-11-22 t371 status |
+| t371 | crux task: deviance eval set beside the headline metrics | agent; proposed | 2026-11-22 t371 status |
+| DEV1 | Fir code kit holding the deviance eval code | agent; proposed | 2026-11-22 t371 status |
+| local_b549bcee | app session id: miniCANDI architecture optimization (link fragment) | app; proposed | 2026-11-22 t371 status |
+| a377 | fragment of a session id in a link | app; proposed | 2026-11-22 t371 status |
+| ac9f | fragment of a session id in a link | app; proposed | 2026-11-22 t371 status |
+| local_0e44c034 | app session id: Poisson deviance metric fork (link fragment) | app; proposed | 2026-11-22 t371 status |
+| ebb0 | fragment of a session id in a link | app; proposed | 2026-11-22 t371 status |
+| compresses | squeezes a score range into a narrower band | general; proposed | 2026-11-23 t371 brief |
+| isotonic | fitted to be non-decreasing in the predictor | statistics; proposed | 2026-11-23 t371 brief |
+| Spearman | rank correlation between two orderings | statistics; proposed | 2026-11-23 t371 brief |
 | Poisson | count distribution whose variance equals its mean | agent; proposed | 2026-11-22 count-score discussion |
 | deviance | twice the log-likelihood gap to a perfect fit | agent; proposed | 2026-11-22 count-score discussion |
 | binomial | count of successes in n independent yes/no trials | agent; proposed | 2026-11-22 count-score discussion |
@@ -183,6 +198,9 @@ Every term and metric in use. A new entry lands before its first use in anything
 | ENCODE | public consortium database of functional genomics experiments | field term; proposed | 2026-11-23 reply |
 | MOESM2 | EIC supplementary truth table, original uncorrected tracks | EIC paper supplement; proposed | 2026-11-23 reply |
 | t184 | task id: build the blind-experiment input rows | crux taskhub; proposed | 2026-11-23 reply |
+| pval | short for p-value, in a session title | app; proposed | 2026-11-23 t371 status |
+| predictive | the full count distribution a model predicts | statistics; proposed | 2026-11-23 deviance explainer |
+| widget | interactive chart shown inline in the chat | app; proposed | 2026-11-23 deviance explainer |
 | FASTQ | raw sequencing-read file format with base qualities | field term; proposed | 2026-11-23 reply |
 | GiB | gibibyte, 2^30 bytes | unit; proposed | 2026-11-23 reply |
 | TiB | tebibyte, 2^40 bytes | unit; proposed | 2026-11-23 reply |
@@ -197,9 +215,20 @@ Every term and metric in use. A new entry lands before its first use in anything
 | local_b5c55e32 | id prefix of the foreman Claude session (agent-facing) | session id; proposed | 2026-11-23 reply |
 | b4b7 | fragment of a linked session id (agent-facing) | session id; proposed | 2026-11-23 reply |
 | edc | fragment of a linked session id (agent-facing) | session id; proposed | 2026-11-23 reply |
+| GitHub | web host of the repository and its pull requests | app; proposed | 2026-11-23 PR 65 conflicts |
+| mergeable | has no conflicts, so a merge can proceed | git; proposed | 2026-11-23 PR 65 conflicts |
+| ULP | unit in the last place: smallest float step | numerics; proposed | 2026-11-23 PR 65 conflicts |
 | froze | stopped pushing changes to given files for a time | agent; proposed | 2026-11-23 reply |
+| watchers | background scripts that poll the cluster and act on events | app; proposed | 2026-11-23 overnight rules |
+| watcher | background script that polls the cluster and acts on events | app; proposed | 2026-11-23 deviance status |
 | pileup | per-bin count of sequenced fragments covering each position | field term; proposed | 2026-11-23 reply |
+| launchers | scripts that build and submit cluster jobs | repo (tests/test_score_launchers.py); proposed | 2026-11-23 PR 65 test status |
+| diagnose | find the cause of a failure | common; proposed | 2026-11-23 PR 65 test diff |
+| git | version-control tool that records the history of code | common; proposed | 2026-11-23 PR 65 test diff |
+| scheduler | cluster software that decides when queued jobs start | English word, Zipf 2.6 | admitted | 2026-11-24 |
 | D53 | decision row: full combination confirmed at 256 regions | agent; proposed | 2026-11-23 |
 | C19M22 | EIC blind track id: cell number, assay number | EIC challenge; proposed | 2026-11-23 |
 | C40M17 | EIC blind track id: cell number, assay number | EIC challenge; proposed | 2026-11-23 |
 | C12M02 | EIC blind track id: cell number, assay number | EIC challenge; proposed | 2026-11-23 |
+| dataset | collection of data used for training or evaluation | field: MeSH | admitted | 2026-11-23 |
+| negative binomial | count distribution with mean and extra spread (overdispersion) | field: Europe PMC, 441 titles | admitted | 2026-11-23 |

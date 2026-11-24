@@ -430,7 +430,7 @@
 
   <!-- 11 · RESULTS · (c) 256-region confirmation
        job      one claim, one figure as its evidence
-       claim    at 256 regions two combinations PASS; the plain pairs U-Net is NEAR
+       claim    at 256 regions the full combination PASSes at 1x and 2x windows; the 2x version is the final architecture
        source   data/pareto_p256_sv.tsv (pareto_select.py), data/deck_arms_p256_sv.tsv
        numbers  DATA.confirm, DATA.floor256
        cut      second bullet -->
@@ -441,6 +441,38 @@
       <div class="fig wide tall" id="figConfirm"></div>
       <ul class="pts" id="tConfList"></ul>
       <aside class="notes"><p>This is the confirmation set: correction on two hundred and fifty-six regions. Each panel is one objective, with the floor dotted and the best base dashed. The class on the right is the Pareto rule's output, read from the selection script. An arm with fewer than three seeds scored is marked; its class can still change.</p></aside>
+    </div>
+  </section>
+
+  <!-- 11b · RESULTS · what each component adds
+       job      one claim, one grid as its evidence
+       claim    pairs carry correction; average carries imputation; Pearson adds on top only with average; 2x windows narrows the imputation seed range
+       source   data/deck_base_p256_sv.tsv, data/deck_arms_p256_sv.tsv
+       numbers  DATA.comp, DATA.floor256
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>what each component adds (<span data-src="literal">256</span> regions)</div>
+      <h2>Pairs give correction, the average input gives imputation, and the two inputs together give all three</h2>
+      <div class="fig wide" id="figComp"></div>
+      <p class="small">Each cell: mean over <span data-src="literal">3</span> seeds, seed range in brackets, change from the row above (from pairs for the two single-input rows). Values in the recipe color are at or above the best base model; changes in that color are gains.</p>
+      <aside class="notes"><p>Read top to bottom. The pairs alone lift correction past the best base model but leave imputation below the U-Net base. The Pearson input alone adds almost nothing. The average input lifts imputation and correction but costs calibration. Both inputs together are the first row that clears all three bars. Twice the windows changes the means very little; it narrows the imputation seed range and raises calibration, inside the seed range.</p></aside>
+    </div>
+  </section>
+
+  <!-- 11c · RESULTS · recalibration
+       job      one claim, one figure as its evidence
+       claim    per-assay dispersion recalibration lifts calibration and leaves imputation and correction unchanged
+       source   data/ens_p256_sv.tsv
+       numbers  DATA.recal
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>recalibration after training</div>
+      <h2>One dispersion factor per assay lifts calibration and leaves imputation and correction unchanged</h2>
+      <div class="fig wide" id="figRecal"></div>
+      <ul class="pts" id="tRecalLi"></ul>
+      <aside class="notes"><p>Recalibration multiplies the negative binomial dispersion by one factor per assay, fitted on calibration regions after training. The mean prediction does not change, so imputation and correction cannot change. This was measured on the pairs plus Pearson model, as a three-seed ensemble before and after the factors. The factors for the final architecture are not fitted yet. The calibration regions share cells and tracks with the scored set, so this gain is an upper estimate.</p></aside>
     </div>
   </section>
 
@@ -689,7 +721,8 @@ function scatter(o){
 (function(){
   const C=DATA.confirm.filter(r=>r.p256), W=1160, rowH=58, H=110+C.length*rowH, L=330, gap=24;
   const names={'rcp_halves_unet':'U-Net + read-disjoint pairs','rcp_halves_headskip_film_unet':'+ conditioned head skip',
-    'rcp_halves_mix_pearson_unet':'+ Pearson-residual input','rcp_halves_mix_avg_unet':'+ average-signal input','rcp_halves_headskip_off_unet':'+ head skip removed'};
+    'rcp_halves_mix_pearson_unet':'+ Pearson-residual input','rcp_halves_mix_avg_unet':'+ average-signal input','rcp_halves_headskip_off_unet':'+ head skip removed',
+    'rcp_halves_mix_avg_pearson_unet':'+ average + Pearson (full combination)','rcp_combo_w2x_unet':'full combination, 2× windows (final)'};
   const ks=[['imp','imputation'],['cor','correction'],['cal','calibration']], pw=(W-L-140-2*gap)/3;
   let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
   ks.forEach(([k,nm],j)=>{
@@ -710,11 +743,49 @@ function scatter(o){
     s+=`<rect x="${W-110}" y="${y-15}" width="80" height="28" rx="5" fill="${cc}"/><text x="${W-70}" y="${y+5}" text-anchor="middle" class="val" fill="#fff">${cl}</text>`;});
   put('figConfirm', s+`</svg>`);
   const pass=C.filter(r=>r.class_p256==='PASS').sort((a,b)=>b.score_p256-a.score_p256);
-  put('tConfH', pass.length?`At 256 regions, ${pass.length===2?'two':pass.length} combinations PASS; the plain pairs U-Net is ${C.find(r=>r.key==='rcp_halves_unet').class_p256}`:'At 256 regions no arm passes yet');
+  put('tConfH', pass.length?`At 256 regions, ${['no','one','two','three','four','five','six'][pass.length]||pass.length} combinations PASS; the final architecture is the full combination at 2× windows`:'At 256 regions no arm passes yet');
   const h=C.find(r=>r.key==='rcp_halves_unet');
-  let li=pass.map((r,i)=>`<li><b>${names[r.key]}</b>${i===0?' (highest Pareto score: the chosen recipe)':''}${r.p256.n<3?` (only ${r.p256.n} seeds scored)`:''}: correction ${f3(r.p256.cor.m)} beyond the best base ${f3(F256.cor.best)}; imputation ${f3(r.p256.imp.m)}, calibration ${f3(r.p256.cal.m)} above their floors.</li>`).join('');
-  li+=`<li>The plain pairs U-Net has the best calibration (${f3(h.p256.cal.m)}), but its correction gain (${sg(h.p256.cor.m-F256.cor.best)}) is inside its own seed range (${f3(h.p256.cor.r)}).</li>`;
+  let li=pass.filter(r=>['rcp_combo_w2x_unet','rcp_halves_mix_avg_pearson_unet'].includes(r.key)).map((r,i)=>`<li><b>${names[r.key]}</b>${r.key==='rcp_combo_w2x_unet'?' (the final architecture, PI 2026-11-23)':''}${r.p256.n<3?` (only ${r.p256.n} seeds scored)`:''}: correction ${f3(r.p256.cor.m)} beyond the best base ${f3(F256.cor.best)}; imputation ${f3(r.p256.imp.m)}, calibration ${f3(r.p256.cal.m)} above their floors.</li>`).join('');
+  li+=`<li>The plain pairs U-Net (calibration ${f3(h.p256.cal.m)}) is not enough alone: its correction gain (${sg(h.p256.cor.m-F256.cor.best)}) is inside its own seed range (${f3(h.p256.cor.r)}).</li>`;
   put('tConfList', li);
+})();
+
+/* ---------- slide 11b: what each component adds ---------- */
+(function(){
+  const C=DATA.comp, ks=[['imp','imputation'],['cor','correction'],['cal','calibration']];
+  const prev={'rcp_halves_mix_avg_unet':'rcp_halves_unet','rcp_halves_mix_pearson_unet':'rcp_halves_unet'};
+  const by=Object.fromEntries(C.map(r=>[r.key,r]));
+  const W=1160,L=360,T=56,rh=62,H=T+C.length*rh+10,cw=(W-L-20)/3;
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+  ks.forEach(([k,nm],j)=>{s+=`<text x="${L+cw*(j+.5)}" y="30" text-anchor="middle" class="xlab">${nm}</text>`;
+    s+=`<text x="${L+cw*(j+.5)}" y="50" text-anchor="middle" class="cap">best base ${F256[k].best.toFixed(3)}</text>`;});
+  C.forEach((r,i)=>{const y=T+i*rh, p=i===0?null:(by[prev[r.key]]||C[i-1]), fin=r.key==='rcp_combo_w2x_unet';
+    s+=`<rect x="10" y="${y+4}" width="${W-20}" height="${rh-8}" rx="6" fill="${fin?'rgba(0,0,0,.05)':'none'}"/>`;
+    s+=`<text x="${L-20}" y="${y+rh/2+6}" text-anchor="end" class="axlbl" fill="${stepCol(r.key)}">${r.lab}</text>`;
+    ks.forEach(([k],j)=>{const v=r[k], x=L+cw*(j+.5), ok=v.m>=F256[k].best;
+      s+=`<text x="${x-14}" y="${y+rh/2+6}" text-anchor="end" class="val" fill="${ok?'var(--recipe)':'currentColor'}">${v.m.toFixed(3)}</text>`;
+      s+=`<text x="${x-8}" y="${y+rh/2+6}" class="cap">(${v.r.toFixed(3)})</text>`;
+      if(p){const d=v.m-p[k].m; s+=`<text x="${x+80}" y="${y+rh/2+6}" class="cap" fill="${d>=0?'var(--recipe)':'var(--base)'}">${sg(d)}</text>`;}});
+  });
+  put('figComp', s+`</svg>`);
+})();
+
+/* ---------- slide 11c: recalibration ---------- */
+(function(){
+  const a=DATA.recal['rcp_halves_mix_pearson_unet__ens3'], b=DATA.recal['rcp_halves_mix_pearson_unet__ens3_recal'];
+  const ks=[['imp','imputation'],['cor','correction'],['cal','calibration']];
+  const W=1160,H=360,L=80,gw=(W-L-40)/3,bw=90,Y=v=>H-70-v*(H-130);
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+  ks.forEach(([k,nm],j)=>{const x0=L+j*gw+gw/2;
+    s+=`<text x="${x0}" y="${H-14}" text-anchor="middle" class="xlab">${nm}</text>`;
+    [[a,'before','var(--addon)',-1],[b,'after','var(--recipe)',1]].forEach(([r,lab,c,sd])=>{const x=x0+sd*(bw/2+6)-bw/2, v=r[k].m;
+      s+=`<rect x="${x}" y="${Y(v)}" width="${bw}" height="${Y(0)-Y(v)}" fill="${c}" rx="3"/>`;
+      s+=`<text x="${x+bw/2}" y="${Y(v)-8}" text-anchor="middle" class="val">${v.toFixed(3)}</text>`;
+      s+=`<text x="${x+bw/2}" y="${Y(0)+18}" text-anchor="middle" class="cap">${lab}</text>`;});
+    s+=`<line x1="${x0-bw-20}" y1="${Y(F256[k].best)}" x2="${x0+bw+20}" y2="${Y(F256[k].best)}" stroke="#9a9a9a" stroke-dasharray="7 4"/>`;});
+  put('figRecal', s+`</svg>`);
+  put('tRecalLi', `<li>Calibration rose from ${f3(a.cal.m)} to ${f3(b.cal.m)} (${sg(b.cal.m-a.cal.m)}); imputation (${f3(b.imp.m)}) and correction (${f3(b.cor.m)}) did not change, as the mean prediction is untouched.</li>`+
+    `<li>Measured on the pairs + Pearson model as a three-seed ensemble. The final architecture's factors are not fitted yet; dashed line: best base model.</li>`);
 })();
 
 /* ---------- slide 12: copy path ---------- */

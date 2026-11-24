@@ -9,6 +9,7 @@ refresh_data.sh, which pulls the tables from Fir and runs tools/onion_eval/paret
   eic_v1_arm_summary_p16_sv.tsv                  eic_v1 arm summary (skip-path dissection)
   scores_ladder.md                               six-model ladder, eic_v1
   ROUND2_READ.md                                 160k-window runs, eic_v1
+  ens_p256_sv.tsv                                seed ensemble and dispersion recalibration, 256 regions
   table_unet_vs_average.tsv (optional)           EIC validation, U-Net vs Average
 
     python3 build_deck.py
@@ -104,7 +105,8 @@ FIXES = {"rcp_cac_cnn_unet": "covariate correction layers (CNN)",
          "rcp_mix_fixdepth_unet": "fixed input depth",
          "rcp_nocov_unet": "no covariates"}
 CONFIRM = ["rcp_halves_unet", "rcp_halves_headskip_film_unet", "rcp_halves_mix_pearson_unet",
-           "rcp_halves_mix_avg_unet", "rcp_halves_headskip_off_unet"]
+           "rcp_halves_mix_avg_unet", "rcp_halves_headskip_off_unet",
+           "rcp_halves_mix_avg_pearson_unet", "rcp_combo_w2x_unet"]
 
 # copy gain per run: mean and range over seeds
 cg = {}
@@ -149,12 +151,26 @@ if p.exists():
     txt = raw("table_unet_vs_average.tsv")
     eic = list(csv.DictReader(io.StringIO(txt), delimiter="\t"))
 
+# recalibration: the same three-seed ensemble before and after the per-assay dispersion factors
+ens = tsv("ens_p256_sv.tsv")
+recal = {k: terms(ens[k]) for k in ("rcp_halves_mix_pearson_unet__ens3", "rcp_halves_mix_pearson_unet__ens3_recal")}
+
+# what each component adds, 256 regions: the ladder from the U-Net base to the final architecture
+LADDER256 = [("eic_v1_2_rung4_base_heldout", "U-Net (base)"),
+             ("rcp_halves_unet", "+ read-disjoint pairs"),
+             ("rcp_halves_mix_pearson_unet", "pairs + Pearson-residual input"),
+             ("rcp_halves_mix_avg_unet", "pairs + average-signal input"),
+             ("rcp_halves_mix_avg_pearson_unet", "pairs + average + Pearson"),
+             ("rcp_combo_w2x_unet", "+ 2× windows (final)")]
+
 data = {
     "floor16": floors(base16), "floor256": floors(base256),
     "steps": [{"key": a, "lab": lab, **arm(a)} for a, lab in STEPS if a in all16],
     "fixes": [{"key": a, "lab": lab, **terms(all16[a])} for a, lab in FIXES.items() if a in all16],
     "confirm": [{"key": a, **arm(a)} for a in CONFIRM if a in all16],
     "halves_conv": {m: terms(all16[f"rcp_halves_{m}"]) for m in ("convae", "convattn")},
+    "comp": [{"key": a, "lab": lab, **terms(all256[a])} for a, lab in LADDER256],
+    "recal": recal,
     "copy": copy, "skip": skip, "ladder": ladder, "win": win, "eic": eic,
 }
 

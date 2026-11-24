@@ -7,7 +7,7 @@ ssh -o BatchMode=yes fir "cd $O && source /project/def-maxwl/mforooz/candi_venv/
     python3 $K/tools/onion_eval/select_rule.py arm-summary --runs $O/runs_rcp --prefix rcp_ --sub \$s > runs_rcp/_sel/deck_arms_\$s.tsv 2>/dev/null; \
     python3 $K/tools/onion_eval/select_rule.py arm-summary --runs $O/runs_fir --prefix eic_v1_2_rung --sub \$s > runs_rcp/_sel/deck_base_\$s.tsv 2>/dev/null; \
   done; python3 runs_rcp/_sel/cg.py > /dev/null" >/dev/null 2>&1
-rsync -q -e 'ssh -o BatchMode=yes' "fir:$O/runs_rcp/_sel/{deck_arms_p16_sv.tsv,deck_arms_p256_sv.tsv,deck_base_p16_sv.tsv,deck_base_p256_sv.tsv,copy_gain_p16_sv.tsv}" $HERE/data/
+rsync -q -e 'ssh -o BatchMode=yes' "fir:$O/runs_rcp/_sel/{deck_arms_p16_sv.tsv,deck_arms_p256_sv.tsv,deck_base_p16_sv.tsv,deck_base_p256_sv.tsv,copy_gain_p16_sv.tsv,ens_p256_sv.tsv}" $HERE/data/
 rsync -q -e 'ssh -o BatchMode=yes' "fir:$O/runs_rcp/eic_val/table_unet_vs_average.tsv" $HERE/data/ 2>/dev/null || true
 rsync -q -e 'ssh -o BatchMode=yes' "fir:$O/runs_fir/ARM_SUMMARY_p16_sv_2026-11-17.txt" $HERE/data/eic_v1_arm_summary_p16_sv.tsv
 cp $HERE/../../INSTRUCTIONS/t370_recipe/evolution/scores_ladder.md $HERE/data/

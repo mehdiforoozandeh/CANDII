@@ -28,6 +28,25 @@ _(none yet)_
 
 ## Evidence
 
-_(experiments only: what this run showed, in prose. The structured fact is
-`hypothesis_refs` in the frontmatter; this is the narrative beside it, and the
-engine never parses it.)_
+Final architecture, picked by the PI on 2026-11-23 (relayed by the foreman session): the U-Net with
+read-disjoint training pairs, average-signal input and Pearson-residual input, the head skip kept,
+160,000 training windows (twice the screen budget), ChIP-control loss weight 1, and per-assay
+dispersion recalibration after training.
+
+256-region confirm, 3 seeds, eic_v1_2 (`presentations/t370-minicandi-recipe/data/pareto_p256_sv.tsv`,
+from `tools/onion_eval/pareto_select.py`; mean, range over seeds):
+
+| arm | imputation | correction | calibration | class |
+|---|---|---|---|---|
+| final (2x windows) | 0.503 (0.010) | 0.818 (0.016) | 0.717 (0.078) | PASS |
+| same at 1x windows | 0.500 (0.035) | 0.818 (0.014) | 0.685 (0.092) | PASS |
+| pairs + Pearson only | 0.445 (0.064) | 0.774 (0.031) | 0.625 (0.144) | PASS |
+| best base model per term | 0.445 | 0.675 | 0.646 | bar |
+
+Imputation and correction clear the bars by more than the seed range; calibration clears the bar
+in the mean (0.717 vs 0.646) but by less than its seed range (0.078). Per-assay recalibration raised
+calibration from 0.625 to 0.749 (one seed) on pairs + Pearson at 256 regions (decision D52), so the
+shipped model's calibration margin is larger than the table shows. Deviance metrics (deviance
+session, PR 65): imputation skill 0.562 (2x) vs 0.543 (1x), correction gap 0.950 vs 0.951,
+calibration ratio 1.067 vs 1.059, both within seed range. Training cost: 129.6 CPU-h for the 3
+final seeds (sacct, Fir jobs 5356071, 5356078, 5356095). Decisions D50-D54 in `.longrun/DECISIONS.md`.

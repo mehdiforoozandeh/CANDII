@@ -1,0 +1,15 @@
+goal	old	new	n_arms	spearman	p
+imputation	imputation_raw	dev_imputation_skill	10	0.9273	0.0001
+imputation	imputation_raw	dev_imputation_r2	10	0.8303	0.0029
+imputation	count_crps_skill	dev_imputation_skill	10	0.8424	0.0022
+imputation	count_crps_skill	dev_imputation_r2	10	0.9152	0.0002
+imputation	r_spec	dev_imputation_skill	10	0.7939	0.0061
+imputation	r_spec	dev_imputation_r2	10	0.8545	0.0016
+correction	correction_v3_raw	dev_correction_gap_closed	10	0.7818	0.0075
+correction	correction_v3_raw	dev_correction_model_neg	10	0.9152	0.0002
+correction	correction_oracle_all	dev_correction_gap_closed	10	0.9273	0.0001
+correction	correction_oracle_all	dev_correction_model_neg	10	0.9758	0.0000
+correction	correction_crps_model_neg	dev_correction_gap_closed	10	0.9152	0.0002
+correction	correction_crps_model_neg	dev_correction_model_neg	10	0.9515	0.0000
+calibration	uncertainty_raw	dev_calibration_error_neg	10	0.1879	0.6032
+calibration	uncertainty_raw	nb_logscore_gain_vs_marginal	10	0.2485	0.4888

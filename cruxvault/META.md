@@ -122,16 +122,18 @@ Root: [[candii]]
 - ● `q27` [Q] [[q27_are_the_onion_run_s_estimators_scorers_a|**Are the onion run's estimators, scorers and training pipeline correct, fast and reproducible on the clusters?**]] — *settled* · strong
 - ● `q28` [Q] [[q28_did_flashzoi_train_on_eic_blind_tracks_o|**Did Flashzoi train on EIC blind tracks or on the genomic loci of the blind scoring?**]] — *settled* · strong
 - ○ `q72` [Q] [[q72_which_architecture_and_which_data_versio|**Which architecture and which data version should the scaled miniCANDI use, given that the conv autoencoder, conv + attention and the U-Net tie on the composite?**]] — *open*
-  - ○ `q75` [Q] [[q75_can_one_minicandi_recipe_match_or_beat_t|**Can one miniCANDI recipe match or beat the best base model on imputation, correction and calibration at the same time (Pareto dominance over the conv autoencoder, conv + attention and U-Net bases on eic_v1_2)?**]] — *open*
+  - ● `q75` [Q] [[q75_can_one_minicandi_recipe_match_or_beat_t|**Can one miniCANDI recipe match or beat the best base model on imputation, correction and calibration at the same time (Pareto dominance over the conv autoencoder, conv + attention and U-Net bases on eic_v1_2)?**]] — *settled* · strong
     - ○ `h44` [H] [[h44_a_u_net_whose_count_skips_are_film_modul|A U-Net whose count skips are FiLM-modulated by (C, C') keeps the base U-Net imputation and reaches conv-level correction]] — *open*
     - ○ `h45` [H] [[h45_pre_and_post_cac_layers_in_the_testbed_g|Pre and post CAC layers in the testbed g/f form (g reads only covariates and outputs the parameters of a count map f; f before the network removes the C artifact, f after the NB re-applies the C' artifact) raise correction without lowering imputation or calibration]] — *open*
     - ○ `h46` [H] [[h46_where_film_injects_the_covariates_encode|Where FiLM injects the covariates (encoder only, decoder only, bottleneck only, every block including attention) moves correction beyond the seed range while imputation stays within range]] — *open*
     - ○ `h47` [H] [[h47_training_correction_and_same_view_pairs_|Training correction and same-view pairs on read-disjoint halves (source pr1, target pr2) removes the U-Net's input copy and lifts its correction to conv level without losing imputation]] — *open*
+    - ◐ `q77` [Q] [[q77_does_a_poisson_deviance_eval_set_imputat|**Does a Poisson-deviance eval set (imputation skill vs the position average, correction gap closed vs depth-only scaling with a read-noise floor, deviance calibration ratio) measure the three goals at least as well as the current headline set?**]] — *leaning* · moderate
+      - ◐ `h48` [H] [[h48_on_the_same_predictions_each_deviance_te|On the same predictions, each deviance term ranks miniCANDI arms like the current term of its goal and separates arms from seed noise at least as well]] — *leaning* · moderate · supports
 - ○ `q73` [Q] [[q73_how_does_the_final_minicandi_score_on_th|**How does the final miniCANDI score on the 51 EIC blind tracks, against the published EIC board and the baselines, once the blind rows are built?**]] — *open*
 
 ## Dashboard
 
-- **Questions** (76): open 24 · leaning 42 · settled 10 · parked 0
-- **Hypotheses** (46): open 14 · leaning 19 · settled 7 · parked 6
-- **Confidence**: weak 22 · moderate 39 · strong 17
-- **Findings**: 140
+- **Questions** (77): open 23 · leaning 43 · settled 11 · parked 0
+- **Hypotheses** (47): open 14 · leaning 20 · settled 7 · parked 6
+- **Confidence**: weak 22 · moderate 41 · strong 18
+- **Findings**: 142

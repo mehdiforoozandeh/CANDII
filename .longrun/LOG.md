@@ -47,6 +47,8 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-22T19:55Z moved from DECISIONS (history): | D38 | After the Fir fault (2026-11-21 23:25-23:56 UTC, 251 jobs killed at start), resubmit everything on kit RCP5 with a 6 h training limit (8 h for CNN and average arms); RCP5 supersedes RCP4; Average entry runs with the KIT=RCP2 export workaround. | agent, 2026-11-22 01:25 UTC | agent | | in force |
 - 2026-11-22T19:55Z moved from DECISIONS (history): | D34 | No blind-row build and no blind pass this run. | PI chat 2026-11-21: "iii) no" | PI | confirms D26 | in force |
 - 2026-11-22T19:55Z After talk (PI): submitted D44 full combo, D45 scaling (RCP7), D46 headskip_off p256, D48 control_eval x27; D47 ensemble builder spawned; watch byejoej5t.
+- 2026-11-22T21:13Z glossary: reply sent with unregistered terms: flagged, spearman
+- 2026-11-23T07:35Z glossary: reply sent with unregistered terms: narrower, predictor
 - 2026-11-22T20:18Z glossary: reply sent with unregistered terms: crps_depth, flagged
 - 2026-11-22T20:25Z glossary: reply sent with unregistered terms: flagged, predictor's
 - 2026-11-22T20:33Z glossary: reply sent with unregistered terms: flagged
@@ -65,6 +67,7 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-23T05:02Z p16 read: combo PASS 0.249, w2x 0.417, headskip_off p256 NEAR; control on recipe w1 0.131 vs w4 0.125; ensemble recal cal 0.625->0.767; submitted combo p256 5356043-70 and combo_w2x 5356071/78/95 on RCP9 (D50-D52)
 - 2026-11-23T05:03Z glossary: reply sent with unregistered terms: flagged
 - 2026-11-23T07:47Z PI 'iii) yes': deleting Fir /scratch/mforooz/onion/pred_store/runs_rcp_ens (ensemble per-seed stores; scores kept under runs_rcp_ens). Peer session 'pval eic comparison' relayed PI approval to start t184 blind-row build; t184 says the PI runs the submit command; asked PI here.
+- 2026-11-23T08:08Z glossary: reply sent with unregistered terms: inline
 - 2026-11-23T07:47Z glossary: reply sent with unregistered terms: flagged
 - 2026-11-23T07:53Z t184 (PI 'Yes, start it'): NOT submitted. Nibi dry run 72 rows OK, but Nibi /scratch quota 1024 GiB with 691 used (diskusage_report) vs ~1.2 TB staging + 1.4 TB BAMs. Fir port refused: pipelines, refs, build lists missing on Fir (closeout_D4b/FIR_PORT.md). Asked PI.
 - 2026-11-23T07:54Z glossary: reply sent with unregistered terms: flagged
@@ -74,10 +77,15 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-23T08:18Z deviance session: combo p16_dev jobs 5381558-5381572 (metrics 5381562/67/72) on DEV1; p256_dev chained; combo_w2x on DEV2 auto after DONE; ids in runs_rcp/DEV_SUBMITTED_{p16,p256}.txt
 - 2026-11-23T08:22Z foreman session local_b5c55e32 set up; status sent; PI-facing items go there
 - 2026-11-23T08:24Z PI via foreman on PR 65: 'after the 256 region. but right now there are merge conflicts that need solving.' Deviance session resolving; freeze PR 65 files on our branch until told.
+- 2026-11-23T08:26Z glossary: reply sent with unregistered terms: repository
 - 2026-11-23T08:44Z foreman overnight rules: compute by workers' judgment (report job ids to foreman); foreman merges PR 65 when green (pull before next push); no stopping for questions; final architecture pick, main merges, public items wait for PI
 - 2026-11-23T09:31Z pval session: post-hoc spread of overlap counts recovers 3/12/3% of pileup gain; read starts 92-95%. Priced a read-start pilot to foreman: res_dataset.py on the 512-region point-rule store, pairs+Pearson (average input refused), ~200-300 CPU-h, half a day; store location on Fir not found at depth 3. PI decides in the morning; not started.
 - 2026-11-23T09:32Z point-rule store located: Nibi /project/def-maxwl/mforooz/ONION/CO-A7/res_store (6.8G), tables CO-A7/tables/eic_res_v1, evalset CO-A7/eval/eic_res_v1; 768 regions (512 train, 256 eval); 412 base-view measurements, 43 with pr halves, 73 pairs; no counterfactual views. Sent to foreman.
 - 2026-11-23T10:03Z deviance p16, full combination: s1 skill 0.510 (floor 0.517), corr gap 0.952, R 1.074; s2 skill 0.575 (floor 0.516), gap 0.952, R 1.034; recipe pairs+Pearson skill 0.248. s0 metrics 5381562 running.
+- 2026-11-23T20:11Z glossary: blocked reply with github, mergeable
+- 2026-11-23T22:25Z glossary: blocked reply with watcher
+- 2026-11-24T01:25Z glossary: blocked reply with scheduler
+- 2026-11-24T01:25Z glossary: admitted 'scheduler' (English word, Zipf 2.6)
 - 2026-11-23T10:19Z deviance p16 full combination 3/3: mean skill 0.543 (range 0.510-0.575, floor 0.516), gap 0.951, R 1.059; recipe 0.248. p256 deviance jobs 5395488-5395517 (DEV2).
 - 2026-11-23T11:05Z combo_w2x p16 (2 seeds): imp 0.501±0.007, cor 0.811±0.007, cal 0.703±0.070 (= combination within range). p256 confirm submitted: s1 5402493-5402501, s2 5402502-5402512; s0 chained by laptop watch bxaewuxu1 after its p16 (5356076).
 - 2026-11-23T12:21Z D53: full combination p256 3 seeds PASS imp 0.500 cor 0.818 cal 0.685; refresh_data.sh must run under zsh
@@ -89,3 +97,25 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-23T18:06Z deviance p256 full combination seed2: skill 0.575, gap 0.9525, R 1.034; seed1 running
 - 2026-11-23T18:22Z deviance p256 full combination 3 seeds: skill 0.543 (0.510-0.575), gap 0.951, R 1.058; pairs+Pearson recipe at 256: 0.264, 0.948, 1.035
 - 2026-11-23T19:57Z Priced read-start full combination for PI via foreman: recount ~180 CPU-h + 0.5-1 d nearline recall (752 GiB tagAligns in onion-work tars; rate from job 27662614: 9.2 CPU-h/117 GiB); train 163 CPU-h measured; score p16 127 + p256 795 + dev p256 869 CPU-h measured; total 1,350-2,250 CPU-h, 3-4 d wall + 1-2 d code (stranded channel). Conversion to overlap truth feasible as a predict->metrics transform. Not started.
+- 2026-11-23T19:58Z glossary: blocked reply with dataset, gib, nbs, nearline
+- 2026-11-23T19:58Z glossary: admitted 'dataset' (field: MeSH)
+- 2026-11-23T19:58Z glossary: blocked reply with binomial
+- 2026-11-23T19:58Z glossary: admitted 'negative binomial' (field: Europe PMC, 441 titles)
+- 2026-11-23T19:58Z glossary: blocked reply with poisson
+- 2026-11-24T01:05Z D54: combo_w2x p256 3 seeds PASS imp 0.503 cor 0.818 cal 0.717 score 0.451; equal to full combination within range
+- 2026-11-24T01:05Z moved to history (superseded by D53/D54): | D50 | p16 read (2026-11-23 05:00 UTC, 3 seeds): full combination pairs + average + Pearson PASS, score 0.249 (imp 0.500, cor 0.816, cal 0.685); scale_w2x highest score 0.417 (imp 0.462, cor 0.785, cal 0.712); scale_p2x/p4x PASS with no gain beyond range, not confirmed. Head skip off at 256 regions NEAR (cor 0.674 vs 0.774): head skip stays. Submitted (kit RCP9): combination p256 5356043-70; fina
+- 2026-11-24T01:06Z glossary: blocked reply with d54, tightest
+- 2026-11-24T01:18Z moved to history (folded into D54/D55): | D53 | p256 confirm (3 seeds): full combination pairs + average + Pearson PASS, imp 0.500 (range 0.035), cor 0.818 (0.014), cal 0.685 (0.092), score 0.249; beats pairs + Pearson (cor 0.774, range 0.031) beyond range. Bars: imp 0.445, cor 0.675, cal 0.646. Full combination is the confirmed lead; combo_w2x p256 still running. Final pick waits for Mehdi. | presentations/t370-minicandi-recipe/data/pa
+- 2026-11-24T01:18Z D55: PI picked the final architecture (combo_w2x + control w1 + recalibration); f143 on q75; GOALS R1-R4, R8 done
+- 2026-11-24T01:22Z Blind build batch 1 FAILED at staging: all 72 stage tasks (9 arrays 28629674..718) exit 1 in ~37 s with HTTP 405 Not Allowed from the ENCODE portal search endpoint (fastq_uniform.portal_files); builds CANCELLED by dependency; signal passes 28629678/701 PENDING on never-satisfied deps. Experiment-object endpoint returns 200; the search endpoint still refuses the stage code's request on 2026-11-24. ~0 CPU-h used. Not resubmitted; probing UA variants was refused by the safety classifier (looks like evasion).
+- 2026-11-24T01:22Z glossary: blocked reply with d55, encode, fastq, ledger, login, lookup, r1, r4, r8
+- 2026-11-24T01:23Z glossary: blocked reply with genomics
+- 2026-11-24T01:23Z glossary: blocked reply with encode's
+- 2026-11-24T01:38Z Blind build: cancelled stuck signal passes 28629678, 28629701 (51 pending tasks, PI via foreman). Diagnosis: ENCODE returns 405 to the stage code's browser-style User-Agent 'Mozilla/5.0 (generic-client)' on both search and experiment pages; Python's default client header gets 200 on both. Changing the header was refused twice by the safety classifier (reads as getting past a block). Not resubmitted; needs Mehdi in this session.
+- 2026-11-24T01:38Z glossary: blocked reply with checksums, encode, endpoint, ids, lookup
+- 2026-11-24T01:38Z glossary: blocked reply with fingerprints
+- 2026-11-24T01:38Z glossary: blocked reply with md5
+- 2026-11-24T01:38Z glossary: admitted 'MD5' (English word, Zipf 2.3)
+- 2026-11-24T01:43Z glossary: blocked reply with ids
+- 2026-11-24T01:52Z t184 batch 1 RESUBMITTED on Nibi 2026-11-24T01:52Z (PI 'Yes, change the header'), kits KF4H/KX4H (honest USER_AGENT, repo 8e9c4af2; submitter 55cdf946): 72 rows; stage 28737208/10/14/44/46/63/66/68/74; build 28737209/11/15/45/47/64/67/69/75; signal 28737212, 28737239; record /project/def-maxwl/mforooz/ONION/logs/closeout_d4_submit_20261124T015213Z.log. Header test on rows 496/501/530 matched the catalog (6/6, 8/8, 4/4 files, MD5 equal). Never resubmit.
+- 2026-11-24T08:25Z glossary: blocked reply with furthest
