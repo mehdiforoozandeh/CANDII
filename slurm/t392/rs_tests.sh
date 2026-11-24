@@ -28,7 +28,7 @@ source "$KIT/slurm/_kit_pin.sh"
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1 PYTHONPATH="$KIT/src:$KIT:$KIT/tests"
 REPORT="$SLURM_TMPDIR/pytest_report.txt"
 rc=0
-python -m pytest tests/ -q -rfE -p no:cacheprovider > "$REPORT" 2>&1 || rc=$?
+python -m pytest tests/ -q -rfE -p no:cacheprovider --basetemp="$SLURM_TMPDIR/pytest" > "$REPORT" 2>&1 || rc=$?
 tail -60 "$REPORT"
 # "FAILED <id> - <message>" and "ERROR <id> - <message>" lines of the short summary -> <id>
 { grep -E '^(FAILED|ERROR) ' "$REPORT" || true; } | sed -E 's/^(FAILED|ERROR) //; s/ - .*$//' \
