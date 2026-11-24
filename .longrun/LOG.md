@@ -89,3 +89,9 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-23T18:06Z deviance p256 full combination seed2: skill 0.575, gap 0.9525, R 1.034; seed1 running
 - 2026-11-23T18:22Z deviance p256 full combination 3 seeds: skill 0.543 (0.510-0.575), gap 0.951, R 1.058; pairs+Pearson recipe at 256: 0.264, 0.948, 1.035
 - 2026-11-23T19:57Z Priced read-start full combination for PI via foreman: recount ~180 CPU-h + 0.5-1 d nearline recall (752 GiB tagAligns in onion-work tars; rate from job 27662614: 9.2 CPU-h/117 GiB); train 163 CPU-h measured; score p16 127 + p256 795 + dev p256 869 CPU-h measured; total 1,350-2,250 CPU-h, 3-4 d wall + 1-2 d code (stranded channel). Conversion to overlap truth feasible as a predict->metrics transform. Not started.
+- 2026-11-23T19:58Z glossary: blocked reply with dataset, gib, nbs, nearline
+- 2026-11-23T19:58Z glossary: admitted 'dataset' (field: MeSH)
+- 2026-11-23T19:58Z glossary: blocked reply with binomial
+- 2026-11-23T19:58Z glossary: admitted 'negative binomial' (field: Europe PMC, 441 titles)
+- 2026-11-23T19:58Z glossary: blocked reply with poisson
+- 2026-11-24T01:05Z D54: combo_w2x p256 3 seeds PASS imp 0.503 cor 0.818 cal 0.717 score 0.451; equal to full combination within range
