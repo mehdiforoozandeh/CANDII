@@ -8,7 +8,8 @@ Builds the scorer as `predict_store.py run` does (same-view on when ONION_SCORE_
 takes the requests of shard i of N, and stages the overlap-count files of the shard as
 `predict_store._stage` does, with the read-start hook off. Then:
   A. the first `--k-items` item requests of the shard, read-start files read in place;
-  B. `ReadStartAdapter.stage_read_starts` on the shard's measurements (the hook `_stage` calls);
+  B. `ReadStartAdapter.stage_read_starts` on the shard's measurements and `train.stage_average`
+     of the scorer's `average_h5` (what `_stage` does for a read-start run);
   C. the next `--k-items-staged` item requests and the first `--k-pairs` pair requests, staged.
 Per phase it records the wall time and the seconds inside the adapter's input reads
 (`_inputs`), the read-start average (`average_strands`), the span kernels, the inner model, and
@@ -103,6 +104,8 @@ def main(argv=None) -> int:
                     res["identical_to_store"][r["key"]] = {
                         k: bool(np.array_equal(z[k], v)) for k, v in arr.items()}
             print(f"probe {name}: {r['key']} {res['requests'][-1]['seconds']} s", flush=True)
+            out["phases"][name] = res
+            Path(a.out).write_text(json.dumps(out, indent=1) + "\n")
         res["wall_seconds"] = round(time.perf_counter() - t, 1)
         res["parts_seconds"] = {k: round(v, 1) for k, v in acc.items()}
         res["timing"] = {k: (round(v, 1) if isinstance(v, float) else v) for k, v in tm.items()}
@@ -119,7 +122,11 @@ def main(argv=None) -> int:
              if m in sc.ds.rows}
     out["stage_read_starts"] = hook(sorted(m for m in mids if m in sc.ds.rows),
                                     Path(a.stage_dir) / "rs392")
-    print(f"probe: staged read starts {out['stage_read_starts']}", flush=True)
+    from minicandi.train import stage_average                # as predict_store._stage does
+    out["stage_average_h5"] = stage_average(sc.ds, Path(a.stage_dir) / "rs392")
+    sc._region, sc._rc = None, {}
+    print(f"probe: staged read starts {out['stage_read_starts']}, average_h5 "
+          f"{out['stage_average_h5']}", flush=True)
     phase("B_staged_items", items[k:k + ks])
     phase("C_staged_pairs", pairs[:a.k_pairs])
     Path(a.out).write_text(json.dumps(out, indent=1) + "\n")

@@ -432,7 +432,13 @@ def test_predict_store_stage_calls_the_adapter_hook(env, cell, tmp_path):
     plain = P._stage(scorer(Stub()), reqs, tmp_path / "a", lambda *x: None)
     assert set(plain) == {"directories", "bytes_copied", "seconds"}
     ad = _adapter(env)
-    info = P._stage(scorer(ad), reqs, tmp_path / "b", lambda *x: None)
-    assert set(info) == {"directories", "bytes_copied", "seconds", "read_starts"}
+    sc = scorer(ad)
+    want = [sc.ds.average(cell, "chr1", s, L) for s in (0, L, 5 * L)]
+    info = P._stage(sc, reqs, tmp_path / "b", lambda *x: None)
+    assert set(info) == {"directories", "bytes_copied", "seconds", "read_starts", "average_h5"}
     assert info["read_starts"]["skipped"] is None
     assert str(ad.ds.rs_store).startswith(str(tmp_path / "b"))
+    # the scorer's overlap-count average (read by every window) is staged too, same values
+    assert sc.ds.config["average_h5"].startswith(str(tmp_path / "b"))
+    got = [sc.ds.average(cell, "chr1", s, L) for s in (0, L, 5 * L)]
+    assert all(np.array_equal(x, y) for x, y in zip(want, got))

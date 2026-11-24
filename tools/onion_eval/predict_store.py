@@ -450,10 +450,15 @@ def _stage(scorer, reqs, root: Path, log) -> dict:
     scorer._region, scorer._rc = None, {}
     info = {"directories": len(dirs), "bytes_copied": nbytes, "seconds": round(time.time() - t0, 1)}
     # t392 C13fix: a read-start run (rs_adapter.ReadStartAdapter) reads its own store and average
-    # through the model; a model without the hook (every read-count run) stages nothing more.
+    # through the model, and the scorer's windows read `average_h5` (measured: 0.35 s per cold
+    # window in place on /scratch, 0.03 s from a local copy); both are staged here. A model
+    # without the hook (every read-count run) stages nothing more.
     rs_stage = getattr(getattr(scorer, "model", None), "stage_read_starts", None)
     if callable(rs_stage):
+        from minicandi.train import stage_average
         info["read_starts"] = rs_stage(sorted(x for x in mids if x in rows), root / "rs392")
+        info["average_h5"] = stage_average(scorer.ds, root / "rs392")
+        scorer._region, scorer._rc = None, {}
     log(f"bench: staged {info}")
     return info
 
