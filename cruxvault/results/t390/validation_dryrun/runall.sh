@@ -20,6 +20,7 @@ OUTS=(cov.tsv cov.tsv.missing.tsv test/board_validation.tsv test/SUMMARY.md
       test/check_C17M04.tsv test/check_C12M32.tsv test/check_C03M02.tsv
       test/avg/check_average_C17M04.tsv test/avg/check_average_C12M32.tsv test/sacct.tsv
       test/blind_recheck_C12M02.tsv)
+FIR_OUTS=(fir/test/check_C17M04.tsv fir/test/sacct.tsv fir/cov.tsv)   # the same test on Fir
 
 sha() { if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d' ' -f1
         else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
@@ -30,6 +31,14 @@ if [ "$missing" = 1 ]; then
     || { echo "pull failed: run \`hpc up nibi\`"; exit 69; }
   echo "1 pull: ${OUTS[*]}"
 fi
+missing=0; for f in "${FIR_OUTS[@]}"; do [ -e "$f" ] || missing=1; done
+if [ "$missing" = 1 ]; then
+  mkdir -p fir
+  ssh -o BatchMode=yes fir "cd $REMOTE && tar cf - ${FIR_OUTS[*]#fir/}" 2>/dev/null | tar xf - -C fir \
+    || { echo "pull failed: run \`hpc up fir\`"; exit 69; }
+  echo "1 pull (fir): ${FIR_OUTS[*]}"
+fi
+OUTS+=("${FIR_OUTS[@]}")
 
 if [ ! -s MANIFEST.tsv ]; then
   printf 'path\tbytes\tsha256\twhere\n' > MANIFEST.tsv

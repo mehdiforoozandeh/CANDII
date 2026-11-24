@@ -1,7 +1,7 @@
 #!/bin/bash
 # EIC entry pipeline (t390) on Nibi: score miniCANDI blind predictions on the MOESM2 and MOESM4 boards.
 #
-#   bash run_entry.sh deploy                             (on the Mac) rsync the code subset to $CODE
+#   bash run_entry.sh deploy [nibi|fir]                  (on the Mac) rsync the code subset to $CODE
 #   bash run_entry.sh submit <pred> <cov.tsv> <out> [C##M## ...]
 #        (on Nibi) one job per track (score_entry.py run), then one collect job (board TSVs, SUMMARY.md).
 #        <pred> = predict.py's --out folder (counts/<track>.h5); <cov.tsv> = covariates, one row per
@@ -29,10 +29,14 @@ VAL=/scratch/mforooz/eicx/val
 SE="python $CODE/tools/eic_entry/score_entry.py"
 ENV='source /etc/profile >/dev/null 2>&1; module load StdEnv/2023 python/3.11 scipy-stack; export PYTHONUNBUFFERED=1 OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK:-1}; virtualenv -q --no-download --system-site-packages $SLURM_TMPDIR/venv; source $SLURM_TMPDIR/venv/bin/activate; pip install -q --no-index h5py'
 
+case $(hostname -f) in *fir*) export EIC_CLUSTER=fir ;; *) export EIC_CLUSTER=nibi ;; esac
+
 sub() {   # sub <out> <name> <mem> <time> <dependency or ""> <command>
   local out=$1 name=$2 mem=$3 time=$4 dep=$5; shift 5
   local d=(); [ -n "$dep" ] && d=(--dependency=afterany:$dep)
-  sbatch --parsable --account=def-maxwl --gres=none --job-name="$name" --cpus-per-task=2 \
+  local cpus=2   # Fir: at most 4000 MB per core, else the job goes to cpularge (days of queue)
+  [ "$EIC_CLUSTER" = fir ] && cpus=$(( (${mem%G} * 1024 + 3999) / 4000 ))
+  sbatch --parsable --account=def-maxwl --gres=none --job-name="$name" --cpus-per-task=$cpus \
     --mem="$mem" --time="$time" --output="$out/logs/%x_%j.out" "${d[@]}" \
     --wrap="$ENV; set -euo pipefail; $*"
 }
@@ -46,12 +50,13 @@ collect() {   # collect <out> <dependency ids>   (BOARD=validation: the validati
 case "${1:?usage}" in
 deploy)
   W=$(cd "$(dirname "$0")/../.." && pwd)
-  ssh -o BatchMode=yes nibi "mkdir -p $CODE"
+  H=${2:-nibi}                                       # deploy [nibi|fir]
+  ssh -o BatchMode=yes $H "mkdir -p $CODE"
   (cd "$W" && rsync -a --relative -e 'ssh -o BatchMode=yes' \
     tools/eic_entry/ tools/onion_eval/__init__.py tools/onion_eval/eic_score.py \
     tools/onion_eval/signal_from_counts.py tools/t112/bin25.py \
     src/candi/store/pval_from_counts.py src/candi/bench/annotations.py \
-    src/candi/bench/assets/ nibi:$CODE/)
+    src/candi/bench/assets/ $H:$CODE/)
   ;;
 submit)
   PRED=${2:?pred}; COV=${3:?cov}; OUT=${4:?out}; shift 4

@@ -81,7 +81,14 @@ BOARDS = {
                    cache=Path("/scratch/mforooz/onion/eic/score_cache/qnorm"),
                    published=E.DEFAULT_PUBLISHED, kind="qn"),
 }
-SYN = "/scratch/maxwl/epi_imputation/data/synapse"                          # Max's Synapse copy
+# The validation board also runs on Fir (EIC_CLUSTER=fir, set by run_entry.sh): Fir's own /project
+# copies of the challenge tracks and the fragment-length table (same sha256 as Nibi's), and the
+# chromosome sizes from a challenge bigWig there. The blind boards stay Nibi-only.
+FIR = os.environ.get("EIC_CLUSTER") == "fir"
+SYN = ("/project/def-maxwl/mforooz/DATA_EIC_SYNAPSE" if FIR
+       else "/scratch/maxwl/epi_imputation/data/synapse")                    # Synapse copy
+if FIR:
+    SIZES = f"{SYN}/blind_truth/C19M22.bigwig"
 VAL_TRUTH = f"{SYN}/validation_data"                                        # 45 C##M##.bigwig + metadata
 VAL_TRAIN = f"{SYN}/training_data"                                          # round 1's training set
 MOESM6 = "/project/def-maxwl/mforooz/ONION/eic/published/13059_2023_2915_MOESM6_ESM.csv"
@@ -94,7 +101,7 @@ BOARDS["validation"] = dict(truth=VAL_TRUTH, cache=Path("/scratch/mforooz/eicx/v
 VAL_MEASURES = [m for m in E.MEASURES9 if m != "msevar"]
 BOARD_SETS = {"blind": ("moesm2", "moesm4"), "validation": ("validation",)}
 TABLES = "/project/def-maxwl/mforooz/ONION/tables/eic_v1_2/measurements.tsv"
-FRAGLEN = "/project/def-maxwl/mforooz/ONION/tables/eic_v1_fraglen.tsv"
+FRAGLEN = (f"/project/def-maxwl/mforooz/ONION/{'e2' if FIR else 'tables'}/eic_v1_fraglen.tsv")
 ENTRANTS_MOESM4 = Path("/scratch/mforooz/onion/eic/score_cache/qnorm/scores")      # team_<tid>/<exp>.tsv
 ENTRANTS_MOESM2 = Path("/project/def-maxwl/maxwl/epi_imputation/s04/scores/pe")    # <slug>/<exp>.csv
 SLUG = {tid: re.sub(r"[^A-Za-z0-9_.-]", "_", name) for tid, name, _ in E.TEAMS}
