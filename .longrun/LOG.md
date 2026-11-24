@@ -52,3 +52,9 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-24T18:19Z cancel-own.sh cancel on fir: 5734182 5734183 5734184 5734185 5734186 5734188 5734189 5734190 5734191
 - 2026-11-24T18:19Z foreman: PI 'Yes, fix' hmap span (t125/hmap 24->25, PR 64, bit-exact check with 24); recal pair waits for wider-grid refit -> cancelled recal_exp jobs 5734182-5734191
 - 2026-11-24T18:35Z 8/8 val tracks scored: mean mode rank1 on 4 (C10M17 C20M22 C24M25 C45M22), 2 C16M17, 2.1 C03M02, 4.3 C02M22, 5 C24M17; expectation mode no better (C16M17 2->4, mse up on 6/8); exp mode cost ~16 CPU-h (137 min x 7 CPUs)
+- 2026-11-24T18:35Z glossary: blocked reply with dfc, refit
+- 2026-11-24T18:47Z PI: predict remaining 34 val exps; score all 42 raw + recal_wide; placement now counts unscored as worst (test: 10/11 with 37 missing, Fir place_test8). Asked foreman: recal pair on 8 only (a, ~30 CPU-h) vs all 42 (b, ~185); default a
+- 2026-11-24T18:47Z recal_wide expectation scoring 8 tracks: Fir 5763739-5763746, collect 5763747, out rcp_combo_w2x_unet_s0_recalwide_exp
+- 2026-11-24T18:47Z recal_wide: DNase c=2^-16.5 (grid cap), n clipped at float16 max 65504 = effectively Poisson; 34 more val preds array 5761693 -> _s0/counts, 5761694 -> _s0_recal_wide/counts (~11 h + queue)
+- 2026-11-24T18:48Z glossary: blocked reply with float16
+- 2026-11-24T19:13Z hmap span fix DONE (8434ac26): bit-exact with 24; chr21 MSE bin variant down 7/8 (DNase 0.536->0.492), frag up 7/8 (<=2.8%); Fir 5756066 0.18 CPU-h; 2 unrelated test failures (stale digest pin, order-dependent checkpoint load)
