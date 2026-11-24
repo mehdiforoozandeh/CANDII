@@ -14,3 +14,4 @@ Provenance: PI, agent proposal approved, agent (code-level or supplementary only
 | D7 | Headline board for miniCANDI = MOESM2 (original truth, no QN, no reprocessing): it tests correction. MOESM4 is reported beside it. | PI 2026-11-23: "yes to i and ii" (ii = MOESM2 headline, MOESM4 beside) | PI | D1 headline truth | in force |
 | D8 | Hold the 48-experiment conversion batch and the message to Jacob Schreiber. | PI 2026-11-23: "hold off on iii and iv" | PI | none | in force |
 | D9 | Copy the 51 original-truth bigWigs to /project; a read-start-count miniCANDI arm is built in a new long-run session | "yes" (PI via foreman, 2026-11-23) | PI | none | in force |
+| D10 | Validation board: raw predictions scored on the mean for all 42 experiments; the expected-p raw-vs-recal_wide pair only on the 8 first tracks (~30 CPU-h). Unscored experiments count as worst. | "yes" to option (a) (PI via foreman, 2026-11-24) | PI | none | in force |

@@ -58,3 +58,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-24T18:47Z recal_wide: DNase c=2^-16.5 (grid cap), n clipped at float16 max 65504 = effectively Poisson; 34 more val preds array 5761693 -> _s0/counts, 5761694 -> _s0_recal_wide/counts (~11 h + queue)
 - 2026-11-24T18:48Z glossary: blocked reply with float16
 - 2026-11-24T19:13Z hmap span fix DONE (8434ac26): bit-exact with 24; chr21 MSE bin variant down 7/8 (DNase 0.536->0.492), frag up 7/8 (<=2.8%); Fir 5756066 0.18 CPU-h; 2 unrelated test failures (stale digest pin, order-dependent checkpoint load)
+- 2026-11-24T19:17Z D10 (PI yes to a): mean board all 42, recal pair on 8 only; watcher submits the 34 when Fir 5761693 ends
