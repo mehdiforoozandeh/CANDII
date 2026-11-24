@@ -1,2 +1,5 @@
 job_id	name	cluster	kit	submitted_utc	cpus	mem	time_limit	out
 5687075	rs392_train_probe	fir	RS4	2026-11-24T07:40Z	12	48000M	01:00:00	/project/def-maxwl/mforooz/t392/runs/_probe/seed0
+5691700	rs392_train_s0	fir	RS4	2026-11-24T08:50Z	12	48000M	24:00:00	/project/def-maxwl/mforooz/t392/runs/rs_halves_mix_avg_pearson_unet/seed0
+5691701	rs392_train_s1	fir	RS4	2026-11-24T08:50Z (held)	12	48000M	24:00:00	.../seed1
+5691702	rs392_train_s2	fir	RS4	2026-11-24T08:50Z (held)	12	48000M	24:00:00	.../seed2
