@@ -14,11 +14,16 @@
 # ones `DRY_RUN=1 SCORE_PHASES=1 SCORE_SHARDS=4 SCORE_PRED_DEVICE=cpu ...` prints, plus that
 # variable. Shard 0 also runs the copy-leak guardrail after its requests, so its edge counters
 # include the guardrail windows; shards 1-3 hold scoring windows only.
-# --time is cut from the defaults (predict 06:00:00, metrics 03:00:00) to fit the per-seed request
-# cap of 60 CPU-h (reference elapsed: predict 0:51-1:09, metrics 0:48). A predict shard that times
-# out resumes request by request on resubmission.
+# Kit RS5 -> RS7 (chunk C13fix): predict.sh's --stage-dir now also copies, for a read-start run,
+# the read-start store files of the shard's measurements, read_start_average_h5 and the scorer's
+# average_h5 to $SLURM_TMPDIR (predict_store._stage -> ReadStartAdapter.stage_read_starts,
+# train.stage_average). No new variable or flag. Measured (Fir probe 5866796, shard 2/4 of seed 0,
+# 8 CPUs, outputs bit-identical to the unstaged store): an item request took 1,317 s unstaged and
+# 245 s staged; a pair request 13.9 s staged; staging 272 s. A fresh shard (16 items, 402 pairs):
+# 16 x 245 + 402 x 13.9 + 272 = 9,780 s, about 2.7 h (reference: about 1 h). PTIME 03:30:00 is
+# that x 1.3. A predict shard that times out resumes request by request on resubmission.
 set -euo pipefail
-KIT=/project/def-maxwl/mforooz/onion_kit/RS5
+KIT=/project/def-maxwl/mforooz/onion_kit/RS7
 RUNS=/project/def-maxwl/mforooz/t392/runs
 ARM=rs_halves_mix_avg_pearson_unet
 CONFIG=$KIT/tools/minicandi/configs/t392/rs_halves_mix_avg_pearson.json
@@ -29,7 +34,7 @@ PS_ROOT=/scratch/mforooz/rs392/pred_store
 REFS=/project/def-maxwl/mforooz/ONION/eval/eic_v1_2/baselines_p16
 # the exclude list of the reference's p16_sv jobs (sacct 5264675)
 EXCL=fc10713,fc10715,fc30601,fc30568,fc30605,fc30564,fc30654,fc30435,fc30562,fc30355,fc30570,fc30455,fc30659,fc30565,fc30613,fc30649
-NSH=4; PB=8; PTIME=${PTIME:-01:20:00}; MTIME=${MTIME:-00:55:00}
+NSH=4; PB=8; PTIME=${PTIME:-03:30:00}; MTIME=${MTIME:-00:55:00}
 STIME=00:30:00; SCPU=4; SMEM=16000
 DRY="${DRY_RUN:-0}"
 read -r -a SL <<< "${SEEDS:?set SEEDS}"
