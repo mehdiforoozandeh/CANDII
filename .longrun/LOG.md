@@ -59,3 +59,5 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-24T18:48Z glossary: blocked reply with float16
 - 2026-11-24T19:13Z hmap span fix DONE (8434ac26): bit-exact with 24; chr21 MSE bin variant down 7/8 (DNase 0.536->0.492), frag up 7/8 (<=2.8%); Fir 5756066 0.18 CPU-h; 2 unrelated test failures (stale digest pin, order-dependent checkpoint load)
 - 2026-11-24T19:17Z D10 (PI yes to a): mean board all 42, recal pair on 8 only; watcher submits the 34 when Fir 5761693 ends
+- 2026-11-24T19:17Z glossary: blocked reply with d10
+- 2026-11-24T19:28Z recal_wide pair DONE: mse worse on 7/8 vs raw_exp, combined rank worse on 4, better on 0; Fir 5763739-47, ~20 CPU-h (174 min x 7)
