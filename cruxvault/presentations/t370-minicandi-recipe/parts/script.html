@@ -144,6 +144,44 @@ function scatter(o){
   put('tConfList', li);
 })();
 
+/* ---------- slide 11b: what each component adds ---------- */
+(function(){
+  const C=DATA.comp, ks=[['imp','imputation'],['cor','correction'],['cal','calibration']];
+  const prev={'rcp_halves_mix_avg_unet':'rcp_halves_unet','rcp_halves_mix_pearson_unet':'rcp_halves_unet'};
+  const by=Object.fromEntries(C.map(r=>[r.key,r]));
+  const W=1160,L=360,T=56,rh=62,H=T+C.length*rh+10,cw=(W-L-20)/3;
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+  ks.forEach(([k,nm],j)=>{s+=`<text x="${L+cw*(j+.5)}" y="30" text-anchor="middle" class="xlab">${nm}</text>`;
+    s+=`<text x="${L+cw*(j+.5)}" y="50" text-anchor="middle" class="cap">best base ${F256[k].best.toFixed(3)}</text>`;});
+  C.forEach((r,i)=>{const y=T+i*rh, p=i===0?null:(by[prev[r.key]]||C[i-1]), fin=r.key==='rcp_combo_w2x_unet';
+    s+=`<rect x="10" y="${y+4}" width="${W-20}" height="${rh-8}" rx="6" fill="${fin?'rgba(0,0,0,.05)':'none'}"/>`;
+    s+=`<text x="${L-20}" y="${y+rh/2+6}" text-anchor="end" class="axlbl" fill="${stepCol(r.key)}">${r.lab}</text>`;
+    ks.forEach(([k],j)=>{const v=r[k], x=L+cw*(j+.5), ok=v.m>=F256[k].best;
+      s+=`<text x="${x-14}" y="${y+rh/2+6}" text-anchor="end" class="val" fill="${ok?'var(--recipe)':'currentColor'}">${v.m.toFixed(3)}</text>`;
+      s+=`<text x="${x-8}" y="${y+rh/2+6}" class="cap">(${v.r.toFixed(3)})</text>`;
+      if(p){const d=v.m-p[k].m; s+=`<text x="${x+80}" y="${y+rh/2+6}" class="cap" fill="${d>=0?'var(--recipe)':'var(--base)'}">${sg(d)}</text>`;}});
+  });
+  put('figComp', s+`</svg>`);
+})();
+
+/* ---------- slide 11c: recalibration ---------- */
+(function(){
+  const a=DATA.recal['rcp_halves_mix_pearson_unet__ens3'], b=DATA.recal['rcp_halves_mix_pearson_unet__ens3_recal'];
+  const ks=[['imp','imputation'],['cor','correction'],['cal','calibration']];
+  const W=1160,H=360,L=80,gw=(W-L-40)/3,bw=90,Y=v=>H-70-v*(H-130);
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+  ks.forEach(([k,nm],j)=>{const x0=L+j*gw+gw/2;
+    s+=`<text x="${x0}" y="${H-14}" text-anchor="middle" class="xlab">${nm}</text>`;
+    [[a,'before','var(--addon)',-1],[b,'after','var(--recipe)',1]].forEach(([r,lab,c,sd])=>{const x=x0+sd*(bw/2+6)-bw/2, v=r[k].m;
+      s+=`<rect x="${x}" y="${Y(v)}" width="${bw}" height="${Y(0)-Y(v)}" fill="${c}" rx="3"/>`;
+      s+=`<text x="${x+bw/2}" y="${Y(v)-8}" text-anchor="middle" class="val">${v.toFixed(3)}</text>`;
+      s+=`<text x="${x+bw/2}" y="${Y(0)+18}" text-anchor="middle" class="cap">${lab}</text>`;});
+    s+=`<line x1="${x0-bw-20}" y1="${Y(F256[k].best)}" x2="${x0+bw+20}" y2="${Y(F256[k].best)}" stroke="#9a9a9a" stroke-dasharray="7 4"/>`;});
+  put('figRecal', s+`</svg>`);
+  put('tRecalLi', `<li>Calibration rose from ${f3(a.cal.m)} to ${f3(b.cal.m)} (${sg(b.cal.m-a.cal.m)}); imputation (${f3(b.imp.m)}) and correction (${f3(b.cor.m)}) did not change, as the mean prediction is untouched.</li>`+
+    `<li>Measured on the pairs + Pearson model as a three-seed ensemble. The final architecture's factors are not fitted yet; dashed line: best base model.</li>`);
+})();
+
 /* ---------- slide 12: copy path ---------- */
 (function(){
   const cp=DATA.copy, rows=[['eic_v1_2_rung2_base_heldout','Conv autoencoder',COL.base],['eic_v1_2_rung3_base_heldout','Conv + attention',COL.base],
