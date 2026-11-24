@@ -1,0 +1,7 @@
+job_id	name	cluster	kit	submitted_utc	cpus	mem	time_limit	out
+5808608	rs392_rs_halves_mix_avg_pearson_unet_s0 (predict 0/4)	fir	RS5	2026-11-24T19:36Z	8	32000M	01:20:00	/project/def-maxwl/mforooz/t392/runs/rs_halves_mix_avg_pearson_unet/seed0/p16_sv
+5808610	rs392_rs_halves_mix_avg_pearson_unet_s0 (predict 1/4)	fir	RS5	2026-11-24T19:36Z	8	32000M	01:20:00	/project/def-maxwl/mforooz/t392/runs/rs_halves_mix_avg_pearson_unet/seed0/p16_sv
+5808611	rs392_rs_halves_mix_avg_pearson_unet_s0 (predict 2/4)	fir	RS5	2026-11-24T19:36Z	8	32000M	01:20:00	/project/def-maxwl/mforooz/t392/runs/rs_halves_mix_avg_pearson_unet/seed0/p16_sv
+5808612	rs392_rs_halves_mix_avg_pearson_unet_s0 (predict 3/4)	fir	RS5	2026-11-24T19:36Z	8	32000M	01:20:00	/project/def-maxwl/mforooz/t392/runs/rs_halves_mix_avg_pearson_unet/seed0/p16_sv
+5808634	rs392_rs_halves_mix_avg_pearson_unet_s0 (metrics, afterok 4 predict)	fir	RS5	2026-11-24T19:36Z	16	64000M	00:55:00	/project/def-maxwl/mforooz/t392/runs/rs_halves_mix_avg_pearson_unet/seed0/p16_sv
+5808635	rs392_sanity_s0	fir	RS5	2026-11-24T19:36Z	4	16000M	00:30:00	/project/def-maxwl/mforooz/t392/runs/rs_halves_mix_avg_pearson_unet/seed0/sanity_p16
