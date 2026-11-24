@@ -23,3 +23,13 @@ job_id	name	cluster	kit	submitted_utc	cpus	mem	time_limit	out
 5874568	rs392_rs_halves_mix_avg_pearson_unet_s0	fir	RS7	2026-11-25T01:20Z	8	32000M	02:00:00	predict 3of4 seed0 p16_sv (resubmit)
 5874569	rs392_rs_halves_mix_avg_pearson_unet_s0	fir	RS7	2026-11-25T01:20Z	16	64000M	00:55:00	metrics seed0 p16_sv
 5874570	rs392_sanity_s0	fir	RS7	2026-11-25T01:20Z	4	16000M	00:30:00	sanity seed0 (repeat)
+5874996	rs392_rs_halves_mix_avg_pearson_unet_s1	fir	RS7	2026-11-25T01:35Z	8	32000M	03:30:00	predict 0of4 seed1 p16_sv (resubmit)
+5874997	rs392_rs_halves_mix_avg_pearson_unet_s1	fir	RS7	2026-11-25T01:35Z	8	32000M	03:30:00	predict 1of4 seed1 p16_sv (resubmit)
+5874998	rs392_rs_halves_mix_avg_pearson_unet_s1	fir	RS7	2026-11-25T01:35Z	8	32000M	03:30:00	predict 2of4 seed1 p16_sv (resubmit)
+5874999	rs392_rs_halves_mix_avg_pearson_unet_s1	fir	RS7	2026-11-25T01:35Z	8	32000M	03:30:00	predict 3of4 seed1 p16_sv (resubmit)
+5875002	rs392_rs_halves_mix_avg_pearson_unet_s2	fir	RS7	2026-11-25T01:35Z	8	32000M	03:30:00	predict 0of4 seed2 p16_sv (resubmit)
+5875003	rs392_rs_halves_mix_avg_pearson_unet_s2	fir	RS7	2026-11-25T01:35Z	8	32000M	03:30:00	predict 1of4 seed2 p16_sv (resubmit)
+5875004	rs392_rs_halves_mix_avg_pearson_unet_s2	fir	RS7	2026-11-25T01:35Z	8	32000M	03:30:00	predict 2of4 seed2 p16_sv (resubmit)
+5875005	rs392_rs_halves_mix_avg_pearson_unet_s2	fir	RS7	2026-11-25T01:35Z	8	32000M	03:30:00	predict 3of4 seed2 p16_sv (resubmit)
+5875000	rs392_rs_halves_mix_avg_pearson_unet_s1	fir	RS7	2026-11-25T01:35Z	16	64000M	00:55:00	metrics seed1 p16_sv
+5875006	rs392_rs_halves_mix_avg_pearson_unet_s2	fir	RS7	2026-11-25T01:35Z	16	64000M	00:55:00	metrics seed2 p16_sv
