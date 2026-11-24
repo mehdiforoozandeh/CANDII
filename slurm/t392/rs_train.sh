@@ -2,7 +2,7 @@
 # t392 C8: train one seed of the read-start miniCANDI inside an ONION code kit.
 #
 #   sbatch --output=<out>/train_%j.out \
-#       <kit>/slurm/t392/rs_train.sh <kit dir> <config.json> <tables dir> <seed> <out dir>
+#       <kit>/slurm/t392/rs_train.sh <kit dir> <config.json> <tables dir> <seed> <out dir> [train.py args]
 #   -> <out>/{ckpt.pt,run.json,log.jsonl,DONE}
 #
 # The config sets `read_start` (tools/minicandi/configs/t392/rs_halves_mix_avg_pearson.json).
@@ -15,7 +15,8 @@
 # Header = the reference jobs' allocation (12 CPUs, 48000M, no GPU); --workers is CPUs - 1. The
 # batch stream does not depend on the worker count (any N > 0), so it equals the reference's 8.
 # Rerunning the same command resumes from <out>/ckpt.pt and skips when <out>/DONE exists.
-# DRY_RUN=1 prints the command and exits. Nothing goes via --export.
+# DRY_RUN=1 prints the command and exits. Nothing goes via --export. Arguments after <out dir> go
+# to train.py unchanged, e.g. `--max-windows 2000` for the training probe.
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=rs392_train
 #SBATCH --time=12:00:00
@@ -30,12 +31,13 @@ CONFIG="${2:?$USAGE}"
 TABLES="${3:?$USAGE}"
 SEED="${4:?$USAGE}"
 OUT="${5:?$USAGE}"
+shift 5
 [[ "$SEED" =~ ^[0-9]+$ ]] || { echo "seed must be an integer" >&2; exit 2; }
 WORKERS=$(( ${SLURM_CPUS_PER_TASK:-12} - 1 ))
 [ "$WORKERS" -ge 0 ] || WORKERS=0
 TRAIN=(python3 "$KIT/tools/minicandi/train.py" --config "$CONFIG" --tables "$TABLES"
        --seed "$SEED" --out "$OUT" --device cpu --workers "$WORKERS"
-       --stage-dir "${SLURM_TMPDIR:-/tmp}/stage")
+       --stage-dir "${SLURM_TMPDIR:-/tmp}/stage" "$@")
 if [ "${DRY_RUN:-0}" = 1 ]; then
   echo "${TRAIN[*]}"
   exit 0
