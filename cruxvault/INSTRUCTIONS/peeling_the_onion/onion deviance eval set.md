@@ -103,7 +103,19 @@ Ten recipe arms × seeds 0 and 1 and the three base models × seeds 0 and 1 were
 | base conv + attention (rung 3) | 0.380 | 0.114 (0.532) | 0.672 | 0.928 | 0.633 | 1.254 |
 | base conv AE (rung 2) | 0.364 | 0.100 (0.535) | 0.672 | 0.928 | 0.651 | 1.268 |
 
-The current pick (pairs + Pearson-residual input U-Net) at 256 regions, seed 2: dev skill 0.294 (floor 0.526), dev gap 0.951 (floor 0.630), R 1.044; imputation gap closed 0.471, uncertainty gap closed 0.705. Seeds 0 and 1 at 256 regions were queued on Fir at the time of writing.
+### The three finalists at 256 regions
+
+All three seeds of each finalist were scored with the 256-region eval set (kit DEV1 for the first arm, DEV2 for the other two; Fir `runs_rcp/<arm>/seed<s>/p256_dev/scores.json`). The table gives the mean over 3 seeds, with the seed range (max minus min) in brackets.
+
+| arm | dev imputation skill (floor) | dev correction gap | dev calibration ratio R |
+|---|---|---|---|
+| pairs + Pearson-residual input U-Net (`rcp_halves_mix_pearson_unet`) | 0.264 [0.074] (0.526–0.529) | 0.949 [0.004] | 1.034 [0.017] |
+| pairs + average + Pearson input U-Net (`rcp_halves_mix_avg_pearson_unet`) | 0.543 [0.065] (0.516–0.517) | 0.951 [0.003] | 1.058 [0.040] |
+| full combination at 2x windows (`rcp_combo_w2x_unet`, the final architecture, D55) | 0.562 [0.053] (0.514–0.515) | 0.951 [0.004] | 1.067 [0.018] |
+
+The depth-only reference correction (`dev_correction_depth_only`) is 2.653 for every run, as it should be: it does not depend on the model.
+
+The 16-region and 256-region eval sets share the same 256 imputation regions. So the deviance imputation skill and calibration ratio are identical in both passes, seed by seed; only the correction gap changes, by less than 0.001 on every seed checked. The 256-region pass adds information on the correction gap only.
 
 ### What the comparison shows
 
@@ -112,6 +124,7 @@ The current pick (pairs + Pearson-residual input U-Net) at 256 regions, seed 2: 
 3. The deviance set shows failures the current set hides or understates. The conv AE with halves has a negative skill (−0.11 and −0.43) and R 1.55 and 1.78, i.e. strongly overconfident. The conv-based runs read as overconfident (R 1.24 to 1.27); the U-Nets sit near 1.0.
 4. The deviance skill spreads arms more than imputation_raw does. The two average-input U-Nets score 0.50 to 0.54; the other U-Nets score 0.19 to 0.27.
 5. Against the base models on the deviance set at 16 regions, the current pick does not beat the base U-Net on imputation skill (0.248 vs 0.272). The pairs + average-input U-Net beats every base model on imputation skill and on the correction gap, but its R (1.091) is further from 1 than the base U-Net's (1.016). The Pareto pick under the headline set (D1) is unchanged; this note reports the deviance view beside it.
+6. At 256 regions, the final architecture (full combination at 2x windows) has the highest deviance imputation skill of the three finalists (0.562), about twice that of the pairs + Pearson-residual U-Net (0.264); the gap between them is several seed ranges. All three close the same share of the correction gap (0.949 to 0.951, within one seed range). Its R (1.067) is the furthest from 1 of the three, i.e. slightly overconfident; the recalibration step that ships with the final (D52) is meant to address this, and it was not scored with the deviance set here.
 
 ### Known weakness: the depth-only reference
 
