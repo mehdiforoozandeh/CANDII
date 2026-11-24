@@ -55,7 +55,7 @@ def main(argv=None) -> int:
     reqs = [r for j, r in enumerate(P.requests(sc)) if j % N == i]
     item = next(r for r in reqs if r["key"].startswith("item/"))
     cell = sc.ds.rows[item["job"]["target"]]["cell"]
-    tiles = sc._tiles([sc.regions[k] for k in item["region_indices"]])
+    tiles = list(sc._tiles([sc.regions[k] for k in item["region_indices"]]))
     W = a.windows
     set_a = [(c, s) for c, s in tiles[0][1][:W]]
     set_b = [(c, s) for c, s in tiles[5][1][:W]]
