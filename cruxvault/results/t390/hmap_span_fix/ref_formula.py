@@ -1,10 +1,11 @@
 """Deterministic outputs of the t125 hmap depth-offset code on fixed synthetic tracks.
 
-    python ref_formula.py <out.npz> [--span N]
+    python ref_formula.py <out.npz> [--span N] [--repo DIR]
 
 `--span N` monkeypatches `hmap.formula.SPAN_EXTRA` and `hmap.caller.SPAN_EXTRA` to N after import
 (the bit-exact check sets N = 24 on the new code). Every array the constant reaches is saved:
 lambda_track, pileup, P("bin"), P("frag"), P_enumerated and data.formula_log1p_t (CPU) on a k grid.
+`--repo DIR` imports hmap from DIR/tools (e.g. an extracted copy of the pre-fix tree); default: this repo.
 """
 from __future__ import annotations
 
@@ -17,6 +18,8 @@ import numpy as np
 import torch
 
 REPO = Path(__file__).resolve().parents[4]
+if "--repo" in sys.argv:
+    REPO = Path(sys.argv[sys.argv.index("--repo") + 1]).resolve()
 for p in (REPO / "tools" / "t118", REPO / "tools" / "t125"):
     sys.path.insert(0, str(p))
 
@@ -53,6 +56,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("out")
     ap.add_argument("--span", type=int, default=None)
+    ap.add_argument("--repo", default=None)
     a = ap.parse_args()
     if a.span is not None:
         formula.SPAN_EXTRA = a.span
@@ -77,7 +81,8 @@ def main() -> None:
         out[f"{name}/log1p_t_frag"] = data.formula_log1p_t("frag", inf, kt, lam[idx],
                                                            torch.from_numpy(rest)).numpy()
     np.savez(a.out, **out)
-    print(f"wrote {a.out}: {len(out)} arrays, SPAN_EXTRA formula={formula.SPAN_EXTRA} caller={caller.SPAN_EXTRA}")
+    print(f"wrote {a.out}: {len(out)} arrays, SPAN_EXTRA formula={formula.SPAN_EXTRA} "
+          f"caller={caller.SPAN_EXTRA}, hmap from {Path(formula.__file__).parent}")
 
 
 if __name__ == "__main__":
