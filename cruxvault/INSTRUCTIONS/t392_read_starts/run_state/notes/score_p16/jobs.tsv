@@ -33,3 +33,6 @@ job_id	name	cluster	kit	submitted_utc	cpus	mem	time_limit	out
 5875005	rs392_rs_halves_mix_avg_pearson_unet_s2	fir	RS7	2026-11-25T01:35Z	8	32000M	03:30:00	predict 3of4 seed2 p16_sv (resubmit)
 5875000	rs392_rs_halves_mix_avg_pearson_unet_s1	fir	RS7	2026-11-25T01:35Z	16	64000M	00:55:00	metrics seed1 p16_sv
 5875006	rs392_rs_halves_mix_avg_pearson_unet_s2	fir	RS7	2026-11-25T01:35Z	16	64000M	00:55:00	metrics seed2 p16_sv
+5875186	rs392_dev_s0	fir	RS7	2026-11-25T01:55Z	16	64000M	01:30:00	deviance metrics seed0 p16_dev (afterok 5874569; reads the p16_sv store)
+5875187	rs392_dev_s1	fir	RS7	2026-11-25T01:55Z	16	64000M	01:30:00	deviance metrics seed1 p16_dev (afterok 5875000; reads the p16_sv store)
+5875188	rs392_dev_s2	fir	RS7	2026-11-25T01:55Z	16	64000M	01:30:00	deviance metrics seed2 p16_dev (afterok 5875006; reads the p16_sv store)
