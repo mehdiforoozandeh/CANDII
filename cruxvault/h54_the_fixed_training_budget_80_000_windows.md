@@ -53,7 +53,7 @@ _(optional: falsifiable checks, added when they can be defined — they inform t
 
 ## Planned Intervention
 
-_(how this hypothesis will be tested)_
+One read-start seed trained to 160,000 windows (about 260 CPU-h). Deferred: the PI answered "no, not now" on 2026-11-25, relayed by the foreman. The hypothesis stays without an answer until that run is approved.
 
 ## Run Links
 
