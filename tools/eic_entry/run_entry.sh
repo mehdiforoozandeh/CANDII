@@ -64,6 +64,7 @@ submit)
   mkdir -p "$OUT/logs"; cp "$COV" "$OUT/covariates.tsv"
   IDS=""
   MEM=48G; [ "${BOARD:-}" = validation ] && MEM=24G   # measured peaks: validation 16 GB, blind (with QN) 23-25 GB
+  MEM=${SCORE_MEM:-$MEM}                               # SCORE_MEM: override (t390 slope_cal, 20G)
   for T in "${TR[@]}"; do
     J=$(sub "$OUT" eicx_entry_$T $MEM 2:00:00 "" "$SE run --pred $PRED --cov $OUT/covariates.tsv --track $T --out $OUT ${MODE:+--mode $MODE} ${BOARD:+--board $BOARD}")
     IDS=${IDS:+$IDS:}$J; echo "$T $J" | tee -a "$OUT/JOBS.txt"
