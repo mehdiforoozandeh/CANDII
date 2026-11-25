@@ -312,3 +312,23 @@ def test_coverage_cli_reuses_analyze_factors(tmp_path):
             assert doc["kinds"] == first
     md = (tmp_path / "out1" / "cov.md").read_text()
     assert "lower <= y <= upper" in md and "| obs_top1 |" in md and "| A |" in md
+
+
+def test_reference_draws_match_model_and_show_outcome_selection():
+    """`reference` replaces y by draws from the model: 'all' covers at least nominal (discrete
+    intervals), and obs_top1 under-covers even though the model is exact by construction."""
+    import numpy as np
+    from candi.bench.distributional import p_from_mu
+    rng = np.random.default_rng(3)
+    B = 200000
+    mu = rng.gamma(2.0, 5.0, B)
+    n = np.full(B, 4.0)
+    ys = rng.negative_binomial(n, p_from_mu(n, mu)).astype(float)
+    assert abs(ys.mean() / mu.mean() - 1) < 0.02
+    obs, _ = R.top_masks(ys, "obs")
+    fy, fm = R.nb_cdf_pair(n, mu, ys)
+    t = R.interval_table(fy, fm, {"all": np.ones(B, bool), **obs})
+    assert t["all"]["0.90"]["coverage"] >= 0.89
+    assert t["obs_top1"]["0.90"]["coverage"] < 0.80
+    assert t["obs_top1"]["0.90"]["frac_above"] > t["obs_top1"]["0.90"]["frac_below"]
+    assert "reference" in R.COV_CONDITIONS

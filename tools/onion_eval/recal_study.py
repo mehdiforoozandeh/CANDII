@@ -531,7 +531,12 @@ def analyze(argv=None) -> int:
 LEVELS = (0.50, 0.80, 0.90, 0.95)
 #: (stratum suffix, quantile): a bin is in the stratum when its value >= np.quantile(values, q)
 TOPS = (("top10", 0.90), ("top1", 0.99), ("top0.1", 0.999))
-COV_CONDITIONS = ("none", "same_cells", "cross_cell")
+#: `reference`: what a calibrated model would show. Per bin, a draw y* ~ NB(n, mu) of the
+#: uncalibrated prediction replaces y, and the obs strata are cut on y*; so the obs_top strata of
+#: `reference` give the coverage a perfectly calibrated model would also get when bins are picked
+#: by their observed value (selection on the outcome), and pred strata the nominal-or-above value.
+COV_CONDITIONS = ("none", "same_cells", "cross_cell", "reference")
+REFERENCE_SEED = 20261125
 STRATA = ("all",) + tuple(f"obs_{t}" for t, _ in TOPS) + tuple(f"pred_{t}" for t, _ in TOPS)
 COV_METRICS = ("coverage", "frac_above", "frac_below")
 
@@ -609,6 +614,15 @@ def coverage_assay(assay: str, its, K: int, folds: dict, same: dict, fold_fit: d
         masks = {"all": np.ones(idx.size, bool), **obs, **pred}
         cs = condition_factors(assay, k, same, fold_fit, src, pos[idx])
         for c in COV_CONDITIONS:
+            if c == "reference":
+                from candi.bench.distributional import p_from_mu
+                rng = np.random.default_rng([REFERENCE_SEED, k, len(yk)])
+                ys = rng.negative_binomial(np.asarray(nk, np.float64),
+                                           p_from_mu(np.asarray(nk, np.float64), mk)).astype(np.float64)
+                sim_obs, _ = top_masks(ys, "obs")
+                fy, fm = nb_cdf_pair(nk, mk, ys)
+                res["tables"][c][k] = interval_table(fy, fm, {**masks, **sim_obs})
+                continue
             n2, m2 = apply_factor(nk, mk, cs[c])
             if not (m2 is mk and np.array_equal(m2, mu[k, idx])):
                 res["mu_unchanged"] = False
