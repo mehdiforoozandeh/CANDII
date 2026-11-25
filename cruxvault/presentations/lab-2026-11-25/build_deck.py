@@ -218,6 +218,26 @@ data["prompt"] = {"arms": arms, "targets": ntg}
 text("presentations_t370-minicandi-recipe_recalibration.md")
 text("presentations_t370-minicandi-recipe_recipe_components.md")
 
+# ---- final recipe vs base models, 256 regions (exp/t370 presentations data) -------------
+T3 = ("imputation_raw", "correction_v3_raw", "uncertainty_raw")
+fin = next(r for r in tsv("presentations_t370-minicandi-recipe_pareto_p256_sv.tsv") if r["arm"] == "rcp_combo_w2x_unet")
+bnames = {"eic_v1_2_rung2_base_heldout": "Conv autoencoder", "eic_v1_2_rung3_base_heldout": "Conv + attention",
+          "eic_v1_2_rung4_base_heldout": "U-Net"}
+bases = [{"name": bnames[r["arm"]], "m": [float(r[t + ".mean"]) for t in T3], "r": [float(r[t + ".range"]) for t in T3]}
+         for r in tsv("presentations_t370-minicandi-recipe_deck_base_p256_sv.tsv")]
+data["recipe"] = {"final": {"m": [float(fin[t + ".mean"]) for t in T3], "r": [float(fin[t + ".range"]) for t in T3],
+                            "seeds": int(fin["n_seeds"])}, "bases": bases}
+
+# ---- deviance metric: simulation checks and rank agreement (results/t371) ---------------
+ck = json.loads(text("t371_sim_checks.json"))
+ra = tsv("t371_compare_rcp_rank_agreement.tsv")
+data["dev"] = {"floor_err": ck["C1_floor_max_abs_error"], "drift": ck["C2_worst_drift"],
+               "drift_log1p": ck["contrast_log1p_worst_drift"], "cal": ck["C4_summary"],
+               "depth_only": ck["C5_depth_only_max_abs"], "truth": [ck["C5_truth_min"], ck["C5_truth_max"]],
+               "all_pass": all(ck[k] for k in ("C1_pass", "C2_pass", "C3_pass", "C4_pass", "C5_pass")),
+               "rank": [{"goal": r["goal"], "old": r["old"], "new": r["new"], "rho": float(r["spearman"]),
+                         "p": float(r["p"]), "n": int(r["n_arms"])} for r in ra]}
+
 # ---- write ----------------------------------------------------------------------------
 read += [HERE / "build_deck.py", HERE / "deck_src.html"]
 sources = {p.relative_to(VAULT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in read}

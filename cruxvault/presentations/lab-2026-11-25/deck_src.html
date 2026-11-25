@@ -278,9 +278,73 @@
     <div class="wrap">
       <div class="kicker">miniCANDI · lab meeting · <span data-src="literal">2026-11-25</span></div>
       <h1>miniCANDI progress: first on the ENCODE Imputation Challenge validation board, and what still limits it</h1>
-      <p class="sub">One external benchmark (<span id="tT45"></span> validation experiments, <span id="tTof"></span> entries), then three studies of the model itself: read starts against read counts, recalibration of the predicted spread, and covariate prompts.</p>
+      <p class="sub">One external benchmark (<span id="tT45"></span> validation experiments, <span id="tTof"></span> entries), the final recipe and a new depth-invariant metric set, then three studies of the model itself: read starts against read counts, recalibration of the predicted spread, and covariate prompts.</p>
       <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd> &nbsp;·&nbsp; <kbd>n</kbd> shows the speaker notes</p>
       <aside class="notes"><p>The deck follows the paper arc: why we entered the board, how the entry works, what we found, and what is next. Every number on the slides is read from the result files when the deck is built. Anything that is not final carries an interim badge.</p></aside>
+    </div>
+  </section>
+
+  <!-- 1b · METHOD · the model we score everywhere below
+       job      the final recipe, and that it beats the three base models on all three goals
+       claim    the final recipe is above the best base model on imputation, correction and calibration
+       source   presentations/t370-minicandi-recipe/data/pareto_p256_sv.tsv, deck_base_p256_sv.tsv
+       numbers  DATA.recipe
+       cut      the arm-by-arm search history -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the model: the final miniCANDI recipe</div>
+      <h2>The final recipe beats all three base models on imputation, correction and calibration</h2>
+      <p class="sub2">U-Net trained on read-disjoint pairs, with average-signal and Pearson-residual inputs, a skip into the output head, <span data-src="literal">160k</span> training windows, and recalibration after training.</p>
+      <div class="chartbox fig wide" id="figRecipe"></div>
+      <ul class="pts sm">
+        <li id="tR1"></li>
+      </ul>
+      <aside class="notes"><p>A read-disjoint pair is two halves of one experiment's reads with no read in common, so one half can be trained to predict the other. The average-signal input is the mean track over training cells; the Pearson residual input is the observed count standardized by its expected count. Imputation is the recovered share of cell-specific signal; correction is how much of the gap from depth-only scaling to the noise floor the model closes; calibration is how flat the probability-integral-transform histogram is. Higher is better on all three. Every later slide uses this model.</p></aside>
+    </div>
+  </section>
+
+  <!-- 1c · METHOD · the deviance metric set
+       job      what we built and how it works
+       claim    one count unit for all three goals, whose score does not drift with sequencing depth
+       source   results/t371/sim/checks.json; cruxvault/INSTRUCTIONS/peeling_the_onion/onion deviance eval set.md
+       numbers  DATA.dev (simulation checks)
+       cut      the lookup table for the expected NB deviance -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>a new metric set, beside the headline metrics</div>
+      <h2>We built a Poisson-deviance metric set whose scores do not drift with sequencing depth</h2>
+      <p class="sub2">Poisson deviance (a count-native error, <span data-src="literal">2</span>[y log(y/μ) − (y − μ)]) splits exactly into read noise plus model error, so each score runs from a baseline (<span data-src="literal">0</span>) to the read-noise floor (<span data-src="literal">1</span>).</p>
+      <div class="flow">
+        <div class="bx"><div class="h">imputation skill</div><p>Share of the gap from the per-position training average to the noise floor that the model closes.</p></div>
+        <div class="ar"></div>
+        <div class="bx"><div class="h">correction gap closed</div><p>Same, from depth-only scaling to the noise floor, on pairs never seen in training.</p></div>
+        <div class="ar"></div>
+        <div class="bx" style="--c:var(--accent)"><div class="h">calibration ratio</div><p>Observed deviance over the deviance the model's own NB expects: <span data-src="literal">1</span> calibrated, above <span data-src="literal">1</span> overconfident.</p></div>
+      </div>
+      <ul class="pts sm">
+        <li id="tV1"></li>
+        <li id="tV2"></li>
+      </ul>
+      <aside class="notes"><p>Our headline metrics use three different units, and squared error on log counts and the CRPS drift with depth: the same mistake scores differently at a quarter and at four times the depth. Correction compares tracks at different depths by design, so that drift matters most there. The noise floor comes from Poisson theory, so it needs no replicate. Simulation checks were written down before the run, and all of them passed. The set is computed in the same scoring job as the headline set and replaces nothing.</p></aside>
+    </div>
+  </section>
+
+  <!-- 1d · RESULTS · does the deviance set rank models like the headline set
+       job      agreement with the headline metrics on real miniCANDI runs
+       claim    it agrees on imputation and correction, and disagrees on calibration
+       source   results/t371/compare/rcp/rank_agreement.tsv
+       numbers  DATA.dev.rank
+       cut      seed stability table -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>the deviance set on real runs</div>
+      <h2>The deviance set ranks models like our headline metrics on imputation and correction, not on calibration</h2>
+      <div class="chartbox fig mid" id="figDevRank"></div>
+      <ul class="pts sm">
+        <li id="tV3"></li>
+        <li>The calibration ratio tests the width of the predicted spread and gives its direction; the PIT deviation tests its shape. They answer different questions, so we keep both.</li>
+      </ul>
+      <aside class="notes"><p>Each bar is the Spearman rank correlation between two orderings of the same recipe arms: one by a headline metric and one by its deviance counterpart. Near one means the two metrics would pick the same model. The scores were re-predicted on sixteen regions, and every non-deviance key was bit-identical to the earlier scores, so the new set changed nothing else.</p></aside>
     </div>
   </section>
 
@@ -816,6 +880,41 @@ function pitPanel(title, P, conds){
   put('tScoreBox', `The organizers' scorer compares our track with the truth on ${D.meas_used} measures and ranks us among the ${DATA.boards.n_entries} entries on each.`);
   put('tFairTrain', DATA.depth.n_train);
   put('tDisc', `The ninth measure, an MSE weighted by each bin's variance across cell types, is not ranked: its weights could not be reproduced. On ${D.ctrl_gap} of ${D.chip_n} ChIP-seq tracks the model sees only the first of the pooled controls.`);
+})();
+
+/* ---------- final recipe vs base models ---------- */
+(function(){
+  const R=DATA.recipe, goals=['imputation','correction','calibration'];
+  const arms=R.bases.map(b=>({name:b.name,m:b.m,r:b.r,c:'var(--field)'})).concat([{name:'Final recipe',m:R.final.m,r:R.final.r,c:'var(--ours)'}]);
+  const W=1160,H=330,L=70,Rr=20,top=30,bot=56,gw=(W-L-Rr)/3,bw=gw/(arms.length+1.6), yy=v=>top+(H-top-bot)*(1-v);
+  let s=svg(W,H);
+  [0,0.25,0.5,0.75,1].forEach(t=>{ s+=`<line x1="${L}" y1="${yy(t)}" x2="${W-Rr}" y2="${yy(t)}" class="grid"/><text x="${L-10}" y="${yy(t)+5}" text-anchor="end" class="tick">${fx(t,2)}</text>`; });
+  goals.forEach((g,i)=>{ const x0=L+i*gw+bw*0.8;
+    arms.forEach((a,j)=>{ const x=x0+j*bw, v=a.m[i], h=a.r[i]/2, fill=j<arms.length-1?(j===0?'#b9b7b0':j===1?'#9d9b94':'#7f7d77'):'var(--ours)';
+      s+=`<rect x="${x}" y="${yy(v)}" width="${bw*0.86}" height="${yy(0)-yy(v)}" fill="${fill}" rx="2"/>`;
+      s+=`<line x1="${x+bw*0.43}" y1="${yy(v+h)}" x2="${x+bw*0.43}" y2="${yy(v-h)}" stroke="#1a1a1a" stroke-width="1.6"/>`;
+      s+=`<text x="${x+bw*0.43}" y="${yy(v+h)-8}" text-anchor="middle" style="font:600 15px var(--sans);fill:${j===arms.length-1?'var(--ours)':'#555'}">${fx(v,3)}</text>`; });
+    s+=`<text x="${L+i*gw+gw/2}" y="${H-bot+28}" text-anchor="middle" class="xlab" style="font-size:19px">${g}</text>`; });
+  arms.forEach((a,j)=>{ const fill=j<arms.length-1?(j===0?'#b9b7b0':j===1?'#9d9b94':'#7f7d77'):'var(--ours)';
+    s+=`<rect x="${L+j*230}" y="${H-18}" width="14" height="14" fill="${fill}" rx="3"/><text x="${L+j*230+20}" y="${H-6}" class="tick" style="fill:#555">${a.name}</text>`; });
+  put('figRecipe', s+'</svg>');
+  const best=i=>Math.max(...R.bases.map(b=>b.m[i]));
+  put('tR1', `${R.final.seeds} seeds, <span data-src="literal">256</span> evaluation regions; whiskers are the seed range. Gain over the best base model: imputation +${fx(R.final.m[0]-best(0),3)}, correction +${fx(R.final.m[1]-best(1),3)}, calibration +${fx(R.final.m[2]-best(2),3)}. ${[0,1,2].filter(i=>R.final.m[i]-best(i)<=R.final.r[i]).map(i=>goals[i]).map(g=>`The ${g} gain is not larger than the final recipe's seed range`).join('; ')||'Every gain is larger than the seed range'}${R.final.m[2]-best(2)<=R.final.r[2]?` (${fx(R.final.r[2],3)})`:''}.`);
+})();
+
+/* ---------- deviance metric set ---------- */
+(function(){
+  const V=DATA.dev, c=V.cal;
+  put('tV1', `Simulation, all checks ${V.all_pass?'passed':'NOT passed'}: the theory floor is off by at most ${fx(V.floor_err,4)}; from ×¼ to ×4 depth, a fixed mistake's score moves by at most ${B(fx(V.drift,3))}, against ${B(fx(V.drift_log1p,3))} for squared error on log(1 + count).`);
+  put('tV2', `Calibration ratio with the true NB spread: ${fx(c.true_size.min,3)}–${fx(c.true_size.max,3)}; with a spread four times too narrow: ${fx(c.overconfident_x4.min,2)}–${fx(c.overconfident_x4.max,2)}; four times too wide: ${fx(c.underconfident_div4.min,2)}–${fx(c.underconfident_div4.max,2)}.`);
+  const nm={imputation_raw:'imputation score',count_crps_skill:'count CRPS skill',r_spec:'specific-signal correlation',dev_imputation_skill:'deviance skill',dev_imputation_r2:'deviance R²',
+    correction_v3_raw:'correction score',correction_oracle_all:'correction, all pairs',correction_crps_model_neg:'correction CRPS',dev_correction_gap_closed:'deviance gap closed',dev_correction_model_neg:'deviance error',
+    uncertainty_raw:'calibration score (PIT)',dev_calibration_error_neg:'deviance calibration error',nb_logscore_gain_vs_marginal:'NB log-score gain'};
+  const pick=[['imputation_raw','dev_imputation_skill'],['count_crps_skill','dev_imputation_skill'],['correction_v3_raw','dev_correction_gap_closed'],['correction_oracle_all','dev_correction_gap_closed'],['uncertainty_raw','dev_calibration_error_neg'],['uncertainty_raw','nb_logscore_gain_vs_marginal']];
+  const rows=pick.map(([o,n])=>{ const r=V.rank.find(x=>x.old===o&&x.new===n); return {lab:`${nm[o]} vs ${nm[n]}`, v:r.rho, c:r.goal==='calibration'?'var(--bad)':'var(--ours)', t:`${fx(r.rho,2)} (p ${r.p<0.001?'< 0.001':fx(r.p,3)})`}; });
+  put('figDevRank', hbar('', rows, {W:1000,top:14,min:0,max:1.15,Lg:470,R:150,rh:40,fs:16,cap:'Spearman rank correlation of recipe arms, headline metric against deviance metric'}));
+  const n=V.rank[0].n;
+  put('tV3', `${B(n)} recipe arms, seeds 0 and 1, <span data-src="literal">16</span> regions. Imputation and correction agree (ρ ${fx(Math.min(...V.rank.filter(r=>r.goal!=='calibration').map(r=>r.rho)),2)} or more); calibration does not (ρ ≤ ${fx(Math.max(...V.rank.filter(r=>r.goal==='calibration').map(r=>r.rho)),2)}).`);
 })();
 
 /* navigation and speaker notes — as in assets/deck.html */
