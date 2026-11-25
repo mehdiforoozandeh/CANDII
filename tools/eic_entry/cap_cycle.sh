@@ -14,6 +14,9 @@ E=/scratch/mforooz/eicx/entry/code/tools/eic_entry
 PY=$V/slope_cal/venv/bin/python
 W=$V/capwatch
 mkdir -p $W/built $W/scored $W/logs
+LIMIT=${CPUH_LIMIT:-55}   # stop submitting once this run's eicx_ jobs since 2026-11-24 19:30 local reach the limit
+used=$(sacct -u $USER -S 2026-11-24T19:30 -X -n -P -o JobName,CPUTimeRAW | awk -F'|' '$1 ~ /^eicx_/ {s += $2} END {printf "%.1f", s / 3600}')
+awk -v u=$used -v l=$LIMIT 'BEGIN {exit !(u >= l)}' && { echo "limit: $used of $LIMIT CPU-h used, nothing submitted"; exit 0; }
 copied=0
 for t in "$@"; do
   [ -e $W/scored/$t ] && continue
