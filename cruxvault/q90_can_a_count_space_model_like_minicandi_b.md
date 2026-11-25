@@ -35,7 +35,7 @@ an exact, tested conversion shows how much of the chain's p-value error is the m
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**3 children** · open 0, leaning 2, settled 1, parked 0 · 10 finding(s) on this question
+**3 children** · open 0, leaning 2, settled 1, parked 0 · 11 finding(s) on this question
 
 - `h90` [[h90_max_s_quantile_normalization_rule_and_hi|Max's quantile-normalization rule and his 1 bp MACS2 formula together reproduce the organizers' signal p-value pipeline exactly, so a count route can be converted without a conversion error of its own]] — *settled · strong*
 - `h91` [[h91_peaks_kept_by_the_encode_naive_overlap_r|Peaks kept by the ENCODE naive-overlap rule across two halves of the reads (an entrant-side analogue of the pseudoreplicate-overlap set) bring the count route's normalized score close to the score it gets with the truth's own peaks]] — *leaning · moderate*
@@ -50,4 +50,5 @@ _(optional: the pre-registered rules — endpoints, thresholds, scope — locked
 - `f400` finding (moderate) [[f400_first_minicandi_scores_on_the_eic_valida|First miniCANDI scores on the EIC validation board (final model, seed 0, not…]]
 - `f401` finding (moderate) [[f401_all_8_minicandi_validation_predictions_f|All 8 miniCANDI validation predictions (final model, seed 0, not…]]
 - `f403` finding (moderate) [[f403_wide_grid_recalibration_n_divided_by_a_p|Wide-grid recalibration (n divided by a per-assay factor) made the…]]
+- `f404` finding (weak) [[f404_interim_30_of_42_predicted_validation_ex|INTERIM, 30 of 42 predicted validation experiments: miniCANDI seed 0 raw…]]
 <!-- crux:ledger:end -->

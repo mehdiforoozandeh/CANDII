@@ -61,3 +61,6 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-24T19:17Z D10 (PI yes to a): mean board all 42, recal pair on 8 only; watcher submits the 34 when Fir 5761693 ends
 - 2026-11-24T19:17Z glossary: blocked reply with d10
 - 2026-11-24T19:28Z recal_wide pair DONE: mse worse on 7/8 vs raw_exp, combined rank worse on 4, better on 0; Fir 5763739-47, ~20 CPU-h (174 min x 7)
+- 2026-11-25T01:19Z Foreman deadline 20:00 UTC 2026-11-25 (PI meeting 22:00). Stopped watcher bexrnghzq; scored 22 finished tracks now (Fir 5942490-5942550, collect 5942551); new watcher scores the 12 remaining tracks as each counts file finishes, until 19:15 UTC.
+- 2026-11-25T01:21Z glossary: blocked reply with c25m26, d10
+- 2026-11-25T02:30Z Interim validation board, 30 of 42 tracks (collect 5942551 done 02:29 UTC): position 5 of 11, 15 unscored counted worst; rank 1 on 7, rank>=10 on 5; nMSE>1 on 20 of 30. results/t390/val_scores_rcp_s0_30, finding f404.
