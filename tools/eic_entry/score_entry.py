@@ -454,6 +454,13 @@ def cmd_val_cov(a):
             why = f"counts_path {r['counts_path']} is not an h5: path"
         elif route == "chip":
             rr, src, note = SFC.with_fraglen(r, fl)
+            if src == "none":   # e.g. a pooled single-end row: read-weighted mean over the experiment's replicate rows
+                reps = [x for x in rows if x["experiment"] == r["experiment"] and x["unit"].startswith("br")
+                        and not x["arm_knob"] and (x["frag_len"] or "").strip() and x["depth_reads"]]
+                if reps:
+                    w = sum(float(x["depth_reads"]) for x in reps)
+                    fr = sum(float(x["frag_len"]) * float(x["depth_reads"]) for x in reps) / w
+                    rr, src, note = dict(r, frag_len=f"{fr:.0f}"), "replicates", f"read-weighted mean of {len(reps)} replicate rows"
             ctl = byid.get(r["control_measurement_id"])
             if src == "none":
                 why = note
