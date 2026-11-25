@@ -136,11 +136,12 @@ Root: [[candii]]
       - ◐ `h52` [H] [[h52_weighting_each_read_once_in_the_start_lo|Weighting each read once in the start loss, instead of about 2.4 times through overlapping bins, gives the read-start model less effective training signal per window]] — *leaning* · weak · against
       - ◐ `h53` [H] [[h53_the_read_start_model_s_inputs_observed_t|The read-start model's inputs (observed tracks, average-signal input, input transform, covariates, masking) were built differently from the reference by mistake]] — *leaning* · moderate · against
       - ○ `h54` [H] [[h54_the_fixed_training_budget_80_000_windows|The fixed training budget (80,000 windows, about 1M parameters) is too small for the noisier start target, so the read-start model is under-trained]] — *open*
+      - ◐ `h55` [H] [[h55_the_read_start_model_s_h3k36me3_loss_is_|The read-start model's H3K36me3 loss is a broad level error: it misplaces the total starts over gene-body domains, not per-bin noise]] — *leaning* · weak · supports
 - ○ `q73` [Q] [[q73_how_does_the_final_minicandi_score_on_th|**How does the final miniCANDI score on the 51 EIC blind tracks, against the published EIC board and the baselines, once the blind rows are built?**]] — *open*
 
 ## Dashboard
 
 - **Questions** (78): open 23 · leaning 44 · settled 11 · parked 0
-- **Hypotheses** (53): open 15 · leaning 25 · settled 7 · parked 6
-- **Confidence**: weak 25 · moderate 44 · strong 18
-- **Findings**: 149
+- **Hypotheses** (54): open 15 · leaning 26 · settled 7 · parked 6
+- **Confidence**: weak 26 · moderate 44 · strong 18
+- **Findings**: 152
