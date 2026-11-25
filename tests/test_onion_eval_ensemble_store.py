@@ -58,7 +58,7 @@ def test_recalibrate_scales_the_dispersion():
         ES.recalibrate(n, 0.0)
 
 
-@pytest.mark.parametrize("c_true", [1.0, 3.0, 0.5])
+@pytest.mark.parametrize("c_true", [1.0, 3.0, 0.5, 64.0, 1 / 64])
 def test_fit_factor_recovers_the_dispersion_scale(c_true):
     rng = np.random.default_rng(7)
     mu = rng.gamma(2.0, 3.0, size=60000)
@@ -191,3 +191,105 @@ def test_combine_refuses_a_target_without_a_factor(tmp_path):
                              "factor_sets": {"seed0": {"A": {"factor": 2.0}}}}))
     with pytest.raises(ValueError, match="no dispersion factor"):
         ES.combine(dirs, tmp_path / "z", factors=f, factor_set="seed0", log=lambda *m: None)
+
+
+def test_assay_factor_sets_one_set_per_seed_and_seed0_as_before():
+    rng = np.random.default_rng(11)
+    mu = rng.gamma(2.0, 3.0, size=(3, 40000))
+    y = rng.negative_binomial(2.0, 2.0 / (2.0 + mu[0])).astype(float)
+    c_true = [1.0, 4.0, 0.25]
+    nk = np.stack([np.full(mu.shape[1], 2.0 * c) for c in c_true])
+    mk = np.repeat(mu[:1], 3, 0)
+    res, nb = ES.assay_factor_sets(y, nk, mk, max_bins=30000)
+    assert sorted(res) == ["ensemble", "seed0", "seed1", "seed2"]
+    assert nb == {"bins": 40000, "finite": 40000, "used": 30000}
+    _, idx = ES.fit_index(y, nk, mk, 30000)
+    # seed0 is the fit of the rule before per-seed sets: seeded subsample, seed 0's own (n, mu)
+    ok = np.flatnonzero(np.isfinite(y))
+    old_idx = np.sort(np.random.default_rng(0).choice(ok, size=30000, replace=False))
+    assert np.array_equal(idx, old_idx)
+    assert res["seed0"] == ES.fit_factor(nk[0, old_idx], mk[0, old_idx], y[old_idx])
+    for k, c in enumerate(c_true):
+        assert abs(np.log2(res[f"seed{k}"]["factor"]) - np.log2(c)) < 0.2
+
+
+def _same_arrays(f1, f2) -> bool:
+    """Every array of two npz files bit-identical (the zip bytes carry a write time)."""
+    with np.load(f1) as a, np.load(f2) as b:
+        return sorted(a.files) == sorted(b.files) and all(
+            a[k].dtype == b[k].dtype and a[k].tobytes() == b[k].tobytes() for k in a.files)
+
+
+def _pair_factors(tmp_path, c, amap=None):
+    f = tmp_path / "pair_factors.json"
+    f.write_text(json.dumps({"factor_sets": {"seed0": {"A": {"factor": c}},
+                                             "ensemble": {"A": {"factor": c}}},
+                             "pair_target_assay": amap if amap is not None else {"p1": "A"}}))
+    return f
+
+
+def test_combine_pair_factors_apply_to_pairs_only_by_target_assay(tmp_path):
+    reqs, dirs, arrs = _members(tmp_path, k=1)
+    plain = tmp_path / "plain"
+    ES.combine(dirs, plain, factors=_factors(tmp_path, 2.0), factor_set="seed0", log=lambda *m: None)
+    withp = tmp_path / "withp"
+    info = ES.combine(dirs, withp, factors=_factors(tmp_path, 2.0), factor_set="seed0",
+                      pair_factors=_pair_factors(tmp_path, 3.0), pair_factor_set="seed0",
+                      log=lambda *m: None)
+    assert info["n_pairs_recalibrated"] == 1 and info["n_pairs_not_in_map"] == 0
+    for r in reqs:
+        f = P.key_file(r["key"])
+        a, b = np.load(plain / f), np.load(withp / f)
+        assert np.array_equal(a["mu"], b["mu"])
+        if r["key"] == "pair/p1":
+            np.testing.assert_allclose(b["n"], arrs[0][r["key"]]["n"].astype(np.float64) / 3.0,
+                                       rtol=1e-7)
+        else:
+            assert _same_arrays(plain / f, withp / f)
+    head = json.loads((withp / "STORE.json").read_text())
+    assert head["ensemble"]["pair_dispersion"]["factor_set"] == "seed0"
+    assert "pair_dispersion" not in json.loads((plain / "STORE.json").read_text())["ensemble"]
+    assert "n_pairs_recalibrated" not in json.loads((plain / ES.COMBINED).read_text())
+
+
+def test_combine_pair_factors_unmapped_and_refusals(tmp_path):
+    reqs, dirs, arrs = _members(tmp_path, k=1)
+    with pytest.raises(ValueError, match="no pair request"):
+        ES.combine(dirs, tmp_path / "u", pair_factors=_pair_factors(tmp_path, 3.0, {"p9": "A"}),
+                   pair_factor_set="seed0", log=lambda *m: None)
+    with pytest.raises(ValueError, match="no pair dispersion factor"):
+        ES.combine(dirs, tmp_path / "v", pair_factors=_pair_factors(tmp_path, 3.0, {"p1": "B"}),
+                   pair_factor_set="seed0", log=lambda *m: None)
+    with pytest.raises(ValueError, match="go together"):
+        ES.combine(dirs, tmp_path / "w", pair_factors=_pair_factors(tmp_path, 3.0),
+                   log=lambda *m: None)
+    with pytest.raises(ValueError, match="no factor set"):
+        ES.combine(dirs, tmp_path / "x", pair_factors=_pair_factors(tmp_path, 3.0),
+                   pair_factor_set="seed7", log=lambda *m: None)
+
+
+def test_combine_default_run_is_bit_identical_to_the_pre_change_code(tmp_path):
+    """The pre-change combine (ff29a883) and this one, with no pair flags, write the same bytes in
+    every request array, and the same STORE.json."""
+    import importlib.util
+    import subprocess
+    root = Path(__file__).resolve().parents[1]
+    try:
+        old = subprocess.run(["git", "-C", str(root), "show",
+                              "ff29a883:tools/onion_eval/ensemble_store.py"],
+                             capture_output=True, text=True, check=True).stdout
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pytest.skip("the pre-change commit is not reachable")
+    p = tmp_path / "es_old.py"
+    p.write_text(old)
+    spec = importlib.util.spec_from_file_location("es_old", p)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    reqs, dirs, arrs = _members(tmp_path, k=3)
+    a, b = tmp_path / "old", tmp_path / "new"
+    mod.combine(dirs, a, factors=_factors(tmp_path, 2.0), factor_set="ensemble", log=lambda *m: None)
+    ES.combine(dirs, b, factors=_factors(tmp_path, 2.0), factor_set="ensemble", log=lambda *m: None)
+    for r in reqs:
+        f = P.key_file(r["key"])
+        assert _same_arrays(a / f, b / f)
+    assert (a / "STORE.json").read_bytes() == (b / "STORE.json").read_bytes()
