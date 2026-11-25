@@ -64,3 +64,7 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-25T01:19Z Foreman deadline 20:00 UTC 2026-11-25 (PI meeting 22:00). Stopped watcher bexrnghzq; scored 22 finished tracks now (Fir 5942490-5942550, collect 5942551); new watcher scores the 12 remaining tracks as each counts file finishes, until 19:15 UTC.
 - 2026-11-25T01:21Z glossary: blocked reply with c25m26, d10
 - 2026-11-25T02:30Z Interim validation board, 30 of 42 tracks (collect 5942551 done 02:29 UTC): position 5 of 11, 15 unscored counted worst; rank 1 on 7, rank>=10 on 5; nMSE>1 on 20 of 30. results/t390/val_scores_rcp_s0_30, finding f404.
+- 2026-11-25T02:43Z glossary: blocked reply with log10, nmse
+- 2026-11-25T02:43Z glossary: blocked reply with logarithm
+- 2026-11-25T02:43Z glossary: blocked reply with exponent
+- 2026-11-25T02:47Z Scale diagnosis of 30 validation tracks done (Fir 5964408-9, 5964853-80, ~0.3 CPU-h): scale error, not depth or lambda; mu over-dispersed on 16/30, p transform enlarges it; 9 tracks have a bad conversion floor. results/t390/val_scale_diag, f405.
