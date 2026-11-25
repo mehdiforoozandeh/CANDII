@@ -179,3 +179,136 @@ def test_write_read_item_and_analyze_cli(tmp_path):
     assert len(pf["pair_target_assay"]) == 8           # fit and score pair keys, all assay A
     with pytest.raises(ValueError):
         R.write_item(tmp_path / "bad", {"key": "x"}, np.zeros(3), np.zeros((2, 4)), np.zeros((2, 4)))
+
+
+# ------------------------------------------------------------------------------------ coverage
+
+def _nb_items(rng, n_true, n_model, mu_scale=50.0, cells=("c0", "c1"), assay="A", kind="imputation",
+              bins=20000, tag="s"):
+    """Items with y ~ NB(n_true, mu) and a model that predicts (n_model, mu) for every seed."""
+    out = []
+    for cell in cells:
+        mu = rng.gamma(2.0, mu_scale / 2.0, size=bins)
+        y = rng.negative_binomial(n_true, n_true / (n_true + mu)).astype(np.float32)
+        target = f"{assay}_{cell}_{tag}"
+        out.append({"kind": kind, "key": f"item/{target}/leave_one_assay_out", "cell": cell,
+                    "assay": assay, "target": target, "source": None, "regime": None, "y": y,
+                    "n": np.full((K, bins), n_model, np.float32),
+                    "mu": np.repeat(mu[None], K, 0).astype(np.float32)})
+    return out
+
+
+def _expected_coverage(n, mu, level):
+    """Mean over bins of P(lower <= Y <= upper) under the model's own NB."""
+    from scipy.stats import nbinom
+    p = n / (n + mu)
+    lo = nbinom.ppf((1 - level) / 2, n, p)
+    hi = nbinom.ppf((1 + level) / 2, n, p)
+    return float(np.mean(nbinom.cdf(hi, n, p) - np.where(lo > 0, nbinom.cdf(lo - 1, n, p), 0.0)))
+
+
+def test_interval_rule_matches_scipy_ppf():
+    from scipy.stats import nbinom
+    rng = np.random.default_rng(1)
+    n = rng.gamma(2.0, 1.0, 20000) + 0.05
+    mu = rng.gamma(1.0, 20.0, 20000)
+    y = rng.negative_binomial(n, n / (n + mu)).astype(np.float64)
+    fy, fm = R.nb_cdf_pair(n, mu, y)
+    tab = R.interval_table(fy, fm, {"all": np.ones(y.size, bool)})["all"]
+    for L in R.LEVELS:
+        p = n / (n + mu)
+        lo, hi = nbinom.ppf((1 - L) / 2, n, p), nbinom.ppf((1 + L) / 2, n, p)
+        t = tab[f"{L:.2f}"]
+        assert t["coverage"] == np.mean((lo <= y) & (y <= hi))
+        assert t["frac_above"] == np.mean(y > hi) and t["frac_below"] == np.mean(y < lo)
+        assert t["coverage"] + t["frac_above"] + t["frac_below"] == pytest.approx(1.0, abs=1e-12)
+
+
+def test_calibrated_model_covers_its_expected_level():
+    rng = np.random.default_rng(2)
+    its = _nb_items(rng, 3.0, 3.0, bins=30000)
+    same = {"A": [{"factor": 1.0}] * K}
+    r = R.coverage_assay("A", its, K, {"c0": 0, "c1": 1}, same, {0: same, 1: same})
+    y, n, mu, _ = R.pool(its)
+    assert r["mu_unchanged"] is True and r["bins"]["used"] == 60000
+    for L in R.LEVELS:
+        want = _expected_coverage(n[0], mu[0], L)
+        se = np.sqrt(want * (1 - want) / y.size)
+        for c in R.COV_CONDITIONS:
+            got = r["tables"][c][0]["all"][f"{L:.2f}"]["coverage"]
+            assert abs(got - want) < 4 * se
+            assert want >= L - 1e-9           # a discrete central interval covers at least L
+            assert want - L < 0.06            # mu ~ 50: little excess from discreteness
+
+
+def test_too_narrow_n_undercovers_and_recalibration_restores():
+    rng = np.random.default_rng(3)
+    n_true, n_model = 2.0, 16.0           # the model's dispersion 1/n is 8 times too small
+    its = _nb_items(rng, n_true, n_model, bins=30000)
+    good = {"A": [{"factor": n_model / n_true}] * K}
+    r = R.coverage_assay("A", its, K, {"c0": 0, "c1": 1}, good, {0: good, 1: good})
+    y, n, mu, _ = R.pool(its)
+    for L in R.LEVELS:
+        lk = f"{L:.2f}"
+        raw = r["tables"]["none"][0]["all"][lk]
+        assert raw["coverage"] < L - 0.05
+        want = _expected_coverage(n[0] / (n_model / n_true), mu[0], L)
+        se = np.sqrt(want * (1 - want) / y.size)
+        for c in ("same_cells", "cross_cell"):
+            assert abs(r["tables"][c][0]["all"][lk]["coverage"] - want) < 4 * se
+    assert r["mu_unchanged"] is True
+
+
+def test_stratum_counts_follow_the_quantile_rule():
+    rng = np.random.default_rng(4)
+    its = _nb_items(rng, 1.0, 1.0, mu_scale=3.0, bins=5000)    # small counts: many ties
+    one = {"A": [{"factor": 1.0}] * K}
+    r = R.coverage_assay("A", its, K, {"c0": 0, "c1": 1}, one, {0: one, 1: one})
+    y, n, mu, _ = R.pool(its)
+    for (t, q) in R.TOPS:
+        thr = np.quantile(y, q)
+        assert r["obs_cuts"][f"obs_{t}"] == thr
+        for k in range(K):
+            tab = r["tables"]["none"][k]
+            assert tab[f"obs_{t}"]["0.90"]["n_bins"] == int((y >= thr).sum())
+            assert tab[f"pred_{t}"]["0.90"]["n_bins"] == int((mu[k] >= np.quantile(mu[k], q)).sum())
+        assert tab["all"]["0.50"]["n_bins"] == y.size
+    assert r["tables"]["none"][0]["obs_top10"]["0.90"]["n_bins"] > 0.1 * y.size   # ties kept
+
+
+def test_coverage_cli_reuses_analyze_factors(tmp_path):
+    fit, score = _sets(seed=7)
+    for name, items in (("fit", fit), ("score", score)):
+        d = tmp_path / name
+        metas = []
+        for it in items:
+            meta = {k: it[k] for k in ("kind", "key", "cell", "assay", "target", "source", "regime")}
+            metas.append(dict(meta, file=R.write_item(d, meta, it["y"], it["n"], it["mu"]).name))
+        (d / R.INDEX).write_text(json.dumps({"runs": ["/r/s0", "/r/s1", "/r/s2"],
+                                             "regions": [[name, 0]], "items": metas}))
+    an = R.analyze_items(fit, score, K, 5000)
+    for workers in (1, 2):
+        prefix = tmp_path / f"out{workers}" / "cov"
+        assert R.coverage(["--fit", str(tmp_path / "fit"), "--score", str(tmp_path / "score"),
+                           "--out", str(prefix), "--max-bins", "5000",
+                           "--workers", str(workers)]) == 0
+        doc = json.loads(prefix.with_name("cov.json").read_text())
+        for kind in ("imputation", "pair"):
+            r = doc["kinds"][kind]
+            assert r["mu_unchanged"] is True
+            assert r["factors"] == json.loads(json.dumps({
+                k: an[kind]["factors"][k] for k in ("same_cells", "cross_cell")}))
+            assert r["fallback_c1"]["cross_cell"] == an[kind]["fallback_c1"]["cross_cell"]
+            for c in R.COV_CONDITIONS:
+                for st in R.STRATA:
+                    for lk in doc["levels"]:
+                        m = r["coverage"][c][st][lk]["mean_over_assays"]
+                        tot = [m[x]["per_seed"] for x in R.COV_METRICS]
+                        assert np.allclose(np.sum(tot, axis=0), 1.0)
+        assert doc["kinds"]["imputation"]["bins"]["A"]["used"] == 4 * B     # no subsample
+        if workers == 1:
+            first = doc["kinds"]
+        else:
+            assert doc["kinds"] == first
+    md = (tmp_path / "out1" / "cov.md").read_text()
+    assert "lower <= y <= upper" in md and "| obs_top1 |" in md and "| A |" in md
