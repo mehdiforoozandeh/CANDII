@@ -1,5 +1,5 @@
 ---
-id: f150
+id: f153
 type: finding
 schema: 3
 title: A file-by-file audit found every input built by the same rule as the…
@@ -14,6 +14,6 @@ created: "2026-11-25T00:25:44"
 updated: "2026-11-25T00:25:44"
 ---
 
-# f150 — A file-by-file audit found every input built by the same rule as the…
+# f153 — A file-by-file audit found every input built by the same rule as the…
 
 Parent:: [[h53_the_read_start_model_s_inputs_observed_t]]

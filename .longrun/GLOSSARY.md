@@ -237,3 +237,15 @@ Every term and metric in use. A new entry lands before its first use in anything
 | ATAC-seq | assay for open chromatin by transposase insertion | field: MeSH | admitted | 2026-11-24 |
 | chromosome | DNA molecule; the genome is split into 23 pairs | field: MeSH | admitted | 2026-11-24 |
 | C24M25 | EIC validation track id: cell number, assay number | coinage: 0 titles in Europe PMC and OpenAlex | rejected | 2026-11-24 |
+| histone | protein that DNA wraps around in chromatin | field: MeSH | admitted | 2026-11-24 |
+| chromatin | DNA packed with proteins inside the cell nucleus | field: MeSH | admitted | 2026-11-24 |
+| throttle | cap on how many array tasks run at once | English word, Zipf 3.5 | admitted | 2026-11-25 |
+| recalibrated | with dispersion rescaled after training to fix calibration | English word, Zipf 2.1 | admitted | 2026-11-25 |
+| elapsed | time passed since a job started | English word, Zipf 3.0 | admitted | 2026-11-25 |
+| metadata | descriptive records about an experiment, not its data | field: MeSH | admitted | 2026-11-25 |
+| FRiP | fraction of reads falling in called peaks | field: OpenAlex, 51 titles | admitted | 2026-11-25 |
+| NSC | ChIP-seq strand cross-correlation quality score, normalized | English word, Zipf 2.9 | admitted | 2026-11-25 |
+| RSC | ChIP-seq strand cross-correlation quality score, relative | English word, Zipf 2.7 | admitted | 2026-11-25 |
+| deduplication | removing duplicate reads from PCR copies of one fragment | English word, Zipf 1.7 | admitted | 2026-11-25 |
+| acetylation | histone mark: acetyl group added to a histone tail | field: MeSH | admitted | 2026-11-25 |
+| methylation | histone mark: methyl group added to a histone tail | field: MeSH | admitted | 2026-11-25 |

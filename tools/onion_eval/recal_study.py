@@ -45,6 +45,17 @@ and ensemble fitted on the FIT forward's pair items, with the pair -> target ass
 
     python tools/onion_eval/recal_study.py analyze --fit <forward dir> --score <forward dir>
         --out <prefix> [--max-bins 300000]
+
+coverage. PI request: do the NB intervals capture large peaks where mu under- or overshoots? Per
+kind, condition (none, same_cells, cross_cell; factors from analyze's fits, `kind_fits`, on the FIT
+forward), seed and assay, the empirical coverage of the central intervals of LEVELS on the SCORE
+forward: covered iff ppf((1 - L) / 2) <= y <= ppf((1 + L) / 2), with frac_above (y > upper) and
+frac_below (y < lower). Strata per assay (pooled bins): all, and the top 10%, 1%, 0.1% by observed
+y and by that seed's mu (value >= np.quantile, ties kept, bin count recorded). Every finite bin is
+scored (no subsample). One assay per job, --workers processes. Writes <prefix>.json, <prefix>.md.
+
+    python tools/onion_eval/recal_study.py coverage --fit <forward dir> --score <forward dir>
+        --out <prefix> [--max-bins 300000] [--workers 4]
 """
 from __future__ import annotations
 
@@ -303,13 +314,52 @@ def _summary(vals) -> dict:
     return {"mean": float(np.mean(v)), "range": float(max(v) - min(v)), "per_seed": list(vals)}
 
 
+def kind_fits(fit_items, K: int, max_bins: int, folds=None) -> tuple:
+    """(same, folds, fold_fit) of one kind: the same_cells factors (`fit_per_seed` over every fit
+    item) and the cross_cell factors fitted on the items of each cell fold. `folds` defaults to
+    `cell_folds(fit_items)`; pass the kind's folds when `fit_items` is a subset (one assay)."""
+    same = fit_per_seed(fit_items, K, max_bins)
+    folds = cell_folds(fit_items) if folds is None else folds
+    fold_fit = {f: fit_per_seed([it for it in fit_items if folds[it["cell"]] == f], K, max_bins)
+                for f in (0, 1)}
+    return same, folds, fold_fit
+
+
+def cross_sources(assay: str, its, folds: dict, fold_fit: dict) -> tuple:
+    """(fit fold per item or None for c = 1, fallback entries) of the cross_cell condition: an item
+    of a cell in fold f takes the factor fitted on fold 1 - f."""
+    src, fb = [], []
+    for it in its:
+        f = folds.get(it["cell"])
+        if f is None:
+            src.append(None)
+            fb.append({"assay": assay, "cell": it["cell"], "key": it["key"],
+                       "why": "cell not in the fit set"})
+        elif assay not in fold_fit[1 - f]:
+            src.append(None)
+            fb.append({"assay": assay, "cell": it["cell"], "key": it["key"], "fit_fold": 1 - f,
+                       "why": "no fit data for this assay in the fold"})
+        else:
+            src.append(1 - f)
+    return src, fb
+
+
+def condition_factors(assay: str, k: int, same: dict, fold_fit: dict, src, pos,
+                      shipped=None) -> dict:
+    """{condition: c} of seed k on bins whose item positions are `pos`: a scalar, or one factor per
+    bin for cross_cell."""
+    cs = {"none": 1.0, "same_cells": same[assay][k]["factor"] if assay in same else 1.0}
+    item_c = np.array([1.0 if s is None else fold_fit[s][assay][k]["factor"] for s in src])
+    cs["cross_cell"] = item_c[pos]
+    if shipped is not None:
+        cs["shipped"] = shipped[assay][k]["factor"] if assay in shipped else 1.0
+    return cs
+
+
 def analyze_kind(fit_items, score_items, K: int, max_bins: int, shipped=None) -> dict:
     """The study of one kind (module docstring). `shipped`: {assay: [per-seed fit_factor result]}
     to apply as the `shipped` condition, or None."""
-    same = fit_per_seed(fit_items, K, max_bins)
-    folds = cell_folds(fit_items)
-    fold_fit = {f: fit_per_seed([it for it in fit_items if folds[it["cell"]] == f], K, max_bins)
-                for f in (0, 1)}
+    same, folds, fold_fit = kind_fits(fit_items, K, max_bins)
     conds = ["none", "same_cells", "cross_cell"] + (["shipped"] if shipped is not None else [])
     pit = {c: [{} for _ in range(K)] for c in conds}
     bins, fallback = {}, {c: [] for c in conds if c != "none"}
@@ -323,33 +373,15 @@ def analyze_kind(fit_items, score_items, K: int, max_bins: int, shipped=None) ->
             fallback["same_cells"].append({"assay": assay, "items": len(its)})
         if shipped is not None and assay not in shipped:
             fallback["shipped"].append({"assay": assay, "items": len(its)})
-        # cross_cell: the fit fold of each item's cell (the other fold) and whether it has data
-        src = []
-        for it in its:
-            f = folds.get(it["cell"])
-            if f is None:
-                src.append(None)
-                fallback["cross_cell"].append({"assay": assay, "cell": it["cell"],
-                                               "key": it["key"], "why": "cell not in the fit set"})
-            elif assay not in fold_fit[1 - f]:
-                src.append(None)
-                fallback["cross_cell"].append({"assay": assay, "cell": it["cell"],
-                                               "key": it["key"], "fit_fold": 1 - f,
-                                               "why": "no fit data for this assay in the fold"})
-            else:
-                src.append(1 - f)
+        src, fb = cross_sources(assay, its, folds, fold_fit)
+        fallback["cross_cell"] += fb
         for k in range(K):
             nk, mk, yk = n[k, idx], mu[k, idx], y[idx]
             if not idx.size:
                 for c in conds:
                     pit[c][k][assay] = None
                 continue
-            cs = {"none": 1.0,
-                  "same_cells": same[assay][k]["factor"] if assay in same else 1.0}
-            item_c = np.array([1.0 if s is None else fold_fit[s][assay][k]["factor"] for s in src])
-            cs["cross_cell"] = item_c[pos[idx]]
-            if shipped is not None:
-                cs["shipped"] = shipped[assay][k]["factor"] if assay in shipped else 1.0
+            cs = condition_factors(assay, k, same, fold_fit, src, pos[idx], shipped)
             for c in conds:
                 n2, m2 = apply_factor(nk, mk, cs[c])
                 if not (m2 is mk and np.array_equal(m2, mu[k, idx])):
@@ -494,11 +526,304 @@ def analyze(argv=None) -> int:
     return 0
 
 
+# ----------------------------------------------------------------------------------- coverage
+
+LEVELS = (0.50, 0.80, 0.90, 0.95)
+#: (stratum suffix, quantile): a bin is in the stratum when its value >= np.quantile(values, q)
+TOPS = (("top10", 0.90), ("top1", 0.99), ("top0.1", 0.999))
+#: `reference`: what a calibrated model would show. Per bin, a draw y* ~ NB(n, mu) of the
+#: uncalibrated prediction replaces y, and the obs strata are cut on y*; so the obs_top strata of
+#: `reference` give the coverage a perfectly calibrated model would also get when bins are picked
+#: by their observed value (selection on the outcome), and pred strata the nominal-or-above value.
+COV_CONDITIONS = ("none", "same_cells", "cross_cell", "reference")
+REFERENCE_SEED = 20261125
+STRATA = ("all",) + tuple(f"obs_{t}" for t, _ in TOPS) + tuple(f"pred_{t}" for t, _ in TOPS)
+COV_METRICS = ("coverage", "frac_above", "frac_below")
+
+
+def _lk(level: float) -> str:
+    return f"{level:.2f}"
+
+
+def nb_cdf_pair(n, mu, y) -> tuple:
+    """(F(y), F(y - 1)) of NB(n, p) with p = n / (n + mu) (`p_from_mu`, the scorer's conversion);
+    F(-1) = 0."""
+    from scipy.stats import nbinom
+    from candi.bench.distributional import p_from_mu
+    n = np.asarray(n, np.float64)
+    y = np.asarray(y, np.float64)
+    p = p_from_mu(n, mu)
+    fy = nbinom.cdf(y, n, p)
+    fm = np.zeros_like(fy)
+    pos = y > 0
+    fm[pos] = nbinom.cdf(y[pos] - 1.0, n[pos], p[pos])
+    return fy, fm
+
+
+def top_masks(v, prefix: str) -> tuple:
+    """({prefix_top<x>: v >= np.quantile(v, q)}, {prefix_top<x>: the quantile value}); ties at the
+    cut are kept, so a stratum may hold more than its nominal share."""
+    v = np.asarray(v, np.float64)
+    masks, cuts = {}, {}
+    for t, q in TOPS:
+        thr = float(np.quantile(v, q))
+        masks[f"{prefix}_{t}"] = v >= thr
+        cuts[f"{prefix}_{t}"] = thr
+    return masks, cuts
+
+
+def interval_table(fy, fm, masks: dict) -> dict:
+    """{stratum: {level: {n_bins, coverage, frac_above, frac_below}}} of the central intervals
+    [ppf((1 - L) / 2), ppf((1 + L) / 2)]. With ppf(q) the least k with F(k) >= q:
+    y < lower iff F(y) < (1 - L) / 2, and y > upper iff F(y - 1) >= (1 + L) / 2."""
+    out = {s: {} for s in masks}
+    for L in LEVELS:
+        below = fy < (1.0 - L) / 2.0
+        above = fm >= (1.0 + L) / 2.0
+        for s, m in masks.items():
+            nb = int(np.count_nonzero(m))
+            a = int(np.count_nonzero(above & m))
+            b = int(np.count_nonzero(below & m))
+            out[s][_lk(L)] = ({"n_bins": 0, "coverage": None, "frac_above": None,
+                               "frac_below": None} if nb == 0 else
+                              {"n_bins": nb, "coverage": (nb - a - b) / nb,
+                               "frac_above": a / nb, "frac_below": b / nb})
+    return out
+
+
+def coverage_assay(assay: str, its, K: int, folds: dict, same: dict, fold_fit: dict) -> dict:
+    """Coverage tables of one pooled assay of one kind: every bin of `fit_index`'s finite mask (no
+    subsample), per condition of COV_CONDITIONS and seed k."""
+    y, n, mu, pos = pool(its)
+    ok, idx = ES.fit_index(y, n, mu, max(int(y.size), 1))
+    src, fb = cross_sources(assay, its, folds, fold_fit)
+    res = {"bins": {"items": len(its), "bins": int(y.size), "finite": int(ok.sum()),
+                    "used": int(idx.size), "cells": sorted({it["cell"] for it in its})},
+           "fallback": {"same_cells": ([] if assay in same else
+                                       [{"assay": assay, "items": len(its)}]),
+                        "cross_cell": fb},
+           "tables": {c: [None] * K for c in COV_CONDITIONS},
+           "obs_cuts": None, "pred_cuts": [None] * K, "mu_unchanged": True}
+    if not idx.size:
+        return res
+    yk = y[idx]
+    obs, res["obs_cuts"] = top_masks(yk, "obs")
+    for k in range(K):
+        nk, mk = n[k, idx], mu[k, idx]
+        pred, res["pred_cuts"][k] = top_masks(mk, "pred")
+        masks = {"all": np.ones(idx.size, bool), **obs, **pred}
+        cs = condition_factors(assay, k, same, fold_fit, src, pos[idx])
+        for c in COV_CONDITIONS:
+            if c == "reference":
+                from candi.bench.distributional import p_from_mu
+                rng = np.random.default_rng([REFERENCE_SEED, k, len(yk)])
+                ys = rng.negative_binomial(np.asarray(nk, np.float64),
+                                           p_from_mu(np.asarray(nk, np.float64), mk)).astype(np.float64)
+                sim_obs, _ = top_masks(ys, "obs")
+                fy, fm = nb_cdf_pair(nk, mk, ys)
+                res["tables"][c][k] = interval_table(fy, fm, {**masks, **sim_obs})
+                continue
+            n2, m2 = apply_factor(nk, mk, cs[c])
+            if not (m2 is mk and np.array_equal(m2, mu[k, idx])):
+                res["mu_unchanged"] = False
+            assert res["mu_unchanged"], f"{assay} {c}: mu changed"
+            fy, fm = nb_cdf_pair(n2, m2, yk)
+            res["tables"][c][k] = interval_table(fy, fm, masks)
+    return res
+
+
+def _load(d, metas):
+    return [read_item(Path(d) / "items" / m["file"]) for m in metas]
+
+
+def _fit_job(job) -> tuple:
+    d, metas, K, max_bins, folds = job
+    same, _, fold_fit = kind_fits(_load(d, metas), K, max_bins, folds)
+    return same, fold_fit
+
+
+def _score_job(job) -> dict:
+    d, metas, assay, K, folds, same, fold_fit = job
+    return coverage_assay(assay, _load(d, metas), K, folds, same, fold_fit)
+
+
+def _map(fn, jobs, workers: int) -> list:
+    if workers <= 1 or len(jobs) <= 1:
+        return [fn(j) for j in jobs]
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    with ProcessPoolExecutor(min(workers, len(jobs)), mp_context=mp.get_context("fork")) as ex:
+        return list(ex.map(fn, jobs))
+
+
+def coverage_kind(fit_dir, fit_metas, score_dir, score_metas, K: int, max_bins: int,
+                  workers: int = 1) -> dict:
+    """The coverage study of one kind. Factors: `kind_fits` (the analyze code path) on the fit
+    forward, run per assay with the kind's cell folds; scoring: `coverage_assay` per assay, one
+    assay per job."""
+    folds = cell_folds(fit_metas)
+    fit_by = by_assay(fit_metas)
+    same, fold_fit = {}, {0: {}, 1: {}}
+    for s, ff in _map(_fit_job, [(fit_dir, m, K, max_bins, folds) for m in fit_by.values()],
+                      workers):
+        same.update(s)
+        for f in (0, 1):
+            fold_fit[f].update(ff[f])
+    same = dict(sorted(same.items()))
+    fold_fit = {f: dict(sorted(v.items())) for f, v in fold_fit.items()}
+    score_by = by_assay(score_metas)
+    rs = _map(_score_job, [(score_dir, m, a, K, folds, same, fold_fit)
+                           for a, m in score_by.items()], workers)
+    per = dict(zip(score_by, rs))
+    assays = list(per)
+    cov = {}
+    for c in COV_CONDITIONS:
+        cov[c] = {}
+        for st in STRATA:
+            cov[c][st] = {}
+            for L in LEVELS:
+                lk = _lk(L)
+                cell = {k: {a: (None if per[a]["tables"][c][k] is None
+                                else per[a]["tables"][c][k][st][lk]) for a in assays}
+                        for k in range(K)}
+                pa = {a: {"n_bins": [None if cell[k][a] is None else cell[k][a]["n_bins"]
+                                     for k in range(K)],
+                          **{m: _summary([None if cell[k][a] is None else cell[k][a][m]
+                                          for k in range(K)]) for m in COV_METRICS}}
+                      for a in assays}
+                moa = {"n_bins": [sum(cell[k][a]["n_bins"] for a in assays
+                                      if cell[k][a] is not None) for k in range(K)]}
+                for m in COV_METRICS:
+                    ps = []
+                    for k in range(K):
+                        v = [None if cell[k][a] is None else cell[k][a][m] for a in assays]
+                        ps.append(float(np.mean(v)) if v and None not in v else None)
+                    moa[m] = _summary(ps)
+                cov[c][st][lk] = {"per_assay": pa, "mean_over_assays": moa}
+    return {"n_items": len(score_metas), "fit_n_items": len(fit_metas), "folds": folds,
+            "bins": {a: dict(r["bins"], obs_cuts=r["obs_cuts"], pred_cuts=r["pred_cuts"])
+                     for a, r in per.items()},
+            "n_bins_used": int(sum(r["bins"]["used"] for r in per.values())),
+            "fallback_c1": {"same_cells": [x for r in per.values()
+                                           for x in r["fallback"]["same_cells"]],
+                            "cross_cell": [x for r in per.values()
+                                           for x in r["fallback"]["cross_cell"]]},
+            "mu_unchanged": all(r["mu_unchanged"] for r in per.values()),
+            "factors": {"same_cells": {a: [_short(r) for r in v] for a, v in same.items()},
+                        "cross_cell": {f"fitted_on_fold{f}": {a: [_short(r) for r in v]
+                                                              for a, v in fold_fit[f].items()}
+                                       for f in (0, 1)}},
+            "coverage": cov}
+
+
+def _cov_cell(x: dict) -> str:
+    c, a, b = (x[m]["mean"] for m in COV_METRICS)
+    if c is None:
+        return "n/a"
+    return f"{c:.3f} ({a:.3f}/{b:.3f})"
+
+
+def coverage_markdown(doc: dict) -> str:
+    K = doc["n_seeds"]
+    L = ["# Recalibration study: NB central-interval coverage by count stratum", "",
+         f"Fit forward: `{doc['fit']}`. Score forward: `{doc['score']}`. Seeds: {K}.", "",
+         "Interval of level L: lower = ppf((1 - L) / 2), upper = ppf((1 + L) / 2) of NB(n', p), "
+         "p = n' / (n' + mu), n' = n / c, integer counts. A bin is covered when "
+         "lower <= y <= upper; above means y > upper, below means y < lower. Computed as "
+         "F(y) >= (1 - L) / 2 and F(y - 1) < (1 + L) / 2, which is the same rule for ppf(q) = "
+         "the least k with F(k) >= q. The interval is discrete, so a calibrated model covers at "
+         "least L, and more at small counts.", "",
+         "Strata, per assay over its pooled score bins: all; obs_topX = observed y >= "
+         "np.quantile(y, 1 - X) (default linear method); pred_topX = that seed's mu >= "
+         "np.quantile(mu, 1 - X). Ties at the cut stay in, so a stratum can hold more bins "
+         "than its share; the json records each n_bins and cut. Every finite bin is scored "
+         f"(no subsample). Factors: the analyze fits on the fit forward (at most "
+         f"{doc['max_bins']} bins per assay, seeded subsample, seed 0).", "",
+         "Cells: coverage (frac_above/frac_below), mean over assays (unweighted), then mean "
+         "over seeds.", ""]
+    head = [f"{c} {_lk(l)}" for c in COV_CONDITIONS for l in LEVELS]
+    for kind, r in doc["kinds"].items():
+        L += [f"## {kind}", "",
+              f"Score items {r['n_items']}, bins scored {r['n_bins_used']}; fit items "
+              f"{r['fit_n_items']}. Mu unchanged under every condition: {r['mu_unchanged']}. "
+              f"Fallbacks to c = 1: same_cells {len(r['fallback_c1']['same_cells'])}, "
+              f"cross_cell {len(r['fallback_c1']['cross_cell'])}.", "",
+              "| stratum | " + " | ".join(head) + " |", "|---|" + "---|" * len(head)]
+        cov = r["coverage"]
+        for st in STRATA:
+            L.append(f"| {st} | " + " | ".join(
+                _cov_cell(cov[c][st][_lk(l)]["mean_over_assays"])
+                for c in COV_CONDITIONS for l in LEVELS) + " |")
+        sts = ("obs_top1", "pred_top1")
+        L += ["", "Per assay, level 0.90: coverage (frac_above/frac_below), mean over seeds; "
+              "n_bins of seed 0.", "",
+              "| assay | " + " | ".join(f"{st} n_bins | " + " | ".join(
+                  f"{st} {c}" for c in COV_CONDITIONS) for st in sts) + " |",
+              "|---|" + "---|" * (len(sts) * (1 + len(COV_CONDITIONS)))]
+        for a in r["bins"]:
+            row = []
+            for st in sts:
+                pa = {c: cov[c][st]["0.90"]["per_assay"][a] for c in COV_CONDITIONS}
+                nb = pa["none"]["n_bins"][0]
+                row.append("n/a" if nb is None else str(nb))
+                row += [_cov_cell(pa[c]) for c in COV_CONDITIONS]
+            L.append(f"| {a} | " + " | ".join(row) + " |")
+        L.append("")
+    return "\n".join(L) + "\n"
+
+
+def coverage(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="recal_study.py coverage", description="coverage of central "
+                                 "NB prediction intervals by count stratum, per condition")
+    ap.add_argument("--fit", required=True, help="forward out dir the factors are fitted on")
+    ap.add_argument("--score", required=True, help="forward out dir the intervals are scored on")
+    ap.add_argument("--out", required=True, help="output prefix: <prefix>.json, <prefix>.md")
+    ap.add_argument("--max-bins", type=int, default=300000,
+                    help="factor-fit subsample per assay, as analyze; scoring uses every bin")
+    ap.add_argument("--workers", type=int, default=4, help="processes, one assay per job")
+    a = ap.parse_args(argv)
+    t0 = time.time()
+    fidx, sidx = _read_json(Path(a.fit) / INDEX), _read_json(Path(a.score) / INDEX)
+    K = len(fidx["runs"])
+    if len(sidx["runs"]) != K:
+        raise SystemExit(f"refused: {K} runs in the fit forward, {len(sidx['runs'])} in the score")
+    if fidx["runs"] != sidx["runs"]:
+        print("coverage: WARNING: the two forwards list different run dirs", flush=True)
+    shared = sorted({tuple(r) for r in fidx["regions"]} & {tuple(r) for r in sidx["regions"]})
+    if shared:
+        print(f"coverage: WARNING: the forwards share {len(shared)} regions", flush=True)
+    kinds = {}
+    for kind in KINDS:
+        fm = [m for m in fidx["items"] if m["kind"] == kind]
+        sm = [m for m in sidx["items"] if m["kind"] == kind]
+        if not sm:
+            continue
+        kinds[kind] = coverage_kind(a.fit, fm, a.score, sm, K, a.max_bins, a.workers)
+        print(f"coverage: {kind} done ({time.time() - t0:.0f} s)", flush=True)
+    doc = {"fit": str(Path(a.fit).resolve()), "score": str(Path(a.score).resolve()),
+           "runs": fidx["runs"], "n_seeds": K, "max_bins": a.max_bins, "subsample_seed": 0,
+           "scoring_subsample": None, "levels": [_lk(l) for l in LEVELS],
+           "strata": list(STRATA), "tops": {t: q for t, q in TOPS},
+           "conditions": list(COV_CONDITIONS), "shared_regions": [list(r) for r in shared],
+           "rule": "covered iff ppf((1-L)/2) <= y <= ppf((1+L)/2), NB(n/c, p = n'/(n'+mu)); "
+                   "stratum topX: value >= np.quantile(values, 1-X), ties kept",
+           "kinds": kinds}
+    doc["seconds"] = round(time.time() - t0, 1)
+    out = Path(a.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(out.with_name(out.name + ".json"), doc)
+    out.with_name(out.name + ".md").write_text(coverage_markdown(doc), encoding="utf-8")
+    print(f"coverage: wrote {out}.json, .md ({doc['seconds']} s)", flush=True)
+    return 0
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     if cmd == "forward":
         sys.exit(forward(sys.argv[2:]))
     if cmd == "analyze":
         sys.exit(analyze(sys.argv[2:]))
+    if cmd == "coverage":
+        sys.exit(coverage(sys.argv[2:]))
     print(__doc__)
     sys.exit(2)

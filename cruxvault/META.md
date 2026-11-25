@@ -130,7 +130,10 @@ Root: [[candii]]
     - ◐ `h49` [H] [[h49_the_full_combination_minicandi_trained_o|The full-combination miniCANDI trained on 25 bp read-start counts, with its predictions converted to overlap counts, matches the same recipe trained on overlap counts on imputation, correction and calibration]] — *leaning* · moderate · against
     - ◐ `q77` [Q] [[q77_does_a_poisson_deviance_eval_set_imputat|**Does a Poisson-deviance eval set (imputation skill vs the position average, correction gap closed vs depth-only scaling with a read-noise floor, deviance calibration ratio) measure the three goals at least as well as the current headline set?**]] — *leaning* · moderate
       - ◐ `h48` [H] [[h48_on_the_same_predictions_each_deviance_te|On the same predictions, each deviance term ranks miniCANDI arms like the current term of its goal and separates arms from seed noise at least as well]] — *leaning* · moderate · supports
-    - ◐ `q78` [Q] [[q78_why_does_the_read_start_minicandi_lose_t|**Why does the read-start miniCANDI lose to the read-count version on imputation and calibration?**]] — *leaning* · moderate
+    - ◐ `q78` [Q] [[q78_how_much_does_per_assay_dispersion_recal|**How much does per-assay dispersion recalibration after training improve calibration of the final miniCANDI when fitted on other cells, as a user must for imputed tracks?**]] — *leaning* · moderate
+    - ◐ `q79` [Q] [[q79_do_the_final_minicandi_s_negative_binomi|**Do the final miniCANDI's negative binomial intervals cover large observed peaks, compared with a perfectly calibrated model under the same bin selection?**]] — *leaning* · moderate
+    - ◐ `q80` [Q] [[q80_does_the_final_minicandi_follow_a_change|**Does the final miniCANDI follow a changed output covariate in the direction stated before the run?**]] — *leaning* · moderate
+    - ◐ `q81` [Q] [[q81_why_does_the_read_start_minicandi_lose_t|**Why does the read-start miniCANDI lose to the read-count version on imputation and calibration?**]] — *leaning* · moderate
       - ◐ `h50` [H] [[h50_the_nb_moment_match_which_treats_neighbo|The NB moment match, which treats neighbouring start counts as independent, understates the converted variance and causes the read-start model's overconfidence]] — *leaning* · weak · supports
       - ◐ `h51` [H] [[h51_sparse_per_bin_start_targets_and_inputs_|Sparse per-bin start targets and inputs (more zeros, lower replicate agreement) cause the read-start imputation loss]] — *leaning* · weak · mixed
       - ◐ `h52` [H] [[h52_weighting_each_read_once_in_the_start_lo|Weighting each read once in the start loss, instead of about 2.4 times through overlapping bins, gives the read-start model less effective training signal per window]] — *leaning* · weak · against
@@ -141,7 +144,7 @@ Root: [[candii]]
 
 ## Dashboard
 
-- **Questions** (78): open 23 · leaning 44 · settled 11 · parked 0
+- **Questions** (81): open 23 · leaning 47 · settled 11 · parked 0
 - **Hypotheses** (54): open 15 · leaning 26 · settled 7 · parked 6
-- **Confidence**: weak 26 · moderate 44 · strong 18
-- **Findings**: 152
+- **Confidence**: weak 26 · moderate 47 · strong 18
+- **Findings**: 155

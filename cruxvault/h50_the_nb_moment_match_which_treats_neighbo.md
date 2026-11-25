@@ -3,7 +3,7 @@ id: h50
 type: idea
 schema: 3
 title: The NB moment match, which treats neighbouring start counts as independent, understates the converted variance and causes the read-start model's overconfidence
-parent: q78
+parent: q81
 rule: 
 measurement: 
 replicates: 
@@ -13,7 +13,7 @@ updated: "2026-11-25T00:25:43"
 
 # h50 — The NB moment match, which treats neighbouring start counts as independent, understates the converted variance and causes the read-start model's overconfidence
 
-Parent:: [[q78_why_does_the_read_start_minicandi_lose_t]]
+Parent:: [[q81_why_does_the_read_start_minicandi_lose_t]]
 
 ## ELI5
 

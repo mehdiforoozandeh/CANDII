@@ -3,7 +3,7 @@ id: h51
 type: idea
 schema: 3
 title: Sparse per-bin start targets and inputs (more zeros, lower replicate agreement) cause the read-start imputation loss
-parent: q78
+parent: q81
 rule: 
 measurement: 
 replicates: 
@@ -13,7 +13,7 @@ updated: "2026-11-25T00:25:43"
 
 # h51 — Sparse per-bin start targets and inputs (more zeros, lower replicate agreement) cause the read-start imputation loss
 
-Parent:: [[q78_why_does_the_read_start_minicandi_lose_t]]
+Parent:: [[q81_why_does_the_read_start_minicandi_lose_t]]
 
 ## ELI5
 

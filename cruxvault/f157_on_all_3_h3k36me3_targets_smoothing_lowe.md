@@ -1,5 +1,5 @@
 ---
-id: f154
+id: f157
 type: finding
 schema: 3
 title: On all 3 H3K36me3 targets, smoothing lowered skill, residual correlation…
@@ -12,6 +12,6 @@ created: "2026-11-25T02:18:15"
 updated: "2026-11-25T02:18:15"
 ---
 
-# f154 — On all 3 H3K36me3 targets, smoothing lowered skill, residual correlation…
+# f157 — On all 3 H3K36me3 targets, smoothing lowered skill, residual correlation…
 
 Parent:: [[h55_the_read_start_model_s_h3k36me3_loss_is_]]

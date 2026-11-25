@@ -3,7 +3,7 @@ id: h54
 type: idea
 schema: 3
 title: The fixed training budget (80,000 windows, about 1M parameters) is too small for the noisier start target, so the read-start model is under-trained
-parent: q78
+parent: q81
 rule: 
 measurement: 
 replicates: 
@@ -13,7 +13,7 @@ updated: "2026-11-25T00:25:43"
 
 # h54 — The fixed training budget (80,000 windows, about 1M parameters) is too small for the noisier start target, so the read-start model is under-trained
 
-Parent:: [[q78_why_does_the_read_start_minicandi_lose_t]]
+Parent:: [[q81_why_does_the_read_start_minicandi_lose_t]]
 
 ## ELI5
 

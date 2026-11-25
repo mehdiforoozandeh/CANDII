@@ -1,5 +1,5 @@
 ---
-id: f146
+id: f149
 type: finding
 schema: 3
 title: Every read-start seed is below every reference seed on imputation (0.457 vs…
@@ -14,6 +14,6 @@ created: "2026-11-24T23:50:05"
 updated: "2026-11-24T23:50:05"
 ---
 
-# f146 — Every read-start seed is below every reference seed on imputation (0.457 vs…
+# f149 — Every read-start seed is below every reference seed on imputation (0.457 vs…
 
 Parent:: [[h49_the_full_combination_minicandi_trained_o]]

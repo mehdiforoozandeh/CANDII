@@ -1,5 +1,5 @@
 ---
-id: f153
+id: f156
 type: finding
 schema: 3
 title: The model's start-space errors stay correlated over 2 to more than 400 bins,…
@@ -13,6 +13,6 @@ created: "2026-11-25T02:18:09"
 updated: "2026-11-25T02:18:09"
 ---
 
-# f153 — The model's start-space errors stay correlated over 2 to more than 400 bins,…
+# f156 — The model's start-space errors stay correlated over 2 to more than 400 bins,…
 
 Parent:: [[h50_the_nb_moment_match_which_treats_neighbo]]

@@ -3,7 +3,7 @@ id: h53
 type: idea
 schema: 3
 title: The read-start model's inputs (observed tracks, average-signal input, input transform, covariates, masking) were built differently from the reference by mistake
-parent: q78
+parent: q81
 rule: 
 measurement: 
 replicates: 
@@ -13,7 +13,7 @@ updated: "2026-11-25T00:25:43"
 
 # h53 — The read-start model's inputs (observed tracks, average-signal input, input transform, covariates, masking) were built differently from the reference by mistake
 
-Parent:: [[q78_why_does_the_read_start_minicandi_lose_t]]
+Parent:: [[q81_why_does_the_read_start_minicandi_lose_t]]
 
 ## ELI5
 

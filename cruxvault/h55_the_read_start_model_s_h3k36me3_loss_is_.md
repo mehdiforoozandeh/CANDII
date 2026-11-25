@@ -3,7 +3,7 @@ id: h55
 type: idea
 schema: 3
 title: "The read-start model's H3K36me3 loss is a broad level error: it misplaces the total starts over gene-body domains, not per-bin noise"
-parent: q78
+parent: q81
 rule: 
 measurement: 
 replicates: 
@@ -13,7 +13,7 @@ updated: "2026-11-25T02:18:02"
 
 # h55 — The read-start model's H3K36me3 loss is a broad level error: it misplaces the total starts over gene-body domains, not per-bin noise
 
-Parent:: [[q78_why_does_the_read_start_minicandi_lose_t]]
+Parent:: [[q81_why_does_the_read_start_minicandi_lose_t]]
 
 ## ELI5
 

@@ -1,5 +1,5 @@
 ---
-id: f152
+id: f155
 type: finding
 schema: 3
 title: Box-smoothing the seed-0 start means at 9 and 41 bins lowered skill…
@@ -12,6 +12,6 @@ created: "2026-11-25T02:18:01"
 updated: "2026-11-25T02:18:01"
 ---
 
-# f152 — Box-smoothing the seed-0 start means at 9 and 41 bins lowered skill…
+# f155 — Box-smoothing the seed-0 start means at 9 and 41 bins lowered skill…
 
 Parent:: [[h54_the_fixed_training_budget_80_000_windows]]

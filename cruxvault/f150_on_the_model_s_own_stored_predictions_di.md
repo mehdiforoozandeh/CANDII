@@ -1,5 +1,5 @@
 ---
-id: f147
+id: f150
 type: finding
 schema: 3
 title: On the model's own stored predictions, dividing the converted dispersion by…
@@ -14,6 +14,6 @@ created: "2026-11-25T00:25:43"
 updated: "2026-11-25T00:25:43"
 ---
 
-# f147 — On the model's own stored predictions, dividing the converted dispersion by…
+# f150 — On the model's own stored predictions, dividing the converted dispersion by…
 
 Parent:: [[h50_the_nb_moment_match_which_treats_neighbo]]

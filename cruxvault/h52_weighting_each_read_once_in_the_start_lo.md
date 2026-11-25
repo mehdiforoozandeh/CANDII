@@ -3,7 +3,7 @@ id: h52
 type: idea
 schema: 3
 title: Weighting each read once in the start loss, instead of about 2.4 times through overlapping bins, gives the read-start model less effective training signal per window
-parent: q78
+parent: q81
 rule: 
 measurement: 
 replicates: 
@@ -13,7 +13,7 @@ updated: "2026-11-25T00:25:43"
 
 # h52 — Weighting each read once in the start loss, instead of about 2.4 times through overlapping bins, gives the read-start model less effective training signal per window
 
-Parent:: [[q78_why_does_the_read_start_minicandi_lose_t]]
+Parent:: [[q81_why_does_the_read_start_minicandi_lose_t]]
 
 ## ELI5
 

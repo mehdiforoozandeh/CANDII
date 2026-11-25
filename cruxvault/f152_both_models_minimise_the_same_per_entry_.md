@@ -1,5 +1,5 @@
 ---
-id: f149
+id: f152
 type: finding
 schema: 3
 title: Both models minimise the same per-entry NB mean on one code path with the…
@@ -14,6 +14,6 @@ created: "2026-11-25T00:25:44"
 updated: "2026-11-25T00:25:44"
 ---
 
-# f149 — Both models minimise the same per-entry NB mean on one code path with the…
+# f152 — Both models minimise the same per-entry NB mean on one code path with the…
 
 Parent:: [[h52_weighting_each_read_once_in_the_start_lo]]

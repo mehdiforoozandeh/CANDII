@@ -1,5 +1,5 @@
 ---
-id: q78
+id: q81
 type: question
 schema: 3
 title: Why does the read-start miniCANDI lose to the read-count version on imputation and calibration?
@@ -8,7 +8,7 @@ created: "2026-11-25T00:25:26"
 updated: "2026-11-25T00:25:26"
 ---
 
-# q78 — Why does the read-start miniCANDI lose to the read-count version on imputation and calibration?
+# q81 — Why does the read-start miniCANDI lose to the read-count version on imputation and calibration?
 
 Parent:: [[q75_can_one_minicandi_recipe_match_or_beat_t]]
 

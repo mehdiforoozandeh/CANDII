@@ -1,5 +1,5 @@
 ---
-id: f148
+id: f151
 type: finding
 schema: 3
 title: Replicate r halves from 0.499 to 0.248 and zeros rise from 0.62 to 0.89, but…
@@ -14,6 +14,6 @@ created: "2026-11-25T00:25:43"
 updated: "2026-11-25T00:25:43"
 ---
 
-# f148 — Replicate r halves from 0.499 to 0.248 and zeros rise from 0.62 to 0.89, but…
+# f151 — Replicate r halves from 0.499 to 0.248 and zeros rise from 0.62 to 0.89, but…
 
 Parent:: [[h51_sparse_per_bin_start_targets_and_inputs_]]

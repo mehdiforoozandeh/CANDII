@@ -1,5 +1,5 @@
 ---
-id: f151
+id: f154
 type: finding
 schema: 3
 title: Equal parameter counts and similar held-out curve shapes (-5.8% vs -7.1%),…
@@ -13,6 +13,6 @@ created: "2026-11-25T00:25:44"
 updated: "2026-11-25T00:25:44"
 ---
 
-# f151 — Equal parameter counts and similar held-out curve shapes (-5.8% vs -7.1%),…
+# f154 — Equal parameter counts and similar held-out curve shapes (-5.8% vs -7.1%),…
 
 Parent:: [[h54_the_fixed_training_budget_80_000_windows]]
