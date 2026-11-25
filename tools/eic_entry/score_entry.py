@@ -428,11 +428,14 @@ def cmd_val_cov(a):
     for r in rows:
         if r["unit"] == "pooled" and not r["arm_knob"] and r["measurement_id"].endswith(".base"):
             base.setdefault(r["eic_track"], {})[r["layer"]] = r
+        elif r["unit"] == "pooled" and r["arm_knob"] == "se" and r["measurement_id"].endswith(".se"):
+            base.setdefault(r["eic_track"], {})[r["layer"] + "_se"] = r    # C25M26, C34M02, C50M02 have no base row
     cols = COV_COLUMNS + ["measurement_id", "layer", "assay_class", "frag_len_source", "observed_counts",
                           "observed_signal"]
     good, miss = [], []
     for t in tracks:
-        r = base.get(t, {}).get("uniform") or base.get(t, {}).get("native")
+        b = base.get(t, {})
+        r = b.get("uniform") or b.get("native") or b.get("uniform_se") or b.get("native_se")
         if r is None:
             miss.append((t, "no pooled base measurement in the tables"))
             continue
