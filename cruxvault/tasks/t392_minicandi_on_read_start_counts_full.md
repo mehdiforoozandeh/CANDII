@@ -1,15 +1,15 @@
 ---
 id: t392
 type: task
-title: miniCANDI on read-start counts: full combination trained on stranded/unstranded read starts, side by side with the read-count version; then transforms from predicted read starts to every signal format
+title: "miniCANDI on read-start counts: full combination trained on stranded/unstranded read starts, side by side with the read-count version; then transforms from predicted read starts to every signal format"
 category: implementation
 parent: 
 blocked_by: None
 refs: q75
 hypothesis_refs: 
-status: open
-created: 2026-11-23T13:10:53
-updated: 2026-11-23T13:10:53
+status: done
+created: "2026-11-23T13:10:53"
+updated: "2026-11-24T21:07:28"
 ---
 
 # t392 — miniCANDI on read-start counts: full combination trained on stranded/unstranded read starts, side by side with the read-count version; then transforms from predicted read starts to every signal format
@@ -24,7 +24,7 @@ one model for our board and the EIC boards; read starts convert exactly to overl
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Read-start vs read-count side by side](results/t392/SIDE_BY_SIDE.md)
 
 ## Evidence
 
