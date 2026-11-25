@@ -78,6 +78,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t371` [implementation] Deviance-based eval set beside the current headline metrics: Poisson deviance skill for imputation and correction, deviance calibration ratio, tested for ranking and depth behaviour
 - `t391` [implementation] Make the full test suite green when run from a Fir code kit: fix the 68 failures already on exp/t370 base cd3b4c74 (no git checkout or GIT_SHA in the kit; hashes recorded off Fir; launcher dry runs; stale import gate missing minicandi.trunk_film; environment: bash on PATH, torchview)
 - `t393` [implementation] convert predicted read-start counts to fold enrichment and signal p-values (on hold until the read-start comparison is reported; design in INSTRUCTIONS/t392_read_starts/PHASE2_DESIGN.md; PI decided 2026-11-24: expected p-value as headline with the plug-in beside it; fragment length from predicted-strand cross-correlation, with an assay-median second arm and the pipeline value as reference; predicted control for zero-shot, observed control first where control reads exist) — refs [[q75_can_one_minicandi_recipe_match_or_beat_t\|q75]], [[q63_how_well_do_the_signal_p_value_track_and\|q63]]
+- `t394` [implementation] Investigate why the read-start miniCANDI loses to the read-count version (low compute) — refs [[h49_the_full_combination_minicandi_trained_o\|h49]]
 
 ## Blocked
 
@@ -185,6 +186,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t371` [implementation] Deviance-based eval set beside the current headline metrics: Poisson deviance skill for imputation and correction, deviance calibration ratio, tested for ranking and depth behaviour — *open*
 - `t391` [implementation] Make the full test suite green when run from a Fir code kit: fix the 68 failures already on exp/t370 base cd3b4c74 (no git checkout or GIT_SHA in the kit; hashes recorded off Fir; launcher dry runs; stale import gate missing minicandi.trunk_film; environment: bash on PATH, torchview) — *open*
 - `t393` [implementation] convert predicted read-start counts to fold enrichment and signal p-values (on hold until the read-start comparison is reported; design in INSTRUCTIONS/t392_read_starts/PHASE2_DESIGN.md; PI decided 2026-11-24: expected p-value as headline with the plug-in beside it; fragment length from predicted-strand cross-correlation, with an assay-median second arm and the pipeline value as reference; predicted control for zero-shot, observed control first where control reads exist) — refs [[q75_can_one_minicandi_recipe_match_or_beat_t\|q75]], [[q63_how_well_do_the_signal_p_value_track_and\|q63]] — *open*
+- `t394` [implementation] Investigate why the read-start miniCANDI loses to the read-count version (low compute) — refs [[h49_the_full_combination_minicandi_trained_o\|h49]] — *open*
 
 ### visualization
 

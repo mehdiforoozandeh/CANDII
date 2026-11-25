@@ -35,7 +35,7 @@ A recipe that dominates on all three terms removes the architecture trade-off, s
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**6 children** · open 4, leaning 2, settled 0, parked 0 · 2 finding(s) on this question
+**7 children** · open 4, leaning 3, settled 0, parked 0 · 2 finding(s) on this question
 
 - `h44` [[h44_a_u_net_whose_count_skips_are_film_modul|A U-Net whose count skips are FiLM-modulated by (C, C') keeps the base U-Net imputation and reaches conv-level correction]] — *open*
 - `h45` [[h45_pre_and_post_cac_layers_in_the_testbed_g|Pre and post CAC layers in the testbed g/f form (g reads only covariates and outputs the parameters of a count map f; f before the network removes the C artifact, f after the NB re-applies the C' artifact) raise correction without lowering imputation or calibration]] — *open*
@@ -43,6 +43,7 @@ _(optional: the pre-registered rules — endpoints, thresholds, scope — locked
 - `h47` [[h47_training_correction_and_same_view_pairs_|Training correction and same-view pairs on read-disjoint halves (source pr1, target pr2) removes the U-Net's input copy and lifts its correction to conv level without losing imputation]] — *open*
 - `h49` [[h49_the_full_combination_minicandi_trained_o|The full-combination miniCANDI trained on 25 bp read-start counts, with its predictions converted to overlap counts, matches the same recipe trained on overlap counts on imputation, correction and calibration]] — *leaning · moderate*
 - `q77` _(Q)_ [[q77_does_a_poisson_deviance_eval_set_imputat|Does a Poisson-deviance eval set (imputation skill vs the position average, correction gap closed vs depth-only scaling with a read-noise floor, deviance calibration ratio) measure the three goals at least as well as the current headline set?]] — *leaning · moderate*
+- `q78` _(Q)_ [[q78_why_does_the_read_start_minicandi_lose_t|Why does the read-start miniCANDI lose to the read-count version on imputation and calibration?]] — *leaning · moderate*
 - `f143` finding (strong) [[f143_imputation_and_correction_clear_the_bars|Imputation and correction clear the bars by several seed ranges; calibration…]]
 - `f145` finding (moderate) [[f145_the_imputation_gap_and_the_deviance_cali|The imputation gap and the deviance calibration gap exceed every seed range…]]
 <!-- crux:ledger:end -->
