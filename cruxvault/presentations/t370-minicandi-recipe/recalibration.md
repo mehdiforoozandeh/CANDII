@@ -51,6 +51,25 @@ Correction pairs, 90% interval: observed top 1%, ours 0.579, reference 0.599; pr
 
 ==Our intervals capture the largest observed peaks almost as well as a calibrated model can. At the top 1% of observed bins, ours cover 0.669 and the reference covers 0.710. At the top 0.1%, ours cover 0.576 and the reference covers 0.554. Most of the apparent miss at large peaks is therefore the selection effect, not a defect of the model. The real defect is at the bins where we predict the largest values. There, the observed count falls below the lower bound in 6.2% of bins, against 2.9% for the calibrated reference. This is the overshoot that the EIC board shows, and in interval terms it is mild. Recalibration does not change either result.==
 
+## Does the model follow a changed output covariate?
+
+==We predicted 16 imputed targets (16 assays: DNase-seq, 7 acetylation marks, 8 methylation marks; 3 seeds; the 32 held-out score regions). For each target we changed one output covariate at a time and kept the rest. Before the run we wrote down the expected direction of each change. We report the total predicted count relative to the unchanged prediction (total ratio), the Pearson r of log(1 + mu) between the two predictions (shape r), and the median ratio of the NB size n (n ratio; a smaller n means a wider predicted spread).==
+
+| change | stated rule | targets meeting it in every seed | what moved |
+|---|---|---|---|
+| depth +1 log2 | total ×1.6–2.5, shape r > 0.98 | 16 / 16 | total ×1.97–2.03 |
+| depth −1 log2 | total ×0.4–0.625, shape r > 0.98 | 16 / 16 | total ×0.496–0.514 |
+| read length 36 ↔ 100 bp | longer reads: total ≥ 1 | 12 / 16 | total up to ×1.57 |
+| duplicate removal off | total > 1 | 1 / 16 | total flat (±6%); n ×0.06–0.80 |
+| MAPQ 30 → 0 | total > 1 | 2 / 16 | total flat (±8%); shape r 0.77–0.99 |
+| single-end → paired-end | total < 1 | 4 / 16 | total changes ≤ 7% |
+| another seen lab / platform / antibody | total within ±20% | 6/9, 15/16, 15/15 | small |
+| unknown lab / platform / antibody | total within ±20% and n down | 1/16, 8/15, 0/15 | n rarely falls; rises for an unknown antibody |
+
+Sources: `results/t370/recal_study/covariate_prompt_acetyl.md`, `covariate_prompt_methyl.md`.
+
+==The model follows read depth almost exactly, as a scale on the total with the profile unchanged. It follows read length in most targets. It answers duplicate removal by changing the spread, not the total: with duplicates kept it predicts more overdispersion, which is plausible because duplicates come in clumps. It answers the mapping-quality threshold by moving counts between regions, not by adding them. Our stated rules for these two changes were wrong about the form of the effect, and the observed form is plausible. Run type barely moves the prediction. One gap matters for deployment. An unseen value of lab, platform or antibody does not make the model less confident: the rule (total within 20% and a smaller n) holds in only 9 of 46 cases, and for an unknown antibody n usually rises. A user who gives an experiment from a new lab therefore gets intervals as narrow as for a known lab. Limits: one region sample, one held-out cell per target, and a rule stated by us, not by the PI.==
+
 ## What this means for the paper
 
 ==(1) Report calibration of imputed tracks with the deployment fit, and of corrected tracks with the same-cell fit. (2) Report the recalibration gain for imputation as small and inside seed noise. (3) Report that the intervals capture large observed peaks at close to the calibrated rate. (4) Report that the mean overshoots where it predicts the largest values. The PI rejected a fix that shrinks the predicted peaks. A fix belongs in training, e.g. a better model of large peaks, and is not yet tested.==
