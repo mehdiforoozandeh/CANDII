@@ -10,7 +10,7 @@ Close the session with one trusted miniCANDI architecture (PI 2026-11-22, after 
 - 256 regions, 3 seeds: imp 0.503, cor 0.818, cal 0.717 vs bars 0.445, 0.675, 0.646. R1-R4, R8 done.
 
 ## In flight (Fir, kit RCP9)
-- Avocado 5022624 still pending. rcp_rec_ctlw4 seed 2 timed out (2 seeds read; not resubmitted).
+- Avocado 5022624-27 pending on Fir. PI rule 2026-11-25: if none has started when Nibi returns (~21:00 UTC), cancel on Fir and submit the same chain on Nibi (check Nibi up + inputs first); if one started, leave it. rcp_rec_ctlw4 seed 2 timed out (2 seeds read; not resubmitted).
 - Ensemble on pairs + average: ens3 missing (only seed0_recal landed); low priority.
 
 - Blind-row build batch 1 RESUBMITTED on Nibi 2026-11-24 01:52 UTC (kits KF4H/KX4H, honest client header): stage 28737208/10/14/44/46/63/66/68/74; build 28737209/11/15/45/47/64/67/69/75; signal 28737212, 28737239. Never resubmit. Watch the first stage tasks; move BAMs and delete staged FASTQs as rows finish (soft quota 1024G).

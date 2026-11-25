@@ -129,11 +129,14 @@ Root: [[candii]]
     - ○ `h47` [H] [[h47_training_correction_and_same_view_pairs_|Training correction and same-view pairs on read-disjoint halves (source pr1, target pr2) removes the U-Net's input copy and lifts its correction to conv level without losing imputation]] — *open*
     - ◐ `q77` [Q] [[q77_does_a_poisson_deviance_eval_set_imputat|**Does a Poisson-deviance eval set (imputation skill vs the position average, correction gap closed vs depth-only scaling with a read-noise floor, deviance calibration ratio) measure the three goals at least as well as the current headline set?**]] — *leaning* · moderate
       - ◐ `h48` [H] [[h48_on_the_same_predictions_each_deviance_te|On the same predictions, each deviance term ranks miniCANDI arms like the current term of its goal and separates arms from seed noise at least as well]] — *leaning* · moderate · supports
+    - ◐ `q78` [Q] [[q78_how_much_does_per_assay_dispersion_recal|**How much does per-assay dispersion recalibration after training improve calibration of the final miniCANDI when fitted on other cells, as a user must for imputed tracks?**]] — *leaning* · moderate
+    - ◐ `q79` [Q] [[q79_do_the_final_minicandi_s_negative_binomi|**Do the final miniCANDI's negative binomial intervals cover large observed peaks, compared with a perfectly calibrated model under the same bin selection?**]] — *leaning* · moderate
+    - ◐ `q80` [Q] [[q80_does_the_final_minicandi_follow_a_change|**Does the final miniCANDI follow a changed output covariate in the direction stated before the run?**]] — *leaning* · moderate
 - ○ `q73` [Q] [[q73_how_does_the_final_minicandi_score_on_th|**How does the final miniCANDI score on the 51 EIC blind tracks, against the published EIC board and the baselines, once the blind rows are built?**]] — *open*
 
 ## Dashboard
 
-- **Questions** (77): open 23 · leaning 43 · settled 11 · parked 0
+- **Questions** (80): open 23 · leaning 46 · settled 11 · parked 0
 - **Hypotheses** (47): open 14 · leaning 20 · settled 7 · parked 6
-- **Confidence**: weak 22 · moderate 41 · strong 18
-- **Findings**: 142
+- **Confidence**: weak 22 · moderate 44 · strong 18
+- **Findings**: 145
