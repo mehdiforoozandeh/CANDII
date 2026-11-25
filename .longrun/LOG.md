@@ -68,3 +68,9 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-25T02:43Z glossary: blocked reply with logarithm
 - 2026-11-25T02:43Z glossary: blocked reply with exponent
 - 2026-11-25T02:47Z Scale diagnosis of 30 validation tracks done (Fir 5964408-9, 5964853-80, ~0.3 CPU-h): scale error, not depth or lambda; mu over-dispersed on 16/30, p transform enlarges it; 9 tracks have a bad conversion floor. results/t390/val_scale_diag, f405.
+- 2026-11-25T03:23Z cancel-own.sh cancel on fir: 5984158
+- 2026-11-25T03:25Z Fix b: ChIP depth cap 20M fitted on 196 training tracks; validation floor mean nMSE 1.57->0.40 (9->1 above 1). Fix a: count slope is per-experiment (0.30-1.92), not per-assay; 8/30 tracks have no LOEO partner. Builds: slope 5984161, depthcap 5986318; scoring chained. ~4.6 CPU-h spent.
+- 2026-11-25T03:25Z glossary: blocked reply with nmse
+- 2026-11-25T05:19Z Four boards on the same 30 validation tracks: raw pos 5 (mean comb 5.31), slope in-sample 5 (4.56, preview), slope LOEO 5 (4.97), depth cap 4 (3.70; nMSE>1 20->10/30). results/t390/val_boards_side_by_side/BOARDS.md. Spend ~27 CPU-h of 36.
+- 2026-11-25T05:20Z glossary: blocked reply with nmse
+- 2026-11-25T05:21Z Spend corrected: 34.24 of 36 CPU-h (sacct eicx_), not ~27. D11, D12 recorded (depth cap is the blind-entry fix). Cap build for 5 new tracks: Fir 6011889. Cap+slope board skipped (~10 CPU-h). Asked foreman for 41 CPU-h to score 4 capped tracks.
