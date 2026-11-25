@@ -212,3 +212,15 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-25T09:50Z glossary: blocked reply with identifier
 - 2026-11-25T11:37Z 5761693: tasks 23 and 24 COMPLETED; task 22 still RUNNING (20681 s); 608.5 CPU-h; copy 5761694 PENDING (afterok). Rearmed watch b0tp7q8eb.
 - 2026-11-25T12:45Z val3 6033930 COMPLETED: C25M26, C34M02, C50M02 counts in runs_rcp/eic_val/val3/out/counts; 62.7 CPU-h (sacct). Sent to pval session and foreman. 5761693 has 18 tasks: 17 done, task 22 running. s0/counts also holds an older C25M26.h5; told pval to use the val3 file.
+- 2026-11-25T12:46Z glossary: blocked reply with avocado, c25m26, c34m02, c50m02
+- 2026-11-25T12:46Z glossary: rejected 'C25M26' (coinage: 0 titles in Europe PMC and OpenAlex)
+- 2026-11-25T12:46Z glossary: rejected 'C34M02' (coinage: 0 titles in Europe PMC and OpenAlex)
+- 2026-11-25T12:46Z glossary: rejected 'C50M02' (coinage: 0 titles in Europe PMC and OpenAlex)
+- 2026-11-25T12:46Z glossary: blocked reply with epigenome
+- 2026-11-25T12:46Z glossary: admitted 'epigenome' (field: MeSH)
+- 2026-11-25T12:46Z glossary: blocked reply with gloss
+- 2026-11-25T12:46Z pval session scoring val3 tracks: raw 6057315-17, board 6057318, ChIP depth-cap 6057319; it picks up 5761693 task 22 count itself.
+- 2026-11-25T12:46Z glossary: blocked reply with ids
+- 2026-11-25T15:25Z 5761693_22 writes cell 46 assays 10,18,21,35 in sequence (~2.9 h each); assay 35 at 11/24 chromosomes at 16:25 UTC; expected end ~18:05 UTC at ~11.2 h of 14 h. Told foreman: no action.
+- 2026-11-25T15:25Z glossary: blocked reply with 5761693_22
+- 2026-11-25T16:57Z 5761693 COMPLETE: task 22 39268 s; 43 counts in s0 and recal_wide; copy 5761694 COMPLETED; array 649.8 CPU-h (sacct). All validation targets predicted. Told foreman and pval.

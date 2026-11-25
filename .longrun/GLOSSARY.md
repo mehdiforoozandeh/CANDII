@@ -249,3 +249,7 @@ Every term and metric in use. A new entry lands before its first use in anything
 | deduplication | removing duplicate reads from PCR copies of one fragment | English word, Zipf 1.7 | admitted | 2026-11-25 |
 | acetylation | histone mark: acetyl group added to a histone tail | field: MeSH | admitted | 2026-11-25 |
 | methylation | histone mark: methyl group added to a histone tail | field: MeSH | admitted | 2026-11-25 |
+| C25M26 | EIC validation track id: cell number, assay number | coinage: 0 titles in Europe PMC and OpenAlex | rejected | 2026-11-25 |
+| C34M02 | EIC validation track id: cell number, assay number | coinage: 0 titles in Europe PMC and OpenAlex | rejected | 2026-11-25 |
+| C50M02 | EIC validation track id: cell number, assay number | coinage: 0 titles in Europe PMC and OpenAlex | rejected | 2026-11-25 |
+| epigenome | all chemical marks on a cell's DNA and histones | field: MeSH | admitted | 2026-11-25 |
