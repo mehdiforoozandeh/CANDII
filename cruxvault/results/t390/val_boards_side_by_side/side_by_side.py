@@ -2,7 +2,8 @@
 """Join the four validation boards on the tracks all four scored -> SIDE_BY_SIDE.tsv, stdout summary."""
 import csv, statistics as st
 B = [("raw", "rcp_combo_w2x_unet_s0_raw"), ("insample", "rcp_s0_slope_insample"),
-     ("loeo", "rcp_s0_slope_loeo"), ("depthcap", "rcp_s0_depthcap")]
+     ("loeo", "rcp_s0_slope_loeo"), ("depthcap", "rcp_s0_depthcap"),
+     ("avgbase_cap", "rcp_s0_avgbase_cap")]
 d = {}
 for k, f in B:
     for r in csv.DictReader(open(f"{f}/board_validation.tsv"), delimiter="\t"):
