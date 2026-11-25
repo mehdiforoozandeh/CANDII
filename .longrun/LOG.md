@@ -208,3 +208,7 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-25T09:13Z PI: no Option B, no second 32-region pass. Recal study closed: recalibration.md now has the covariate-prompt section (unknown-value gap); vault q78-q80 f145-f147 recorded. 5761693 at 577.4 CPU-h with tasks 22-24 running; val3 6033930 pending.
 - 2026-11-25T09:13Z glossary: blocked reply with antibody
 - 2026-11-25T09:50Z Pulled PR 66 merge b2bc153c (read-start, vault q81 f148-f157) into the worktree; no conflicts.
+- 2026-11-25T09:50Z glossary: blocked reply with fbda
+- 2026-11-25T09:50Z glossary: blocked reply with identifier
+- 2026-11-25T11:37Z 5761693: tasks 23 and 24 COMPLETED; task 22 still RUNNING (20681 s); 608.5 CPU-h; copy 5761694 PENDING (afterok). Rearmed watch b0tp7q8eb.
+- 2026-11-25T12:45Z val3 6033930 COMPLETED: C25M26, C34M02, C50M02 counts in runs_rcp/eic_val/val3/out/counts; 62.7 CPU-h (sacct). Sent to pval session and foreman. 5761693 has 18 tasks: 17 done, task 22 running. s0/counts also holds an older C25M26.h5; told pval to use the val3 file.

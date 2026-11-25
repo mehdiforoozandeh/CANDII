@@ -11,7 +11,7 @@ Close the session with one trusted miniCANDI architecture (PI 2026-11-22): the r
 - Recalibration study DONE (79.1 CPU-h of 150): sent to foreman with Option B = do not run. Paper note cruxvault/presentations/t370-minicandi-recipe/recalibration.md; reports cruxvault/results/t370/recal_study/ (converted); vault q78-q80, f145-f147. Covariate-prompt test (16 targets) done, same folder.
 
 ## In flight
-- Fir 6033930 (array 0-2): the 3 never-built val targets C25M26, C34M02, C50M02 on pooled .se rows (PI option a) -> runs_rcp/eic_val/val3/out; chr21 probe 6033929 done. Pending on Priority. Stop at 130 CPU-h. Send out dir to pval session (local_0e44c034) when counts land; it keys on .se rows, frag 227 bp for C25M26.
+- Fir 6033930 DONE (62.7 CPU-h): val3/out/counts sent to pval session; use the val3 C25M26, not the older one in s0/counts.
 - Fir 5761693 (34 val targets): check final tasks 23/24 and copy job 5761694; never cancel running tasks; report at 650 CPU-h, cap 700. pval session's watcher scores the counts by itself until 19:15 UTC.
 - Avocado 5022624-27 pending on Fir. PI rule: if none started when Nibi returns (~2026-11-25 21:00 UTC), cancel on Fir and submit the same chain on Nibi (check Nibi up and inputs first); if one started, leave it. Watch bp5s3733k.
 - Nibi blind build batch 1 (t184): build 28737209/11/15/45/47/64/67/69/75, signal 28737212, 28737239 wait out NibiMaintenance. Never resubmit.
