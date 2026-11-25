@@ -203,3 +203,8 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-25T08:39Z glossary: blocked reply with acetyl, methyl
 - 2026-11-25T08:40Z Foreman: yes to calibrated reference; rerun covariate prompt on methylation marks. covariate_prompt --assays (pushed), Fir 6037859 -> covprompt/methyl (H3K4me1/2/3, H3K27me3, H3K36me3, H3K9me3, H3K79me2, H4K20me1). Send both before 19:00 UTC.
 - 2026-11-25T09:08Z Recal study DONE and sent to foreman with Option B = do not run. Analyze 6035885: imputation PIT none 0.0200, same_cells 0.0150, cross_cell 0.0185, shipped 0.0191 (seed range 0.005-0.009); pair none 0.0089, same 0.0066, cross 0.0078. Coverage ref 6037609: 90% obs top1 ours 0.669 vs calibrated draw 0.710; top0.1 0.576 vs 0.554; pred top1 0.891 vs 0.926 (below 6.2% vs 2.9%). Covariate methyl 6037859: depth 8/8, read length 7/8, dedup/MAPQ move n/shape not total, unknown values do not lower n. Study total 79.1 CPU-h. Reports in cruxvault/results/t370/recal_study/.
+- 2026-11-25T09:10Z glossary: blocked reply with avocado, calibrated, git
+- 2026-11-25T09:10Z glossary: blocked reply with repository's
+- 2026-11-25T09:13Z PI: no Option B, no second 32-region pass. Recal study closed: recalibration.md now has the covariate-prompt section (unknown-value gap); vault q78-q80 f145-f147 recorded. 5761693 at 577.4 CPU-h with tasks 22-24 running; val3 6033930 pending.
+- 2026-11-25T09:13Z glossary: blocked reply with antibody
+- 2026-11-25T09:50Z Pulled PR 66 merge b2bc153c (read-start, vault q81 f148-f157) into the worktree; no conflicts.
