@@ -121,7 +121,7 @@ def cmd_apply(a):
             m = tot / sum(f["mu"][c].shape[0] for c in chroms)
             for c in chroms:
                 mu = f["mu"][c][:].astype(np.float64)
-                g.create_dataset(f"mu/{c}", data=(m + b * (mu - m)).astype(f["mu"][c].dtype))   # the source dtype (float16)
+                g.create_dataset(f"mu/{c}", data=np.maximum(m + b * (mu - m), 0.0).astype(f["mu"][c].dtype))   # b > 1 can go below 0: clip (the conversion adds eps)
                 g.create_dataset(f"n/{c}", data=f["n"][c][:])
             g.attrs["calibration"] = json.dumps(dict(variant=a.variant, b=b, center=m, source=str(src)))
         tmp.rename(dst)
