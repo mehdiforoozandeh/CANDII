@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="prezit-arc" content="paper">
+<title>miniCANDI Progress</title>
+
+<!--
+  prezit · PAPER ARC · lab meeting 2026-11-25 · miniCANDI progress.
+
+  arc      motivation -> method -> results -> discussion (references/paper-arc.md)
+  build    python build_deck.py  ->  index.html beside this file
+  numbers  every measured number comes from DATA, which build_deck.py reads from data/:
+           copies of cruxvault/results/t390/* (branch implementation/t390-eic-pvalue-entry
+           @ 6714498a) and of results/t392, t394, t395, t370/recal_study and
+           presentations/t370-minicandi-recipe/*.md (branch exp/t370-minicandi-recipe @ 4f4663f5).
+           The deck-sources manifest records the sha256 of every file the build read.
+  typed    design constants only, each marked data-src="literal": the challenge year, the
+           90% interval level, the 1.3 count-slope threshold, the bin size, the rank bands.
+  notes    every slide carries speaker notes (press n). Notes hold no digits.
+-->
+<script type="application/json" id="deck-sources">__SOURCES__</script>
+
+<style>
+  :root{
+    /* --- chrome ------------------------------------------------------- */
+    --paper:#faf9f7;
+    --ink:#1a1a1a;
+    --muted:#77736c;
+    --faint:#a6a29a;
+    --hair:#e6e3dd;
+    --accent:#b5462e;
+
+    /* --- semantic series colours -------------------------------------- */
+    /* One colour per arm, reused identically in chart, legend and bullets.
+       Rename the tokens to your arms; never colour by chart. */
+    --baseline:#8d8f98;
+    --arm-a:#3f7d7a;
+    --arm-b:#b5462e;
+
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--paper);color:var(--ink);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+    overflow:hidden;
+  }
+
+  #progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);
+    width:0;transition:width .5s ease;z-index:50}
+
+  #deck{position:fixed;inset:0}
+  .slide{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column;justify-content:center;
+    padding:5.5vh 8vw 8.5vh;   /* bottom pad clears the fixed foot / counter / nav */
+    opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .6s ease,visibility .6s ease;   /* fade only — no slide, no zoom */
+  }
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+
+  .wrap{width:100%;max-width:1160px;margin:0 auto}
+
+  /* --- typography ----------------------------------------------------- */
+  .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin-bottom:22px}
+  h1{font-family:var(--serif);font-weight:400;line-height:1.12;
+    font-size:clamp(30px,4.6vw,58px);letter-spacing:-.01em}
+  h2{font-weight:600;line-height:1.14;font-size:clamp(24px,3.4vw,42px);
+    letter-spacing:-.015em;margin-bottom:26px}
+  .lead{font-family:var(--serif);font-weight:400;line-height:1.32;
+    font-size:clamp(22px,2.9vw,36px);letter-spacing:-.005em}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;
+    margin-top:22px;max-width:56ch}
+  .note{color:var(--faint);font-size:13px;line-height:1.5;margin-top:26px}
+
+  ul.pts{list-style:none;margin-top:26px;max-width:70ch}
+  ul.pts li{position:relative;padding-left:26px;margin:14px 0;
+    font-size:clamp(15px,1.55vw,19px);line-height:1.5;color:#333}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.62em;
+    width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  .em{color:var(--accent);font-weight:600}
+
+  ul.pts.lg li{font-size:clamp(16px,1.65vw,21px);margin:11px 0}
+  ul.pts.cols{display:grid;grid-template-columns:1fr 1fr;gap:2px 48px;
+    max-width:none;margin-top:18px}
+  @media (max-width:900px){ul.pts.cols{grid-template-columns:1fr}}
+
+  /* numbers the vault owns render in tabular figures so a --refresh that
+     changes a digit does not reflow the sentence around it */
+  [data-src],[data-derived]{font-variant-numeric:tabular-nums;font-weight:600}
+
+  /* --- lineage chain -------------------------------------------------- */
+  .chain{display:flex;align-items:stretch;gap:0;margin-top:34px;flex-wrap:wrap}
+  .node{flex:1;min-width:180px;border:1px solid var(--hair);border-radius:10px;
+    padding:18px 20px;background:#fff}
+  .node .lab{font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);margin-bottom:8px}
+  .node .txt{font-size:15px;line-height:1.4;color:#2a2a2a}
+  .node.now{border-color:var(--accent);box-shadow:0 1px 0 var(--accent)}
+  .node.now .lab{color:var(--accent)}
+  .arrow{display:flex;align-items:center;padding:0 12px;color:var(--faint);font-size:20px}
+
+  /* --- method pipeline ------------------------------------------------ */
+  .pipe{display:flex;align-items:flex-start;gap:0;margin-top:22px;flex-wrap:wrap}
+  .step{flex:1;min-width:150px;padding:14px 16px;text-align:left}
+  .step .n{font-family:var(--serif);font-size:22px;color:var(--accent);line-height:1}
+  .step .t{font-size:14.5px;line-height:1.4;color:#2a2a2a;margin-top:8px}
+  .psep{color:var(--faint);font-size:18px;padding:24px 4px 0}
+
+  /* --- target callout ------------------------------------------------- */
+  .target{border-left:3px solid var(--accent);background:#fff;border-radius:0 8px 8px 0;
+    padding:16px 22px;margin-top:6px}
+  .target .tlab{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin-bottom:8px}
+  .target .ttxt{font-size:clamp(15px,1.55vw,19px);line-height:1.5;color:#333}
+  .target .ttxt b{color:var(--ink);font-weight:600}
+
+  .cols2{display:grid;grid-template-columns:1fr 1.05fr;gap:44px;margin-top:26px;
+    align-items:start}
+  @media (max-width:900px){.cols2{grid-template-columns:1fr}}
+  .blk .blab{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);font-weight:600;margin-bottom:14px}
+
+  /* --- chips: a short fixed list, when a table would be overkill ------ */
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{border:1px solid var(--hair);background:#fff;border-radius:8px;padding:10px 14px;line-height:1.2}
+  .chip .cn{font-size:15px;font-weight:600;color:var(--ink)}
+  .chip .cc{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:3px}
+
+  /* --- tables --------------------------------------------------------- */
+  table.dtable{border-collapse:collapse;width:100%;font-size:15px}
+  table.dtable th{font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--faint);font-weight:600;text-align:left;padding:0 14px 10px 0;
+    border-bottom:1px solid var(--hair)}
+  table.dtable td{padding:11px 14px 11px 0;border-bottom:1px solid var(--hair);
+    color:#333;line-height:1.35}
+  table.dtable td:first-child{font-weight:600;color:var(--ink);white-space:nowrap}
+  table.dtable td.num{font-variant-numeric:tabular-nums}
+  table.dtable td .role{color:var(--muted);font-size:13px}
+
+  /* --- chart ---------------------------------------------------------- */
+  .chartbox{margin:8px 0}
+  .fig{display:flex;justify-content:center}
+  /* Cap chart height so a tall figure can never crowd out its caption bullets.
+     A full-width chart + a legend + four two-line bullets + a footnote is the
+     ceiling for one slide — check the fit after every content edit. */
+  .fig svg{width:100%;height:auto;max-height:44vh;display:block}
+  .fig.wide svg{max-width:1160px}
+  .fig.mid svg{max-width:960px}
+  .legend{display:flex;gap:24px;flex-wrap:wrap;margin-top:10px;justify-content:center;
+    font-size:15px;color:var(--muted)}
+  .legend.big{font-size:16px;gap:30px}
+  .legend .item{display:flex;align-items:center;gap:9px}
+  .legend .sw{width:16px;height:16px;border-radius:3px;flex:none}
+
+  /* SVG text lives in viewBox units and gets scaled DOWN when the svg is placed
+     in a column — so everything here is sized for a projector, ~1.5x what looks
+     right on a laptop. Do not shrink these to taste. */
+  .axlbl{font:500 17px var(--sans);fill:#3a3a3a}
+  .ptitle{font:600 22px var(--sans);fill:#1a1a1a;letter-spacing:.02em}
+  .psub{font:400 14px var(--sans);fill:#8a8a8a}
+  .tick{font:400 15px var(--sans);fill:#9a9a9a}
+  .val{font:600 16px var(--sans)}
+  .cap{font:400 14px var(--sans);fill:#9a9a9a}
+  .grid{stroke:#ececea;stroke-width:1}
+  .axis{stroke:#cfccc6;stroke-width:1.2}
+  .zero{stroke:#bbb;stroke-width:1.6;stroke-dasharray:5 4}
+  .sep{stroke:#e6e3dd;stroke-width:1}
+  .barval{font:600 20px var(--sans)}
+  .mult{font:600 19px var(--sans);fill:#1a1a1a}
+  .xlab{font:600 22px var(--sans);fill:#1a1a1a}
+  .xsub{font:400 15px var(--sans);fill:#8a8a8a}
+  .ylab{font:500 18px var(--sans);fill:#8a8a8a}
+
+  /* --- chrome --------------------------------------------------------- */
+  .foot{position:fixed;bottom:20px;left:8vw;font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:8vw;font-size:12px;color:var(--faint);
+    font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:16px;right:calc(8vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:#fff;color:var(--muted);
+    width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;
+    transition:border-color .2s,color .2s}
+  .nav button:hover{border-color:var(--accent);color:var(--accent)}
+  .hint{margin-top:40px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;
+    border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:#fff}
+
+  /* --- speaker notes ---------------------------------------------------
+     Optional: an <aside class="notes"> inside a slide, written in <p> (an <li>
+     there counts toward the slide's 7 units). Hidden; `n` overlays the active
+     slide's notes; print puts them under each slide. A deck without notes is
+     unaffected. */
+  aside.notes{display:none}
+  body.shownotes .slide.active aside.notes{display:block;position:fixed;left:7vw;right:7vw;
+    bottom:58px;max-height:52vh;overflow:auto;background:#fff;border:1px solid var(--hair);
+    border-left:4px solid var(--accent);border-radius:10px;padding:16px 22px;font-size:16.5px;
+    line-height:1.55;color:#333;z-index:60;box-shadow:0 10px 40px rgba(0,0,0,.18)}
+  aside.notes::before{content:"Speaker notes · n to close";display:block;font-size:11px;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+  aside.notes p{margin:0 0 6px}
+
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint{display:none}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;
+      height:100vh;transition:none}
+    aside.notes{display:block;margin-top:18px;border-top:1px solid #bbb;padding-top:10px;
+      font-size:12.5px;line-height:1.5;color:#333}
+  }
+
+  /* --- paper arc ------------------------------------------------------ */
+  :root{--own:#3f7d7a;--eqc:#b5462e;--data:#3f7d7a;--model:#8d8f98;--noise:#a6a29a}
+  .kicker .sec{display:inline-block;background:var(--accent);color:#fff;padding:3px 9px;
+    border-radius:4px;margin-right:12px;letter-spacing:.14em}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:22px}
+  @media (max-width:900px){.cards{grid-template-columns:1fr}}
+  .card{border:1px solid var(--hair);border-top:3px solid var(--c,var(--accent));background:#fff;
+    border-radius:8px;padding:16px 18px}
+  .card .rl{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--c,var(--accent));
+    font-weight:700;margin-bottom:8px}
+  .card p{font-size:clamp(14px,1.4vw,17px);line-height:1.45;color:#333}
+  .panels{display:grid;grid-template-columns:1fr 1fr;gap:0}
+  .panels>div{padding:0 14px}
+  .panels .fig svg{max-height:40vh}
+  .panels>div+div{border-left:1px solid var(--hair)}
+  @media (max-width:900px){.panels{grid-template-columns:1fr}.panels>div+div{border-left:0;border-top:1px solid var(--hair)}}
+  table.dtable td.run{color:var(--own);font-weight:600}
+  table.dtable td.off{color:var(--faint)}
+
+  /* --- this deck ------------------------------------------------------- */
+  :root{--ours:#3f7d7a;--field:#8d8f98;--rc:#3f7d7a;--rs:#c4693a;--ref:#8d8f98;
+    --r1:#2f6b68;--r23:#8fbfba;--r46:#d9d6cf;--r711:#c4693a;--bad:#c4693a;--ok:#3f7d7a}
+  .interim{display:inline-block;border:1px solid var(--bad);color:var(--bad);border-radius:4px;
+    padding:1px 7px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;margin-left:10px;
+    vertical-align:middle;font-weight:700}
+  h2{font-size:clamp(22px,2.9vw,36px);margin-bottom:14px}
+  .sub2{color:var(--muted);font-size:clamp(14px,1.35vw,17px);line-height:1.45;margin:-4px 0 8px;max-width:95ch}
+  ul.pts.sm{margin-top:8px}
+  ul.pts.sm li{font-size:clamp(14px,1.35vw,17px);margin:6px 0;line-height:1.42}
+  .fig svg{max-height:46vh}
+  .panels .fig svg{max-height:42vh}
+  .flow{display:flex;align-items:stretch;gap:0;margin-top:20px}
+  .flow .bx{flex:1;border:1px solid var(--hair);border-top:3px solid var(--c,var(--ours));
+    background:#fff;border-radius:8px;padding:14px 14px}
+  .flow .bx .h{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--c,var(--ours));
+    font-weight:700;margin-bottom:6px}
+  .flow .bx p{font-size:clamp(13px,1.3vw,16px);line-height:1.42;color:#333}
+  .flow .ar{display:flex;align-items:center;padding:0 8px;color:var(--faint);font-size:22px}
+  .cards.four{grid-template-columns:repeat(4,1fr)}
+  .cards.two{grid-template-columns:repeat(2,1fr)}
+  .card p+p{margin-top:6px}
+  .rankl{display:grid;grid-template-columns:auto 1fr auto;gap:4px 14px;margin-top:10px;
+    font-size:clamp(13px,1.3vw,16px);line-height:1.35;color:#333;align-items:baseline}
+  .rankl .rk{font-family:var(--serif);color:var(--accent);font-size:18px}
+  .rankl .st{font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+  table.dtable.gl td{padding:7px 14px 7px 0;font-size:14px}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- 1 · TITLE
+       job      the progress claim as a headline, and the scope in one line
+       source   DATA.boards.final (results/t390/val_boards_final45)
+       numbers  experiment count and board size from DATA
+       cut      the nav hint -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">miniCANDI · lab meeting · <span data-src="literal">2026-11-25</span></div>
+      <h1>miniCANDI progress: first on the ENCODE Imputation Challenge validation board, and what still limits it</h1>
+      <p class="sub">One external benchmark (<span id="tT45"></span> validation experiments, <span id="tTof"></span> entries), then three studies of the model itself: read starts against read counts, recalibration of the predicted spread, and covariate prompts.</p>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd> &nbsp;·&nbsp; <kbd>n</kbd> shows the speaker notes</p>
+      <aside class="notes"><p>The deck follows the paper arc: why we entered the board, how the entry works, what we found, and what is next. Every number on the slides is read from the result files when the deck is built. Anything that is not final carries an interim badge.</p></aside>
+    </div>
+  </section>
+
+  <!-- 2 · MOTIVATION · the external benchmark
+       job      what the EIC validation board is, and how a count model enters it
+       source   results/t390/validation_dryrun/VALIDATION_DRYRUN.md, val_boards_final45 SUMMARY
+       numbers  entry counts from DATA; the challenge year is a literal
+       cut      a second schematic of the scorer -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>an external, fixed benchmark</div>
+      <h2>The <span data-src="literal">2019</span> ENCODE Imputation Challenge lets us rank miniCANDI against published entries</h2>
+      <p class="sub2" id="tBoardDef"></p>
+      <div class="flow">
+        <div class="bx"><div class="h">predict</div><p>miniCANDI predicts the read count of each <span data-src="literal">25 bp</span> bin as a negative binomial (count distribution with a mean and a spread).</p></div>
+        <div class="ar">&rarr;</div>
+        <div class="bx"><div class="h">convert</div><p>The predicted mean and the observed control go through the <span data-src="literal">MACS2</span> rule (standard ChIP-seq peak caller) to a −log<sub><span data-src="literal">10</span></sub> p-value track, the challenge's signal.</p></div>
+        <div class="ar">&rarr;</div>
+        <div class="bx" style="--c:var(--accent)"><div class="h">score</div><p id="tScoreBox"></p></div>
+        <div class="ar">&rarr;</div>
+        <div class="bx" style="--c:var(--accent)"><div class="h">place</div><p>The organizers' combined rank (mean rank over measures) per experiment gives one board position. An unscored experiment counts as the worst.</p></div>
+      </div>
+      <aside class="notes"><p>The challenge withheld some assays in some cell types. The validation set is the round of experiments whose truth was released, and the paper's supplementary file gives every round-one entry's scores on it, so we can place a new entry without the organizers. Our model works in raw counts, so the entry needs a conversion step to the challenge's p-value signal. That conversion is fixed; nothing in it is tuned on validation truth.</p></aside>
+    </div>
+  </section>
+
+  <!-- 3 · METHOD · what the entry may use
+       job      fairness and disclosures before the headline, so the audience can weigh it
+       source   results/t390/depth_rule/DEPTH_RULE.md, validation_dryrun/VALIDATION_DRYRUN.md, val_boards_final45/BOARDS.md
+       numbers  counts from DATA
+       cut      the msevar weight attempts; moved here from after the results (deviation from the brief order) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>what the entry uses, and what a <span data-src="literal">2019</span> entrant did not have</div>
+      <h2>Nothing is fitted on validation truth, but the entry uses each target's own processed reads</h2>
+      <div class="cards">
+        <div class="card" style="--c:var(--ok)"><div class="rl">Fitted on training tracks only</div><p>The model weights. The read-depth cap, chosen on <span id="tFairTrain"></span> training ChIP-seq tracks.</p><p>No factor is tuned on validation truth.</p></div>
+        <div class="card" style="--c:var(--bad)"><div class="rl">From the target's own reads</div><p>Read depth, read length and fragment length of each target experiment, and its observed control counts. A <span data-src="literal">2019</span> entrant had none of these for a withheld experiment.</p></div>
+        <div class="card" style="--c:var(--noise)"><div class="rl">Disclosures</div><p id="tDisc"></p><p>A sensitivity board with neutral covariate prompts is not run yet. <span class="interim">interim</span></p></div>
+      </div>
+      <aside class="notes"><p>The middle card is the main caveat. Our model is conditioned on experimental covariates, and on this board those covariates come from the target experiment's own reads. A round-one entrant predicted a withheld experiment without them. The neutral-prompt board would measure how much of our position rests on them. Fragment length matters only for the conversion step.</p></aside>
+    </div>
+  </section>
+
+  <!-- 4 · RESULTS · (a) the headline
+       job      one claim: first of eleven on all validation experiments
+       claim    with the depth cap, miniCANDI is first of eleven on all validation experiments; raw counts are second
+       source   results/t390/val_boards_final45 (BOARDS.md, three SUMMARY.md), val_boards_side_by_side (BOARDS.md, SUMMARY.md)
+       numbers  DATA.boards
+       cut      the slope boards (they move to slide e) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(a) the validation board</div>
+      <h2>With the depth cap, miniCANDI is first of <span id="tH11"></span> on all <span id="tH45"></span> validation experiments</h2>
+      <div class="chartbox fig wide" id="figBoard"></div>
+      <ul class="pts sm">
+        <li id="tB1"></li>
+        <li id="tB2"></li>
+      </ul>
+      <aside class="notes"><p>Each row is one board. Read each group separately: the top group scores the same thirty experiments and counts the rest as worst, so it understates every entry of ours. The bottom group is the complete board. There is no seed range here: the board scores one model seed, and the only spread is over the organizers' bootstrap samples.</p></aside>
+    </div>
+  </section>
+
+  <!-- 5 · RESULTS · (b) per-measure ranks
+       job      where the first place comes from, measure by measure
+       claim    the entry is strongest on the correlations and weakest on the error at its own top-predicted bins
+       source   results/t390/val_boards_final45/rcp_s0_depthcap/board_validation.tsv
+       numbers  DATA.measures
+       cut      msevar (not ranked) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(b) rank per measure, depth-capped board</div>
+      <h2>We rank best on correlation and worst on error at the bins we predict highest</h2>
+      <div class="chartbox fig wide" id="figMeasures"></div>
+      <ul class="pts sm">
+        <li id="tM1"></li>
+        <li id="tM2"></li>
+      </ul>
+      <aside class="notes"><p>Each bar is one measure, split by our rank among the ten round-one entries on each experiment. Correlations ignore scale, so they reward the right shape. The error at our own top-predicted bins punishes peaks that are too tall, which is the weakness the next slides trace.</p></aside>
+    </div>
+  </section>
+
+  <!-- 6 · RESULTS · (c) the depth fix
+       job      why the cap exists, and that it was fitted without validation truth
+       claim    the 2019 truth behaves like about 20 M reads; capping depth there cuts the conversion floor four-fold
+       source   results/t390/depth_rule/DEPTH_RULE.md
+       numbers  DATA.depth
+       cut      the DNase-seq half (its best cap is no cap) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(c) the read-depth cap</div>
+      <h2>The <span data-src="literal">2019</span> truth looks like about <span id="tCapH"></span> M reads, so we cap ChIP-seq depth there</h2>
+      <div class="chartbox panels"><div class="fig" id="figCapTrain"></div><div class="fig" id="figCapVal"></div></div>
+      <ul class="pts sm">
+        <li id="tC1"></li>
+        <li id="tC2"></li>
+      </ul>
+      <aside class="notes"><p>The floor is the best a perfect count model could do: we put the experiment's own observed reads through our conversion and score that against the organizers' truth. On deep experiments the floor was bad, because the organizers processed fewer reads than our store holds. Thinning to the cap was chosen on training tracks only, then applied unchanged to validation. DNase-seq keeps full depth, because no cap helped on its training tracks.</p></aside>
+    </div>
+  </section>
+
+  <!-- 7 · RESULTS · (d) where the bottleneck is
+       job      separate the conversion floor from our prediction error
+       claim    most bad tracks fail because the predicted counts overshoot at peaks, not because of the conversion
+       source   results/t390/val_scale_diag/DIAG_TABLE.tsv, SCALE_DIAG.md
+       numbers  DATA.diag
+       cut      the oracle affine bound -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(d) prediction error against the conversion floor</div>
+      <h2>The bottleneck is our count overshoot at peaks, not the conversion</h2>
+      <div class="chartbox fig mid" id="figDiag"></div>
+      <ul class="pts sm">
+        <li id="tD1"></li>
+        <li id="tD2"></li>
+      </ul>
+      <aside class="notes"><p>Each point is one validation track before the depth cap. The horizontal axis is the floor, our conversion applied to the observed reads. The vertical axis is our prediction through the same conversion. Points far above the diagonal are model error. Orange points are tracks whose predicted counts are too tall for how well they correlate. The p-value transform is convex, so a count overshoot at a peak becomes a larger p-value overshoot.</p></aside>
+    </div>
+  </section>
+
+  <!-- 8 · RESULTS · (e) what did not help
+       job      keep the negatives: peak shrink and recalibration on the board
+       claim    a per-assay peak shrink fitted fairly does not move the position, and recalibration raises the error on most tracks
+       source   results/t390/val_boards_side_by_side/BOARDS.md; val_recal_pair_s0 and val_scores_rcp_s0_8 (expected-p boards)
+       numbers  DATA.boards.b30, DATA.recal_board
+       cut      the averaged board -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(e) what did not help on the board</div>
+      <h2>A fairly fitted peak shrink and a recalibrated spread did not help</h2>
+      <div class="chartbox panels"><div class="fig" id="figShrink"></div><div class="fig" id="figRecalB"></div></div>
+      <ul class="pts sm">
+        <li id="tE1"></li>
+        <li id="tE2"></li>
+      </ul>
+      <aside class="notes"><p>Panel a: the peak shrink rescales each prediction toward its mean by one slope per assay. Fitted with the target's own experiment included, it helps, but that uses validation truth. Fitted with that experiment left out, the fair version, the gain mostly goes away, because the right slope varies between experiments of one assay. Panel b: recalibration widens or narrows the predicted spread, and the expected p-value then moves. On this board it made the error worse.</p></aside>
+    </div>
+  </section>
+
+  <!-- 9 · RESULTS · (f) read starts against read counts
+       job      why read starts were tried, and the three-seed result
+       claim    read counts beat read starts on imputation; correction is close
+       source   results/t390/postpile/POSTPILE.md; results/t392/per_seed.tsv, table.tsv, SIDE_BY_SIDE.md
+       numbers  DATA.postpile, DATA.rs
+       cut      the sanity checks against read-start truth -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(f) read-start targets against read-count targets</div>
+      <h2>Read counts beat read starts on imputation; correction is close</h2>
+      <div class="chartbox panels" style="grid-template-columns:0.8fr 1.2fr"><div class="fig" id="figPost"></div><div class="fig" id="figRS"></div></div>
+      <ul class="pts sm">
+        <li id="tF1"></li>
+        <li id="tF2"></li>
+      </ul>
+      <aside class="notes"><p>A read start is the five-prime end of a read, counted per bin; a read count counts every read that overlaps the bin. Panel a is why we tried read starts: with the strand, they rebuild the fragment pileup the challenge used, and overlap counts cannot. Panel b is the same recipe trained on each target, three seeds each, sixteen regions. The dots are seeds. A gap counts only when it is larger than both models' seed ranges, which is our project's noise floor.</p></aside>
+    </div>
+  </section>
+
+  <!-- 10 · RESULTS · (g) why read starts lost
+       job      the ranked causes, each with its evidence
+       claim    the calibration loss is the conversion's independence assumption; the imputation loss is mostly a broad level error on H3K36me3
+       source   results/t394/INVESTIGATION.md, split/per_assay_deviance_split.tsv; results/t395/SMOOTHING.md
+       numbers  DATA.why, DATA.rs
+       cut      the loss-weighting detail -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(g) why read starts lost</div>
+      <h2>The conversion explains the overconfidence; <span data-src="literal">H3K36me3</span> explains most of the imputation gap</h2>
+      <div class="chartbox panels"><div class="fig" id="figWhySkill"></div><div class="fig" id="figWhyCal"></div></div>
+      <div class="rankl" id="tCauses"></div>
+      <aside class="notes"><p>Panel a: the imputation gap is not uniform. One broad mark, which covers whole gene bodies, carries most of it, and the read-start model is even better on one acetylation mark. Smoothing the read-start prediction made that broad mark worse, so the error is a level error over long domains, not per-bin noise. Panel b: the conversion from starts to counts treats neighbouring bins as independent. Correcting for the measured correlation length removes most or all of the overconfidence. Training budget is the one cause still untested.</p></aside>
+    </div>
+  </section>
+
+  <!-- 11 · RESULTS · (h) recalibration of the spread
+       job      same-cell against deployment fit, per seed
+       claim    the deployment fit helps imputation calibration only inside seed noise; the same-cell fit helps correction
+       source   results/t370/recal_study/recal_study.md
+       numbers  DATA.pit
+       cut      the per-assay table -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(h) recalibrating the predicted spread</div>
+      <h2>For imputation, the honest recalibration gain is inside seed noise</h2>
+      <div class="chartbox panels"><div class="fig" id="figPitImp"></div><div class="fig" id="figPitPair"></div></div>
+      <ul class="pts sm">
+        <li id="tH1"></li>
+        <li id="tH2"></li>
+      </ul>
+      <aside class="notes"><p>Recalibration divides the negative binomial size by one factor per assay. It never changes the mean, so imputation and correction scores do not move; only calibration can. For an imputed track a user has no truth in that cell, so the factor must come from other cells: that is the deployment fit. The same-cell fit is an upper bound for imputation, but a user can reach it for correction, where the observed track exists.</p></aside>
+    </div>
+  </section>
+
+  <!-- 12 · RESULTS · (i) intervals at big peaks
+       job      do the predicted intervals capture large peaks
+       claim    at the largest observed peaks our intervals cover close to a calibrated model; at our top predicted bins the truth falls below the interval twice as often
+       source   results/t370/recal_study/peak_coverage_ref.md
+       numbers  DATA.cov
+       cut      the 50, 80 and 95% levels -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(i) interval coverage at large peaks</div>
+      <h2>Our intervals cover large observed peaks almost as well as a calibrated model</h2>
+      <div class="chartbox fig wide" id="figCov"></div>
+      <ul class="pts sm">
+        <li id="tI1"></li>
+        <li id="tI2"></li>
+      </ul>
+      <aside class="notes"><p>Coverage is the fraction of bins whose observed count falls inside the predicted interval. Picking bins by their observed value lowers coverage even for a perfect model, because the highest observed bins are mostly upper-tail draws. So the grey bars redraw each bin from its own predicted distribution and apply the same selection. The gap between teal and grey is the real miss.</p></aside>
+    </div>
+  </section>
+
+  <!-- 13 · RESULTS · (j) covariate prompts
+       job      which output covariates steer the prediction
+       claim    depth steers every target as a pure scale; dedup and mapping quality act through spread and shape; unknown values do not widen intervals
+       source   results/t370/recal_study/covariate_prompt_acetyl.md, covariate_prompt_methyl.md
+       numbers  DATA.prompt
+       cut      the per-target table -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(j) covariate prompts</div>
+      <h2>Depth steers every target; an unknown lab or antibody does not widen the intervals</h2>
+      <div class="chartbox fig wide" id="figPrompt"></div>
+      <ul class="pts sm">
+        <li id="tJ1"></li>
+        <li id="tJ2"></li>
+      </ul>
+      <aside class="notes"><p>For each imputed target we changed one output covariate and kept the rest, and we wrote the expected direction down before the run. A bar is the share of targets that met that rule in every seed. Two rules were wrong about the form of the effect rather than the model: duplicates and mapping quality change the spread and the shape, not the total. The real gap is the unknown values, which should make the model less confident and do not.</p></aside>
+    </div>
+  </section>
+
+  <!-- 14 · DISCUSSION · status and next steps
+       job      what is ruled in and out, and what comes next
+       source   restated from results (a) to (j)
+       numbers  none new
+       cut      cost estimates -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>status and next steps <span class="interim">interim</span></div>
+      <h2>The board result stands; the model's peak overshoot is the next thing to fix</h2>
+      <div class="cards four">
+        <div class="card"><div class="rl">Blind set</div><p>Build the blind-set entry with the same pipeline once Nibi returns. The blind board is the one that counts.</p></div>
+        <div class="card"><div class="rl">Avocado baseline</div><p>Score Avocado through the same conversion, so the comparison shares one pipeline.</p></div>
+        <div class="card" style="--c:var(--bad)"><div class="rl">Covariate prompts</div><p>Design gap: unknown values should widen the intervals. Run the neutral-prompt board.</p></div>
+        <div class="card" style="--c:var(--noise)"><div class="rl">Read starts</div><p>Phase two is on hold. The one open cause, training budget, needs a longer run.</p></div>
+      </div>
+      <aside class="notes"><p>Ruled in: the depth cap, fitted without validation truth, is what lifts the board position. Ruled out: a post-hoc peak shrink or recalibration as the fix for the overshoot. The fix belongs in training. Read starts stay parked until the PI decides whether a longer run is worth it.</p></aside>
+    </div>
+  </section>
+
+  <!-- 15 · BACKUP · glossary
+       job      every gloss in one place
+       source   the glosses on slides 2 to 13
+       numbers  none
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Backup</span>glossary</div>
+      <table class="dtable gl">
+        <thead><tr><th>term</th><th>meaning</th></tr></thead>
+        <tbody>
+          <tr><td>nMSE</td><td>normalized mean squared error: squared error divided by the variance of the truth; below one beats predicting the mean</td></tr>
+          <tr><td>combined rank</td><td>the organizers' per-experiment mean rank over the measures, among the round-one entries plus ours</td></tr>
+          <tr><td>conversion floor</td><td>the experiment's own observed reads through our conversion, scored against the challenge truth</td></tr>
+          <tr><td>count slope</td><td>spread of predicted counts over (correlation × spread of observed counts); above one means peaks too tall</td></tr>
+          <tr><td>deviance imputation skill</td><td>fraction of the gap between a per-position average and the noise floor that the model closes</td></tr>
+          <tr><td>PIT deviation</td><td>distance of the probability integral transform histogram from flat; zero is perfectly calibrated</td></tr>
+          <tr><td>calibration ratio</td><td>deviance scorer's calibration ratio; one is calibrated, above one is overconfident (intervals too narrow)</td></tr>
+        </tbody>
+      </table>
+      <aside class="notes"><p>Each term is also glossed on the slide where it first appears.</p></aside>
+    </div>
+  </section>
+
+</div>
+
+<div class="foot">miniCANDI · lab meeting · interim where marked</div>
+<div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+
+<script>
+/* Every measured number below comes from DATA, which build_deck.py embeds from the
+   result files. Comparisons (N of M, a gap against a seed range) are computed here. */
+const DATA = __DATA__;
+const put=(id,html)=>{const e=document.getElementById(id); if(e) e.innerHTML=html;};
+const fx=(v,d)=>Number(v).toFixed(d);
+const B=v=>`<b>${v}</b>`;
+const svg=(W,H)=>`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+const log10=Math.log10;
+
+/* ---------- (a) board positions ---------- */
+(function(){
+  const b=DATA.boards, F=b.final, b30=b.b30, P=b.partial, n=F.cap.of;
+  const rows=[
+    {g:`${b30.n} experiments scored, ${b30.unscored} count as worst`},
+    {lab:'Raw counts', v:b30.raw.pos, c:'var(--field)'},
+    {lab:'Depth cap', v:b30.cap.pos, c:'var(--ours)'},
+    {lab:'Average with base model, then depth cap', v:b30.avg.pos, c:'var(--ours)'},
+    {g:'Partial boards, as scored on the way'},
+    {lab:`Raw counts, ${P.raw.scored} scored`, v:P.raw.pos, c:'var(--field)'},
+    {lab:`Depth cap, ${P.cap.scored} scored`, v:P.cap.pos, c:'var(--ours)'},
+    {g:`All ${F.cap.scored} experiments scored (final)`},
+    {lab:'Raw counts', v:F.raw.pos, c:'var(--field)'},
+    {lab:'Depth cap (primary entry)', v:F.cap.pos, c:'var(--ours)', bold:1},
+    {lab:'Average with base model, then depth cap', v:F.avg.pos, c:'var(--ours)'},
+  ];
+  const W=1400, Lg=600, R=50, rh=37, top=44, H=top+rows.length*rh+52, xx=k=>Lg+(k-1)/(n-1)*(W-Lg-R);
+  let s=svg(W,H);
+  for(let k=1;k<=n;k++){ s+=`<line x1="${xx(k)}" y1="${top}" x2="${xx(k)}" y2="${H-44}" class="grid"/><text x="${xx(k)}" y="${H-18}" text-anchor="middle" class="tick" style="font-size:21px">${k}</text>`; }
+  s+=`<text x="${Lg}" y="${top-14}" class="cap" style="font-size:19px">board position among ${n} (1 = first)</text>`;
+  rows.forEach((r,i)=>{const y=top+i*rh+rh/2+6;
+    if(r.g){ s+=`<text x="16" y="${y}" style="font:600 20px var(--sans);fill:#6a665f">${r.g}</text>`; return; }
+    s+=`<text x="${Lg-24}" y="${y}" text-anchor="end" style="font:${r.bold?700:500} 22px var(--sans);fill:#3a3a3a">${r.lab}</text>`;
+    s+=`<circle cx="${xx(r.v)}" cy="${y-7}" r="${r.bold?12:10}" fill="${r.c}"/>`;
+    s+=`<text x="${xx(r.v)+20}" y="${y}" style="font:600 22px var(--sans)" fill="${r.c}">${r.v}</text>`;
+  });
+  put('figBoard', s+'</svg>');
+  put('tH11', n); put('tH45', F.cap.scored);
+  put('tB1', `On all ${B(F.cap.scored)} experiments the depth-capped entry has mean combined rank ${B(fx(F.cap.mean_rank,2))} against ${B(fx(F.raw.mean_rank,2))} for raw counts; the cap improved ${B(F.cap_vs_raw.better)} experiments and worsened ${B(F.cap_vs_raw.worse)}.`);
+  put('tB2', `Caveat: one model seed, so there is no seed range; the only spread is over the organizers' bootstrap samples. The averaged board uses the final model alone on ${B(F.avg_only_final)} experiments.`);
+})();
+
+/* ---------- (b) per-measure ranks ---------- */
+(function(){
+  const M=DATA.measures, names={gwcorr:'Pearson correlation, genome-wide',gwspear:'Spearman correlation, genome-wide',
+    mse:'MSE, genome-wide',msegene:'MSE, gene bodies',mseprom:'MSE, promoters',mseenh:'MSE, enhancers',
+    mse1obs:'MSE, top 1% observed bins',mse1imp:'MSE, top 1% predicted bins'};
+  const cols=['var(--r1)','var(--r23)','var(--r46)','var(--r711)'], labs=['rank 1','rank 2–3','rank 4–6','rank 7–11'];
+  const W=1160, Lg=400, R=30, rh=38, top=58, H=top+M.order.length*rh+30, xx=v=>Lg+v/M.n*(W-Lg-R);
+  let s=svg(W,H);
+  labs.forEach((l,j)=>{ s+=`<rect x="${Lg+j*190}" y="14" width="16" height="16" fill="${cols[j]}" rx="3"/><text x="${Lg+j*190+24}" y="28" class="tick" style="fill:#555">${l}</text>`; });
+  M.order.forEach((m,i)=>{ const y=top+i*rh; let x0=0;
+    s+=`<text x="${Lg-16}" y="${y+21}" text-anchor="end" class="axlbl">${names[m]}</text>`;
+    M.bins[m].forEach((c,j)=>{ if(!c) return; s+=`<rect x="${xx(x0)}" y="${y+4}" width="${xx(x0+c)-xx(x0)-1}" height="${rh-10}" fill="${cols[j]}"/>`;
+      if(c>=3) s+=`<text x="${(xx(x0)+xx(x0+c))/2}" y="${y+22}" text-anchor="middle" style="font:600 14px var(--sans);fill:${j==2?'#555':'#fff'}">${c}</text>`; x0+=c; });
+  });
+  s+=`<text x="${W-R}" y="${H-6}" text-anchor="end" class="cap">experiments, of ${M.n}; rank among the ${DATA.boards.n_entries} round-one entries plus ours</text>`;
+  put('figMeasures', s+'</svg>');
+  const b=M.bins;
+  put('tM1', `Spearman correlation: rank 1 on ${B(b.gwspear[0])} of ${M.n} experiments. MSE (mean squared error) at our top 1% predicted bins: rank 1 on ${B(b.mse1imp[0])}, rank 7–11 on ${B(b.mse1imp[3])}.`);
+  put('tM2', `The weak measure scores exactly the bins where the model predicts its tallest peaks, so it points at peak height, not at peak position.`);
+})();
+
+/* ---------- (c) depth cap ---------- */
+(function(){
+  const d=DATA.depth, caps=d.caps.concat([[0,d.nocap[1],d.nocap[2]]]);
+  const W=600,H=380,L=80,R=24,top=60,bot=70, n=caps.length, xx=i=>L+i/(n-1)*(W-L-R);
+  const ymax=Math.ceil(Math.max(...caps.map(c=>c[1]))*5)/5, yy=v=>top+(H-top-bot)*(1-v/ymax);
+  let s=svg(W,H)+`<text x="10" y="30" class="ptitle">(a) Training ChIP-seq tracks</text>`;
+  for(let t=0;t<=ymax+1e-9;t+=0.2){ s+=`<line x1="${L}" y1="${yy(t)}" x2="${W-R}" y2="${yy(t)}" class="grid"/><text x="${L-10}" y="${yy(t)+5}" text-anchor="end" class="tick">${fx(t,1)}</text>`; }
+  s+=`<polyline fill="none" stroke="var(--ours)" stroke-width="3" points="${caps.map((c,i)=>`${xx(i)},${yy(c[1])}`).join(' ')}"/>`;
+  caps.forEach((c,i)=>{ const best=c[0]===d.best; s+=`<circle cx="${xx(i)}" cy="${yy(c[1])}" r="${best?9:6}" fill="${best?'var(--accent)':'var(--ours)'}"/>`;
+    s+=`<text x="${xx(i)}" y="${H-bot+26}" text-anchor="middle" class="tick">${c[0]?c[0]+' M':'none'}</text>`;
+    if(best) s+=`<text x="${xx(i)}" y="${yy(c[1])-16}" text-anchor="middle" class="val" fill="var(--accent)">best: ${fx(c[1],2)}</text>`; });
+  s+=`<text x="${(L+W-R)/2}" y="${H-12}" text-anchor="middle" class="cap">depth cap (reads)</text>`;
+  s+=`<text transform="translate(22,${(top+H-bot)/2}) rotate(-90)" text-anchor="middle" class="cap">mean nMSE of the floor</text>`;
+  put('figCapTrain', s+'</svg>');
+  /* (b) validation floor before and after, per track, log scale */
+  const T=d.tracks, lo=Math.floor(log10(Math.min(...T.flatMap(t=>[t[2],t[3]])))), hi=Math.ceil(log10(Math.max(...T.flatMap(t=>[t[2],t[3]]))));
+  const W2=600,H2=380,L2=80,x1=200,x2=440, y2=v=>top+(H2-top-bot)*(1-(log10(v)-lo)/(hi-lo));
+  let s2=svg(W2,H2)+`<text x="10" y="30" class="ptitle">(b) Validation tracks, floor</text>`;
+  for(let k=lo;k<=hi;k++){ const v=Math.pow(10,k); s2+=`<line x1="${L2}" y1="${y2(v)}" x2="${W2-R}" y2="${y2(v)}" class="grid"/><text x="${L2-10}" y="${y2(v)+5}" text-anchor="end" class="tick">${v}</text>`; }
+  s2+=`<line x1="${L2}" y1="${y2(1)}" x2="${W2-R}" y2="${y2(1)}" class="zero"/>`;
+  T.forEach(t=>{ const c=t[3]<t[2]?'var(--ours)':'var(--bad)'; s2+=`<line x1="${x1}" y1="${y2(t[2])}" x2="${x2}" y2="${y2(t[3])}" stroke="${c}" stroke-width="1.6" opacity=".75"/><circle cx="${x1}" cy="${y2(t[2])}" r="3.5" fill="${c}"/><circle cx="${x2}" cy="${y2(t[3])}" r="3.5" fill="${c}"/>`; });
+  s2+=`<text x="${x1}" y="${H2-bot+26}" text-anchor="middle" class="xlab" style="font-size:18px">full depth</text><text x="${x2}" y="${H2-bot+26}" text-anchor="middle" class="xlab" style="font-size:18px">capped</text>`;
+  s2+=`<text transform="translate(22,${(top+H2-bot)/2}) rotate(-90)" text-anchor="middle" class="cap">floor nMSE (log scale)</text>`;
+  s2+=`<text x="${W2-R}" y="${H2-12}" text-anchor="end" class="cap">teal: better · orange: worse · dashed: nMSE 1</text>`;
+  put('figCapVal', s2+'</svg>');
+  put('tCapH', d.best);
+  put('tC1', `On ${B(d.n_train)} training tracks the depth that best matches the truth has median ${B(fx(d.eff_med,1))} M reads (quartiles ${fx(d.eff_q[0],1)}–${fx(d.eff_q[1],1)} M); a ${B(d.best+' M')} cap minimizes the mean floor nMSE (normalized mean squared error; below 1 beats the mean).`);
+  put('tC2', `Applied unchanged to validation, mean floor nMSE fell from ${B(fx(d.val.before,2))} to ${B(fx(d.val.after,2))}; tracks above 1 fell from ${B(d.val.gt1_before)} to ${B(d.val.gt1_after)} of ${d.val.n}. A floor, not a score: it uses observed reads.`);
+})();
+
+/* ---------- (d) prediction against floor ---------- */
+(function(){
+  const g=DATA.diag, P=g.pts, all=P.flatMap(p=>[p.obs,p.pred]);
+  const lo=Math.floor(log10(Math.min(...all))), hi=Math.ceil(log10(Math.max(...all)));
+  const W=960,H=420,L=90,R=30,top=24,bot=64, sx=v=>L+(log10(v)-lo)/(hi-lo)*(W-L-R), sy=v=>top+(H-top-bot)*(1-(log10(v)-lo)/(hi-lo));
+  let s=svg(W,H);
+  for(let k=lo;k<=hi;k++){ const v=Math.pow(10,k);
+    s+=`<line x1="${sx(v)}" y1="${top}" x2="${sx(v)}" y2="${H-bot}" class="grid"/><text x="${sx(v)}" y="${H-bot+24}" text-anchor="middle" class="tick">${v}</text>`;
+    s+=`<line x1="${L}" y1="${sy(v)}" x2="${W-R}" y2="${sy(v)}" class="grid"/><text x="${L-10}" y="${sy(v)+5}" text-anchor="end" class="tick">${v}</text>`; }
+  s+=`<line x1="${sx(Math.pow(10,lo))}" y1="${sy(Math.pow(10,lo))}" x2="${sx(Math.pow(10,hi))}" y2="${sy(Math.pow(10,hi))}" class="zero"/>`;
+  s+=`<line x1="${L}" y1="${sy(1)}" x2="${W-R}" y2="${sy(1)}" stroke="#bbb" stroke-width="1"/><line x1="${sx(1)}" y1="${top}" x2="${sx(1)}" y2="${H-bot}" stroke="#bbb" stroke-width="1"/>`;
+  P.forEach(p=>{ s+=`<circle cx="${sx(p.obs)}" cy="${sy(p.pred)}" r="7" fill="${p.cs>1.3?'var(--bad)':'var(--ours)'}" opacity=".85"/>`; });
+  s+=`<text x="${(L+W-R)/2}" y="${H-14}" text-anchor="middle" class="cap">conversion floor nMSE (observed reads through our conversion), log scale</text>`;
+  s+=`<text transform="translate(26,${(top+H-bot)/2}) rotate(-90)" text-anchor="middle" class="cap">our prediction nMSE, log scale</text>`;
+  s+=`<text x="${sx(Math.pow(10,hi))-6}" y="${sy(Math.pow(10,hi))+22}" text-anchor="end" class="psub">diagonal: prediction = floor</text>`;
+  s+=`<circle cx="${L+20}" cy="${top+12}" r="7" fill="var(--bad)"/><text x="${L+34}" y="${top+17}" class="tick" style="fill:#555">count slope above 1.3 (predicted peaks too tall)</text>`;
+  s+=`<circle cx="${L+20}" cy="${top+38}" r="7" fill="var(--ours)"/><text x="${L+34}" y="${top+43}" class="tick" style="fill:#555">count slope 1.3 or below</text>`;
+  put('figDiag', s+'</svg>');
+  put('tD1', `Before the cap, our prediction has nMSE above 1 on ${B(g.bad)} of ${g.n} tracks; ${B(g.bad_slope_hi)} of those have a count slope (predicted spread over correlation × observed spread) above <span data-src="literal">1.3</span>.`);
+  put('tD2', `The floor itself is above 1 on ${B(g.floor_bad)} tracks; for ${B(g.floor_only)} bad tracks it is the whole cause. One seed, chromosomes 1, 9 and 21 only.`);
+})();
+
+/* ---------- (e) what did not help ---------- */
+function hbar(title, rows, o){
+  const W=o.W||600, Lg=o.Lg||230, R=o.R||70, rh=o.rh||46, top=o.top||58, H=top+rows.length*rh+(o.cap?44:16);
+  const lo=o.min, hi=o.max, tf=o.log?(v=>log10(v)):(v=>v), xx=v=>Lg+(tf(v)-tf(lo))/(tf(hi)-tf(lo))*(W-Lg-R);
+  let s=svg(W,H)+`<text x="10" y="30" class="ptitle">${title}</text>`;
+  const base=o.base!==undefined?o.base:lo;
+  if(o.ref!==undefined) s+=`<line x1="${xx(o.ref)}" y1="${top-6}" x2="${xx(o.ref)}" y2="${top+rows.length*rh}" class="zero"/>`;
+  rows.forEach((r,i)=>{ const y=top+i*rh, a=xx(Math.min(base,r.v)), b=xx(Math.max(base,r.v));
+    s+=`<text x="${Lg-12}" y="${y+rh/2+6}" text-anchor="end" class="axlbl" style="font-size:${o.fs||17}px">${r.lab}</text>`;
+    s+=`<rect x="${a}" y="${y+8}" width="${Math.max(1,b-a)}" height="${rh-16}" fill="${r.c}" rx="2"/>`;
+    s+=`<text x="${(r.v>=base?b+8:a-8)}" y="${y+rh/2+6}" text-anchor="${r.v>=base?'start':'end'}" class="val" fill="${r.c}">${r.t}</text>`; });
+  if(o.cap) s+=`<text x="${W-10}" y="${H-12}" text-anchor="end" class="cap">${o.cap}</text>`;
+  return s+'</svg>';
+}
+(function(){
+  const b=DATA.boards.b30, R=DATA.recal_board;
+  put('figShrink', hbar(`(a) Same ${b.n} experiments`, [
+    {lab:'Raw counts', v:b.raw.mean_rank, c:'var(--field)', t:`${fx(b.raw.mean_rank,2)} · position ${b.raw.pos}`},
+    {lab:'Peak shrink, own experiment in fit', v:b.slope_in.mean_rank, c:'var(--noise)', t:`${fx(b.slope_in.mean_rank,2)} · position ${b.slope_in.pos}`},
+    {lab:'Peak shrink, leave one out', v:b.slope_loo.mean_rank, c:'var(--bad)', t:`${fx(b.slope_loo.mean_rank,2)} · position ${b.slope_loo.pos}`},
+    {lab:'Depth cap', v:b.cap.mean_rank, c:'var(--ours)', t:`${fx(b.cap.mean_rank,2)} · position ${b.cap.pos}`}],
+    {min:0,max:6,Lg:290,R:175,fs:15,cap:'mean combined rank (lower is better)'}));
+  const rows=R.map(r=>({lab:r.e, v:r.rec/r.raw, c:r.rec>r.raw?'var(--bad)':'var(--ours)', t:`×${fx(r.rec/r.raw,2)}`}));
+  put('figRecalB', hbar('(b) Recalibrated spread, seed 0', rows, {min:0.5,max:4,log:1,base:1,ref:1,Lg:130,R:70,rh:34,fs:14,cap:'nMSE recalibrated ÷ nMSE as trained (log scale)'}));
+  const worse=R.filter(r=>r.rec>r.raw).length, rk=R.filter(r=>r.rrec>r.rraw).length;
+  put('tE1', `The fair peak shrink (one slope per assay, target experiment left out) leaves the position at ${B(b.slope_loo.pos)}; ${B(b.loo_none)} of ${b.n} tracks have no other experiment of their assay to fit on.`);
+  put('tE2', `Recalibration raised the expected-p-value nMSE on ${B(worse)} of ${R.length} experiments and worsened the combined rank on ${B(rk)}. One seed; no seed range.`);
+})();
+
+/* ---------- (f) read starts ---------- */
+(function(){
+  const pp=DATA.postpile;
+  const rows=[]; pp.exps.forEach((e,i)=>{ rows.push({lab:`${e}, overlap counts`, v:pp.A[i], c:'var(--rc)', t:pp.A[i]+'%'}); rows.push({lab:`${e}, read starts`, v:pp.C[i], c:'var(--rs)', t:pp.C[i]+'%'}); });
+  put('figPost', hbar('(a) Why try read starts', rows, {W:560,min:0,max:120,Lg:270,R:20,rh:32,fs:14,cap:'share of the fragment-pileup gain recovered'}));
+  const S=DATA.rs, mets=[['imputation','imputation score',1],['correction','correction score',1],['calibration','calibration score',1],
+    ['dev_imputation_skill','deviance imputation skill',1],['dev_correction_gap_closed','deviance correction gap closed',1],['dev_calibration_ratio','calibration ratio (1 = calibrated)',0]];
+  const W=760, Lg=300, R=150, rh=50, top=58, H=top+mets.length*rh+40;
+  let s=svg(W,H)+`<text x="10" y="30" class="ptitle">(b) Three seeds each, 16 regions</text>`;
+  mets.forEach(([k,lab],i)=>{ const v=[...S.count[k],...S.start[k]], lo=Math.min(...v), hi=Math.max(...v), pad=(hi-lo)*0.12||0.01;
+    const xx=x=>Lg+(x-lo+pad)/(hi-lo+2*pad)*(W-Lg-R), y=top+i*rh+rh/2;
+    s+=`<line x1="${Lg}" y1="${y}" x2="${W-R}" y2="${y}" class="grid"/>`;
+    s+=`<text x="${Lg-12}" y="${y+5}" text-anchor="end" class="axlbl" style="font-size:15px">${lab}</text>`;
+    S.count[k].forEach(x=>{ s+=`<circle cx="${xx(x)}" cy="${y-7}" r="6.5" fill="var(--rc)"/>`; });
+    S.start[k].forEach(x=>{ s+=`<circle cx="${xx(x)}" cy="${y+7}" r="6.5" fill="var(--rs)"/>`; });
+    const gap=Math.abs(S.count.mean[k]-S.start.mean[k]), nf=Math.max(S.count.range[k],S.start.range[k]), sig=gap>nf;
+    s+=`<text x="${W-R+12}" y="${y+5}" style="font:600 14px var(--sans);fill:${sig?'#1a1a1a':'#9a9a9a'}">${sig?'gap > seed range':'within seed range'}</text>`; });
+  s+=`<circle cx="${Lg}" cy="${H-18}" r="6.5" fill="var(--rc)"/><text x="${Lg+12}" y="${H-13}" class="tick" style="fill:#555">read counts</text>`;
+  s+=`<circle cx="${Lg+150}" cy="${H-18}" r="6.5" fill="var(--rs)"/><text x="${Lg+162}" y="${H-13}" class="tick" style="fill:#555">read starts · each row on its own scale</text>`;
+  put('figRS', s+'</svg>');
+  const c=S.count, t=S.start;
+  put('tF1', `Imputation: ${B(fx(t.mean.imputation,3))} (seed range ${fx(t.range.imputation,3)}) for read starts against ${B(fx(c.mean.imputation,3))} (${fx(c.range.imputation,3)}); deviance skill (share of average-to-floor gap closed) ${B(fx(t.mean.dev_imputation_skill,3))} against ${B(fx(c.mean.dev_imputation_skill,3))}.`);
+  put('tF2', `Correction: ${B(fx(t.mean.correction,3))} against ${B(fx(c.mean.correction,3))}, inside the read-start seed range (${fx(t.range.correction,3)}); the deviance correction term differs by only ${fx(c.mean.dev_correction_gap_closed-t.mean.dev_correction_gap_closed,4)}. Read starts are overconfident (calibration ratio ${B(fx(t.mean.dev_calibration_ratio,2))} against ${B(fx(c.mean.dev_calibration_ratio,2))}).`);
+})();
+
+/* ---------- (g) why read starts lost ---------- */
+(function(){
+  const w=DATA.why, A=Object.keys(w.skill).sort((a,b)=>(w.skill[a].count-w.skill[a].start)-(w.skill[b].count-w.skill[b].start)).reverse();
+  const W=600,H=380,L=120,R=20,top=58,bot=56, lo=-0.5, hi=0.9, n=A.length, bw=(H-top-bot)/n;
+  const xx=v=>L+(v-lo)/(hi-lo)*(W-L-R);
+  let s=svg(W,H)+`<text x="10" y="30" class="ptitle">(a) Skill per assay, mean of 3 seeds</text>`;
+  [-0.4,0,0.4,0.8].forEach(t=>{ s+=`<line x1="${xx(t)}" y1="${top}" x2="${xx(t)}" y2="${H-bot}" class="${t===0?'zero':'grid'}"/><text x="${xx(t)}" y="${H-bot+22}" text-anchor="middle" class="tick">${fx(t,1)}</text>`; });
+  A.forEach((a,i)=>{ const y=top+i*bw; s+=`<text x="${L-10}" y="${y+bw/2+5}" text-anchor="end" class="axlbl" style="font-size:15px">${a}</text>`;
+    [['count','var(--rc)',0],['start','var(--rs)',1]].forEach(([k,c,j])=>{ const v=w.skill[a][k]; s+=`<rect x="${xx(Math.min(0,v))}" y="${y+3+j*(bw-6)/2}" width="${Math.abs(xx(v)-xx(0))}" height="${(bw-6)/2-1}" fill="${c}"/>`; }); });
+  s+=`<text x="${W-R}" y="${H-10}" text-anchor="end" class="cap">deviance imputation skill · teal read counts, orange read starts</text>`;
+  put('figWhySkill', s+'</svg>');
+  const S=DATA.rs;
+  put('figWhyCal', hbar('(b) Calibration ratio, read starts', [
+    {lab:'as scored', v:S.start.mean.dev_calibration_ratio, c:'var(--rs)', t:fx(S.start.mean.dev_calibration_ratio,3)},
+    {lab:'corrected, 9 bins', v:w.calW['9'], c:'var(--noise)', t:fx(w.calW['9'],3)},
+    {lab:'corrected, 41 bins', v:w.calW['41'], c:'var(--noise)', t:fx(w.calW['41'],3)},
+    {lab:'corrected, 401 bins', v:w.calW['401'], c:'var(--noise)', t:fx(w.calW['401'],3)},
+    {lab:'read counts', v:S.count.mean.dev_calibration_ratio, c:'var(--rc)', t:fx(S.count.mean.dev_calibration_ratio,3)}],
+    {min:0.9,max:1.4,base:1,ref:1,Lg:190,R:70,rh:44,fs:15,cap:'1 = calibrated; corrected = spread inflated for error correlation over that width'}));
+  const r=w.smooth36;
+  put('tCauses', `<span class="rk">1</span><span>Conversion treats neighbouring bins as independent: explains the overconfidence, not the skill gap.</span><span class="st" style="color:var(--ok)">supports</span>
+    <span class="rk">2</span><span>Training budget for a noisier target. Smoothing does not help: H3K36me3 skill ${fx(r[0],2)} → ${fx(r[2],2)} at width 41.</span><span class="st" style="color:var(--bad)">untested</span>
+    <span class="rk">3</span><span>Sparse targets: summed starts still correlate r = ${fx(w.r_conv,3)} with overlap counts.</span><span class="st" style="color:var(--muted)">weak</span>
+    <span class="rk">4</span><span>An input built differently by mistake: code audit found none.</span><span class="st" style="color:var(--muted)">ruled out</span>`);
+})();
+
+/* ---------- (h) recalibration, PIT deviation per seed ---------- */
+function pitPanel(title, P, conds){
+  const W=600,H=380,L=90,R=30,top=58,bot=60, all=conds.flatMap(c=>P[c[0]].seeds), lo=0, hi=Math.ceil(Math.max(...all)*1000/5)*5/1000;
+  const xx=i=>L+40+i/(conds.length-1)*(W-L-R-80), yy=v=>top+(H-top-bot)*(1-(v-lo)/(hi-lo));
+  let s=svg(W,H)+`<text x="10" y="30" class="ptitle">${title}</text>`;
+  for(let t=0;t<=hi+1e-9;t+=hi/5){ s+=`<line x1="${L}" y1="${yy(t)}" x2="${W-R}" y2="${yy(t)}" class="grid"/><text x="${L-10}" y="${yy(t)+5}" text-anchor="end" class="tick">${fx(t,3)}</text>`; }
+  for(let k=0;k<3;k++){ s+=`<polyline fill="none" stroke="#c9c5be" stroke-width="1.6" points="${conds.map((c,i)=>`${xx(i)},${yy(P[c[0]].seeds[k])}`).join(' ')}"/>`; }
+  conds.forEach((c,i)=>{ P[c[0]].seeds.forEach(v=>{ s+=`<circle cx="${xx(i)}" cy="${yy(v)}" r="6" fill="${c[2]}"/>`; });
+    s+=`<text x="${xx(i)}" y="${yy(P[c[0]].mean)}" dx="14" dy="5" class="val" fill="${c[2]}">${fx(P[c[0]].mean,4)}</text>`;
+    s+=`<text x="${xx(i)}" y="${H-bot+26}" text-anchor="middle" class="tick" style="fill:#444">${c[1]}</text>`; });
+  s+=`<text transform="translate(22,${(top+H-bot)/2}) rotate(-90)" text-anchor="middle" class="cap">PIT deviation (lower is better)</text>`;
+  return s+'</svg>';
+}
+(function(){
+  const p=DATA.pit, C=[['none','no fit','var(--field)'],['same_cells','same-cell fit','var(--noise)'],['cross_cell','deployment fit','var(--ours)']];
+  put('figPitImp', pitPanel('(a) Imputation', p.imp, C));
+  put('figPitPair', pitPanel('(b) Correction', p.pair, C));
+  const i=p.imp, q=p.pair, gain=i.none.mean-i.cross_cell.mean, every=i.none.seeds.every((v,k)=>i.cross_cell.seeds[k]<v);
+  put('tH1', `Imputation, deployment fit (factor from other cells): PIT deviation (distance of the probability-integral-transform histogram from flat) ${B(fx(i.none.mean,4))} → ${B(fx(i.cross_cell.mean,4))}; the drop ${fx(gain,4)} is smaller than the seed range ${fx(i.none.range,4)}${every?', although every seed improves':''}.`);
+  put('tH2', `Correction, same-cell fit: ${B(fx(q.none.mean,4))} → ${B(fx(q.same_cells.mean,4))} (seed range ${fx(q.none.range,4)}); a user can reach this fit, because the observed track exists.`);
+})();
+
+/* ---------- (i) coverage ---------- */
+(function(){
+  const C=DATA.cov, S=[['obs_top10','observed top 10%'],['obs_top1','observed top 1%'],['obs_top0.1','observed top 0.1%'],['pred_top10','predicted top 10%'],['pred_top1','predicted top 1%'],['pred_top0.1','predicted top 0.1%']];
+  const W=1160,H=360,L=80,R=20,top=30,bot=70, gw=(W-L-R)/S.length, bw=gw*0.32, yy=v=>top+(H-top-bot)*(1-v);
+  let s=svg(W,H);
+  [0,0.25,0.5,0.75,1].forEach(t=>{ s+=`<line x1="${L}" y1="${yy(t)}" x2="${W-R}" y2="${yy(t)}" class="grid"/><text x="${L-10}" y="${yy(t)+5}" text-anchor="end" class="tick">${fx(t,2)}</text>`; });
+  s+=`<line x1="${L}" y1="${yy(0.9)}" x2="${W-R}" y2="${yy(0.9)}" class="zero"/><text x="${L+6}" y="${yy(0.9)-8}" class="psub">nominal level</text>`;
+  S.forEach(([k,lab],i)=>{ const x=L+i*gw+gw/2;
+    [['ours','var(--ours)',-1],['ref','var(--ref)',0]].forEach(([m,c,o])=>{ const v=C[k][m][0]; s+=`<rect x="${x+o*bw-2}" y="${yy(v)}" width="${bw}" height="${yy(0)-yy(v)}" fill="${c}" rx="2"/><text x="${x+o*bw-2+bw/2}" y="${yy(v)-8}" text-anchor="middle" style="font:600 15px var(--sans);fill:${c}">${fx(v,2)}</text>`; });
+    s+=`<text x="${x}" y="${H-bot+26}" text-anchor="middle" class="tick" style="fill:#444">${lab}</text>`; });
+  s+=`<text x="${L}" y="${H-10}" class="cap">bins selected by observed count (left) or by predicted mean (right) · teal ours · grey calibrated reference</text>`;
+  put('figCov', s+'</svg>');
+  const a=C.obs_top1, b=C.pred_top1;
+  put('tI1', `Imputation, <span data-src="literal">90%</span> interval, mean over assays and 3 seeds: at the top 1% observed bins ours cover ${B(fx(a.ours[0],3))}, a calibrated model ${B(fx(a.ref[0],3))}; most of the miss is the selection, not the model.`);
+  put('tI2', `At our top 1% predicted bins the truth falls below the interval in ${B(fx(b.ours[2]*100,1)+'%')} of bins against ${B(fx(b.ref[2]*100,1)+'%')} for the reference: the same overshoot the board shows, mild in interval terms.`);
+})();
+
+/* ---------- (j) covariate prompts ---------- */
+(function(){
+  const A=DATA.prompt.arms, lab={depth_up:'read depth ×2',depth_down:'read depth ×½',read_length:'read length 36 ↔ 100 bp',run_type_flip:'single-end ↔ paired-end',
+    dedup_flip:'duplicate removal on ↔ off',mapq_flip:'mapping-quality filter 30 ↔ 0',platform_other:'another seen platform',antibody_other:'another seen antibody',lab_other:'another seen lab',
+    platform_unknown:'unknown platform',lab_unknown:'unknown lab',antibody_unknown:'unknown antibody'};
+  const ord=Object.keys(lab).filter(k=>A[k]);
+  const rows=ord.map(k=>({lab:lab[k], v:A[k].met/A[k].n, c:k.endsWith('unknown')?'var(--bad)':k.startsWith('depth')||k==='read_length'?'var(--ours)':'var(--noise)', t:`${A[k].met} of ${A[k].n}`}));
+  put('figPrompt', hbar('', rows, {W:1000,top:14,min:0,max:1.12,Lg:310,R:110,rh:30,fs:18,cap:'share of imputed targets meeting the rule stated before the run, in every seed'}));
+  const d=A.depth_up, dd=A.dedup_flip;
+  put('tJ1', `Depth ×2 multiplies the total by ${B(fx(d.tot[0],2)+'–'+fx(d.tot[1],2))} on ${B(d.met)} of ${d.n} targets, shape unchanged. Duplicate removal leaves the total within ${fx(dd.tot[0],2)}–${fx(dd.tot[1],2)} but changes the predicted spread (median size ratio ${fx(dd.nr_med,2)}).`);
+  put('tJ2', `Unknown lab, platform or antibody should make the model less confident; that rule holds on ${B(A.lab_unknown.met+A.platform_unknown.met+A.antibody_unknown.met)} of ${A.lab_unknown.n+A.platform_unknown.n+A.antibody_unknown.n} cases. One held-out cell per target, 3 seeds.`);
+})();
+
+/* ---------- prose on slides 1-3 ---------- */
+(function(){
+  const F=DATA.boards.final, D=DATA.disc;
+  put('tT45', F.cap.scored); put('tTof', F.cap.of);
+  put('tBoardDef', `The validation board has ${B(F.cap.scored)} experiments (cell type × assay) with released truth, and the published scores of ${B(DATA.boards.n_entries)} round-one entries: ${D.teams} teams plus two baselines (an average of training tracks, and Avocado).`);
+  put('tScoreBox', `The organizers' scorer compares our track with the truth on ${D.meas_used} measures and ranks us among the ${DATA.boards.n_entries} entries on each.`);
+  put('tFairTrain', DATA.depth.n_train);
+  put('tDisc', `The ninth measure, an MSE weighted by each bin's variance across cell types, is not ranked: its weights could not be reproduced. On ${D.ctrl_gap} of ${D.chip_n} ChIP-seq tracks the model sees only the first of the pooled controls.`);
+})();
+
+/* navigation and speaker notes — as in assets/deck.html */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length; let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){
+  cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+}
+const next=()=>show(cur+1), prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;
+document.getElementById('prev').onclick=prev;
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='Home'){show(0);}
+  else if(e.key==='End'){show(tot-1);}
+  else if(e.key==='n'||e.key==='N'){e.preventDefault();document.body.classList.toggle('shownotes');}
+  else if(e.key==='Escape'){document.body.classList.remove('shownotes');}
+});
+show(0);
+</script>
+</body>
+</html>
