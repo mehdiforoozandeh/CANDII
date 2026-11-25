@@ -37,5 +37,5 @@ _(optional: the pre-registered rules — endpoints, thresholds, scope — locked
 <!-- crux:ledger:start -->
 **0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
 
-- `f147` finding (moderate) [[f147_16_targets_across_15_assays_3_seeds_dire|16 targets across 15 assays, 3 seeds, directions stated before the run; one…]]
+- `f147` finding (moderate) [[f147_16_targets_across_15_assays_3_seeds_dire|16 targets across 16 assays, 3 seeds, directions stated before the run; one…]]
 <!-- crux:ledger:end -->

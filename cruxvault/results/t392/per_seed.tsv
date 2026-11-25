@@ -1,0 +1,7 @@
+model	seed	imputation	correction	calibration	dev_imputation_skill	dev_imputation_r2	dev_correction_gap_closed	dev_calibration_ratio	nb_logscore_gain_vs_marginal
+rcp_halves_mix_avg_pearson_unet	0	0.507853	0.816437	0.700505	0.542901	0.343116	0.949315	1.067922	0.372304
+rcp_halves_mix_avg_pearson_unet	1	0.477964	0.809870	0.723748	0.509737	0.333129	0.951506	1.073537	0.370724
+rcp_halves_mix_avg_pearson_unet	2	0.512893	0.820415	0.631393	0.575069	0.350616	0.951611	1.033743	0.381191
+rs_halves_mix_avg_pearson_unet	0	0.458721	0.780265	0.610220	0.424569	0.308297	0.947596	1.248485	0.326762
+rs_halves_mix_avg_pearson_unet	1	0.459388	0.801881	0.638402	0.337607	0.275867	0.944923	1.344994	0.299100
+rs_halves_mix_avg_pearson_unet	2	0.452365	0.765714	0.570501	0.361558	0.281543	0.943169	1.330847	0.293232

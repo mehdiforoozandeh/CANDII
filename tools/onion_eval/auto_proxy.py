@@ -118,7 +118,8 @@ STDLIB_OK = frozenset(("__future__", "math", "functools", "itertools", "collecti
                        "collections.abc", "dataclasses", "typing", "enum", "numbers", "abc", "copy",
                        "operator", "warnings", "sys", "pathlib", "re", "string", "bisect", "heapq",
                        "statistics", "fractions", "contextlib"))
-MINICANDI_OK = frozenset(("contract", "components", "covariates", "dna_fusion", "trunk_film"))
+MINICANDI_OK = frozenset(("contract", "components", "covariates", "dna_fusion", "read_start",
+                          "trunk_film"))  # read_start: pure torch, no file access (t392)
 TORCH_BANNED = ("torch.hub", "torch.package", "torch.utils.cpp_extension", "torch.multiprocessing",
                 "torch.distributed", "torch.utils.data", "torch.serialization", "torch.onnx",
                 "torch.utils.tensorboard", "torch._C")

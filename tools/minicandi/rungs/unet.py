@@ -82,6 +82,15 @@ learned sub-bin embedding expands each token's head features to five sub-bins, t
 (mu, n) per sub-bin, and the output holds `mu_sub`, `n_sub` [B, L, A, 5] and their pooled NB at
 25 bp as `mu`, `n` (`components.sub_output`). At 1 (default) neither builds anything.
 
+Read starts (t392 chunk C8, `read_start`, default false = today's model, which builds nothing new):
+the sub-channel count is `read_start.STRANDS` = 2 on both sides, set here in place of
+`res_subs_of` (whose RES_SUBS are 1 and 5). The input MLP reads `x_counts_sub` [B, L, A, 2] (plus-
+and minus-strand starts, each through the count transform) by Linear(2, D_TRACK); the average
+enters as `avg_sub` [B, L, A, 2] by `avg_in` = Linear(2, D_TRACK); the head emits `mu_sub`, `n_sub`
+[B, L, A, 2] through `out_sub_emb`, and `mu`, `n` [B, L, A] are `read_start.strand_output` (both
+channels pooled for a stranded track, channel 0 alone for ATAC-seq and DNase-seq).
+`read_start` with `res_in_sub` or `res_out_sub` above 1 raises ValueError.
+
 A window whose length is not a multiple of 2**n_levels is zero-padded at its right end inside the
 network (features already masked) and the output is cropped back to L.
 """
@@ -107,6 +116,7 @@ from minicandi.components import (ConvBlock, CountTransform, CovariateInjector, 
 from minicandi.contract import (A, CONTROL_INDEX, K_META, LOG2_DEPTH_COL, MiniCandi,  # noqa: E402
                                 k_input)
 from minicandi.covariates import drop_field_indices, model_covariates, scramble_mode  # noqa: E402
+from minicandi.read_start import STRANDS, strand_output  # noqa: E402
 from minicandi.dna_fusion import DnaCrossAttn, DnaFiLM, fusion_of, without_fusion  # noqa: E402
 from minicandi.trunk_film import TrunkFiLM, placement_of, pooled_condition, sites_of  # noqa: E402
 
@@ -236,11 +246,14 @@ class Model(MiniCandi):
         # per-track input path
         self.transform = CountTransform(cfg["count_transform"], **kw["transform"])
         self.in_sub, self.out_sub = res_subs_of(cfg)
+        self.read_start = bool(cfg.get("read_start", False))   # t392 C8; off = today
+        if self.read_start:                       # bypasses RES_SUBS = (1, 5): 2 strand channels
+            self.in_sub = self.out_sub = STRANDS
         self.track_in = nn.Sequential(nn.Linear(self.in_sub, D_TRACK), nn.GELU(),
                                       nn.Linear(D_TRACK, D_TRACK))
         self.track_emb_in = nn.Parameter(torch.randn(A, D_TRACK) * 0.02)
         if self.average_input:
-            self.avg_in = nn.Linear(1, D_TRACK)
+            self.avg_in = nn.Linear(STRANDS if self.read_start else 1, D_TRACK)
         self.in_inj = CovariateInjector(self.injection, d_model if tokens else D_TRACK,
                                         self.k_in, D_COV, **kw["injector"])
         self.mask = MaskHandler(cfg["mask_mode"], D_TRACK)
@@ -347,7 +360,9 @@ class Model(MiniCandi):
         if not tokens:
             h = self.in_inj(h, c_in[:, None])
         h, vis = self.mask(h, x_avail, x_bin_mask)
-        if self.average_input:
+        if self.average_input and self.read_start:
+            h = h + self.avg_in(torch.log1p(batch["avg_sub"].float().clamp_min(0)))
+        elif self.average_input:
             h = h + self.avg_in(torch.log1p(batch["avg"].float().clamp_min(0))[..., None])
         h_track = torch.cat([h, vis[..., None].to(h.dtype)], dim=-1)      # [B, L, A, d+1]
 
@@ -461,6 +476,9 @@ class Model(MiniCandi):
             ctl, i = self.ctl_nb(self.ctl_mlp(hd), c_out_t.float()), CONTROL_INDEX
             out = {**out, **{k: torch.cat([out[k][..., :i], ctl[k][..., i:]], dim=-1)
                              for k in ("n", "mu")}}
+        if self.read_start:
+            out = sub_output(out, self.out_sub)
+            return {**out, **strand_output(out)}
         return sub_output(out, self.out_sub) if self.out_sub > 1 else out
 
 
@@ -474,6 +492,9 @@ def _validate(cfg: dict) -> None:
         raise ValueError(f"skip_film {sf!r} not in {SKIP_FILMS}")
     if hs not in HEAD_SKIPS:
         raise ValueError(f"head_skip {hs!r} not in {HEAD_SKIPS}")
+    if cfg.get("read_start") and max(res_subs_of(cfg)) > 1:
+        raise ValueError("rung 4: read_start sets 2 strand channels; res_in_sub / res_out_sub "
+                         "above 1 cannot be combined with it")
     cb = cfg.get("control_branch", "shared")
     if cb not in CONTROL_BRANCHES:
         raise ValueError(f"control_branch {cb!r} not in {CONTROL_BRANCHES}")
