@@ -76,7 +76,8 @@ def main(argv=None):
     sizes = LP.chrom_sizes(S.SIZES)
     bl = E.load_blacklist_bins(E.asset_dir())
     truth = E.load_prediction(f"{S.VAL_TRUTH}/{a.track}.bigwig", chroms, bl)
-    scored = E.load_prediction(str(Path(a.out) / "raw" / a.track / f"{a.track}.npy"), chroms, bl)
+    sc = Path(a.out) / "raw" / a.track / f"{a.track}.npy"      # absent for a model this run did not score
+    scored = E.load_prediction(str(sc), chroms, bl) if sc.exists() else None
     raw = {k: {} for k in ("pred", "observed", "pred_depth", "pred_lamobs")}
     mus, obss = {}, {}
     with h5py.File(Path(a.pred) / "counts" / f"{a.track}.h5", "r") as f, h5py.File(cov["observed_counts"], "r") as g:
@@ -103,12 +104,12 @@ def main(argv=None):
         if raw[name]:
             P, T = E.align(raw[name], truth, chroms)
             X[name] = cat(P)
-    P, T = E.align(scored, truth, chroms)
+    P, T = E.align(scored if scored is not None else raw["pred"], truth, chroms)
     x, ysc = cat(T), cat(P)
     rep = dict(track=a.track, route=route, assay_class=cov["assay_class"], chroms=chroms, n_bins=int(x.size),
                depth_reads=float(cov["depth_reads"]), k_depth=float(k),
                sum_mu=float(sum(m.sum() for m in mus.values())), sum_obs=float(sum(o.sum() for o in obss.values())),
-               pred_matches_scored=float(np.max(np.abs(X["pred"] - ysc))),
+               pred_matches_scored=float(np.max(np.abs(X["pred"] - ysc))) if scored is not None else float("nan"),
                mean_truth=float(x.mean()), var_truth=float(x.var()))
     rep["vs_truth"] = {name: terms(x, y) for name, y in X.items()}
     rep["pred_vs_observed"] = terms(X["observed"], X["pred"])
