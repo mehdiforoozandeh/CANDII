@@ -10,7 +10,7 @@ native prediction. Directions are stated before the run in EXPECTED and printed 
     -> <out>/covariate_prompt.json, <out>/covariate_prompt.md
 
 Targets: the imputation jobs of the calibration eval set (regime in ensemble_store.FIT_REGIMES),
-one per assay, assays in sorted order, at most --n-targets. Every region of the eval set is used.
+one per assay, assays in sorted order (only --assays when given), at most --n-targets. Every region of the eval set is used.
 Per target, arm and seed, over all bins: total_ratio = sum mu_arm / sum mu_native; shape_r =
 Pearson r of log1p(mu_arm) vs log1p(mu_native); n_ratio = median(n_arm) / median(n_native);
 var_ratio = sum(mu + mu^2/n)_arm / sum(mu + mu^2/n)_native. mu is the NB mean, n its size
@@ -134,6 +134,8 @@ def run(argv=None) -> int:
     ap.add_argument("--runs", nargs="+", required=True)
     ap.add_argument("--calibration-evalset", required=True)
     ap.add_argument("--n-targets", type=int, default=8)
+    ap.add_argument("--assays", nargs="*", default=None,
+                    help="restrict targets to these assays (one target each, sorted order)")
     ap.add_argument("--infer-batch", type=int, default=8)
     ap.add_argument("--out", required=True)
     a = ap.parse_args(argv)
@@ -156,6 +158,8 @@ def run(argv=None) -> int:
     imp = [j for j in sc.jobs()[0] if j["regime"] in ES.FIT_REGIMES]
     seen, jobs = set(), []
     for j in sorted(imp, key=lambda j: (j["assay"], j["target"])):
+        if a.assays and j["assay"] not in a.assays:
+            continue
         if j["assay"] not in seen:
             seen.add(j["assay"])
             jobs.append(j)
