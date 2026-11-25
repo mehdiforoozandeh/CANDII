@@ -104,6 +104,10 @@ $SE run --board validation --pred $OUT/pred --cov $OUT/cov/$T.tsv --track $T --o
   done
   echo "collect $(BOARD=validation collect "$OUT" "$IDS")" | tee -a "$OUT/JOBS.txt"
   ;;
+collect)   # collect <out> [dependency ids]: rebuild the board after scores were copied in
+  OUT=${2:?out}; mkdir -p "$OUT/logs"
+  echo "collect $(collect "$OUT" "${3:-}")" | tee -a "$OUT/JOBS.txt"
+  ;;
 sacct)
   OUT=${2:?out}; IDS=${3:?ids}
   sacct -j "$IDS" -X -P --units=G -o JobID,JobName%30,State,Elapsed,AllocCPUS,ReqMem > "$OUT/sacct.tsv"

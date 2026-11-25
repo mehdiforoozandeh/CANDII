@@ -24,7 +24,7 @@ Exploratory, open. First measured result delivered 2026-11-22: ladder probe on 3
 
 ## Next
 - Blind-entry fix (D12): 20 M ChIP depth cap, fitted on training tracks only (results/t390/depth_rule/DEPTH_RULE.md); validation 30 tracks: position 5 -> 4 of 11 (results/t390/val_boards_side_by_side/BOARDS.md). Apply it to the blind predictions when t184 delivers them.
-- Spend 34.24 of 36 CPU-h (sacct eicx_, 2026-11-25 05:xx UTC). Cap counts for 5 new tracks: Fir 6011889 (depth_cap2); scoring of 4 capped tracks waits on foreman budget answer.
+- Spend 34.24 of 36 CPU-h (sacct eicx_, 2026-11-25 05:xx UTC). Cap counts for 5 new tracks: Fir 6011889 (depth_cap2); limit now 55 CPU-h; cap watcher runs tools/eic_entry/cap_cycle.sh on Fir every 10 min to 19:15 UTC (markers /scratch/mforooz/eicx/val/capwatch). 20:00 UTC message: both boards, spend from sacct.
 0. t184 batch 1 submitted on Nibi 2026-11-23 08:01 UTC by the recipe session (PI-approved there): ChIP/ATAC 28629674-28629678, DNase 28629699-28629701; outputs /scratch/mforooz/onion/{work,measurements}; limits 3 d / 7 d. Never resubmit (not ours). Blind predictions follow the final architecture at original covariates; recipe session sends paths.
 1. Read probe 2; record findings; choose the fair peak rule for the count route.
 2. 48-experiment batch: held by the PI (D8).

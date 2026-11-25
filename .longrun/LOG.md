@@ -74,3 +74,5 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-25T05:19Z Four boards on the same 30 validation tracks: raw pos 5 (mean comb 5.31), slope in-sample 5 (4.56, preview), slope LOEO 5 (4.97), depth cap 4 (3.70; nMSE>1 20->10/30). results/t390/val_boards_side_by_side/BOARDS.md. Spend ~27 CPU-h of 36.
 - 2026-11-25T05:20Z glossary: blocked reply with nmse
 - 2026-11-25T05:21Z Spend corrected: 34.24 of 36 CPU-h (sacct eicx_), not ~27. D11, D12 recorded (depth cap is the blind-entry fix). Cap build for 5 new tracks: Fir 6011889. Cap+slope board skipped (~10 CPU-h). Asked foreman for 41 CPU-h to score 4 capped tracks.
+- 2026-11-25T05:21Z glossary: blocked reply with c36m18, eicx, sacct
+- 2026-11-25T05:22Z Limit raised to 55 CPU-h (foreman). Cap watcher (laptop, to 19:15 UTC) runs tools/eic_entry/cap_cycle.sh on Fir every 10 min over the 12 remaining tracks; first pass reused C36M18, collect 6012271; cap build 6011889 pending. Raw watcher still running.
