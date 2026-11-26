@@ -35,7 +35,8 @@ Answers the PI's question whether the intervals capture large peaks where the me
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+**1 children** · open 1, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
 
+- `q93` _(Q)_ [[q93_how_can_training_make_the_model_capture_|How can training make the model capture large peaks accurately, without a post-hoc shrink of the predicted peaks?]] — *open*
 - `f146` finding (moderate) [[f146_asked_for_measurement_with_a_calibrated_|Asked-for measurement with a calibrated reference, 3 seeds, 22 assays, 32…]]
 <!-- crux:ledger:end -->
