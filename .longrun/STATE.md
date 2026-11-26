@@ -13,7 +13,7 @@ Close the session with one trusted miniCANDI architecture (PI 2026-11-22): the r
 ## In flight
 - Fir 6033930 DONE (62.7 CPU-h): val3/out/counts sent to pval session; use the val3 C25M26, not the older one in s0/counts.
 - Fir 5761693 DONE: 43 counts, copy 5761694 done, 649.8 CPU-h.
-- Avocado 5022624-27 pending on Fir. PI rule: if none started when Nibi returns (~2026-11-25 21:00 UTC), cancel on Fir and submit the same chain on Nibi (check Nibi up and inputs first); if one started, leave it. Watch bp5s3733k.
+- Avocado chain on Fir GPU slices (PI 2026-11-26): shared 6291945, genome 6291946, predict 6291947, bigwig 6291948; old 5022624-27 cancelled. Never resubmit. Nibi move dropped.
 - Nibi blind build batch 1 (t184): build 28737209/11/15/45/47/64/67/69/75, signal 28737212, 28737239 wait out NibiMaintenance. Never resubmit.
 
 ## Next

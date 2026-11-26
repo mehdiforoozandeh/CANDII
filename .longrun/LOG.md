@@ -224,3 +224,11 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-25T15:25Z 5761693_22 writes cell 46 assays 10,18,21,35 in sequence (~2.9 h each); assay 35 at 11/24 chromosomes at 16:25 UTC; expected end ~18:05 UTC at ~11.2 h of 14 h. Told foreman: no action.
 - 2026-11-25T15:25Z glossary: blocked reply with 5761693_22
 - 2026-11-25T16:57Z 5761693 COMPLETE: task 22 39268 s; 43 counts in s0 and recal_wide; copy 5761694 COMPLETED; array 649.8 CPU-h (sacct). All validation targets predicted. Told foreman and pval.
+- 2026-11-25T16:57Z glossary: blocked reply with avocado
+- 2026-11-25T21:23Z 21:23 Nibi tunnel down (hpc status: nibi down); asked PI for hpc up nibi. Avocado 5022624-27 not started on Fir (head ReqNodeNotAvail fc10515); held until Nibi answers. Watch bp5s3733k still armed.
+- 2026-11-25T21:23Z glossary: blocked reply with avocado
+- 2026-11-26T10:06Z 2026-11-26 PI via foreman: fir up, nibi down; keep Avocado on Fir. 5022624 pending since 11-21 19:07 UTC (1 H100, 96G, 12 h). Sent foreman status table; GPU-slice resubmit offered as PI option only.
+- 2026-11-26T10:06Z glossary: blocked reply with gpu, h100
+- 2026-11-26T10:10Z PI (via foreman 2026-11-26): resubmit Avocado chain as GPU slice after a memory check, measured --time, exclude fc10713/fc10715, cancel old chain only when new is ready. Max 005 logs (full H100): shared chr20 1.81 h, genome chr1 3.71 h (max), chr14 1.28 h. Data on host; est. GPU ~13 GB chr1. Probe 6290210 (3g.40gb, shared mode chr1, 0.25 h) for peak memory and steps/s.
+- 2026-11-26T10:26Z cancel-own.sh cancel on fir: 5022624 5022625 5022626 5022627
+- 2026-11-26T10:26Z Probe 6290210 (3g.40gb, shared chr1): peak GPU 19262 MiB, host RSS 22.5 GB, 19.7 steps/s (2.2x slower than full H100). New Avocado chain: shared 6291945 (7h, MAXHOURS 6.5), genome 6291946 (11:30, 11.0), predict 6291947, bigwig 6291948; excl fc10713,fc10715. Old 5022624-27 cancelled. Nibi-move watch bp5s3733k stopped (rule superseded).
