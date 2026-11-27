@@ -7,7 +7,7 @@ Decide read-start vs read-count fairly, with the explanation (q94), and find why
 No deadline, no cap (D13). Target: iteration 1 measured result by 2026-11-30; later iterations 3-4 days each.
 
 ## In flight
-- Planner agent (Fable) writing .orchestrate/plan.md for iteration 1. No cluster jobs yet.
+- Iteration 1 wave 1: 7 builders (C1 deconv, C2 spaces, C3 covconv, C4 caps, C5 audits+golden, C6 dump tool, C12a 1bp tool + sc_untar job). Plan .orchestrate/plan.md (20 chunks, 5 waves).
 - Branch exp/start-vs-count-dedup, draft PR 68 (base exp/t370-minicandi-recipe).
 
 ## Next
