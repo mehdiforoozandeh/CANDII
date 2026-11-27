@@ -253,3 +253,7 @@ Every term and metric in use. A new entry lands before its first use in anything
 | C34M02 | EIC validation track id: cell number, assay number | coinage: 0 titles in Europe PMC and OpenAlex | rejected | 2026-11-25 |
 | C50M02 | EIC validation track id: cell number, assay number | coinage: 0 titles in Europe PMC and OpenAlex | rejected | 2026-11-25 |
 | epigenome | all chemical marks on a cell's DNA and histones | field: MeSH | admitted | 2026-11-25 |
+| Cromwell | workflow engine that runs the ENCODE pipelines under Caper | English word, Zipf 3.4 | admitted | 2026-11-27 |
+| filesystem | storage system that holds files on a disk or cluster | English word, Zipf 2.6 | admitted | 2026-11-27 |
+| Slurm | job scheduler used on the Fir and Nibi clusters | English word, Zipf 1.4 | admitted | 2026-11-27 |
+| scontrol | Slurm command that inspects or changes a queued job | coinage: 1 titles in Europe PMC and OpenAlex | rejected | 2026-11-27 |
