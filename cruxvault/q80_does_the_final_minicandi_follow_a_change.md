@@ -35,8 +35,9 @@ Shows whether the output covariates act as prompts a user can set, which the pap
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**1 children** · open 1, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+**2 children** · open 2, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
 
 - `q92` _(Q)_ [[q92_which_output_covariates_make_sense_as_pr|Which output covariates make sense as prompts for an imputed experiment that was never done?]] — *open*
+- `q95` _(Q)_ [[q95_why_does_minicandi_fail_to_follow_the_de|Why does miniCANDI fail to follow the deduplication and single-end/paired-end covariates while it follows depth, and can a closed-form processing layer or more counterfactual views fix it?]] — *open*
 - `f147` finding (moderate) [[f147_16_targets_across_15_assays_3_seeds_dire|16 targets across 16 assays, 3 seeds, directions stated before the run; one…]]
 <!-- crux:ledger:end -->

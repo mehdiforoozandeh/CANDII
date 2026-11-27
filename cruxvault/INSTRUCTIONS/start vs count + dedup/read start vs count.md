@@ -1,0 +1,30 @@
+here's a voice transcript from Max:
+
+> We’re talking about the read start model versus the model that predicts read counts after extension. What we were finding was that the read start model is doing worse, but it’s hard to tell because they’re predicting different things, and so you’re evaluating them on different things. So okay, the thing we’re proposing is run one on the other. So take the read start model, extend the reads to produce read counts, and evaluate that against the read counts. If it’s the case that that model does worse than the read count model, that’s more evidence that indeed the read start model is worse. Then do the opposite. Take the read count model, use just the starts, like basically take the derivative to get the read counts _[read starts?]_, and predict, and then evaluate that against the read counts _[read starts?]_. And the real slam dunk is if the read count model still does better when predicting read starts. So we’ll see what happens.
+
+To look at what we have done already on the read start model, the data that we have processed So far for the read start model and then our evaluation of the read start model and how we compare it against the read count model. Basically, I want you to set up the background and where we are on the read start versus read count comparison. And then based on the transcript above, and our results and data and preparations that we have right now, I want us to plan for actually investigating this further according to the transcript. We need to decide and basically investigate whether we are better off using the read count formulation or the read start formulation. There is a pros and cons list for each one. And then we have like the empirical results that we get to see. First of all, we need to compare them in a very fair setting. That is, one shouldn't be an advantage in terms of like data availability, more more compute, etc.
+
+. Then we also have to find the actual scientific explanation that explains whether the read count is doing better or the read start is doing better.
+
+
+now please Check Sprint 19 in max's github repo for the analysis on SE/PE deduplication
+
+Based on what Max explained to me verbally, it seems like uh, candy correction is not successful at understanding and taking into account the deduplication step. So in the encode imputation challenge, read deduplication and single end versus pair end reads were the most consequential covariates that basically plagued the whole encode imputation challenge, meaning that processing these two differently in the training set and the blind set caused a huge mismatch that most of the models that were the entrants of that challenge were failing to take into account.
+
+Candy we have been successful at finding a list of covariates that seem to be consequential. And we have been successful at generating augmented views of the same experiment in different processing settings. So we have enough counterfactual data or augmented data to train a candy model that understands the effects of different covariates and can go from one to the other i.e. correction.
+
+But based on our results so far, it seems that we are not equally able to correct for different covariates. For example, it seems that we are very good at correcting the covariate effect of depth, read depth, sequencing depth, but not, for example, deduplication.
+
+One of the reasons that we have been very successful at correcting the depth effect is because we are using a mechanical closed form solution of how read depth affects the read count given a negative binomial distribution that has depth offset. So there is a mechanical closed form mathematical solution that we are building into the model that makes us very good at applying and correcting for the depth effect.
+
+However, other covariates, most other covariates are not mechanically and mathematically wired into the system, but because we have counterfactuals, the model seems to be responding based on the training data that it has seen with different process covariates and augmented views.
+
+It seems like we are limited in our ability to apply this kind of corrections just by looking at the augmented view. So there might be different causes for this. One, we don't have enough augmented data for some of the covariates. That's one possibility. We must consider that. If that's the case, then the next thing is whether we can actually provide and process new and more augmented data views for those covariates. This might be impossible for the EIC data that we're working on, right now, but might be possible for the big extended data set that we are planning to collect later from ENCODE, epiAtlas, and Chip Atlas. So to wrap up, one cause might be in the data layer. And how much augmented data views that we have.
+
+The other possibility is that similar to how we mechanically made our model responsive to sequencing depth, maybe there are other mechanical ways to make our model responsive to, for example, read deduplication. We must consider those as well. For different covariates, we should think and ask, is there a known relationship that we can mathematically implement? That models the covariate effects. In the signal, in the read count data
+
+or read start data.
+
+And finally, another possible way of looking at this is whether we are losing some of the information just because we're looking in read count or overlap space instead of read start space. I think this is another thing that we must consider and we must investigate. Whether we are providing more information to the model and preventing loss of information if we start working on the read start space instead of read count space.
+
+I want you to read and look at Max's GitHub repo, different sprints, their instructions, the findings, and basically this and the information i provided above will help inform our plan for moving forward.
