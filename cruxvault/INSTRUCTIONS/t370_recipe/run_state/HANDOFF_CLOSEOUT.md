@@ -7,7 +7,7 @@ to: p-value session (EIC comparison), via the foreman
 
 # Close-out handoff
 
-The recipe run is closed. The PI ruled on 2026-11-27 (relayed by the foreman) that the p-value session owns the two open hand-offs below. Decision rows D59, D60 and D61 in `.longrun/DECISIONS.md` record the rulings. Every time is UTC.
+The recipe run is closed. The PI ruled on 2026-11-27 (relayed by the foreman) that the p-value session owns the two open hand-offs below. Decision rows D59, D60 and D61 in `cruxvault/INSTRUCTIONS/t370_recipe/run_state/longrun/DECISIONS.md` record the rulings. Every time is UTC.
 
 ## The final model
 
@@ -58,7 +58,7 @@ sbatch --array=<cell indices>%12 --time=14:00:00 --job-name=rcp_eicblind --expor
 
 ## Never resubmit
 
-5761693, 5761694, 6033929, 6033930, 6290210, 6291945-6291948, 5022624-5022627 (cancelled), 28737208/10/14/44/46/63/66/68/74 (stage), 28737209/11/15/45/47/64/67/69/75 (build), 28737212, 28737239 (signal), and every job listed in `.longrun/LOG.md`.
+5761693, 5761694, 6033929, 6033930, 6290210, 6291945-6291948, 5022624-5022627 (cancelled), 28737208/10/14/44/46/63/66/68/74 (stage), 28737209/11/15/45/47/64/67/69/75 (build), 28737212, 28737239 (signal), and every job listed in `cruxvault/INSTRUCTIONS/t370_recipe/run_state/longrun/LOG.md`.
 
 ## Deferred to the next session (D61)
 
