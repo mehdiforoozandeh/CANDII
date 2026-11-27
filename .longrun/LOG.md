@@ -6,3 +6,7 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-27T23:24Z ledger: 52 rows written (R1-R52); D11-D12; q94 q95 recorded
 - 2026-11-27T23:27Z D13: no deadline, no cap (PI). STATE written. Next: orchestrate iteration 1.
 - 2026-11-27T23:28Z D14 commit policy; iteration-1 planner spawned (fable)
+- 2026-11-27T23:29Z glossary: blocked reply with d1, d12, d13, d14, d6, d7
+- 2026-11-27T23:29Z glossary: blocked reply with prefix
+- 2026-11-27T23:44Z iteration-1 plan: 16 chunks in 4 waves; cold plan review running
+- 2026-11-27T23:53Z plan review done: 6 factual errors + unsound dedup floor; planner amending once
