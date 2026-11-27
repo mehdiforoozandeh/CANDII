@@ -136,7 +136,7 @@ MIXED_RUN_TYPE_NOTE = ("mixed single-end and paired-end runs: every replicate al
 #: NETPROBE 2026-11-11). Byte ranges per file and files at once; both are CLI parameters.
 RANGES = 64
 PARALLEL_FILES = 4
-USER_AGENT = "Mozilla/5.0 (generic-client)"
+USER_AGENT = "candi-onion-stage/1.0 (python-urllib)"  # ENCODE refuses browser-style headers (405, 2026-11-23)
 
 
 class NotApplicable(Exception):

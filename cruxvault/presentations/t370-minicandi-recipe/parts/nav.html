@@ -1,0 +1,26 @@
+<script>
+/* navigation and speaker notes — as in assets/deck.html */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length; let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){
+  cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+}
+const next=()=>show(cur+1), prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;
+document.getElementById('prev').onclick=prev;
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='Home'){show(0);}
+  else if(e.key==='End'){show(tot-1);}
+  else if(e.key==='n'||e.key==='N'){e.preventDefault();document.body.classList.toggle('shownotes');}
+  else if(e.key==='Escape'){document.body.classList.remove('shownotes');}
+});
+show((parseInt(location.hash.slice(1))||1)-1);
+</script>
+</body>
+</html>

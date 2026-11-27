@@ -1,0 +1,347 @@
+<body>
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- 1 · TITLE
+       job      the result as a headline; scope in one line
+       source   DATA.confirm (class at 256 regions)
+       numbers  none typed; counts from DATA
+       cut      the hint -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">miniCANDI recipe · lab meeting</div>
+      <h1>Training the U-Net on read-disjoint pairs breaks its imputation–correction trade-off</h1>
+      <p class="sub">Three objectives scored on the <span data-src="literal">eic_v1_2</span> tables (the current EIC training-cell data version) against the three base models. Every arm has <span data-src="literal">3</span> seeds (independent training restarts) unless marked.</p>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd> &nbsp;·&nbsp; <kbd>n</kbd> shows the speaker notes</p>
+      <aside class="notes"><p>The deck runs in paper order: what we want, why the U-Net was stuck, how the model and its training work, what we found, and what is left. Every measured number is read from the score tables when the deck is built.</p></aside>
+    </div>
+  </section>
+
+  <!-- 2 · MOTIVATION · the three objectives
+       job      what miniCANDI must do, as a schematic
+       source   PI instruction (mini candi.md), D1
+       numbers  none
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>what we want from one model</div>
+      <h2>One model must impute, correct and know its own uncertainty</h2>
+      <div class="fig wide" id="figGoals"></div>
+      <aside class="notes"><p>Imputation predicts a track that is missing from the input. Correction maps an observed track, made with one protocol, to what a reference protocol would have measured. Calibration asks that the predicted Negative Binomial spread match the real errors. A recipe wins only if it is at least as good as the best base model on all three at once.</p></aside>
+    </div>
+  </section>
+
+  <!-- 3 · MOTIVATION · the trade-off
+       job      the U-Net imputes best but corrects worst, on two data versions
+       source   data/scores_ladder.md (eic_v1), data/deck_base_p16_sv.tsv (eic_v1_2)
+       numbers  from DATA.ladder, DATA.steps
+       cut      the second bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the problem</div>
+      <h2>The U-Net imputes best but corrects worst, on both data versions</h2>
+      <div class="chartbox panels"><div class="fig" id="figLadder"></div><div class="fig" id="figBases"></div></div>
+      <ul class="pts">
+        <li>On <span data-src="literal">eic_v1_2</span> the U-Net gains <span id="tTradeImp"></span> imputation over conv + attention and loses <span id="tTradeCor"></span> correction.</li>
+      </ul>
+      <aside class="notes"><p>Panel a is the six-model ladder on the earlier data version, with an older correction scale, so its numbers are not comparable with panel b. Both show the same shape: adding skip connections moves the model right and down. Axial attention and Perceiver were dropped at the ladder stage.</p></aside>
+    </div>
+  </section>
+
+  <!-- 4 · METHOD · the training window
+       job      what one training example is, and the three target kinds
+       source   tools/minicandi/dataset.py, contract.py (design constants)
+       numbers  design constants, literal
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>one training example</div>
+      <h2>Each window hides some tracks and asks for three kinds of target</h2>
+      <div class="fig wide tall" id="figWindow"></div>
+      <aside class="notes"><p>A window is a stretch of genome from one cell type, with every assay of that cell as a track. A random fraction of tracks is hidden whole, and those are the imputation targets. The visible tracks are either corrected to another processing view of the same experiment, or reconstructed in the same view with a quarter of their bins hidden. The loss on a same-view target counts only the hidden bins, so the model cannot score by copying.</p></aside>
+    </div>
+  </section>
+
+  <!-- 5 · METHOD · architecture
+       job      the data flow of the U-Net, end to end
+       source   tools/minicandi/rungs/unet.py (checked against the code)
+       numbers  design constants, literal
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the architecture</div>
+      <h2>A two-tower U-Net with covariates on both sides and a Negative Binomial head</h2>
+      <div class="fig wide tall" id="figArch"></div>
+      <aside class="notes"><p>Counts and DNA sequence go down separate towers and meet at the bottleneck, where a small transformer sees the whole window. The decoder goes back up to full resolution with skip connections from both towers, each scaled by the output covariates. A per-track head turns the features into a mean and a dispersion for each bin. The head skip, shown in red, brings each track's own input features straight to its head.</p></aside>
+    </div>
+  </section>
+
+  <!-- 6 · METHOD · per-track encoder
+       job      what enters the network, with shapes
+       source   tools/minicandi/rungs/unet.py lines 236-352; components.py CountTransform, MaskHandler
+       numbers  design constants, literal
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the per-track encoder</div>
+      <h2>Each count becomes nine numbers before any bins or tracks mix</h2>
+      <div class="fig wide tall" id="figEnc"></div>
+      <aside class="notes"><p>Each cell of the window, one bin of one track, is handled alone. The count is depth-normalized, lifted to eight features by a shared small network, tagged with which assay it is, and scaled by that experiment's covariates. Hidden bins and missing tracks are replaced by learned tokens before anything mixes, so no hidden value can leak. The first layer that mixes all tracks in a bin is the stem.</p></aside>
+    </div>
+  </section>
+
+  <!-- 7 · METHOD · objective and read-disjoint pairs
+       job      the loss, and why disjoint pairs stop the copy
+       source   tools/minicandi/losses.py, contract.py loss_mask; D29
+       numbers  none
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the objective</div>
+      <h2>Read-disjoint pairs make copying the input useless</h2>
+      <div class="fig wide" id="figPairs"></div>
+      <aside class="notes"><p>The loss is the Negative Binomial negative log-likelihood over the loss mask. Before this change, a correction pair was two processing views of the same reads, so the input already held most of the target's noise, and a model with a cheap identity path could win by copying. With read-disjoint pairs, the input is built from one random half of the reads and the target from the other half. Their noise is independent, so copying the input no longer predicts the target. Imputation pairs are unchanged.</p></aside>
+    </div>
+  </section>
+
+  <!-- 8 · METHOD · how a recipe is selected (the grid of arm families: the deck's one table)
+       job      the three scores, the Pareto rule, and the families of arms tried
+       source   tools/onion_eval/pareto_select.py docstring; D1, D3, D21; recipe_arms.py
+       numbers  design constants, literal
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>selection rule and arms</div>
+      <h2>A recipe wins when it is above the floor on all three and clearly better on one</h2>
+      <div class="cols2">
+        <div class="blk"><div class="blab">Pareto rule (fixed before the runs)</div>
+          <ul class="pts" style="margin-top:0">
+            <li><b>Floor</b> per objective = best base model's mean minus its seed range (max minus min over seeds).</li>
+            <li><b>Eligible</b>: at or above the floor on all three objectives.</li>
+            <li><b>Beyond</b> on one objective: better than the best base by more than the larger of the two seed ranges.</li>
+            <li><b>PASS</b> = eligible and beyond on at least one; <b>NEAR</b> = eligible, none beyond.</li>
+            <li>Correction screened on <span data-src="literal">16</span> genomic regions, confirmed on <span data-src="literal">256</span>.</li>
+          </ul></div>
+        <div class="blk"><div class="blab">Families of arms (U-Net unless noted)</div>
+          <table class="dtable tight"><thead><tr><th>family</th><th>what changes</th></tr></thead><tbody>
+            <tr><td>Skip paths</td><td>head skip off, conditioned head skip, conditioned level skips</td></tr>
+            <tr><td>FiLM placement</td><td>encoder, decoder, bottleneck, everywhere</td></tr>
+            <tr><td>Correction layers</td><td>learned covariate correction before / after the model</td></tr>
+            <tr><td>Inputs</td><td>average signal, Pearson residual, fixed depth, no covariates</td></tr>
+            <tr><td>Training pairs</td><td>read-disjoint pairs (all three models)</td></tr>
+            <tr><td>Combinations</td><td>read-disjoint pairs + one switch each</td></tr>
+          </tbody></table></div>
+      </div>
+      <aside class="notes"><p>The rule was written down before any arm was scored. A seed range is the spread of a mean over the independent training restarts, so beyond means the gain is larger than the noise of either model. Screening uses few regions to be cheap; only arms that pass the screen are scored on the larger set.</p></aside>
+    </div>
+  </section>
+
+  <!-- 9 · RESULTS · (a) the path
+       job      one claim, one figure as its evidence
+       claim    read-disjoint pairs move the U-Net above both floors; no single architectural fix did
+       source   data/deck_*_p16_sv.tsv
+       numbers  DATA.steps, DATA.fixes, DATA.floor16
+       cut      second bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(a) the path to the recipe</div>
+      <h2>Read-disjoint pairs moved the U-Net above both floors; no architectural fix did</h2>
+      <div class="fig wide tall" id="figPath"></div>
+      <ul class="pts">
+        <li>Read-disjoint pairs raised U-Net correction from <span id="tPathC0"></span> to <span id="tPathC1"></span> while imputation stayed at <span id="tPathI1"></span> (floor <span id="tPathIF"></span>).</li>
+      </ul>
+      <aside class="notes"><p>Each point is a seed mean, the bars are seed ranges, and correction here is the sixteen-region screen. The grey points are single fixes to the U-Net without the new pairs: changes to where covariates enter, correction layers and extra inputs. None of them left the U-Net's corner. Removing the head skip restored correction but gave up imputation, which told us where the copy happens.</p></aside>
+    </div>
+  </section>
+
+  <!-- 10 · RESULTS · (b) three objectives per step
+       job      one claim, one figure as its evidence
+       claim    each step's effect on each objective; only the pairs step helps all three
+       source   data/deck_*_p16_sv.tsv
+       numbers  DATA.steps
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(b) each objective, step by step</div>
+      <h2>Pairs helped correction and calibration; the added inputs buy imputation with calibration</h2>
+      <div class="fig wide tall" id="figStrips"></div>
+      <aside class="notes"><p>The steps are numbered as on the previous slide. Dashed lines mark the best base model and dotted lines the floor. The skip connections of the U-Net, step three, gave the largest imputation gain and caused the correction collapse. The pairs, step five, gave the largest correction gain and the best calibration. The two added inputs raise imputation or correction but lower calibration, and their calibration varies widely between seeds.</p></aside>
+    </div>
+  </section>
+
+  <!-- 11 · RESULTS · (c) 256-region confirmation
+       job      one claim, one figure as its evidence
+       claim    at 256 regions the full combination PASSes at 1x and 2x windows; the 2x version is the final architecture
+       source   data/pareto_p256_sv.tsv (pareto_select.py), data/deck_arms_p256_sv.tsv
+       numbers  DATA.confirm, DATA.floor256
+       cut      second bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(c) confirmation on <span data-src="literal">256</span> regions</div>
+      <h2 id="tConfH"></h2>
+      <div class="fig wide tall" id="figConfirm"></div>
+      <ul class="pts" id="tConfList"></ul>
+      <aside class="notes"><p>This is the confirmation set: correction on two hundred and fifty-six regions. Each panel is one objective, with the floor dotted and the best base dashed. The class on the right is the Pareto rule's output, read from the selection script. An arm with fewer than three seeds scored is marked; its class can still change.</p></aside>
+    </div>
+  </section>
+
+  <!-- 11b · RESULTS · what each component adds
+       job      one claim, one grid as its evidence
+       claim    pairs carry correction; average carries imputation; Pearson adds on top only with average; 2x windows narrows the imputation seed range
+       source   data/deck_base_p256_sv.tsv, data/deck_arms_p256_sv.tsv
+       numbers  DATA.comp, DATA.floor256
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>what each component adds (<span data-src="literal">256</span> regions)</div>
+      <h2>Pairs give correction, the average input gives imputation, and the two inputs together give all three</h2>
+      <div class="fig wide" id="figComp"></div>
+      <p class="small">Each cell: mean over <span data-src="literal">3</span> seeds, seed range in brackets, change from the row above (from pairs for the two single-input rows). Values in the recipe color are at or above the best base model; changes in that color are gains.</p>
+      <aside class="notes"><p>Read top to bottom. The pairs alone lift correction past the best base model but leave imputation below the U-Net base. The Pearson input alone adds almost nothing. The average input lifts imputation and correction but costs calibration. Both inputs together are the first row that clears all three bars. Twice the windows changes the means very little; it narrows the imputation seed range and raises calibration, inside the seed range.</p></aside>
+    </div>
+  </section>
+
+  <!-- 11c · RESULTS · recalibration
+       job      one claim, one figure as its evidence
+       claim    per-assay dispersion recalibration lifts calibration and leaves imputation and correction unchanged
+       source   data/ens_p256_sv.tsv
+       numbers  DATA.recal
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>recalibration after training</div>
+      <h2>One dispersion factor per assay lifts calibration and leaves imputation and correction unchanged</h2>
+      <div class="fig wide" id="figRecal"></div>
+      <ul class="pts" id="tRecalLi"></ul>
+      <aside class="notes"><p>Recalibration multiplies the negative binomial dispersion by one factor per assay, fitted on calibration regions after training. The mean prediction does not change, so imputation and correction cannot change. This was measured on the pairs plus Pearson model, as a three-seed ensemble before and after the factors. The factors for the final architecture are not fitted yet. The calibration regions share cells and tracks with the scored set, so this gain is an upper estimate.</p></aside>
+    </div>
+  </section>
+
+  <!-- 12 · RESULTS · (d) the copy path
+       job      one claim, one figure as its evidence
+       claim    the head skip carries the copy; with pairs, removing it ends the copy at no clear cost
+       source   data/copy_gain_p16_sv.tsv; data/eic_v1_arm_summary_p16_sv.tsv
+       numbers  DATA.copy, DATA.skip
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(d) where the U-Net copies</div>
+      <h2 id="tCopyH"></h2>
+      <div class="chartbox panels"><div class="fig" id="figCopy"></div><div class="fig" id="figSkip"></div></div>
+      <ul class="pts" id="tCopyLi"></ul>
+      <p class="small">Copy gain = (CRPS on hidden bins − CRPS on visible bins) / CRPS on hidden bins, same-view reconstruction; near <span data-src="literal">0</span> means no copying. CRPS: a proper score of a predictive distribution, lower is better.</p>
+      <aside class="notes"><p>Panel a: the full U-Net has a copy gain far above the conv models. Removing the head skip alone brings it down to the conv models' level, so the head skip, not the level skips, carries the copy. Read-disjoint pairs cut it by most of the way, and the average-signal input cuts it further. Panel b is the earlier data version: when only DNA skips remain, correction rises and imputation falls. Removing the head skip on top of the pairs ended the copy and kept imputation. Correction fell, but by less than the pairs model's own seed range, and only on the <span data-src="literal">16</span>-region screen; it is not confirmed on <span data-src="literal">256</span> regions.</p></aside>
+    </div>
+  </section>
+
+  <!-- 13 · RESULTS · (e) the negatives
+       job      one claim, one figure as its evidence
+       claim    fifteen single U-Net fixes without pairs all left correction below the floor
+       source   data/deck_arms_p16_sv.tsv
+       numbers  DATA.fixes, DATA.floor16
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(e) what did not work</div>
+      <h2 id="tNegH"></h2>
+      <div class="fig wide tall" id="figNeg"></div>
+      <aside class="notes"><p>These are kept because they rule things out. Moving FiLM conditioning around the network, adding learned covariate correction layers before or after the model, conditioning the skips and adding extra inputs did not stop the copy on their own. The one fix that just reached the floor is fixed input depth, which thins every input to one sequencing depth and was judged unrealistic for deployment. Head skip removal, which pays in imputation, and the training pairs moved correction well past the floor. The pairs also did not help the two conv models, whose correction was already high.</p></aside>
+    </div>
+  </section>
+
+  <!-- 14 · RESULTS · (f) EIC validation
+       job      one claim, one figure as its evidence
+       claim    the U-Net against the challenge's Average baseline on the validation tracks
+       source   data/table_unet_vs_average.tsv (eic_val_compare.py table)
+       numbers  DATA.eic
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(f) EIC validation tracks</div>
+      <h2 id="tEicH"></h2>
+      <div id="eicBody"></div>
+      <aside class="notes"><p>This uses the challenge's own nine measures on its validation tracks. The Average baseline is the mean of the training tracks of the same assay, built from training cells only. The entry is the base U-Net from before the read-disjoint pairs, one seed; the chosen recipe was not scored here. The last column counts tracks, so a better mean can come with fewer than half the tracks better. The retrained Avocado comparison was queued but its training job did not start in time, so it is not in this deck.</p></aside>
+    </div>
+  </section>
+
+  <!-- 15 · DISCUSSION · ruled in / out, limitations
+       job      readings restated; limitations with counts
+       source   restated from results (a)-(f)
+       numbers  none new
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>what this rules in and out</div>
+      <h2>The trade-off came from the training pairs, not from the architecture</h2>
+      <div class="cards">
+        <div class="card" style="--c:var(--recipe)"><div class="rl">Ruled in</div><p>The U-Net's skips learned to copy because correction pairs shared reads. Read-disjoint pairs remove the reward for copying, and the U-Net keeps most of its imputation lead.</p></div>
+        <div class="card" style="--c:var(--base)"><div class="rl">Ruled out</div><p>Fixing the trade-off by moving covariate conditioning, adding correction layers or conditioning the skips: none reached the correction floor. Only fixed input depth did, which needs every input thinned to one depth.</p></div>
+        <div class="card" style="--c:var(--addon)"><div class="rl">Limitations</div><p>One data version, three seeds per arm, one model size. The added inputs lower calibration and vary widely between seeds. Removing the head skip with pairs ends the copy; its correction is screened on <span data-src="literal">16</span> regions only.</p></div>
+      </div>
+      <aside class="notes"><p>The discussion adds no number of its own. Each card restates a result slide.</p></aside>
+    </div>
+  </section>
+
+  <!-- 16 · DISCUSSION · headroom and scaling
+       job      one claim, one figure as its evidence
+       claim    more training without pairs fed the copy; scaling with pairs is untested
+       source   data/ROUND2_READ.md (eic_v1, 80k vs 160k windows)
+       numbers  DATA.win
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>will scaling close the gap?</div>
+      <h2>Twice the training, before the pairs, made the U-Net copy more</h2>
+      <div class="fig mid" id="figWin"></div>
+      <ul class="pts">
+        <li>U-Net correction moved from <span id="tWinC1"></span> to <span id="tWinC2"></span> with twice the windows, while imputation moved from <span id="tWinI1"></span> to <span id="tWinI2"></span>. Model size was never varied.</li>
+      </ul>
+      <aside class="notes"><p>This is the earlier data version with the older correction scale, and these runs predate the pairs. The held-out loss went down with more training, but none of the objectives improved, and the U-Net's correction got worse. Our reading is that more training let it learn the copy better. Whether scaling helps once copying is no longer rewarded is untested; that run is queued.</p></aside>
+    </div>
+  </section>
+
+  <!-- 17 · DISCUSSION · options
+       job      labelled options for the PI; no ranking
+       source   limitations above; D41, D42
+       numbers  none
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>options for the next phase</div>
+      <h2>Options for the next phase</h2>
+      <div class="cards" style="grid-template-columns:repeat(3,1fr)">
+        <div class="card"><div class="rl">Option A · close the copy path</div><p>Pairs with the head skip removed ended the copy with no clear loss (results d). Next: confirm it on <span data-src="literal">256</span> regions, then a blind-spot head skip (output at a bin never sees that bin's input) or skip dropout.</p></div>
+        <div class="card"><div class="rl">Option B · calibration of the added inputs</div><p>Seed ensembling and post-training dispersion recalibration on held-out data. No training; tests whether the imputation gain of the added inputs can keep the pairs model's calibration.</p></div>
+        <div class="card"><div class="rl">Option C · scale with pairs</div><p>Two and four times the parameters, twice the windows, with read-disjoint pairs. About a thousand CPU-hours; tells us whether scaling helps once copying is not rewarded.</p></div>
+      </div>
+      <aside class="notes"><p>These are options, not recommendations. Option A's first run is done; option C is approved and queued.</p></aside>
+    </div>
+  </section>
+
+  <!-- 18 · BACKUP · glossary
+       job      repeat the glosses in one place
+       source   .longrun/GLOSSARY.md
+       numbers  none
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Backup</span>glossary</div>
+      <table class="dtable tight"><tbody>
+        <tr><td>Imputation</td><td>track-specific variance of a hidden track recovered above noise (<span data-src="literal">log1p</span> counts), higher is better</td></tr>
+        <tr><td>Correction</td><td>fraction of the gap to an oracle closed on crop pairs (a track at one processing view mapped to another)</td></tr>
+        <tr><td>Calibration</td><td><span data-src="literal">1</span> − PIT deviation of the model / PIT deviation of a marginal NB (PIT: where each observation falls in its predicted distribution; flat when calibrated). Higher is better</td></tr>
+        <tr><td><span data-src="literal">pr1</span> / <span data-src="literal">pr2</span></td><td>pseudoreplicates: the two disjoint random halves of one experiment's reads</td></tr>
+        <tr><td>FiLM</td><td>feature-wise scale and shift computed from covariates</td></tr>
+        <tr><td>Head skip</td><td>connection from a track's input features straight to its output head</td></tr>
+        <tr><td>Seed range</td><td>maximum minus minimum of a mean over training restarts</td></tr>
+        <tr><td>Covariates (C, C′)</td><td>experiment descriptors of the input (C) and wanted output (C′): depth, read length, lab, antibody, pipeline</td></tr>
+      </tbody></table>
+      <aside class="notes"><p>The same glosses appear on the slides where each term is first used.</p></aside>
+    </div>
+  </section>
+
+</div>
+
+<div class="foot">miniCANDI recipe · read-disjoint pairs</div>
+<div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>

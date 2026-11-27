@@ -35,7 +35,8 @@ Says whether one architecture can lead both goals or the composite must trade im
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+**0 children** · open 0, leaning 0, settled 0, parked 0 · 2 finding(s) on this question
 
 - `f87` finding (moderate) [[f87_both_effects_exceed_the_seed_ranges_0_02|Both effects exceed the seed ranges (0.02 and 0.06 to 0.07) in a 3-seed…]]
+- `f140` finding (moderate) [[f140_reading_of_existing_runs_no_new_compute_|Reading of existing runs, no new compute; the causal arm exists only on eic_v1.]]
 <!-- crux:ledger:end -->

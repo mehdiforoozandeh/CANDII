@@ -1,0 +1,64 @@
+[kit-pin] candi from /project/6014832/mforooz/onion_kit/DEV1/src/candi
+{
+ "C1_floor_max_abs_error": 0.001339382958845614,
+ "C1_pass": true,
+ "C2_worst_drift": 0.02134087194548595,
+ "C2_worst_label": "('scale', 'x4.0')",
+ "C2_fail_labels": [],
+ "C2_pass": true,
+ "contrast_log1p_worst_drift": 0.4673794500818082,
+ "C3_pass": true,
+ "C4_true_size_max_abs": 0.0074004340983123695,
+ "C4_pass": true,
+ "C4_summary": {
+  "overconfident_x4": {
+   "min": 1.025,
+   "max": 1.932,
+   "mean": 1.332
+  },
+  "true_size": {
+   "min": 0.993,
+   "max": 1.005,
+   "mean": 0.999
+  },
+  "underconfident_div4": {
+   "min": 0.513,
+   "max": 0.909,
+   "mean": 0.677
+  }
+ },
+ "C5_depth_only_max_abs": 0.0,
+ "C5_truth_min": 0.9988892570687311,
+ "C5_truth_max": 1.0009563148055842,
+ "C5_pass": true
+}
+        store = env["root"] / "store"
+        P.predict(sc, P.requests(sc), store, B)
+        for name, dev in (("off", False), ("on", True)):
+            S.score(env["evalset"], env["root"] / f"m_{name}", phase="metrics", pred_store=store,
+                    config=env["config"], run_tables_sha256=env["sha"], refs_from=env["refs"],
+                    deviance=dev, **MKW)
+>       _check(_scores(env["root"] / "m_off"), _scores(env["root"] / "m_on"))
+
+tests/test_onion_eval_deviance.py:156: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+off = {'accessibility_only': {'count_crps': {'ci': [None, None], 'macro': None, 'missing_scorable': [], 'n': 3, ...}, 'count...leak_pass_by_mask_seed': [True, True, True], 'gate_on_copy_gain': False, 'hidden_input_max_abs_change': 0.0, ...}, ...}
+on = {'accessibility_only': {'count_crps': {'ci': [None, None], 'macro': None, 'missing_scorable': [], 'n': 3, ...}, 'count...leak_pass_by_mask_seed': [True, True, True], 'gate_on_copy_gain': False, 'hidden_input_max_abs_change': 0.0, ...}, ...}
+
+    def _check(off, on):
+        assert "deviance" not in off
+        blk = on.pop("deviance")
+        assert off == on                     # every other key is unchanged
+        for k in ("dev_imputation_skill", "dev_correction_gap_closed", "dev_calibration_ratio",
+                  "dev_imputation_floor", "dev_correction_depth_only"):
+>           assert blk[k]["macro"] is not None and np.isfinite(blk[k]["macro"]), (k, blk[k])
+E           AssertionError: ('dev_imputation_skill', {'ci': [None, None], 'macro': None, 'missing_scorable': [], 'n': 3, ...})
+E           assert (None is not None)
+
+tests/test_onion_eval_deviance.py:134: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_onion_eval_deviance.py::test_simulation_checks_pass - Asser...
+FAILED tests/test_onion_eval_deviance.py::test_switch_adds_only_the_deviance_key_in_process
+FAILED tests/test_onion_eval_deviance.py::test_switch_adds_only_the_deviance_key_on_the_store_path
+3 failed, 70 passed, 1 skipped in 702.02s (0:11:42)

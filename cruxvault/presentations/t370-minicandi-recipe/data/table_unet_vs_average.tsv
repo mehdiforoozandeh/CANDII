@@ -1,0 +1,19 @@
+entry	measure	higher_is_better	n_tracks	n_nan	mean	n_tracks_entry	beats:Average_train_only	beats:miniCANDI_UNet_base_s0
+Average_train_only	mse	0	43	0	6.845567979708571	45		22
+Average_train_only	gwcorr	1	43	0	0.5040695188620969	45		28
+Average_train_only	gwspear	1	43	0	0.16962711115651793	45		7
+Average_train_only	mseprom	0	43	0	131.38038761583098	45		25
+Average_train_only	msegene	0	43	0	13.525786902208829	45		22
+Average_train_only	mseenh	0	43	0	37.644025553145816	45		23
+Average_train_only	msevar	0	43	10	9640.668723825014	45		13
+Average_train_only	mse1obs	0	43	0	540.4321625583026	45		15
+Average_train_only	mse1imp	0	43	0	577.6301265133346	45		17
+miniCANDI_UNet_base_s0	mse	0	43	0	6.562555432369798	43	21	
+miniCANDI_UNet_base_s0	gwcorr	1	43	0	0.4217828630976627	43	15	
+miniCANDI_UNet_base_s0	gwspear	1	43	0	0.3071688619355281	43	36	
+miniCANDI_UNet_base_s0	mseprom	0	43	0	64.28541332506781	43	18	
+miniCANDI_UNet_base_s0	msegene	0	43	0	10.184245890824368	43	21	
+miniCANDI_UNet_base_s0	mseenh	0	43	0	39.05812639672322	43	20	
+miniCANDI_UNet_base_s0	msevar	0	43	10	2619.489685713077	43	20	
+miniCANDI_UNet_base_s0	mse1obs	0	43	0	384.57892029908476	43	28	
+miniCANDI_UNet_base_s0	mse1imp	0	43	0	465.91499956577655	43	26	
