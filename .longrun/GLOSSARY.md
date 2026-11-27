@@ -206,3 +206,9 @@ Every term and metric in use. A new entry lands before its first use in anything
 | C40M17 | EIC blind experiment: cell type 40, H3K27me3 | field | proposed | R10 / entry pipeline reply |
 | C12M02 | EIC blind experiment: cell type 12, DNase-seq | field | proposed | R10 / entry pipeline reply |
 | dab | fragment of git commit hash 8e8dab68, not a word | agent | proposed | entry pipeline reply |
+| SHA-256 | standard file fingerprint; any change gives a different value | field: Europe PMC, 10 titles | admitted | 2026-11-23 |
+| msevar | EIC error measure weighted by the variance across cell types | coinage: 0 titles in Europe PMC and OpenAlex | rejected | 2026-11-24 |
+| C24M25 | EIC validation experiment: cell type 24, assay 25 | coinage: 0 titles in Europe PMC and OpenAlex | rejected | 2026-11-24 |
+| C25M26 | EIC validation experiment: cell type 25, assay 26 | coinage: 0 titles in Europe PMC and OpenAlex | rejected | 2026-11-25 |
+| C34M02 | EIC validation experiment: cell type 34, DNase-seq | coinage: 0 titles in Europe PMC and OpenAlex | rejected | 2026-11-25 |
+| C50M02 | EIC validation experiment: cell type 50, DNase-seq | coinage: 0 titles in Europe PMC and OpenAlex | rejected | 2026-11-25 |

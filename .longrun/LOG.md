@@ -76,3 +76,23 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-25T05:21Z Spend corrected: 34.24 of 36 CPU-h (sacct eicx_), not ~27. D11, D12 recorded (depth cap is the blind-entry fix). Cap build for 5 new tracks: Fir 6011889. Cap+slope board skipped (~10 CPU-h). Asked foreman for 41 CPU-h to score 4 capped tracks.
 - 2026-11-25T05:21Z glossary: blocked reply with c36m18, eicx, sacct
 - 2026-11-25T05:22Z Limit raised to 55 CPU-h (foreman). Cap watcher (laptop, to 19:15 UTC) runs tools/eic_entry/cap_cycle.sh on Fir every 10 min over the 12 remaining tracks; first pass reused C36M18, collect 6012271; cap build 6011889 pending. Raw watcher still running.
+- 2026-11-25T07:30Z Base model check: training reads only in_eic=train rows (COD1b tools/minicandi/dataset.py:10-14); all 42 validation tracks are in_eic=val. Base diag submitted on 30 tracks, Fir 6030581-6030610, out /scratch/mforooz/eicx/val/base_diag.
+- 2026-11-25T07:38Z Base slope: median count slope base 1.20 vs final 1.34; on the 16 final>1.3 tracks base in [0.8,1.2] on 2, <1.3 on 6. Condition for the model-average board not met; reported to foreman. Spend 38.11 CPU-h (sacct). results/t390/val_base_slope.
+- 2026-11-25T07:38Z glossary: blocked reply with correlates, heldout, sacct
+- 2026-11-25T07:56Z Foreman: run the depth-capped average of final + base anyway (~15 CPU-h). Build Fir 6032998 -> /scratch/mforooz/eicx/val/avg_cap; scoring into rcp_s0_avgbase_cap submits on build end.
+- 2026-11-25T08:01Z Recipe session builds C34M02, C50M02 (DNase .se rows) and C25M26 (.se row). val-cov fallback to pooled .se rows: test table cov_se.tsv (other 42 rows identical). C25M26 lacks frag_len: default 227 bp (read-weighted br1/br2) unless predict.py gives one.
+- 2026-11-25T08:01Z Both watchers now stop submitting once eicx_ sacct spend reaches 55 CPU-h (cap_cycle.sh guard; raw watcher restarted as val_watch2.sh on the 7 remaining tracks).
+- 2026-11-25T08:01Z glossary: blocked reply with lambda
+- 2026-11-25T08:01Z glossary: blocked reply with macs2
+- 2026-11-25T08:05Z Limit 80 CPU-h (foreman); priority: 7 waiting + 3 new tracks before the average board (already scoring, collect 6033856). cov.tsv now 45 tracks (old saved as cov_42.tsv; 42 rows identical); C25M26 frag_len 227 from replicates.
+- 2026-11-25T08:05Z glossary: blocked reply with c25m26
+- 2026-11-25T08:25Z Average final+base, depth-capped: position 2 of 11 on 30 tracks (mean comb 3.35; cap alone 3.70, pos 4); per track vs cap better 10 worse 9. Collect 6033856. Spend 51.02 CPU-h (sacct). BOARDS.md updated.
+- 2026-11-25T08:26Z glossary: blocked reply with c25m26
+- 2026-11-25T08:26Z Averaged board additions (foreman yes): 12 tracks with base counts at the same row; C25M26, C34M02, C50M02 final-model-only (cap score copied). avg_cycle.sh every 10 min to 19:15 UTC, after the cap board, reserving 1.1 CPU-h per priority score owed under the 80 limit.
+- 2026-11-25T08:27Z glossary: blocked reply with c25m26, c34m02, c50m02
+- 2026-11-25T08:27Z glossary: rejected 'C25M26' (coinage: 0 titles in Europe PMC and OpenAlex)
+- 2026-11-25T08:28Z glossary: rejected 'C34M02' (coinage: 0 titles in Europe PMC and OpenAlex)
+- 2026-11-25T08:29Z glossary: rejected 'C50M02' (coinage: 0 titles in Europe PMC and OpenAlex)
+- 2026-11-25T11:24Z glossary: blocked reply with c25m26, c34m02, c46m18, c46m21, c46m35, c50m02
+- 2026-11-25T15:24Z glossary: blocked reply with 5761693_22
+- 2026-11-25T18:42Z glossary: blocked reply with nmse
