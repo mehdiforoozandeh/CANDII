@@ -22,6 +22,12 @@ Exploratory, open. First measured result delivered 2026-11-22: ladder probe on 3
 - Entry pipeline DONE (536312a2): `run_entry.sh deploy` then `submit <pred> <cov.tsv> <out> C19M22 C40M17 C12M02`; 12/12 checks bit-exact. Waits on predict.py output from the recipe session.
 - Probe 2 DONE (results/t390/ladder_probe2/PROBE2.md): fragment pileup nMSE 0.0021/0.062/0.00003; half-read peaks within 8.5% of truth peaks.
 
+## Inherited from the recipe run (PI, 2026-11-27, via foreman)
+Handoff: cruxvault/INSTRUCTIONS/t370_recipe/run_state/HANDOFF_CLOSEOUT.md on origin/exp/t370-minicandi-recipe (3951e62d). Never resubmit any job it lists.
+- Avocado chain, Fir: genome 6291946_[14-22] PENDING (Priority) at 06:13 UTC, then predict 6291947, bigwig 6291948. On 6291948 done: score the Avocado bigwigs on the 45 validation experiments beside miniCANDI. Fallback if JobArrayTaskLimit with none running: scontrol update JobId=6291946 ArrayTaskThrottle=13 (PI-approved).
+- Nibi blind retest: signal 28737212 (48) and 28737239 (3), all 51 RUNNING since 05:28. On success: Globus the rows to Fir, price the blind predict (validation cost 649.8 CPU-h for 43), send the submit to the foreman for the PI's yes. On failure: propose the crash-log-to-/project change via the foreman (PI's yes).
+- Laptop watcher: scratchpad/handoff_watch.sh, every 15 min, exits on the first event.
+
 ## Next
 - DONE 2026-11-25: all 45 validation experiments scored (commit 6714498a, cruxvault/results/t390/val_boards_final45/BOARDS.md). Depth cap (primary) 1 of 11, mean combined rank 3.22; averaged then capped 1 of 11, 3.20; raw 2 of 11, 4.31. Spend 66.73 of 80 CPU-h (sacct eicx_, 537 jobs). No job queued; watchers stopped.
 - Record the finding on q90; apply the depth cap to the blind predictions when t184 delivers them.
