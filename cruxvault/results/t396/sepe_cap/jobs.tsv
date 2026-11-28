@@ -1,0 +1,3 @@
+job_id	kind	array	group	cpus	mem	time	kit	unit_rule	out	logs	submitted_utc	probe_measure
+6736416	probe	10	1	2	8000M	03:00:00	/project/def-maxwl/mforooz/onion_kit/SC10b	/project/def-maxwl/mforooz/onion_kit/SC10b/cruxvault/results/t396/dedup_1bp/UNIT_RULE.json	/scratch/mforooz/sc396/caps/probe_sepe	/scratch/mforooz/sc396/logs	2026-11-28	ENCSR113MBR (largest reads_parent, 134M): wall 139 s, TotalCPU 30.8 s, MaxRSS 2.52 GB, COMPLETED
+6737536	stats	0-2%12	7	1	4000M	01:00:00	/project/def-maxwl/mforooz/onion_kit/SC10b	/project/def-maxwl/mforooz/onion_kit/SC10b/cruxvault/results/t396/dedup_1bp/UNIT_RULE.json	/scratch/mforooz/sc396/caps/sepe	/scratch/mforooz/sc396/logs	2026-11-28	21 pairs, 7 per task

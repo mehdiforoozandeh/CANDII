@@ -1,0 +1,23 @@
+{
+ "experiment": "ENCSR928HYM",
+ "label": "br2",
+ "n_off_absent_from_on": 0,
+ "n_off_distinct": 9862368,
+ "n_off_lines": 10124320,
+ "n_on_absent_from_off": 0,
+ "n_on_distinct": 9862368,
+ "n_on_lines": 9862368,
+ "n_units": 1,
+ "off": [
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR928HYM/br2.uniform/nodedup/pr1.tagAlign.gz",
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR928HYM/br2.uniform/nodedup/pr2.tagAlign.gz"
+ ],
+ "on": [
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR928HYM/br2.uniform/base/pr1.tagAlign.gz",
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR928HYM/br2.uniform/base/pr2.tagAlign.gz"
+ ],
+ "share_off_absent_from_on": 0.0,
+ "share_off_duplicate_lines": 0.025873540148869258,
+ "share_on_absent_from_off": 0.0,
+ "share_on_repeated_lines": 0.0
+}

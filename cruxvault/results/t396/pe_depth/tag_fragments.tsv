@@ -1,0 +1,6 @@
+measurement_id	run_type	pipeline	reads_per_fragment_table	lines_per_fragment_store	member	n_lines_store_pr1	tag_lines_pr1	tag_adjacent_mate_pairs_pr1	tag_lines_per_mate_pair	tag_fraction_lines_in_mate_pairs	lines_match_store	error
+ENCSR813CKU.pooled.uniform.depth0.125	paired-ended	dnase-seq-pipeline	1	1	onion/work/ENCSR813CKU/pooled.uniform/depth0.125/pr1.tagAlign.gz	3492631	3492631	811519	4.30382	0.464704	1	
+ENCSR700ILE.pooled.uniform.depth0.125	paired-ended	dnase-seq-pipeline	1	1	onion/work/ENCSR700ILE/pooled.uniform/depth0.125/pr1.tagAlign.gz	3799824	3799824	865028	4.39272	0.455299	1	
+ENCSR539TKY.pooled.uniform.depth0.125	paired-ended	chip-seq-pipeline2	2	2	onion/work/ENCSR539TKY/pooled.uniform/depth0.125/pr1.tagAlign.gz	956302	956302	478151	2	1	1	
+ENCSR539TKY.pooled.uniform.depth0.25	paired-ended	chip-seq-pipeline2	2	2	onion/work/ENCSR539TKY/pooled.uniform/depth0.25/pr1.tagAlign.gz	1912606	1912606	956303	2	1	1	
+ENCSR486GWT.pooled.uniform.depth0.125	single-ended	chip-seq-pipeline2	1	1	onion/work/ENCSR486GWT/pooled.uniform/depth0.125/pr1.tagAlign.gz	349310	349310	40007	8.73122	0.229063	1	

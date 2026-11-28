@@ -1,0 +1,9 @@
+job_id	name	array	resources	projected_cpu_h	output
+6771321	sc_spaces_probe_ref reference seed0 1 target --validate-truth	none	4 cpu 16000M 01:00:00	0.09 measured	/project/def-maxwl/mforooz/t396/legB_spaces/probe/reference_seed0_probe.jsonl
+6771322	sc_spaces_probe_rs read_start seed0 1 target	none	4 cpu 16000M 01:00:00	0.01 measured	/project/def-maxwl/mforooz/t396/legB_spaces/probe/read_start_seed0_probe.jsonl
+6773696	sc_spaces_ref_s0 reference seed0 43 targets regions all pair even --validate-truth	0-3%2	2 cpu 8000M 03:00:00	3.7	/project/def-maxwl/mforooz/t396/legB_spaces/records/reference_seed0_<task>.jsonl
+6773697	sc_spaces_rs_s0 read_start seed0 43 targets regions all pair even 	0-3%2	2 cpu 8000M 01:00:00	0.5	/project/def-maxwl/mforooz/t396/legB_spaces/records/read_start_seed0_<task>.jsonl
+6773700	sc_spaces_ref_s1 reference seed1 43 targets regions all pair even 	0-3%2	2 cpu 8000M 03:00:00	3.7	/project/def-maxwl/mforooz/t396/legB_spaces/records/reference_seed1_<task>.jsonl
+6773701	sc_spaces_rs_s1 read_start seed1 43 targets regions all pair even 	0-3%2	2 cpu 8000M 01:00:00	0.5	/project/def-maxwl/mforooz/t396/legB_spaces/records/read_start_seed1_<task>.jsonl
+6773704	sc_spaces_ref_s2 reference seed2 43 targets regions all pair even 	0-3%2	2 cpu 8000M 03:00:00	3.7	/project/def-maxwl/mforooz/t396/legB_spaces/records/reference_seed2_<task>.jsonl
+6773705	sc_spaces_rs_s2 read_start seed2 43 targets regions all pair even 	0-3%2	2 cpu 8000M 01:00:00	0.5	/project/def-maxwl/mforooz/t396/legB_spaces/records/read_start_seed2_<task>.jsonl

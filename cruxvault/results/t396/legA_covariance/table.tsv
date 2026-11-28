@@ -1,0 +1,13 @@
+variant	macro	calibration_ratio	seed_range	per_seed	n_targets	flag
+rs_independent	all_assays	1.258	0.0499073	seed0:1.22582;seed1:1.27573;seed2:1.27245	43	
+rs_independent	scorable	1.30304	0.0982949	seed0:1.24236;seed1:1.34065;seed2:1.32612	43	
+rs_cov_loo	all_assays	1.03234	0.0245798	seed0:1.01965;seed1:1.03315;seed2:1.04423	43	residuals_include_mean_error,fallback_assays=11
+rs_cov_loo	scorable	1.04362	0.0599386	seed0:1.01169;seed1:1.04754;seed2:1.07163	43	residuals_include_mean_error,fallback_assays=11
+rs_cov_insample	all_assays	1.05497	0.0145715	seed0:1.04636;seed1:1.06093;seed2:1.05763	43	residuals_include_mean_error,in_sample_upper_bound
+rs_cov_insample	scorable	1.05217	0.0407353	seed0:1.02738;seed1:1.06101;seed2:1.06811	43	residuals_include_mean_error,in_sample_upper_bound
+rs_scaled_loo	all_assays	1.04992	0.0307285	seed0:1.06402;seed1:1.03329;seed2:1.05244	43	fallback_assays=11
+rs_scaled_loo	scorable	0.974581	0.0239263	seed0:0.969176;seed1:0.96532;seed2:0.989246	43	fallback_assays=11
+ref_stored	all_assays	1.06396	0.0323676	seed0:1.0854;seed1:1.05345;seed2:1.05304	43	
+ref_stored	scorable	1.06432	0.0376677	seed0:1.07268;seed1:1.07898;seed2:1.04131	43	
+ref_scaled_loo	all_assays	1.06173	0.0482749	seed0:1.08608;seed1:1.03781;seed2:1.06132	43	fallback_assays=11
+ref_scaled_loo	scorable	0.99628	0.023464	seed0:1.0014;seed1:1.00545;seed2:0.981988	43	fallback_assays=11

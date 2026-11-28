@@ -1,0 +1,42 @@
+# Log
+
+Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
+- 2026-11-27T23:23Z longrun initialized (protected=cruxvault/INSTRUCTIONS/start vs count + dedup, job_prefix=sc_)
+- 2026-11-27T23:23Z kickoff: worktree startcount, branch exp/start-vs-count-dedup off origin/exp/t370 36a306d3; D1-D10 written; ledger reader running
+- 2026-11-27T23:24Z ledger: 52 rows written (R1-R52); D11-D12; q94 q95 recorded
+- 2026-11-27T23:27Z D13: no deadline, no cap (PI). STATE written. Next: orchestrate iteration 1.
+- 2026-11-27T23:28Z D14 commit policy; iteration-1 planner spawned (fable)
+- 2026-11-27T23:29Z glossary: blocked reply with d1, d12, d13, d14, d6, d7
+- 2026-11-27T23:29Z glossary: blocked reply with prefix
+- 2026-11-27T23:44Z iteration-1 plan: 16 chunks in 4 waves; cold plan review running
+- 2026-11-27T23:53Z plan review done: 6 factual errors + unsound dedup floor; planner amending once
+- 2026-11-27T23:59Z wave 1 spawned: 7 opus builders from dadf6b59
+- 2026-11-28T00:07Z wave 1: C1 C2 C3 C4 C12a merged; Fir job 6726827 sc_untar pending
+- 2026-11-28T00:10Z wave 2 spawned: C7a C8 C9 C10a C12b C13
+- 2026-11-28T00:15Z glossary: blocked reply with stub
+- 2026-11-28T00:23Z C8 C9 C10a C13 merged; D15 shared-weight dedup law primary; C12b retry 1 (OOM)
+- 2026-11-28T00:24Z early 1 bp result: ENCSR956CTX br1 dedup-on equals distinct dedup-off positions exactly (77,217,569); probe 2 Fir 6729250
+- 2026-11-28T00:25Z glossary: blocked reply with deduplicated
+- 2026-11-28T00:35Z C7a merged; dump arrays 6731315-6731318 submitted (16.7 CPU-h projected); D16
+- 2026-11-28T00:49Z 1 bp: dedup is per replicate (ENCSR956CTX both reps exact; pooled 2.6% repeats); 5 more jobs 6733480-84
+- 2026-11-28T00:55Z wave 1 complete (C5 merged); f158 on h61 against; census: SE pairs 20 from 2 experiments
+- 2026-11-28T01:11Z C10b merged; cap arrays 6737535 6737536
+- 2026-11-28T02:30Z glossary: blocked reply with c10c, handback
+- 2026-11-28T03:34Z C10c merged: start cap beats count law (1.35, CI 0.29-3.41) but neither explains dedup on 43 val pairs (cap gap -0.56); h58 mixed
+- 2026-11-28T03:34Z glossary: blocked reply with bootstrap
+- 2026-11-28T03:34Z glossary: admitted 'bootstrap' (English word, Zipf 2.9)
+- 2026-11-28T07:08Z C15 merged: leg A calibration gap was a conversion artifact; covariance term 1.258->1.032 vs ref 1.064
+- 2026-11-28T07:09Z glossary: blocked reply with scorable
+- 2026-11-28T07:09Z C14 merged: leg B start-space test void (deconvolution gate failed); ref leads in count and 1 kb; D17
+- 2026-11-28T07:10Z glossary: blocked reply with amplified
+- 2026-11-28T07:13Z iteration 1 closed; milestone report to PI with SE/PE data ask
+- 2026-11-28T12:04Z audit: it.1 closed; ledger lagged on R11 R12 R13 R41 R44 (fixed); D8 superseded by D17; R39 102 vs 88 consistent (102 includes 14 crop pairs); D17 needs PI confirm
+- 2026-11-28T12:06Z iteration 2 planner (fable) launched: factorial + controlled SE/PE and dedup pairs (D18); plan file .orchestrate/plan_it2.md
+- 2026-11-28T12:06Z glossary: blocked reply with lagged
+- 2026-11-28T12:16Z it2 plan written (17 chunks, 8 waves); D19-D23 logged; cold review running
+- 2026-11-28T12:16Z glossary: blocked reply with d19, d23, h100
+- 2026-11-28T12:21Z it2 plan review: 4 factual errors, fairness holes (one-sided calibration, gate e hash, lr grid edge); D24 supersedes D23; planner amending
+- 2026-11-28T12:24Z it2 wave 1 launched: A1 A2 A3 A4 B1 B2
+- 2026-11-28T14:47Z B5 merged: controlled pairs, start cap explains dedup (0.94-0.98) and run type (0.93-0.94) at plausible ratios, beats count law at all ratios; h58 h60 supports moderate
+- 2026-11-28T14:47Z glossary: blocked reply with duplication
+- 2026-11-28T15:04Z B6 merged: existing models do not follow dedup or run type on controlled pairs; cap does; D27

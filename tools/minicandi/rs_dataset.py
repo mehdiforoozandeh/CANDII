@@ -18,6 +18,24 @@ plus-strand starts, column 1 minus-strand starts). The tables stay the read-coun
                [L, A, 2] with `avg` its channel sum
   average_strands(cell, chrom, start, L) -> float32 [L, A, 2]   leave-one-cell-out average
 
+Kernel head (t396 chunk C13, config `kernel_head: true`). `window` adds `y_counts_overlap` int32
+[L, A], the targets read from the count store by `OnionDataset.read` (the same file choice as
+`y_counts_sub`; 0 where a track has no target), and `y_kernel` float32 [A, 2, 17], the `kernel`
+attribute of each target's start file. An unstranded track holds the read-weighted mix
+(`read_start.unstranded_kernel`, by the file's `n_reads_strand`) in row 0 and 0 in row 1. A track
+with no target takes the mix of the window's target kernels weighted by `n_reads_strand` (the rule
+of `rs_adapter`); a window with no target holds 0. With `kernel_head` unset the window is unchanged.
+
+Count input (t396 iteration 2 chunk A2, config `input_space: "count"`; absent or "start" = the
+start input above). The model input is the overlap count of the input file read from the count
+store (`OnionDataset.read`): `x_counts_sub` holds it in channel 0 and 0 in channel 1 for every
+track, and `x_counts` is that count. `avg_sub` holds the leave-one-cell-out count average
+(`OnionDataset.average`, from `average_h5`) in channel 0 and 0 in channel 1. The targets
+(`y_counts`, `y_counts_sub`) stay the starts. `input_strands` and `input_average` give the input
+and the average of either space; `rs_adapter` calls them, so scoring builds the same input. The
+two-channel shape is kept so the network is that of `start_in_start_out`. `input_space_of`
+refuses "count" without `read_start` or with `kernel_head`, and any other value.
+
 Unstranded tracks (`read_start.UNSTRANDED_TRACKS`, D11): in `x_counts_sub`, `y_counts_sub` and
 `avg_sub` channel 0 holds the total and channel 1 is 0. `read_strands` returns the store as is.
 
@@ -49,9 +67,11 @@ if str(_TOOLS) not in sys.path:
 from minicandi import contract as C  # noqa: E402
 from minicandi.components import res_bp_of, res_subs_of  # noqa: E402
 from minicandi.dataset import FILES, OnionDataset, RoleError, read_tsv  # noqa: E402
-from minicandi.read_start import STRANDS, UNSTRANDED_TRACKS  # noqa: E402
+from minicandi.read_start import KERNEL_WIDTH, STRANDS, UNSTRANDED_TRACKS  # noqa: E402
+from minicandi.read_start import unstranded_kernel  # noqa: E402
 
 STORE_FILES = {"counts": "starts.h5", "pr1": "starts_pr1.h5", "pr2": "starts_pr2.h5"}
+INPUT_SPACES = ("start", "count")
 _UNSTRANDED_T = frozenset(C.TRACK_INDEX[a] for a in UNSTRANDED_TRACKS)
 
 
@@ -65,6 +85,22 @@ def _fold(a: np.ndarray) -> np.ndarray:
         a[..., t, 0] = a[..., t, 0] + a[..., t, 1]
         a[..., t, 1] = 0
     return a
+
+
+def input_space_of(config: dict | None) -> str:
+    """The config's `input_space` ("start" when absent); ValueError for an unknown value, and for
+    "count" without `read_start` or with `kernel_head` (module docstring)."""
+    cfg = config or {}
+    v = cfg.get("input_space", "start")
+    if v not in INPUT_SPACES:
+        raise ValueError(f"input_space {v!r} not in {INPUT_SPACES}")
+    if v == "count":
+        if not cfg.get("read_start"):
+            raise ValueError("input_space = count needs read_start: true (the targets are starts)")
+        if cfg.get("kernel_head"):
+            raise ValueError("input_space = count with kernel_head: the kernel head is the start "
+                             "input arm")
+    return v
 
 
 class ReadStartDataset(OnionDataset):
@@ -96,6 +132,9 @@ class ReadStartDataset(OnionDataset):
         avg = self.config.get("read_start_average_h5")
         self.rs_average_h5 = Path(avg) if avg else None
         self._strand_cache: dict | None = None
+        self._kernels: dict = {}
+        self.count_input = input_space_of(self.config) == "count"
+        self._count_rates = False
 
     # ---------------------------------------------------------------- reading
 
@@ -128,6 +167,44 @@ class ReadStartDataset(OnionDataset):
         """int32 [L]: the strand sum of the starts."""
         return self.read_strands(mid, chrom, start, L, which).sum(1, dtype=np.int32)
 
+    def input_strands(self, mid: str, chrom: str, start: int, L: int | None = None,
+                      which: str = "counts") -> np.ndarray:
+        """int32 [L, 2], unfolded: the model input of one measurement. `read_strands` under the
+        start input; under the count input the count-store read in channel 0, 0 in channel 1."""
+        if not self.count_input:
+            return self.read_strands(mid, chrom, start, L, which)
+        L = self.L if L is None else int(L)
+        out = np.zeros((L, STRANDS), np.int32)
+        out[:, 0] = OnionDataset.read(self, mid, chrom, start, L, which)
+        return out
+
+    def input_average(self, cell: str, chrom: str, start: int,
+                      L: int | None = None) -> np.ndarray:
+        """float32 [L, A, 2]: the average input. `average_strands` under the start input; under
+        the count input `OnionDataset.average` (count store, `average_h5`) in channel 0, 0 in
+        channel 1."""
+        if not self.count_input:
+            return self.average_strands(cell, chrom, start, L)
+        L = self.L if L is None else int(L)
+        out = np.zeros((L, C.A, STRANDS), np.float32)
+        self._count_rates = True
+        try:
+            out[..., 0] = OnionDataset.average(self, cell, chrom, start, L)
+        finally:
+            self._count_rates = False
+        return out
+
+    def _rate(self, mid: str, chrom: str, start: int, L: int) -> np.ndarray | None:
+        """`OnionDataset._rate`; inside `input_average` of the count input it reads the count
+        store, so the own cell subtracted from `average_h5` is in counts."""
+        if not self._count_rates:
+            return super()._rate(mid, chrom, start, L)
+        r = self.rows[mid]
+        depth = float(r["depth_reads"]) if r["depth_reads"] else 0.0
+        if depth <= 0:
+            return None
+        return OnionDataset.read(self, mid, chrom, start, L).astype(np.float64) * (1e6 / depth)
+
     # ---------------------------------------------------------------- windows
 
     def window(self, chrom: str, start_bin: int, inputs: list, targets: list, **kw) -> dict:
@@ -146,14 +223,16 @@ class ReadStartDataset(OnionDataset):
             f_in, f_out = meta["input_file"], meta["target_file"]
             for t, m in enumerate(m_in):
                 if m:
-                    x_sub[:, t] = self.read_strands(
+                    x_sub[:, t] = self.input_strands(
                         m, chrom, start_bin, L, "pr1" if C.TRACKS[t] in halved else f_in)
+            y_which = [""] * C.A
             for t, m in enumerate(m_out):
                 if not m:
                     continue
+                y_which[t] = "pr2" if m_in[t] and C.TRACKS[t] in halved else f_out
                 if m_in[t] and C.TRACKS[t] in halved:
                     y_sub[:, t] = self.read_strands(m, chrom, start_bin, L, "pr2")
-                elif m_in[t] == m and f_out == f_in:
+                elif m_in[t] == m and f_out == f_in and not self.count_input:
                     y_sub[:, t] = x_sub[:, t]            # same view: the unmasked input
                 else:
                     y_sub[:, t] = self.read_strands(m, chrom, start_bin, L, f_out)
@@ -162,17 +241,58 @@ class ReadStartDataset(OnionDataset):
         x_sub[win["x_bin_mask"].numpy()] = 0
         _fold(x_sub)
         _fold(y_sub)
-        if not np.array_equal(x_sub.sum(-1), win["x_counts"].numpy()):
+        if self.count_input:
+            win["x_counts"] = torch.from_numpy(x_sub.sum(-1, dtype=np.int32))
+        elif not np.array_equal(x_sub.sum(-1), win["x_counts"].numpy()):
             raise ValueError(f"{chrom}:{start_bin}: the input strands do not sum to x_counts")
         if not np.array_equal(y_sub.sum(-1), win["y_counts"].numpy()):
             raise ValueError(f"{chrom}:{start_bin}: the target strands do not sum to y_counts")
         win["x_counts_sub"] = torch.from_numpy(x_sub)
         win["y_counts_sub"] = torch.from_numpy(y_sub)
+        if self.config.get("kernel_head"):
+            y_ov = np.zeros((L, C.A), np.int32)
+            for t, m in enumerate(m_out):
+                if m:
+                    y_ov[:, t] = OnionDataset.read(self, m, chrom, start_bin, L, y_which[t])
+            win["y_counts_overlap"] = torch.from_numpy(y_ov)
+            win["y_kernel"] = torch.from_numpy(self.window_kernels(m_out, y_which))
         if want_avg:
-            a = self.average_strands(meta["cell"], chrom, start_bin, L)
+            a = self.input_average(meta["cell"], chrom, start_bin, L)
             win["avg_sub"] = torch.from_numpy(a)
             win["avg"] = torch.from_numpy(a.sum(-1, dtype=np.float32))
         return win
+
+    # ---------------------------------------------------------------- kernels
+
+    def kernel_of(self, mid: str, which: str) -> tuple[np.ndarray, np.ndarray]:
+        """(kernel float64 [2, 17], n_reads_strand float64 [2]): the attributes of a start file."""
+        key = (mid, which)
+        if key not in self._kernels:
+            self._fresh()
+            attrs = self._h5file(self.start_path(mid, which)).attrs
+            k = np.asarray(attrs["kernel"], np.float64)
+            nr = np.asarray(attrs["n_reads_strand"], np.float64)
+            if k.shape != (STRANDS, KERNEL_WIDTH) or nr.shape != (STRANDS,):
+                raise ValueError(f"{mid} {which}: kernel {k.shape}, n_reads_strand {nr.shape}")
+            self._kernels[key] = (k, nr)
+        return self._kernels[key]
+
+    def window_kernels(self, m_out: list, which: list) -> np.ndarray:
+        """float32 [A, 2, 17]: `y_kernel` of a window (module docstring)."""
+        out = np.zeros((C.A, STRANDS, KERNEL_WIDTH), np.float32)
+        own = {t: self.kernel_of(m, which[t]) for t, m in enumerate(m_out) if m}
+        if not own:
+            return out
+        nr_mix = sum(nr for _, nr in own.values())
+        k_mix = (sum(nr[:, None] * k for k, nr in own.values())
+                 / np.maximum(nr_mix, 1e-300)[:, None])
+        for t in range(C.A):
+            k, nr = own.get(t, (k_mix, nr_mix))
+            if t in _UNSTRANDED_T:
+                out[t, 0] = unstranded_kernel(k, nr).numpy()
+            else:
+                out[t] = k
+        return out
 
     # ---------------------------------------------------------------- average
 
@@ -285,4 +405,5 @@ def build_average_h5(reference_average_h5, store, tables, out) -> Path:
     return out
 
 
-__all__ = ["STORE_FILES", "ReadStartDataset", "build_average_h5"]
+__all__ = ["INPUT_SPACES", "STORE_FILES", "ReadStartDataset", "build_average_h5",
+           "input_space_of"]

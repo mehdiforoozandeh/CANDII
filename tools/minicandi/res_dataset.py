@@ -46,6 +46,17 @@ Read starts (t392, decision D14). A config that sets `read_start` gets a
 `rs_dataset.ReadStartDataset` from `make_dataset` (whatever its resolution keys; that class
 refuses the ones it cannot serve), and `train` swaps in `read_start.read_start_loss` in place of
 `res_total_loss`. With `read_start` unset, nothing here changes.
+
+Kernel head (t396 chunk C13). A config that also sets `kernel_head` gets
+`kernel_head.kernel_head_loss` from `train` in place of `read_start_loss` (start output, loss on
+overlap counts through the span kernel); `make_dataset` and `train` refuse `kernel_head` without
+`read_start`, and `make_dataset` refuses a placeholder config (a `_todo` key). With `kernel_head`
+and `_todo` unset, nothing here changes.
+
+Count input (t396 it2 A2, `input_space: "count"`, see `rs_dataset`). `make_dataset` and `train`
+refuse it without `read_start` or with `kernel_head`. `train` keeps `read_start_loss` and computes
+the Pearson statistics with `read_start` off, i.e. from `x_counts` (the count, channel 0 of
+`x_counts_sub`), so the empty channel 1 is left out.
 """
 from __future__ import annotations
 
@@ -83,6 +94,13 @@ def make_dataset(tables_dir, mode: str, config: dict | None = None, seed: int = 
     """`ReadStartDataset` when the config sets `read_start`, else `ResDataset` for a
     resolution config (`is_res_config`), else `OnionDataset`."""
     cfg = dict(config or {})
+    if "_todo" in cfg:
+        raise ValueError(f"a placeholder config is not runnable: {cfg['_todo']}")
+    from minicandi.rs_dataset import input_space_of
+    input_space_of(cfg)
+    if cfg.get("kernel_head"):
+        from minicandi.kernel_head import check_config
+        check_config(cfg)
     if cfg.get("read_start"):
         from minicandi.rs_dataset import ReadStartDataset
         return ReadStartDataset(tables_dir, mode, cfg, seed)
@@ -342,14 +360,23 @@ def train(config: dict, tables, seed: int, out, *args, **kw) -> dict:
     read-start dataset and `read_start.read_start_loss` (module docstring)."""
     from minicandi import train as T
     loss = res_total_loss
-    if config.get("read_start"):
+    if config.get("kernel_head"):
+        from minicandi.kernel_head import check_config
+        from minicandi.kernel_head import kernel_head_loss as loss
+        check_config(config)
+    elif config.get("read_start"):
         from minicandi.read_start import read_start_loss as loss
-    saved = (T.OnionDataset, T.total_loss)
+    from minicandi.rs_dataset import input_space_of
+    count_input = input_space_of(config) == "count"
+    saved = (T.OnionDataset, T.total_loss, T.set_pearson_stats)
     T.OnionDataset, T.total_loss = make_dataset, loss
+    if count_input:
+        pearson = saved[2]
+        T.set_pearson_stats = lambda model, batches, read_start=False: pearson(model, batches)
     try:
         return T.train(config, tables, seed, out, *args, **kw)
     finally:
-        T.OnionDataset, T.total_loss = saved
+        T.OnionDataset, T.total_loss, T.set_pearson_stats = saved
 
 
 def main(argv=None) -> int:

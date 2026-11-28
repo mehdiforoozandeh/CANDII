@@ -1,0 +1,83 @@
+{
+ "K_25bp": 50.0,
+ "dirichlet_a_1bp": 0.05081047362472446,
+ "dirichlet_a_25bp_caps_fit_shape": 0.02837023109533865,
+ "experiment": "ENCSR925LJZ",
+ "hist_off_reads_per_position": {
+  "1": 19429928,
+  "2": 1376093,
+  "3": 108859,
+  "4": 8997,
+  "5": 1018,
+  "6": 295,
+  "7": 211,
+  "8": 139,
+  "9": 123,
+  "10": 91,
+  "11": 61,
+  "12": 59,
+  "13": 62,
+  "14": 34,
+  "15": 24,
+  "16": 18,
+  "17": 19,
+  "18": 12,
+  "19": 15,
+  "20": 8,
+  "21": 3,
+  "22": 6,
+  "23": 4,
+  "24": 4,
+  "25": 5,
+  "26": 1,
+  "28": 2,
+  "29": 2,
+  "30": 1,
+  "34": 2,
+  "37": 1
+ },
+ "label": "pooled",
+ "n_on_reads_outside_off_bins": 0,
+ "n_strand_bins_with_off_reads": 19273151,
+ "n_top_strand_bins": 2470617,
+ "n_units": 2,
+ "off": [
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR925LJZ/br1.uniform/nodedup/pr1.tagAlign.gz",
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR925LJZ/br1.uniform/nodedup/pr2.tagAlign.gz",
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR925LJZ/br2.uniform/nodedup/pr1.tagAlign.gz",
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR925LJZ/br2.uniform/nodedup/pr2.tagAlign.gz"
+ ],
+ "on": [
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR925LJZ/br1.uniform/base/pr1.tagAlign.gz",
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR925LJZ/br1.uniform/base/pr2.tagAlign.gz",
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR925LJZ/br2.uniform/base/pr1.tagAlign.gz",
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR925LJZ/br2.uniform/base/pr2.tagAlign.gz"
+ ],
+ "top1pct": {
+  "dm_distinct_a_1bp": {
+   "deviance_distinct_off": 532724.2732267025,
+   "deviance_on": 529442.4297662675,
+   "rel_err_vs_distinct_off": 0.12096809108948858,
+   "rel_err_vs_on": 0.10965997495436985,
+   "sum_pred": 4486902.341108169
+  },
+  "dm_distinct_a_25bp": {
+   "deviance_distinct_off": 490668.35030582955,
+   "deviance_on": 497303.13236191927,
+   "rel_err_vs_distinct_off": 0.023322397356244196,
+   "rel_err_vs_on": 0.012999312689556008,
+   "sum_pred": 4096055.6298650308
+  },
+  "occupancy": {
+   "deviance_distinct_off": 884155.0384615166,
+   "deviance_on": 856542.3532337786,
+   "rel_err_vs_distinct_off": 0.35226058864991994,
+   "rel_err_vs_on": 0.3386192371226562,
+   "sum_pred": 5412697.514970801
+  },
+  "sum_distinct_off": 4002703,
+  "sum_off": 5494685,
+  "sum_on": 4043493
+ },
+ "top_denominator": "genome_strand_bins"
+}

@@ -135,6 +135,11 @@ Root: [[candii]]
       - ○ `q93` [Q] [[q93_how_can_training_make_the_model_capture_|**How can training make the model capture large peaks accurately, without a post-hoc shrink of the predicted peaks?**]] — *open*
     - ◐ `q80` [Q] [[q80_does_the_final_minicandi_follow_a_change|**Does the final miniCANDI follow a changed output covariate in the direction stated before the run?**]] — *leaning* · moderate
       - ○ `q92` [Q] [[q92_which_output_covariates_make_sense_as_pr|**Which output covariates make sense as prompts for an imputed experiment that was never done?**]] — *open*
+      - ◐ `q95` [Q] [[q95_why_does_minicandi_fail_to_follow_the_de|**Why does miniCANDI fail to follow the deduplication and single-end/paired-end covariates while it follows depth, and can a closed-form processing layer or more counterfactual views fix it?**]] — *leaning* · moderate
+        - ◐ `h58` [H] [[h58_deduplication_is_a_per_position_cap_whos|Deduplication is a per-position cap whose expected effect is closed form in read-start space: kept starts per strand per 25 bp bin = 25(1-(1+lambda/(25a))^-a), with one fitted shape a per assay.]] — *leaning* · moderate · supports
+        - ○ `h59` [H] [[h59_the_dedup_failure_is_a_missing_mechanism|The dedup failure is a missing mechanism, not missing data: correction of dedup does not rise with more dedup-off views, but rises with a closed-form cap layer.]] — *open*
+        - ◐ `h60` [H] [[h60_the_se_pe_failure_is_first_a_data_gap_38|The SE/PE failure is first a data gap: 38 SE views covering 13 of 36 assays and 12 PE base experiments are too few.]] — *leaning* · moderate · supports
+        - ◐ `h61` [H] [[h61_our_log2_depth_counts_both_mates_of_pair|Our log2_depth counts both mates of paired-end reads, so PE depth is about 2x the depth MACS2 and our counts see.]] — *leaning* · moderate · against
     - ◐ `q81` [Q] [[q81_why_does_the_read_start_minicandi_lose_t|**Why does the read-start miniCANDI lose to the read-count version on imputation and calibration?**]] — *leaning* · moderate
       - ◐ `h50` [H] [[h50_the_nb_moment_match_which_treats_neighbo|The NB moment match, which treats neighbouring start counts as independent, understates the converted variance and causes the read-start model's overconfidence]] — *leaning* · weak · supports
       - ◐ `h51` [H] [[h51_sparse_per_bin_start_targets_and_inputs_|Sparse per-bin start targets and inputs (more zeros, lower replicate agreement) cause the read-start imputation loss]] — *leaning* · weak · mixed
@@ -142,11 +147,14 @@ Root: [[candii]]
       - ◐ `h53` [H] [[h53_the_read_start_model_s_inputs_observed_t|The read-start model's inputs (observed tracks, average-signal input, input transform, covariates, masking) were built differently from the reference by mistake]] — *leaning* · moderate · against
       - ○ `h54` [H] [[h54_the_fixed_training_budget_80_000_windows|The fixed training budget (80,000 windows, about 1M parameters) is too small for the noisier start target, so the read-start model is under-trained]] — *open*
       - ◐ `h55` [H] [[h55_the_read_start_model_s_h3k36me3_loss_is_|The read-start model's H3K36me3 loss is a broad level error: it misplaces the total starts over gene-body domains, not per-bin noise]] — *leaning* · weak · supports
+  - ◐ `q94` [Q] [[q94_is_the_read_start_or_the_read_count_form|**Is the read-start or the read-count formulation better for the scaled miniCANDI when both get equal data, windows, parameters and tuning, judged in count space, start space and 1 kb sums, and what explains the winner?**]] — *leaning* · moderate
+    - ○ `h56` [H] [[h56_the_read_count_model_s_advantage_comes_f|The read-count model's advantage comes from target smoothing (statistical efficiency), not from more information: a read-start-input model trained on count targets through a fixed fragment-span kernel layer matches the read-count model.]] — *open*
+    - ○ `h57` [H] [[h57_the_read_count_model_still_beats_the_rea|The read-count model still beats the read-start model when both are scored in strand-summed read-start space (Max's slam dunk).]] — *open*
 - ○ `q73` [Q] [[q73_how_does_the_final_minicandi_score_on_th|**How does the final miniCANDI score on the 51 EIC blind tracks, against the published EIC board and the baselines, once the blind rows are built?**]] — *open*
 
 ## Dashboard
 
-- **Questions** (83): open 25 · leaning 47 · settled 11 · parked 0
-- **Hypotheses** (54): open 15 · leaning 26 · settled 7 · parked 6
-- **Confidence**: weak 26 · moderate 47 · strong 18
-- **Findings**: 155
+- **Questions** (85): open 25 · leaning 49 · settled 11 · parked 0
+- **Hypotheses** (60): open 18 · leaning 29 · settled 7 · parked 6
+- **Confidence**: weak 26 · moderate 52 · strong 18
+- **Findings**: 164
