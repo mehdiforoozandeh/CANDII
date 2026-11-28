@@ -1,0 +1,32 @@
+{
+ "_todo": "not runnable: count input, start target needs a dataset mode that reads inputs and the average input from the count store and targets from the start store, and a 1-channel model input (plan t396, Iteration 2 prep, item 2)",
+ "rung": 4,
+ "context_bins": 1024,
+ "skip_source": "both",
+ "covariate_injection": "film",
+ "mask_mode": "token",
+ "dna": "own",
+ "scramble_covariates": false,
+ "scramble_all": false,
+ "count_transform": "pearson",
+ "qc_on_input": false,
+ "two_step": false,
+ "base_depth": "native",
+ "average_input": true,
+ "control_input": true,
+ "predict_control": true,
+ "param_budget": 1000000.0,
+ "windows_seen": 160000,
+ "lr": 0.001,
+ "batch_size": 8,
+ "simpler_than_base": null,
+ "heldout_loss": {
+  "batches": 16,
+  "every": 20
+ },
+ "train_halves": "pairs",
+ "average_h5": "/scratch/mforooz/onion/aux/eic_v1_average.h5",
+ "read_start": true,
+ "read_start_store": "/scratch/mforooz/rs392/store",
+ "read_start_average_h5": "/scratch/mforooz/rs392/aux/eic_v1_2_read_start_average.h5"
+}
