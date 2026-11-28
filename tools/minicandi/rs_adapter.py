@@ -14,8 +14,10 @@ Steps of `forward`:
      on every track where `x_avail` is false, and folded as in training (an unstranded track holds
      its total in channel 0, channel 1 is 0). `x_counts` becomes its channel sum. The batch's own
      `x_counts` is never read.
-  2. Under `average_input`, `avg_sub` comes from `ReadStartDataset.average_strands` and `avg` is
-     its channel sum.
+     Under `input_space: "count"` (t396 it2 A2) the read is `ReadStartDataset.input_strands`:
+     the count-store read in channel 0 and 0 in channel 1, the input of training.
+  2. Under `average_input`, `avg_sub` comes from `ReadStartDataset.input_average` (the start
+     average; under the count input the count average in channel 0) and `avg` is its channel sum.
   3. The inner model runs and returns `mu_sub`, `n_sub` [B, L, A, 2].
   4. Span kernel per target track: the `kernel` [2, 17] and `n_reads_strand` [2] attributes of
      the target's store file (`measurements_out`, `target_file`; `pr2` for a halved track). A
@@ -98,7 +100,8 @@ class ReadStartAdapter(C.MiniCandi):
     # ---------------------------------------------------------------- inputs
 
     def _inputs(self, batch: dict) -> torch.Tensor:
-        """int32 [B, L, A, 2]: the store's starts, 0 at hidden bins and missing tracks, folded."""
+        """int32 [B, L, A, 2]: the store's starts (the count input: the count in channel 0), 0 at
+        hidden bins and missing tracks, folded."""
         x_avail = batch["x_avail"].cpu()
         B, L, A = batch["x_bin_mask"].shape
         out = torch.zeros(B, L, A, RS.STRANDS, dtype=torch.int32)
@@ -109,7 +112,7 @@ class ReadStartAdapter(C.MiniCandi):
                 if not m or not bool(x_avail[b, t]):
                     continue
                 which = "pr1" if C.TRACKS[t] in halved else meta.get("input_file", "counts")
-                v = self.ds.read_strands(m, meta["chrom"], start, L, which)
+                v = self.ds.input_strands(m, meta["chrom"], start, L, which)
                 out[b, :, t] = torch.from_numpy(v.astype(np.int32))
         hidden = batch["x_bin_mask"].cpu().bool() | ~x_avail.bool()[:, None, :]
         out[hidden] = 0
@@ -162,7 +165,7 @@ class ReadStartAdapter(C.MiniCandi):
         b = dict(batch, x_counts_sub=x_sub, x_counts=x_sub.sum(-1, dtype=torch.int32))
         B, L, A = batch["x_bin_mask"].shape
         if self.config.get("average_input"):
-            a = np.stack([self.ds.average_strands(m["cell"], m["chrom"], int(m["start_bin"]), L)
+            a = np.stack([self.ds.input_average(m["cell"], m["chrom"], int(m["start_bin"]), L)
                           for m in batch["meta"]])
             avg_sub = torch.from_numpy(a).to(dev)
             b["avg_sub"], b["avg"] = avg_sub, avg_sub.sum(-1)

@@ -34,7 +34,7 @@ sha() {  # sha <file> -> hex digest (macOS shasum or GNU sha256sum)
 }
 rsha() {  # rsha <abs path on Fir> -> hex digest
   local rc=0 out
-  out=$(ssh -o BatchMode=yes "$H" "sha256sum '$1'" 2>/dev/null) || rc=$?
+  out=$(ssh -n -o BatchMode=yes "$H" "sha256sum '$1'" 2>/dev/null) || rc=$?
   if [ "$rc" = 255 ]; then echo "the tunnel to $H is down: run 'hpc up $H', then rerun" >&2; exit 255; fi
   echo "${out%% *}"
 }

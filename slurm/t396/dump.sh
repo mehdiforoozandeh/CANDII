@@ -1,11 +1,12 @@
 #!/bin/bash
-# t396 C6: one shard of tools/t396/dump_native.py (truth or model) inside an ONION code kit.
+# t396 C6, iteration 2 A4: one shard of tools/t396/dump_native.py (truth or model) inside an ONION
+# code kit. `model` takes any start-output arm (a run whose config sets read_start).
 #
 #   export KIT=/project/def-maxwl/mforooz/onion_kit/SC7a
 #   sbatch --job-name=sc_dump --output=<logs>/%x_%A_%a.out --array=0-3%12 \
 #       [--time=...] "$KIT/slurm/t396/dump.sh" "$KIT" truth --evalset <json> --tables <dir> \
 #       --rs-config <rs run dir> --out <dir>
-#   sbatch ... "$KIT/slurm/t396/dump.sh" "$KIT" model --run <rs run dir> --evalset <json> \
+#   sbatch ... "$KIT/slurm/t396/dump.sh" "$KIT" model --run <start-output run dir> --evalset <json> \
 #       --pred-store <dir> --out <dir> [--regions pair|all]
 #
 # Shards: when the arguments carry no --shard and the job is an array task, the script appends
@@ -13,6 +14,8 @@
 # array must be 0..N-1; write it as --array=0-<N-1>%12, the cap on torch-importing arrays). Both modes import torch (read-start dataset, model), so the environment is
 # the kit venv of slurm/onion_eval/predict.sh. An existing output file is skipped.
 # DRY_RUN=1 prints the command and runs nothing.
+# Resources: --mem=32000M (the iteration-1 dump peaked at 19.5 GiB); --cpus-per-task=8 is set by
+# the 4000 MB per core rule, not by use.
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=sc_dump
 #SBATCH --time=03:00:00

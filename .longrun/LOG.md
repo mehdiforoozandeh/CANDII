@@ -36,3 +36,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-28T12:16Z it2 plan written (17 chunks, 8 waves); D19-D23 logged; cold review running
 - 2026-11-28T12:16Z glossary: blocked reply with d19, d23, h100
 - 2026-11-28T12:21Z it2 plan review: 4 factual errors, fairness holes (one-sided calibration, gate e hash, lr grid edge); D24 supersedes D23; planner amending
+- 2026-11-28T12:24Z it2 wave 1 launched: A1 A2 A3 A4 B1 B2

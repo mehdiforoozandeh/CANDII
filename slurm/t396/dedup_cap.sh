@@ -10,6 +10,12 @@
 #     export KIT=... UNIT_RULE=... FIT=<per_assay.tsv> GROUP=4
 #     sbatch --job-name=sc_dedup ... "$KIT/slurm/t396/dedup_cap.sh" floor-count
 #
+#   testbed (iteration 2, B3): the controlled pairs of a testbed rows file (`dedup_cap.py rows
+#          --layer testbed`; floor-count then covers every testbed pair), outputs named by the
+#          target (.base) id:
+#     export KIT=... UNIT_RULE=... ROWS=$KIT/cruxvault/results/t396/cf_caps/rows.tsv GROUP=1 \
+#            OUT=/scratch/mforooz/sc396/it2/cf_caps/dedup OUT_FLOOR=/scratch/mforooz/sc396/it2/cf_caps/dedup_floor
+#
 # Outputs: $OUT/<on id>.npz (stats), $OUT_FLOOR/<on id>.npz (floor-count). An existing output is
 # skipped. DRY_RUN=1 prints the commands and runs nothing.
 #SBATCH --account=def-maxwl
@@ -44,9 +50,12 @@ floor-count) : "${FIT:?export FIT}"; VAL_ONLY=1; DEST="$OUT_FLOOR" ;;
 esac
 mkdir -p "$DEST"
 # pairs of this task: rows with in_store = 1 (and in_eic = val for floor-count), GROUP per task
+# testbed rows (header source_id): the dedup rows with in_store = 1, every one for both modes
 pairs=$(awk -F'\t' -v g="$GROUP" -v i="$I" -v v="$VAL_ONLY" '
-  NR == 1 {for (k = 1; k <= NF; k++) c[$k] = k; next}
-  $c["in_store"] == "1" && (v == 0 || $c["in_eic"] == "val") {
+  NR == 1 {for (k = 1; k <= NF; k++) c[$k] = k; tb = ("source_id" in c); next}
+  tb && $c["covariate"] == "dedup" && $c["in_store"] == "1" {
+    if (int(n / g) == i) print $c["source_id"], $c["target_id"]; n++; next }
+  !tb && $c["in_store"] == "1" && (v == 0 || $c["in_eic"] == "val") {
     if (int(n / g) == i) print $c["off_id"], $c["on_id"]; n++ }' "$ROWS")
 [ -n "$pairs" ] || { echo "no pairs for task $I" >&2; exit 1; }
 rc=0

@@ -124,3 +124,57 @@ def test_pe_cap_size_reported(case):
     assert len(pc) == 6
     v = np.array([float(r["pe_base_over_nodedup_top1pct"]) for r in pc])
     assert np.all(np.abs(v - 0.8) < 0.03), v                 # the base kept 80% of the reads
+
+
+# ------------------------------------------------------------------ testbed pairs (iteration 2)
+from tests.test_t396_dedup_cap import TB_RATES, build_testbed, run_testbed, tb_pick  # noqa: E402
+
+
+@pytest.fixture(scope="module")
+def sepe_tb(tmp_path_factory):
+    tmp = tmp_path_factory.mktemp("sepe_testbed")
+    rs, ct, tb = build_testbed(tmp, np.random.default_rng(43))
+    res = run_testbed(S, tmp, rs, ct, tb, str(tmp / "totals.tsv"), "sepe", floor_count=True)
+    return tmp, rs, ct, tb, res
+
+
+def test_sepe_testbed_rows(sepe_tb):
+    rows = sepe_tb[4]["rows"]
+    assert len(rows) == 7
+    assert all(r["source_id"].endswith(".pe") and r["target_id"].endswith(".base")
+               and r["covariate"] == "run_type" and r["share"] == "0.5"
+               and r["lines_per_fragment_source"] == "2" and r["run_type"] == "single-ended"
+               for r in rows)
+    assert not any(r["source_id"].endswith(".sex") for r in rows)       # arm_value must be pe
+    r0 = [r for r in rows if r["experiment"] == "ENCSR100"][0]
+    assert float(r0["q_source"]) == pytest.approx(TB_RATES[0][1], rel=1e-4)
+
+
+def test_sepe_testbed_mate_share_and_rates_close_the_gap(sepe_tb):
+    t = sepe_tb[4]["table"]
+    assert {x["covariate"] for x in t} == {"run_type"}
+    for scope in ("genome", "top1pct"):
+        row = tb_pick(t, D.TB_PRIMARY, scope=scope)
+        assert float(row["gap_closed_vs_depth_scaling"]) > 0.9, row
+        assert np.isfinite(float(row["halves_floor"]))
+    assert float(tb_pick(t, D.TB_UNSUB, scope="genome")["gap_closed_vs_depth_scaling"]) < 0.9
+    cnt = tb_pick(t, D.COUNT_LAW, space="count", scope="genome")
+    assert np.isfinite(float(cnt["gap_closed_vs_depth_scaling"]))
+    assert all(r["share"] == "0.5" for r in sepe_tb[4]["pairs"])
+
+
+def test_testbed_rows_files_concatenate(sepe_tb):
+    """The two tools' testbed rows share one header; each tool keeps its covariate's rows."""
+    tmp, rs, ct, tb, res = sepe_tb
+    D.main(["rows", "--layer", "testbed", "--tables", tb, "--rs-store", rs, "--count-store", ct,
+            "--totals", str(tmp / "totals.tsv"), "--out", str(tmp / "rd.tsv")])
+    a = open(tmp / "rd.tsv").read().splitlines()
+    b = open(tmp / "sepe" / "rows.tsv").read().splitlines()
+    assert a[0] == b[0]
+    with open(tmp / "both.tsv", "w") as f:
+        f.write("\n".join(a + b[1:]) + "\n")
+    stats = [str(tmp / "sepe" / "stats" / f"{r['target_id']}.npz") for r in res["rows"]]
+    S.main(["fit", "--stats", *stats, "--rows", str(tmp / "both.tsv"), "--out", str(tmp / "f.tsv")])
+    fit = D.read_tsv(tmp / "f.tsv")
+    assert len(fit) == 7 and {f["covariate"] for f in fit} == {"run_type"}
+    assert [f["a_loto"] for f in fit] == [f["a_loto"] for f in res["fit"]]

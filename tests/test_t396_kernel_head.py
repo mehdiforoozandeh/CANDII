@@ -260,5 +260,5 @@ def test_arm_configs():
     assert rs["read_start"] is True and "kernel_head" not in rs
     assert {k: v for k, v in rs.items() if not k.startswith("read_start")} == recipe
     assert c["start_in_count_out"] == {**rs, "kernel_head": True}
-    assert "_todo" in c["count_in_start_out"]
+    assert "_todo" not in c["count_in_start_out"]
     assert "_todo" not in c["start_in_count_out"]
