@@ -1,0 +1,4 @@
+run_type	n_rows	n_rows_not_blind	n_ratio_1	n_ratio_2	n_ratio_other	ratio_min	ratio_median	ratio_max	n_in_start_store	n_store_lines_eq_depth_reads	n_store_lpf_2	n_store_lpf_eq_table_ratio	lines_over_depth_reads_min	lines_over_depth_reads_max	n_strand_balance_0	strand_balance_median	chr1_overlap_over_main_lines_median
+mixed	72	72	14	58	0	1	2	2	72	72	58	72	1	1	0	0.000120876	0.391626
+paired-ended	128	121	13	115	0	1	2	2	121	121	108	121	1	1	111	0	0.373525
+single-ended	2540	2469	2540	0	0	1	1	1	2469	2469	0	2469	1	1	0	0.000200977	0.21973
