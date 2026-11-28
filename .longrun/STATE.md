@@ -14,6 +14,9 @@ No deadline, no cap (D13). Target: iteration 1 measured result by 2026-11-30; la
 - Merged: C1 C2 C3 C4 C6 C12a (sc_untar 6726827 COMPLETED). C5 (audits, golden) still running.
 - Wave 2 running: C7a dump submit, C8 scoring tool, C9 leg A tool, C10a cap test tools, C12b 1 bp run + unit rule, C13 kernel head (iteration 2 prep).
 
+- Fir dump arrays: truth 6731315, model 6731316/6731317/6731318 (sc_dump; collect = C7b).
+- Fir 1 bp probe 2: 6729250 (C12b resumes after it).
+
 ## Next
 1. Planner writes the iteration 1 chunks (leg B deconvolution + 3 score spaces; covariance conversion; dedup cap test; SE/PE cap test; PE depth check).
 2. Builders implement and probe one job each on Fir, then batch.

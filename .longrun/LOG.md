@@ -15,3 +15,6 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-28T00:10Z wave 2 spawned: C7a C8 C9 C10a C12b C13
 - 2026-11-28T00:15Z glossary: blocked reply with stub
 - 2026-11-28T00:23Z C8 C9 C10a C13 merged; D15 shared-weight dedup law primary; C12b retry 1 (OOM)
+- 2026-11-28T00:24Z early 1 bp result: ENCSR956CTX br1 dedup-on equals distinct dedup-off positions exactly (77,217,569); probe 2 Fir 6729250
+- 2026-11-28T00:25Z glossary: blocked reply with deduplicated
+- 2026-11-28T00:35Z C7a merged; dump arrays 6731315-6731318 submitted (16.7 CPU-h projected); D16
