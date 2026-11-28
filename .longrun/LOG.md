@@ -20,3 +20,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-28T00:35Z C7a merged; dump arrays 6731315-6731318 submitted (16.7 CPU-h projected); D16
 - 2026-11-28T00:49Z 1 bp: dedup is per replicate (ENCSR956CTX both reps exact; pooled 2.6% repeats); 5 more jobs 6733480-84
 - 2026-11-28T00:55Z wave 1 complete (C5 merged); f158 on h61 against; census: SE pairs 20 from 2 experiments
+- 2026-11-28T01:11Z C10b merged; cap arrays 6737535 6737536

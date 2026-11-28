@@ -15,7 +15,8 @@ No deadline, no cap (D13). Target: iteration 1 measured result by 2026-11-30; la
 - Wave 2 running: C7a dump submit, C8 scoring tool, C9 leg A tool, C10a cap test tools, C12b 1 bp run + unit rule, C13 kernel head (iteration 2 prep).
 
 - Fir dump arrays: truth 6731315, model 6731316/6731317/6731318 (sc_dump; collect = C7b).
-- Fir 1 bp probe 2: 6729250 (C12b resumes after it).
+- Fir cap arrays: sc_dedup 6737535, sc_sepe 6737536 (collect = C10c, C11).
+- 1 bp result: dedup is exact per replicate (f159).
 
 ## Next
 1. Planner writes the iteration 1 chunks (leg B deconvolution + 3 score spaces; covariance conversion; dedup cap test; SE/PE cap test; PE depth check).
