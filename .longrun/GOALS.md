@@ -18,7 +18,7 @@ Provenance: PI doc, PI, agent proposal approved.
 | R10 | P0 | "find the actual scientific explanation" for which formulation does better | T:7 | PI doc | open | |
 | R11 | P0 | leg A: "take the read start model, extend the reads ... evaluate that against the read counts" | T:3 | PI doc (Max) | partial | t392 + covariance redo: results/t396/legA_covariance/LEG_A.md (1.258 -> 1.032 vs ref 1.064); factorial redo in it.2 |
 | R12 | P1 | leg A reading: worse start model = "more evidence that indeed the read start model is worse" | T:3 | PI doc (Max) | partial | LEG_A.md: like-for-like calibration inside seed range; count-space skill gap remains (LEG_B.md 0.543 vs 0.375) |
-| R13 | P0 | leg B: "Take the read count model, use just the starts ... and evaluate" against read starts | T:3 | PI doc (Max) | partial | ran by deconvolution: results/t396/legB_spaces/LEG_B.md; start space void (gate c); factorial arm per D17, pending PI confirm |
+| R13 | P0 | leg B: "Take the read count model, use just the starts ... and evaluate" against read starts | T:3 | PI doc (Max) | partial | ran by deconvolution: results/t396/legB_spaces/LEG_B.md; start space void (gate c); factorial arm per D17 (PI confirmed) |
 | R14 | P0 | slam dunk: "the read count model still does better when predicting read starts" | T:3 | PI doc (Max) | open | |
 | R15 | P0 | the two predict "different things", so score both on a common target | T:3 | PI doc (Max) | open | |
 | R16 | P1 | "check Sprint 19 in max's github repo for the analysis on SE/PE deduplication" | T:10 | PI doc | done | none on GitHub or Fir s19; see R17 |

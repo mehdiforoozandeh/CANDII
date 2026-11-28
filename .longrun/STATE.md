@@ -21,4 +21,4 @@ No deadline, no cap (D13). Iteration 1 DONE 2026-11-28; iterations 2-4 take 3-4 
 3. File a task for the read-start adapter per-batch stitch defect.
 
 ## Open asks to the PI
-- SE/PE evidence source for the main-text claim (asked 2026-11-28).
+none (SE/PE source answered: D18; slam-dunk route answered: D17)
