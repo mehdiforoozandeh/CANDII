@@ -34,9 +34,16 @@ Under `read_start` (t392 chunk C8) every count is read from the read-start store
 `<stage dir>/aux/`, and points the dataset at the copies. When the node's free space is below 1.05
 times the bytes to copy, nothing is staged and the log says so; the run then reads the originals
 (same bytes, same batches, slower).
+A read-start run that also reads the count store (t396 iteration 2, chunk A1: the config sets
+`kernel_head`, whose loss reads the overlap counts, or `input_space` = `count`) stages both
+stores: `stage_read_starts`, then `stage_counts`, then, with `input_space` = `count`,
+`stage_average`. The free-space check then covers the total of all three; below 1.05 times it,
+nothing is staged and the log says `staging skipped`.
 
-Read starts. `train.py` with a config that sets `read_start` runs `res_dataset.train` (the
-read-start dataset and `read_start.read_start_loss`), so `--stage-dir` reaches it.
+Read starts. `train.py` with a config that sets `read_start` or `kernel_head` runs
+`res_dataset.train` (the read-start dataset and `read_start.read_start_loss`, or
+`kernel_head.kernel_head_loss`), so `--stage-dir` reaches it. `kernel_head` without `read_start`
+fails there (`kernel_head.check_config`) before any file is written.
 
 Budget. `config["windows_seen"]` is the training budget in windows; steps = ceil(budget /
 batch_size). `--max-windows N` stops this invocation at N windows (checkpointed) and ends it in
@@ -534,13 +541,41 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
     torch.backends.cudnn.benchmark = False
     ds = OnionDataset(tables, "train", cfg, seed)
     if stage_dir and cfg.get("read_start"):
-        st_ = stage_read_starts(ds, stage_dir)
+        reads_counts = bool(cfg.get("kernel_head") or cfg.get("input_space") == "count")
+        skip = None
+        if reads_counts:                       # one free-space check over both stores (A1)
+            import shutil
+            from minicandi.rs_dataset import STORE_FILES
+            src_store, avg = Path(ds.rs_store), ds.rs_average_h5
+            need = sum((src_store / m / STORE_FILES["counts"]).stat().st_size
+                       for m in sorted(ds.allowed)
+                       if (src_store / m / STORE_FILES["counts"]).is_file())
+            need += Path(avg).stat().st_size if avg is not None else 0
+            need += sum(Path(ds.rows[m]["counts_path"][3:]).stat().st_size
+                        for m in sorted(ds.allowed)
+                        if ds.rows[m]["counts_path"].startswith("h5:"))
+            if cfg.get("input_space") == "count" and ds.config.get("average_h5"):
+                need += Path(ds.config["average_h5"]).stat().st_size
+            Path(stage_dir).mkdir(parents=True, exist_ok=True)
+            free = shutil.disk_usage(stage_dir).free
+            if free < need * 1.05:
+                skip = f"needs {need} bytes, {stage_dir} has {free} free"
+        st_ = ({"skipped": skip} if skip else stage_read_starts(ds, stage_dir))
         if st_["skipped"]:
             print(f"read_start: staging skipped ({st_['skipped']}); reading the read-start store "
                   f"and average in place", flush=True)
         else:
             print(f"staged {st_['files']} read-start files (store and average), "
                   f"{st_['bytes'] / 1e9:.2f} GB, in {st_['seconds']} s to {stage_dir}", flush=True)
+            if reads_counts:
+                sc = stage_counts(ds, stage_dir)
+                print(f"staged {sc['files']} counts files, {sc['bytes'] / 1e9:.2f} GB, in "
+                      f"{sc['seconds']} s to {stage_dir}", flush=True)
+            if cfg.get("input_space") == "count":
+                sa = stage_average(ds, stage_dir)
+                if sa is not None:
+                    print(f"staged average_h5 {sa['src']} ({sa['bytes'] / 1e9:.2f} GB) in "
+                          f"{sa['seconds']} s to {sa['dst']}", flush=True)
     elif stage_dir:
         st_ = stage_counts(ds, stage_dir)
         print(f"staged {st_['files']} counts files, {st_['bytes'] / 1e9:.2f} GB, in "
@@ -784,7 +819,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     config = json.loads(Path(a.config).read_text(encoding="utf-8"))
     run = train
-    if config.get("read_start"):          # t392 C8: the read-start dataset and loss
+    if config.get("read_start") or config.get("kernel_head"):   # t392 C8, t396 it2 A1
         from minicandi.res_dataset import train as run
     info = run(config, a.tables, a.seed, a.out, a.device, a.max_windows, a.val_every,
                a.val_batches, a.log_every, a.ckpt_minutes, a.workers, a.stage_dir)
