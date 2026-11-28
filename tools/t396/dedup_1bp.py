@@ -67,17 +67,40 @@ def keys_from_columns(chrom_codes, start, end, strand_minus) -> np.ndarray:
     return (np.asarray(chrom_codes, np.int64) << (POS_BITS + 1)) | (pos5 << 1) | minus.astype(np.int64)
 
 
-def read_keys(paths, index: ChromIndex) -> np.ndarray:
-    """One key per tagAlign line over all `paths` (columns chrom, start, end, name, score, strand)."""
+def read_keys_by_chrom(paths, index: ChromIndex) -> dict:
+    """chrom code -> one sorted-free int64 key array per chromosome, over all `paths` (columns
+    chrom, start, end, name, score, strand). Keys of different chromosomes never collide, so every
+    statistic below is computed one chromosome at a time and the peak memory is one chromosome's
+    copies, not the whole read set's."""
     import pandas as pd
-    out = []
+    parts = defaultdict(list)
     for p in paths:
         for df in pd.read_csv(p, sep="\t", header=None, usecols=[0, 1, 2, 5],
                               names=["c", "s", "e", "t"], dtype={"c": str, "s": np.int64,
                                                                  "e": np.int64, "t": str},
                               chunksize=CHUNK, compression="infer"):
-            out.append(keys_from_columns(index.code(df["c"].to_numpy()), df["s"].to_numpy(),
-                                         df["e"].to_numpy(), df["t"].to_numpy() == "-"))
+            codes = index.code(df["c"].to_numpy())
+            k = keys_from_columns(codes, df["s"].to_numpy(), df["e"].to_numpy(),
+                                  df["t"].to_numpy() == "-")
+            del df
+            for cc in np.unique(codes):
+                parts[int(cc)].append(k[codes == cc])
+    return parts
+
+
+def iter_chroms(off_parts: dict, on_parts: dict):
+    """(off keys, on keys) of each chromosome in chromosome-code order; frees each after use."""
+    empty = np.zeros(0, np.int64)
+    for cc in sorted(set(off_parts) | set(on_parts)):
+        off = np.concatenate(off_parts.pop(cc)) if cc in off_parts else empty
+        on = np.concatenate(on_parts.pop(cc)) if cc in on_parts else empty
+        yield off, on
+
+
+def read_keys(paths, index: ChromIndex) -> np.ndarray:
+    """One key per tagAlign line over all `paths`, grouped by chromosome."""
+    parts = read_keys_by_chrom(paths, index)
+    out = [np.concatenate(parts[c]) for c in sorted(parts)]
     return np.concatenate(out) if out else np.zeros(0, np.int64)
 
 
@@ -89,20 +112,38 @@ def strand_bin(keys: np.ndarray) -> np.ndarray:
 
 
 # ------------------------------------------------------------------ (i) unit comparison
-def compare_unit(off: np.ndarray, on: np.ndarray) -> dict:
+COUNT_KEYS = ("n_off_lines", "n_off_distinct", "n_on_lines", "n_on_distinct",
+              "n_on_absent_from_off", "n_off_absent_from_on")
+
+
+def unit_counts(off: np.ndarray, on: np.ndarray) -> dict:
     d_off = np.unique(off)
     d_on = np.unique(on)
-    on_absent = int(np.setdiff1d(d_on, d_off, assume_unique=True).size)
-    off_absent = int(np.setdiff1d(d_off, d_on, assume_unique=True).size)
-    return {
-        "n_off_lines": int(off.size), "n_off_distinct": int(d_off.size),
-        "n_on_lines": int(on.size), "n_on_distinct": int(d_on.size),
-        "n_on_absent_from_off": on_absent, "n_off_absent_from_on": off_absent,
-        "share_on_absent_from_off": on_absent / max(d_on.size, 1),
-        "share_off_absent_from_on": off_absent / max(d_off.size, 1),
-        "share_on_repeated_lines": (on.size - d_on.size) / max(on.size, 1),
-        "share_off_duplicate_lines": (off.size - d_off.size) / max(off.size, 1),
-    }
+    return {"n_off_lines": int(off.size), "n_off_distinct": int(d_off.size),
+            "n_on_lines": int(on.size), "n_on_distinct": int(d_on.size),
+            "n_on_absent_from_off": int(np.setdiff1d(d_on, d_off, assume_unique=True).size),
+            "n_off_absent_from_on": int(np.setdiff1d(d_off, d_on, assume_unique=True).size)}
+
+
+def unit_shares(n: dict) -> dict:
+    return {**n,
+            "share_on_absent_from_off": n["n_on_absent_from_off"] / max(n["n_on_distinct"], 1),
+            "share_off_absent_from_on": n["n_off_absent_from_on"] / max(n["n_off_distinct"], 1),
+            "share_on_repeated_lines": (n["n_on_lines"] - n["n_on_distinct"]) / max(n["n_on_lines"], 1),
+            "share_off_duplicate_lines": (n["n_off_lines"] - n["n_off_distinct"]) / max(n["n_off_lines"], 1)}
+
+
+def compare_unit(off: np.ndarray, on: np.ndarray) -> dict:
+    return unit_shares(unit_counts(off, on))
+
+
+def compare_unit_chroms(pairs) -> dict:
+    """compare_unit summed over (off, on) pairs of disjoint key sets (one per chromosome)."""
+    n = dict.fromkeys(COUNT_KEYS, 0)
+    for off, on in pairs:
+        for k, v in unit_counts(off, on).items():
+            n[k] += v
+    return unit_shares(n)
 
 
 def max_share(u: dict) -> float:
@@ -149,32 +190,54 @@ def load_sizes(path) -> dict:
     return out
 
 
-def shape_stats(off: np.ndarray, on: np.ndarray, n_units: int, n_strand_bins=None) -> dict:
-    """(ii)-(iv) for one read set. `n_strand_bins` = 2 x genome bins (sets the top-1% size);
-    None uses the number of strand-bins with dedup-off reads."""
+def bin_counts(off: np.ndarray, on: np.ndarray):
+    """Per strand-bin with dedup-off reads: dedup-off reads c, distinct dedup-off positions d,
+    dedup-on reads t; plus dedup-off reads per position x and the dedup-on reads outside them."""
     pos, x = np.unique(off, return_counts=True)            # per position dedup-off reads
-    sb_pos = strand_bin(pos)
-    sb, inv = np.unique(sb_pos, return_inverse=True)
-    c = np.bincount(inv, weights=x).astype(np.int64)        # dedup-off reads per strand-bin
-    d = np.bincount(inv).astype(np.int64)                   # distinct dedup-off positions per strand-bin
+    sb, inv = np.unique(strand_bin(pos), return_inverse=True)
+    c = np.bincount(inv, weights=x, minlength=sb.size).astype(np.int64)
+    d = np.bincount(inv, minlength=sb.size).astype(np.int64)
     on_sb = strand_bin(on)
     j = np.searchsorted(sb, on_sb)
-    inside = (j < sb.size) & (sb[np.minimum(j, sb.size - 1)] == on_sb)
-    t = np.bincount(j[inside], minlength=sb.size).astype(np.int64)  # dedup-on reads per strand-bin
-    hist_x, hist_c = hist_dict(x), hist_dict(c)
+    inside = (j < sb.size) & (sb[np.minimum(j, sb.size - 1)] == on_sb) if sb.size else np.zeros(on_sb.size, bool)
+    t = np.bincount(j[inside], minlength=sb.size).astype(np.int64)
+    return x, c, d, t, int((~inside).sum())
+
+
+def shape_stats(off: np.ndarray, on: np.ndarray, n_units: int, n_strand_bins=None) -> dict:
+    return shape_stats_chroms([(off, on)], n_units, n_strand_bins)
+
+
+def shape_stats_chroms(pairs, n_units: int, n_strand_bins=None) -> dict:
+    """(ii)-(iv) for one read set given as (off, on) key pairs, one per chromosome.
+    `n_strand_bins` = 2 x genome bins (sets the top-1% size); None uses the number of strand-bins
+    with dedup-off reads."""
+    cs, ds, ts, n_out = [], [], [], 0
+    hx = defaultdict(int)
+    for off, on in pairs:
+        x, c1, d1, t1, o = bin_counts(off, on)
+        v, k = np.unique(x, return_counts=True)
+        for a, b in zip(v, k):
+            hx[int(a)] += int(b)
+        cs.append(c1.astype(np.int32)); ds.append(d1.astype(np.int32)); ts.append(t1.astype(np.int32))
+        n_out += o
+    cat = lambda l: np.concatenate(l).astype(np.int64) if l else np.zeros(0, np.int64)
+    c, d, t = cat(cs), cat(ds), cat(ts)
+    del cs, ds, ts
+    hist_x, hist_c = dict(sorted(hx.items())), hist_dict(c)
     a_1bp = fit_dm_shape(hist_c, hist_x, RES)
 
-    denom = n_strand_bins if n_strand_bins else sb.size
-    n_top = min(int(math.ceil(TOP_FRACTION * denom)), sb.size)
-    top = np.zeros(sb.size, bool)
+    denom = n_strand_bins if n_strand_bins else c.size
+    n_top = min(int(math.ceil(TOP_FRACTION * denom)), c.size)
+    top = np.zeros(c.size, bool)
     top[np.argsort(-c, kind="stable")[:n_top]] = True
 
     out = {
         "n_units": n_units,
-        "n_strand_bins_with_off_reads": int(sb.size),
+        "n_strand_bins_with_off_reads": int(c.size),
         "top_denominator": "genome_strand_bins" if n_strand_bins else "nonzero_strand_bins",
         "n_top_strand_bins": int(n_top),
-        "n_on_reads_outside_off_bins": int((~inside).sum()),
+        "n_on_reads_outside_off_bins": n_out,
         "hist_off_reads_per_position": hist_x,
         "dirichlet_a_1bp": a_1bp,
         "top1pct": {"sum_off": int(c[top].sum()), "sum_distinct_off": int(d[top].sum()),
@@ -264,16 +327,17 @@ def main(argv=None):
         print(json.dumps(res))
         return res
     index = ChromIndex()
-    off, on = read_keys(a.off, index), read_keys(a.on, index)
+    off_parts, on_parts = read_keys_by_chrom(a.off, index), read_keys_by_chrom(a.on, index)
     head = {"experiment": a.experiment, "label": a.label, "n_units": a.n_units,
             "off": list(a.off), "on": list(a.on)}
+    pairs = iter_chroms(off_parts, on_parts)
     if a.cmd == "unit":
-        res = {**head, **compare_unit(off, on)}
+        res = {**head, **compare_unit_chroms(pairs)}
     else:
         nsb = None
         if a.chrom_sizes:
             nsb = 2 * sum(math.ceil(v / RES) for v in load_sizes(a.chrom_sizes).values())
-        res = {**head, **shape_stats(off, on, a.n_units, nsb)}
+        res = {**head, **shape_stats_chroms(pairs, a.n_units, nsb)}
     _write(res, a.out)
     return res
 

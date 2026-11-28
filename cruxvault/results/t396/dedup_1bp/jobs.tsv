@@ -1,2 +1,9 @@
 job_id	job_name	cluster	kit	command	submitted_utc
 6726827	sc_untar	fir	SC12a	dedup_1bp.sh untar	2026-11-28T00:07:24Z
+6727806	sc_1bp	fir	SC12b	dedup_1bp.sh run EXP=ENCSR956CTX (probe)	2026-11-28T00:14:28Z
+6729250	sc_1bp	fir	SC12b	dedup_1bp.sh run EXP=ENCSR956CTX (probe 2, per-chromosome tool, 4 CPU 16000M)	2026-11-28T00:24:31Z
+6733480	sc_1bp	fir	SC12b	dedup_1bp.sh run EXP=ENCSR928HYM (2 CPU 8000M 00:30:00)	2026-11-28T00:49:14Z
+6733481	sc_1bp	fir	SC12b	dedup_1bp.sh run EXP=ENCSR925LJZ (2 CPU 8000M 00:30:00)	2026-11-28T00:49:14Z
+6733482	sc_1bp	fir	SC12b	dedup_1bp.sh run EXP=ENCSR902EEI (2 CPU 8000M 00:30:00)	2026-11-28T00:49:14Z
+6733483	sc_1bp	fir	SC12b	dedup_1bp.sh run EXP=ENCSR972SMV (2 CPU 8000M 00:30:00)	2026-11-28T00:49:14Z
+6733484	sc_1bp	fir	SC12b	dedup_1bp.sh run EXP=ENCSR960VLF (2 CPU 8000M 00:30:00)	2026-11-28T00:49:14Z

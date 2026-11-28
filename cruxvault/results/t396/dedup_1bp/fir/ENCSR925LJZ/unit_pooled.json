@@ -1,0 +1,27 @@
+{
+ "experiment": "ENCSR925LJZ",
+ "label": "pooled",
+ "n_off_absent_from_on": 0,
+ "n_off_distinct": 20926097,
+ "n_off_lines": 22561221,
+ "n_on_absent_from_off": 0,
+ "n_on_distinct": 20926097,
+ "n_on_lines": 20969469,
+ "n_units": 2,
+ "off": [
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR925LJZ/br1.uniform/nodedup/pr1.tagAlign.gz",
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR925LJZ/br1.uniform/nodedup/pr2.tagAlign.gz",
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR925LJZ/br2.uniform/nodedup/pr1.tagAlign.gz",
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR925LJZ/br2.uniform/nodedup/pr2.tagAlign.gz"
+ ],
+ "on": [
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR925LJZ/br1.uniform/base/pr1.tagAlign.gz",
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR925LJZ/br1.uniform/base/pr2.tagAlign.gz",
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR925LJZ/br2.uniform/base/pr1.tagAlign.gz",
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR925LJZ/br2.uniform/base/pr2.tagAlign.gz"
+ ],
+ "share_off_absent_from_on": 0.0,
+ "share_off_duplicate_lines": 0.07247497819377773,
+ "share_on_absent_from_off": 0.0,
+ "share_on_repeated_lines": 0.0020683404048047185
+}
