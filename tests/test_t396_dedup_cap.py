@@ -258,3 +258,230 @@ def test_count_law_data_favor_count_law(tmp_path):
     gs = float(pick(t, "dm_distinct")["gap_closed_vs_depth_scaling"])
     assert gc > gs, (gc, gs)
     assert np.isfinite(float(pick(t, "count_saturation")["attainable_floor"]))
+
+
+# ------------------------------------------------------------------ testbed pairs (iteration 2)
+TB_ASSAYS = ["H3K4me1", "H3K27ac", "H3K9me3", "H3K27me3", "H3K36me3", "H3K4me3", "DNase-seq"]
+TB_A = 0.6
+TB_RATES = {  # track index: (q of nodedup, q of pe, q of base)
+    i: (0.3 + 0.05 * i, 0.35 + 0.05 * i, 0.85 - 0.04 * i) for i in range(7)}
+
+
+def write_halves(root_rs, root_ct, mid, starts, rng, kernel=KERNEL):
+    """starts_pr1/2.h5 and pr1/2.h5 of a view: each read to pr1 with probability 1/2."""
+    import h5py
+    pr1 = {c: rng.binomial(s, 0.5) for c, s in starts.items()}
+    for i, half in ((1, pr1), (2, {c: starts[c] - pr1[c] for c in starts})):
+        with h5py.File(os.path.join(root_rs, mid, f"starts_pr{i}.h5"), "w") as f:
+            for c, s in half.items():
+                f[c] = s.astype(np.uint32)
+        with h5py.File(os.path.join(root_ct, mid, f"pr{i}.h5"), "w") as f:
+            for c, s in half.items():
+                ov = deconv.forward(s[:, 0], kernel[0]) + deconv.forward(s[:, 1], kernel[1])
+                f[c] = np.rint(ov).astype(np.uint32)
+
+
+def make_testbed_track(rng, q_nd, q_pe, q_base, a=TB_A):
+    """(nodedup, pe, base) starts of one track. The full PE library has P mate lines per strand-bin;
+    the SE library is mate 1 (Binomial(P, 1/2)); base = a q_base sample of the SE library's distinct
+    positions (Dirichlet(a) over 25); nodedup = a q_nd sample of the SE library; pe = a q_pe sample
+    of P. Each arm is its own subsample of the same library."""
+    lam = intensities(rng, scale=4.0)
+    nd, pe, base = {}, {}, {}
+    for c, l in lam.items():
+        P = rng.poisson(l)
+        M = rng.binomial(P, 0.5)
+        D_ = np.stack([caps._draw_distinct(M[:, j], a, 25, rng) for j in (0, 1)], 1)
+        nd[c], pe[c], base[c] = rng.binomial(M, q_nd), rng.binomial(P, q_pe), rng.binomial(D_, q_base)
+    return nd, pe, base
+
+
+def build_testbed(tmp, rng, missing_total=None):
+    """Stores, measurements.tsv and totals.tsv of 7 testbed tracks x (base, nodedup, pe), plus
+    decoys: an EIC train nodedup pair, a testbed mapq arm, a testbed `se` arm with another value.
+    Track 0 has in_eic = val (rows must not read in_eic). `missing_total`: ids with total NA."""
+    rs, ct, tb = (str(tmp / x) for x in ("rs", "ct", "tables"))
+    rows, totals = [], []
+    for i, assay in enumerate(TB_ASSAYS):
+        exp = f"ENCSR{100 + i:03d}"
+        q_nd, q_pe, q_b = TB_RATES[i]
+        nd, pe, base = make_testbed_track(rng, q_nd, q_pe, q_b)
+        ids = {k: f"{exp}.pooled.testbed.{k}" for k in ("base", "nodedup", "pe")}
+        for k, st, q, lpf in (("base", base, q_b, 1), ("nodedup", nd, q_nd, 1), ("pe", pe, q_pe, 2)):
+            write_view(rs, ct, ids[k], st, 1)
+            lines = sum(int(v.sum()) for v in st.values())
+            common = {"experiment": exp, "assay": assay, "in_eic": "val" if i == 0 else "blind",
+                      "unit": "pooled", "layer": "testbed", "read_length": "50",
+                      "run_type": "paired-ended" if k == "pe" else "single-ended",
+                      "depth_reads": str(lines), "depth_fragments": str(lines // lpf)}
+            arm = {"base": ("", ""), "nodedup": ("nodedup", ""), "pe": ("se", "pe")}[k]
+            rows.append({**common, "measurement_id": ids[k], "arm_knob": arm[0], "arm_value": arm[1],
+                         "parent_measurement_id": "" if k == "base" else ids["base"]})
+            tot = "NA" if missing_total and ids[k] in missing_total else f"{lines / q:.0f}"
+            totals.append({"measurement_id": ids[k], "lines_before_subsample": tot})
+        write_halves(rs, ct, ids["base"], base, rng)
+    rows += [
+        {"measurement_id": "ENCSR900.pooled.uniform.nodedup", "experiment": "ENCSR900",
+         "assay": "H3K4me3", "in_eic": "train", "layer": "uniform", "arm_knob": "nodedup",
+         "parent_measurement_id": "ENCSR900.pooled.uniform.base", "run_type": "single-ended",
+         "read_length": "36"},
+        {"measurement_id": "ENCSR100.pooled.testbed.mapq0", "experiment": "ENCSR100",
+         "assay": "H3K4me1", "in_eic": "blind", "layer": "testbed", "arm_knob": "mapq",
+         "arm_value": "0", "parent_measurement_id": "ENCSR100.pooled.testbed.base",
+         "run_type": "single-ended", "read_length": "50"},
+        {"measurement_id": "ENCSR100.pooled.testbed.sex", "experiment": "ENCSR100",
+         "assay": "H3K4me1", "in_eic": "blind", "layer": "testbed", "arm_knob": "se",
+         "arm_value": "se", "parent_measurement_id": "ENCSR100.pooled.testbed.base",
+         "run_type": "single-ended", "read_length": "50"}]
+    cols = COLUMNS + ["arm_value", "depth_fragments"]
+    os.makedirs(tb, exist_ok=True)
+    with open(os.path.join(tb, "measurements.tsv"), "w", newline="") as f:
+        w = csv.DictWriter(f, cols, delimiter="\t", extrasaction="ignore", lineterminator="\n")
+        w.writeheader()
+        for r in rows:
+            w.writerow({k: r.get(k, "") for k in cols})
+    D.write_tsv(str(tmp / "totals.tsv"), totals, ["measurement_id", "lines_before_subsample"])
+    json.dump({"dedup_unit": "replicate"}, open(tmp / "UNIT_RULE.json", "w"))
+    return rs, ct, tb
+
+
+def run_testbed(tool, tmp, rs, ct, tb, totals, tag, floor_count=False, n_rep=3, n_boot=200):
+    """rows -> stats -> fit -> (floor-count) -> score of one tool on the testbed layer."""
+    out = tmp / tag
+    rows = str(out / "rows.tsv")
+    tool.main(["rows", "--layer", "testbed", "--tables", tb, "--rs-store", rs, "--count-store", ct,
+               "--totals", totals, "--out", rows])
+    stats, floors = [], []
+    for r in D.read_tsv(rows):
+        p = str(out / "stats" / f"{r['target_id']}.npz")
+        tool.main(["stats", "--pair", r["source_id"], r["target_id"], "--unit-rule",
+                   str(tmp / "UNIT_RULE.json"), "--rows", rows, "--rs-store", rs, "--count-store", ct,
+                   "--out", p])
+        stats.append(p)
+    fit = str(out / "fit.tsv")
+    tool.main(["fit", "--stats", *stats, "--rows", rows, "--out", fit])
+    if floor_count:
+        for r in D.read_tsv(rows):
+            p = str(out / "floor" / f"{r['target_id']}.npz")
+            tool.main(["floor-count", "--pair", r["source_id"], r["target_id"], "--unit-rule",
+                       str(tmp / "UNIT_RULE.json"), "--fit", fit, "--rows", rows, "--rs-store", rs,
+                       "--count-store", ct, "--out", p])
+            floors.append(p)
+    tool.main(["score", "--stats", *stats, "--fit", fit, "--rows", rows, "--floor-count", *floors,
+               "--n-boot", str(n_boot), "--n-rep", str(n_rep), "--out", str(out / "score")])
+    return {"rows": D.read_tsv(rows), "fit": D.read_tsv(fit),
+            "table": D.read_tsv(out / "score" / "table.tsv"),
+            "pairs": D.read_tsv(out / "score" / "pairs.tsv")}
+
+
+def tb_pick(table, law, shape="loto", scope="top1pct", group="all", space=None):
+    r = [x for x in table if x["law"] == law and x["shape"] == shape and x["scope"] == scope
+         and x["assay_group"] == group and (space is None or x["space"] == space)]
+    assert len(r) == 1, (law, shape, scope, group, r)
+    return r[0]
+
+
+@pytest.fixture(scope="module")
+def testbed(tmp_path_factory):
+    tmp = tmp_path_factory.mktemp("testbed")
+    rs, ct, tb = build_testbed(tmp, np.random.default_rng(42))
+    # q = 1: totals equal to the stored lines
+    q1 = [{"measurement_id": r["measurement_id"], "lines_before_subsample": r["depth_reads"]}
+          for r in D.read_tsv(os.path.join(tb, "measurements.tsv")) if r["depth_reads"]]
+    D.write_tsv(str(tmp / "totals_q1.tsv"), q1, ["measurement_id", "lines_before_subsample"])
+    return tmp, rs, ct, tb
+
+
+@pytest.fixture(scope="module")
+def dedup_tb(testbed):
+    tmp, rs, ct, tb = testbed
+    return run_testbed(D, tmp, rs, ct, tb, str(tmp / "totals.tsv"), "dedup", floor_count=True)
+
+
+def test_testbed_rows_by_layer_and_knob(testbed):
+    tmp, rs, ct, tb = testbed
+    D.main(["rows", "--layer", "testbed", "--tables", tb, "--rs-store", rs, "--count-store", ct,
+            "--totals", str(tmp / "totals.tsv"), "--out", str(tmp / "r_dedup.tsv")])
+    rows = D.read_tsv(tmp / "r_dedup.tsv")
+    assert len(rows) == 7
+    assert all(r["source_id"].endswith(".nodedup") and r["target_id"].endswith(".base")
+               and r["covariate"] == "dedup" and r["share"] == "1" for r in rows)
+    assert {r["in_eic"] for r in rows} == {"val", "blind"}           # in_eic is not a filter
+    assert all(r["q_origin"] == "measured" and r["in_store"] == "1" for r in rows)
+    r0 = [r for r in rows if r["experiment"] == "ENCSR100"][0]
+    assert float(r0["q_source"]) == pytest.approx(TB_RATES[0][0], rel=1e-4)
+    assert float(r0["q_target"]) == pytest.approx(TB_RATES[0][2], rel=1e-4)
+    # without --layer the iteration-1 selection (in_eic train/val, any layer) is unchanged
+    D.main(["rows", "--tables", tb, "--rs-store", rs, "--count-store", ct,
+            "--out", str(tmp / "r_iter1.tsv")])
+    old = D.read_tsv(tmp / "r_iter1.tsv")
+    assert sorted(r["off_id"] for r in old) == ["ENCSR100.pooled.testbed.nodedup",
+                                               "ENCSR900.pooled.uniform.nodedup"]
+    assert "source_id" not in old[0]
+    with pytest.raises(SystemExit):
+        D.main(["rows", "--tables", tb, "--totals", str(tmp / "totals.tsv"),
+                "--out", str(tmp / "r_bad.tsv")])
+
+
+def test_testbed_missing_total_is_fitted(tmp_path):
+    rng = np.random.default_rng(5)
+    miss = {"ENCSR103.pooled.testbed.nodedup"}
+    rs, ct, tb = build_testbed(tmp_path, rng, missing_total=miss)
+    D.main(["rows", "--layer", "testbed", "--tables", tb, "--rs-store", rs, "--count-store", ct,
+            "--totals", str(tmp_path / "totals.tsv"), "--out", str(tmp_path / "rows.tsv")])
+    rows = {r["experiment"]: r for r in D.read_tsv(tmp_path / "rows.tsv")}
+    assert rows["ENCSR103"]["q_origin"] == "fitted" and rows["ENCSR103"]["q_source"] == ""
+    assert rows["ENCSR103"]["total_source"] == "NA" and rows["ENCSR103"]["q_target"] != ""
+    assert sum(r["q_origin"] == "fitted" for r in rows.values()) == 1
+    # fit_rates recovers the missing source rate on the pair's own table
+    r = rows["ENCSR103"]
+    st = D.testbed_stats(r, rs, ct, {"dedup_unit": "replicate"})[0]
+    h = caps.merge_hists([D.arr_to_hist(st[f"start_{s}_genome"]) for s in ("plus", "minus")])
+    qs, qt = D.fit_rates(h, 25, 1.0, None, float(r["q_target"]), TB_A)
+    assert qt == float(r["q_target"])
+    assert qs == pytest.approx(TB_RATES[3][0], rel=0.3), qs
+
+
+def test_testbed_dedup_right_rates_close_the_gap(dedup_tb):
+    t = dedup_tb["table"]
+    assert {x["covariate"] for x in t} == {"dedup"}
+    assert {x["shape"] for x in t} == {"iteration1", "loto"}
+    assert {x["assay_group"] for x in t} == {"all", "histone", "DNase-seq"}
+    for scope in ("genome", "top1pct"):
+        row = tb_pick(t, D.TB_PRIMARY, scope=scope)
+        assert float(row["gap_closed_vs_depth_scaling"]) > 0.9, row
+        assert int(row["n_experiments"]) == 7 and row["n_q_fitted"] == "0"
+    # the same law and shape at q = 1 misses the unseen reads genome-wide
+    unsub = tb_pick(t, D.TB_UNSUB, scope="genome")
+    assert float(unsub["gap_closed_vs_depth_scaling"]) < 0.9, unsub
+    fit = dedup_tb["fit"]
+    assert len(fit) == 7 and all(f["n_pairs_fit"] == "6" for f in fit)
+    assert all(0.3 < float(f["a_loto"]) < 1.2 for f in fit), [f["a_loto"] for f in fit]
+    cnt = tb_pick(t, D.COUNT_LAW, space="count")
+    assert cnt["attainable_floor"] not in ("", "nan")
+
+
+def test_testbed_dedup_q1_falls_short(testbed, dedup_tb):
+    tmp, rs, ct, tb = testbed
+    res = run_testbed(D, tmp, rs, ct, tb, str(tmp / "totals_q1.tsv"), "dedup_q1")
+    assert all(r["q_source"] == "1" and r["q_target"] == "1" for r in res["rows"])
+    # q = 1 with its own leave-one-track-out shape: genome-wide gap below 0.9
+    row = tb_pick(res["table"], D.TB_PRIMARY, scope="genome")
+    assert float(row["gap_closed_vs_depth_scaling"]) < 0.9, row
+    right = tb_pick(dedup_tb["table"], D.TB_PRIMARY, scope="genome")
+    assert float(row["deviance_law"]) > float(right["deviance_law"])
+
+
+def test_testbed_halves_floor_below_wrong_law(dedup_tb):
+    t = dedup_tb["table"]
+    for scope in ("genome", "top1pct"):
+        unsub = tb_pick(t, D.TB_UNSUB, scope=scope)
+        prim = tb_pick(t, D.TB_PRIMARY, scope=scope)
+        hf = float(prim["halves_floor"])
+        assert np.isfinite(hf) and 0 < hf < float(prim["deviance_depth_scaling"]), (scope, hf)
+        assert hf == float(unsub["halves_floor"])
+        cnt = tb_pick(t, D.COUNT_LAW, scope=scope, space="count")
+        assert 0 < float(cnt["halves_floor"]) < float(cnt["deviance_depth_scaling"])
+    assert {"law", "space", "covariate", "scope", "gap_closed_vs_depth_scaling",
+            "attainable_floor", "halves_floor", "bootstrap_spread", "explains",
+            "beats_other_law"} <= set(t[0])

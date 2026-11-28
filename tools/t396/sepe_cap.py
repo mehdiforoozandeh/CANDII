@@ -12,9 +12,11 @@ tagAlign step). So per strand the law is `caps.thinned_dm_distinct(c_PE, q = 0.5
 wrong for the single-end replicates (their reads are all kept); mixed pairs are reported apart.
 
 Subcommands
-  rows        --tables <dir> --rs-store <dir> [--count-store <dir>] --out rows.tsv
-  stats       --pair <parent id> <se id> --unit-rule UNIT_RULE.json --out <npz>
-  fit         --stats <npz...> --rows rows.tsv [--dedup-fit dedup per_assay.tsv] --out per_assay.tsv
+  rows        --tables <dir> --rs-store <dir> [--count-store <dir>] [--layer testbed
+              [--totals totals.tsv]] --out rows.tsv
+  stats       --pair <parent id> <se id> --unit-rule UNIT_RULE.json [--rows rows.tsv] --out <npz>
+  fit         --stats <npz...> --rows rows.tsv [--dedup-fit dedup per_assay.tsv]
+              [--iteration1-fit per_assay.tsv] --out per_assay.tsv
   floor-count --pair <parent id> <se id> --unit-rule UNIT_RULE.json --fit per_assay.tsv
               --rows rows.tsv --out <npz>
   score       --stats <npz...> --fit per_assay.tsv --rows rows.tsv [--floor-count <npz...>]
@@ -28,6 +30,13 @@ the PE overlap counts thinned by the same q, then saturated (deviation: the brie
 the PE overlap counts; without the q the law predicts twice the SE reads at low counts).
 `(PE base) / (PE dedup-off)` in the top 1% of bins (by PE dedup-off starts) is the size of the PE
 cap; it needs the parent's `*.nodedup` view in the store.
+
+Testbed pairs (iteration 2, `--layer testbed`): the 7 (`.pe` -> `.base`) controlled pairs, covariate
+`run_type`. Here the PE track is the source and the SE base the target, each its own subsample; per
+strand the SE base is predicted by `caps.subsampled_dm_distinct` with share = 1 / lines per fragment
+of the PE row (2 -> 1), and the count law is `caps.subsampled_count_saturation` on the PE overlap
+counts. Rows, rates, shapes, halves and tables follow `dedup_cap.py` (its testbed section); the
+rows of both tools share one column set.
 """
 from __future__ import annotations
 
@@ -166,13 +175,20 @@ def _items(stats_paths, rows):
 
 
 # ------------------------------------------------------------------ CLI
+COV = "run_type"
+
+
 def cmd_rows(a):
+    if a.layer or a.totals:
+        return D.cmd_rows(a, covariate=COV, tool="sepe_cap")
     rows = sepe_rows(a.tables, a.rs_store, a.count_store)
     D.write_tsv(a.out, rows, ROW_COLUMNS)
     print(f"[sepe_cap] rows: {len(rows)} pairs -> {a.out}")
 
 
 def cmd_stats(a):
+    if D.is_testbed_rows(a.rows):
+        return D.cmd_stats_testbed(a, COV, "sepe_cap")
     rule = D.load_unit_rule(a.unit_rule)
     par, se = a.pair
     units = D.units_of(se, a.rs_store, a.count_store)
@@ -190,6 +206,8 @@ def cmd_stats(a):
 
 
 def cmd_fit(a):
+    if D.is_testbed_rows(a.rows):
+        return D.cmd_fit_testbed(a, COV, "sepe_cap")
     items = _items(a.stats, D.read_tsv(a.rows))
     dedup_fit = D.read_tsv(a.dedup_fit) if a.dedup_fit and os.path.isfile(a.dedup_fit) else None
     rows = loeo_fit(items, dedup_fit)
@@ -203,6 +221,10 @@ def _fit_of(fit, experiment):
 
 
 def cmd_floor_count(a):
+    if D.is_testbed_rows(a.rows):
+        return D.testbed_floor_count(a.pair, a.rows, a.fit, COV, D.load_unit_rule(a.unit_rule),
+                                     a.rs_store, a.count_store, a.n_rep, a.seed, a.out,
+                                     tool="sepe_cap")
     rule = D.load_unit_rule(a.unit_rule)
     par, se = a.pair
     r = {x["se_id"]: x for x in D.read_tsv(a.rows)}[se]
@@ -219,6 +241,9 @@ def cmd_floor_count(a):
 
 
 def cmd_score(a):
+    if D.is_testbed_rows(a.rows):
+        return D.testbed_score(a.stats, a.rows, a.fit, COV, a.out, a.floor_count, n_boot=a.n_boot,
+                               n_rep=a.n_rep, seed=a.seed, tool="sepe_cap")
     rows = D.read_tsv(a.rows)
     fit = D.read_tsv(a.fit)
     floors = D.load_floor_counts(a.floor_count)
@@ -265,6 +290,7 @@ def main(argv=None):
     p = sub.add_parser("stats")
     p.add_argument("--pair", nargs=2, required=True, metavar=("PARENT", "SE"))
     p.add_argument("--unit-rule", required=True)
+    p.add_argument("--rows", help="testbed rows.tsv (rates and mate share)")
     D.add_store_args(p)
     p.add_argument("--out", required=True)
     p = sub.add_parser("fit")
@@ -290,6 +316,7 @@ def main(argv=None):
     p.add_argument("--n-rep", type=int, default=20)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", required=True)
+    D.add_testbed_args(sub)
     a = ap.parse_args(argv)
     return {"rows": cmd_rows, "stats": cmd_stats, "fit": cmd_fit, "floor-count": cmd_floor_count,
             "score": cmd_score}[a.cmd](a)

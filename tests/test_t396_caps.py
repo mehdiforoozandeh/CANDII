@@ -180,3 +180,87 @@ def test_floor_below_wrong_law_and_gap_closed_is_one():
     # the floor matches the realized law deviance within Monte Carlo error
     assert abs(D_law - D_floor) / D_floor < 0.03
     assert caps.gap_closed(10.0, 4.0, 2.0) == pytest.approx(0.75)
+
+
+# ------------------------------------------------------------------ subsampled law (iteration 2)
+@pytest.mark.parametrize("q_s,q_t,a,share", [(0.3, 0.7, 0.5, 1.0), (0.6, 0.4, 2.0, 1.0),
+                                             (0.4, 0.9, 0.3, 0.5)])
+def test_subsampled_dm_distinct_matches_monte_carlo(q_s, q_t, a, share):
+    """Exact mean against draws of the generative model: unseen reads U ~ NegBinomial(c, q_s),
+    m ~ Binomial(c + U, share) reads on 25 positions, distinct kept with probability q_t."""
+    rng = np.random.default_rng(7)
+    c = np.array([1, 3, 10, 40, 150])
+    ex = caps.subsampled_dm_distinct(c, q_s, q_t, a, 25, share)
+    mc = np.array([caps.draw_subsampled_distinct(np.full(40000, x), q_s, q_t, a, 25, rng,
+                                                 share).mean() for x in c])
+    assert np.all(np.abs(ex / mc - 1) < 0.02), (ex, mc)
+
+
+def test_subsampled_dm_distinct_q1_limit_and_inputs():
+    c = np.array([0, 1, 2, 7, 30, 200])
+    for a in (0.2, 1.0, np.inf):
+        assert np.allclose(caps.subsampled_dm_distinct(c, 1.0, 1.0, a, 25), caps.dm_distinct(c, a, 25))
+    assert np.allclose(caps.subsampled_dm_distinct(c, 1.0, 1.0, 0.7, 25, 0.5),
+                       caps.thinned_dm_distinct(c, 0.5, 0.7, 25))
+    assert np.allclose(caps.subsampled_dm_distinct(c, 1.0, 0.4, 0.7, 25),
+                       0.4 * caps.dm_distinct(c, 0.7, 25))
+    assert abs(caps.subsampled_dm_distinct(np.array([0]), 0.3, 0.5, 1.0, 25)[0]) < 1e-9
+    # the unseen reads raise the expectation: a q_source sample predicts more than c alone
+    assert np.all(caps.subsampled_dm_distinct(c[1:], 0.5, 1.0, 1.0, 25)
+                  > caps.dm_distinct(c[1:], 1.0, 25))
+    with pytest.raises(ValueError):
+        caps.subsampled_dm_distinct(np.array([1.5]), 0.5, 0.5, 1.0, 25)
+    with pytest.raises(ValueError):
+        caps.subsampled_dm_distinct(c, 0.0, 0.5, 1.0, 25)
+
+
+def test_completion_prior():
+    """A Gamma(alpha, beta) intensity prior: fit_completion_prior recovers it from source counts,
+    and with it a source count of 0 predicts a positive target (the unseen reads of empty bins)."""
+    rng = np.random.default_rng(11)
+    lam = rng.gamma(0.5, 1 / 0.05, 200000)                    # alpha 0.5, rate 0.05: mean 10
+    c = rng.poisson(0.3 * lam)
+    al, be = caps.fit_completion_prior(c, q_source=0.3)
+    assert al == pytest.approx(0.5, rel=0.05) and be == pytest.approx(0.05, rel=0.1), (al, be)
+    v, w = np.unique(c, return_counts=True)
+    assert np.allclose(caps.fit_completion_prior(v, w, 0.3), (al, be), rtol=1e-3)
+    pri = (al, be)
+    assert caps.subsampled_dm_distinct(np.array([0]), 0.3, 1.0, 1.0, 25, prior=pri)[0] > 0.1
+    # Monte Carlo of the law with the prior, and E[M | c] against the truth of the simulation
+    for x in (0, 2, 20):
+        mc = caps.draw_subsampled_distinct(np.full(40000, x), 0.3, 0.7, 0.8, 25, rng,
+                                           prior=pri).mean()
+        ex = caps.subsampled_dm_distinct(np.array([x]), 0.3, 0.7, 0.8, 25, prior=pri)[0]
+        assert abs(ex / mc - 1) < 0.02, (x, ex, mc)
+        lo, pm = caps._completion_pmf(x, 0.3, 1.0, al, be)
+        # M = c + U, U ~ Poisson((1 - q) lambda): E[M | c] = c + 0.7 E[lambda | c]
+        assert np.dot(pm, np.arange(lo, lo + pm.size)) == pytest.approx(
+            x + 0.7 * lam[c == x].mean(), rel=0.05)
+
+
+def test_subsampled_count_saturation_and_fits():
+    c = np.array([0.0, 5, 50, 500])
+    assert np.allclose(caps.subsampled_count_saturation(c, 1.0, 1.0, 3.0, 50),
+                       caps.count_saturation(c, 3.0, 50))
+    assert np.allclose(caps.subsampled_count_saturation(c, 1.0, 0.8, 3.0, 50),
+                       0.8 * caps.count_saturation(c, 3.0, 50))
+    # with completion: below the plug-in of the mean (concave law), above the unsubsampled law
+    sub = caps.subsampled_count_saturation(c[1:], 0.5, 1.0, 3.0, 50)
+    assert np.all(sub <= caps.count_saturation(c[1:] / 0.5, 3.0, 50) + 1e-9)
+    unsub = caps.count_saturation(c[1:], 3.0, 50)
+    assert np.all(sub >= unsub - 1e-9) and sub[0] > unsub[0]
+    # fit_shape_subsampled recovers a from targets drawn from the subsampled model
+    rng = np.random.default_rng(3)
+    s = rng.integers(0, 120, 20000)
+    t = caps.draw_subsampled_distinct(s, 0.4, 0.8, 0.6, 25, rng)
+    h = caps.joint_hist(s, t)["genome"]
+    a = caps.fit_shape_subsampled(h, 25, 0.4, 0.8)
+    assert 0.4 < a < 0.9, a
+    assert np.isclose(caps.fit_shape_subsampled([h, h], [25, 25], [0.4, 0.4], [0.8, 0.8]), a,
+                      rtol=1e-3)
+    fl = caps.simulate_subsampled_floor(h, a, 25, 0.4, 0.8, rng=rng, n_rep=5)
+    d_law = caps.deviance_of(h, lambda x: caps.subsampled_dm_distinct(x, 0.4, 0.8, a, 25))
+    d_q1 = caps.deviance_of(h, lambda x: caps.dm_distinct(x, a, 25))
+    assert fl < d_q1 and abs(d_law / fl - 1) < 0.1, (fl, d_law, d_q1)
+    k = caps.fit_kappa_subsampled([h, h], [50, 50], [0.4, 0.4], [0.8, 0.8], prior=[(0, 0), (0, 0)])
+    assert np.isfinite(k)

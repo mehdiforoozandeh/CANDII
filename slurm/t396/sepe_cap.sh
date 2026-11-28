@@ -11,6 +11,11 @@
 #     export KIT=... UNIT_RULE=... FIT=<per_assay.tsv> GROUP=2
 #     sbatch --job-name=sc_sepe ... "$KIT/slurm/t396/sepe_cap.sh" floor-count
 #
+#   testbed (iteration 2, B3): the controlled pairs of a testbed rows file (`sepe_cap.py rows
+#          --layer testbed`), outputs named by the target (.base) id:
+#     export KIT=... UNIT_RULE=... ROWS=$KIT/cruxvault/results/t396/cf_caps/rows.tsv GROUP=1 \
+#            OUT=/scratch/mforooz/sc396/it2/cf_caps/sepe OUT_FLOOR=/scratch/mforooz/sc396/it2/cf_caps/sepe_floor
+#
 # Outputs: $OUT/<se id>.npz (stats), $OUT_FLOOR/<se id>.npz (floor-count). An existing output is
 # skipped. DRY_RUN=1 prints the commands and runs nothing.
 #SBATCH --account=def-maxwl
@@ -44,16 +49,19 @@ floor-count) : "${FIT:?export FIT}"; DEST="$OUT_FLOOR" ;;
 *) echo "unknown mode $MODE" >&2; exit 2 ;;
 esac
 mkdir -p "$DEST"
+# testbed rows (header source_id): the run_type rows with in_store = 1 (.pe -> .base)
 pairs=$(awk -F'\t' -v g="$GROUP" -v i="$I" '
-  NR == 1 {for (k = 1; k <= NF; k++) c[$k] = k; next}
-  { if (int(n / g) == i) print $c["parent_id"], $c["se_id"]; n++ }' "$ROWS")
+  NR == 1 {for (k = 1; k <= NF; k++) c[$k] = k; tb = ("source_id" in c); next}
+  tb && $c["covariate"] == "run_type" && $c["in_store"] == "1" {
+    if (int(n / g) == i) print $c["source_id"], $c["target_id"]; n++; next }
+  !tb { if (int(n / g) == i) print $c["parent_id"], $c["se_id"]; n++ }' "$ROWS")
 [ -n "$pairs" ] || { echo "no pairs for task $I" >&2; exit 1; }
 rc=0
 while read -r par se; do
   f="$DEST/$se.npz"
   [ -s "$f" ] && { echo "skip $f"; continue; }
-  extra=()
-  [ "$MODE" = floor-count ] && extra=(--fit "$FIT" --rows "$ROWS")
+  extra=(--rows "$ROWS")
+  [ "$MODE" = floor-count ] && extra+=(--fit "$FIT")
   cmd=("$PY" tools/t396/sepe_cap.py "$MODE" --pair "$par" "$se" --unit-rule "$UNIT_RULE" "${extra[@]}" --out "$f")
   if [ "${DRY_RUN:-0}" = 1 ]; then echo "${cmd[*]}"; continue; fi
   /usr/bin/time -v "${cmd[@]}" || { echo "FAILED $se" >&2; rc=1; }

@@ -20,6 +20,7 @@ target's own depth. Raw deviances are never compared across spaces; gaps closed 
 """
 from __future__ import annotations
 
+import functools
 import math
 import os
 import sys
@@ -38,7 +39,11 @@ TOP_FRACTION = 0.01          # the top1pct scope: the 1% of bins with the larges
 
 __all__ = ["K_of", "dm_distinct", "occupancy", "thinned_dm_distinct", "start_cap",
            "count_saturation", "joint_hist", "merge_hists", "depth_ratio", "fit_shape",
-           "fit_kappa", "deviance_of", "simulate_floor", "gap_closed"]
+           "fit_kappa", "deviance_of", "simulate_floor", "gap_closed", "subsampled_dm_distinct",
+           "draw_subsampled_distinct", "subsampled_count_saturation", "fit_completion_prior", "fit_shape_subsampled",
+           "fit_kappa_subsampled", "simulate_subsampled_floor"]
+
+NB_TOL = 1e-10               # tail mass dropped from each side of a completion pmf
 
 
 # ------------------------------------------------------------------ laws
@@ -81,6 +86,125 @@ def thinned_dm_distinct(c, q, a, K):
         m = np.arange(cu + 1)
         out[i] = float(np.dot(stats.binom.pmf(m, cu, q), dm_distinct(m, a, K)))
     return out[inv].reshape(ci.shape)
+
+
+def _int_counts(c, who):
+    c = np.asarray(c)
+    ci = np.rint(c).astype(np.int64)
+    if np.any(np.abs(c - ci) > 1e-9) or np.any(ci < 0):
+        raise ValueError(f"{who} needs non-negative integer counts c")
+    return ci
+
+
+def _support_pmf(dist, tol=NB_TOL):
+    """(first value, pmf) of a discrete scipy distribution over its central 1 - 2 tol mass,
+    renormalized."""
+    lo = max(int(dist.ppf(tol)) - 1, 0)
+    hi = int(dist.ppf(1.0 - tol)) + 1
+    w = dist.pmf(np.arange(lo, hi + 1))
+    return lo, w / w.sum()
+
+
+@functools.lru_cache(maxsize=50_000)
+def _completion_pmf(c: int, q_source: float, share: float, alpha: float = 0.0,
+                    beta: float = 0.0):
+    """(first value, pmf) of m, the reads of the full library at ``share`` of its lines, given
+    ``c`` reads in a ``q_source`` sample of it. With a Gamma(alpha, rate beta) prior on the bin's
+    full-library intensity, the unseen reads are U ~ NegBinomial(alpha + c, (beta + q_source) /
+    (beta + 1)) (failures before the (alpha + c)-th success). alpha = beta = 0 is the scale-free
+    prior 1 / lambda: U ~ NegBinomial(c, q_source), E[c + U] = c / q_source, and c = 0 gives U = 0.
+    m = Binomial(c, share) + Binomial(U, share); a NegBinomial(r, p) thinned by ``share`` is
+    NegBinomial(r, p / (p + share (1 - p)))."""
+    r = alpha + c
+    if r == 0:
+        return 0, np.ones(1)
+    p = (beta + q_source) / (beta + 1.0)
+    p = p / (p + share * (1.0 - p))
+    lo_u, w_u = (0, np.ones(1)) if p >= 1.0 else _support_pmf(stats.nbinom(r, p))
+    if share == 1.0:
+        return c + lo_u, w_u
+    lo_b, w_b = _support_pmf(stats.binom(c, share))
+    return lo_b + lo_u, np.convolve(w_b, w_u)
+
+
+def subsampled_dm_distinct(c, q_source, q_target, a, K, share=1.0, prior=(0.0, 0.0)):
+    """Expected target count given the source count ``c`` when the source is a ``q_source`` sample
+    of the full library and the target is a ``q_target`` sample of the distinct positions of that
+    library: the mean over m = c + U (U ~ NegBinomial(c, q_source), the unseen reads) of
+    ``q_target * dm_distinct(m, a, K)``. ``share`` < 1 keeps each read of the full library with
+    that probability before the distinct count (one mate of a paired-end library: share 0.5).
+    ``prior = (alpha, beta)``: the Gamma prior of the completion (``_completion_pmf``; default the
+    scale-free prior; ``fit_completion_prior`` fits it to a source track). q_source = q_target =
+    share = 1 gives ``dm_distinct``. ``c`` must hold non-negative integers."""
+    ci = _int_counts(c, "subsampled_dm_distinct")
+    if not (0 < q_source <= 1 and 0 < q_target <= 1 and 0 < share <= 1):
+        raise ValueError("q_source, q_target and share must lie in (0, 1]")
+    if q_source == 1.0:
+        return q_target * thinned_dm_distinct(ci, share, a, K)
+    uniq, inv = np.unique(ci, return_inverse=True)
+    out = np.empty(uniq.size, np.float64)
+    for i, cu in enumerate(uniq):
+        lo, w = _completion_pmf(int(cu), float(q_source), float(share), float(prior[0]),
+                                float(prior[1]))
+        out[i] = float(np.dot(w, dm_distinct(np.arange(lo, lo + w.size), a, K)))
+    return q_target * out[inv].reshape(ci.shape)
+
+
+def draw_subsampled_distinct(c, q_source, q_target, a, K, rng, share=1.0, prior=(0.0, 0.0)):
+    """One draw of the target for each source count in ``c`` under the generative model of
+    ``subsampled_dm_distinct``: unseen reads U ~ NegBinomial(alpha + c, (beta + q_source) /
+    (beta + 1)), m ~ Binomial(c + U, share) reads on K positions with fresh Dirichlet(a) weights,
+    distinct positions kept each with probability q_target."""
+    c = _int_counts(c, "draw_subsampled_distinct").ravel()
+    m = c.copy()
+    r = prior[0] + c
+    nz = r > 0
+    if q_source < 1.0 and nz.any():
+        m[nz] += rng.negative_binomial(r[nz], (prior[1] + q_source) / (prior[1] + 1.0))
+    if share < 1.0:
+        m = rng.binomial(m, share)
+    y = _draw_distinct(m, a, int(round(K)), rng)
+    return rng.binomial(y, q_target) if q_target < 1.0 else y
+
+
+def fit_completion_prior(source_counts, weights=None, q_source=1.0):
+    """(alpha, beta) of the Gamma prior on the full-library intensity of a bin, from the source
+    counts: maximum likelihood of c ~ NegBinomial(alpha, beta / (beta + q_source)) (Poisson(q_source
+    lambda) with lambda ~ Gamma(alpha, rate beta)); ``weights`` counts each value."""
+    c = np.asarray(source_counts, np.float64).ravel()
+    w = np.ones_like(c) if weights is None else np.asarray(weights, np.float64).ravel()
+    m = float((w * c).sum() / w.sum())
+    if m <= 0:
+        return 0.0, 0.0
+    v = float((w * (c - m) ** 2).sum() / w.sum())
+    r0 = m * m / (v - m) if v > m else 1e3
+
+    def nll(x):
+        r, p = float(np.exp(x[0])), float(special.expit(x[1]))
+        return -float((w * stats.nbinom.logpmf(c, r, p)).sum())
+    x0 = [np.log(r0), special.logit(r0 / (r0 + m))]
+    res = optimize.minimize(nll, x0, method="Nelder-Mead", options={"xatol": 1e-6, "fatol": 1e-8})
+    r, p = float(np.exp(res.x[0])), float(special.expit(res.x[1]))
+    return r, q_source * p / (1.0 - p)
+
+
+def subsampled_count_saturation(c, q_source, q_target, kappa, read_length, share=1.0,
+                                prior=(0.0, 0.0), res=25):
+    """Count-space law on subsampled tracks: the mean of q_target count_saturation(m) over the same
+    completion m of the source overlap count ``c`` as ``subsampled_dm_distinct`` (the full
+    library's overlap count at ``share``). q_source = share = 1 gives
+    q_target count_saturation(c)."""
+    ci = _int_counts(c, "subsampled_count_saturation")
+    if q_source == 1.0 and share == 1.0:
+        return q_target * count_saturation(ci, kappa, read_length, res)
+    uniq, inv = np.unique(ci, return_inverse=True)
+    out = np.empty(uniq.size, np.float64)
+    for i, cu in enumerate(uniq):
+        lo, w = _completion_pmf(int(cu), float(q_source), float(share), float(prior[0]),
+                                float(prior[1]))
+        out[i] = float(np.dot(w, count_saturation(np.arange(lo, lo + w.size), kappa,
+                                                  read_length, res)))
+    return q_target * out[inv].reshape(ci.shape)
 
 
 def start_cap(lam, a, K):
@@ -208,6 +332,38 @@ def fit_kappa(hist: Union[Hist, Sequence[Hist]], read_length) -> float:
     return _fit(dev)
 
 
+def fit_shape_subsampled(hist, K, q_source, q_target, share=1.0, prior=(0.0, 0.0)) -> float:
+    """``fit_shape`` under ``subsampled_dm_distinct``; ``K``, the rates, ``share`` and ``prior``
+    are scalars (a prior: one tuple) or lists matching the tables."""
+    hs = list(hist) if isinstance(hist, (list, tuple)) else [hist]
+    pr = prior if isinstance(prior, list) else [prior] * len(hs)
+    P = list(zip(_as_list(K, len(hs)), _as_list(q_source, len(hs)), _as_list(q_target, len(hs)),
+                 _as_list(share, len(hs)), pr))
+
+    def dev(la):
+        a = float(np.exp(la))
+        return sum(deviance_of(h, lambda s, p=p: subsampled_dm_distinct(s, p[1], p[2], a, p[0],
+                                                                        p[3], p[4]))
+                   for h, p in zip(hs, P))
+    return _fit(dev)
+
+
+def fit_kappa_subsampled(hist, read_length, q_source, q_target, share=1.0,
+                         prior=(0.0, 0.0)) -> float:
+    """``fit_kappa`` under ``subsampled_count_saturation``; lists as in ``fit_shape_subsampled``."""
+    hs = list(hist) if isinstance(hist, (list, tuple)) else [hist]
+    pr = prior if isinstance(prior, list) else [prior] * len(hs)
+    P = list(zip(_as_list(read_length, len(hs)), _as_list(q_source, len(hs)),
+                 _as_list(q_target, len(hs)), _as_list(share, len(hs)), pr))
+
+    def dev(lk):
+        kappa = float(np.exp(lk))
+        return sum(deviance_of(h, lambda s, p=p: subsampled_count_saturation(s, p[1], p[2], kappa,
+                                                                             p[0], p[3], p[4]))
+                   for h, p in zip(hs, P))
+    return _fit(dev)
+
+
 # ------------------------------------------------------------------ attainable floor
 def _draw_distinct(m: np.ndarray, a: float, K: int, rng: np.random.Generator) -> np.ndarray:
     """Distinct occupied positions for each read number in ``m`` (one fresh Dirichlet per draw)."""
@@ -249,6 +405,26 @@ def simulate_floor(hist: Hist, a, K, q=1.0, rng=None, n_rep=20,
         if q != 1.0:
             m = rng.binomial(m, q)
         y = _draw_distinct(m, a, Ki, rng)
+        total += wu * float(unit_deviance(y, np.full(n, mu_u)).mean())
+    return total
+
+
+def simulate_subsampled_floor(hist: Hist, a, K, q_source, q_target, share=1.0, rng=None,
+                              n_rep=20, max_bins_per_value=500, prior=(0.0, 0.0)) -> float:
+    """``simulate_floor`` for ``subsampled_dm_distinct``: targets drawn by
+    ``draw_subsampled_distinct`` against the law's mean, weighted as in ``simulate_floor``."""
+    rng = np.random.default_rng() if rng is None else rng
+    s, _, w = _arrays(hist)
+    if s.size == 0:
+        return 0.0
+    us = np.unique(s)
+    ws = np.array([w[s == u].sum() for u in us])
+    mu = subsampled_dm_distinct(us, q_source, q_target, a, K, share, prior)
+    total = 0.0
+    for u, wu, mu_u in zip(us, ws, mu):
+        n = int(n_rep * min(wu, max_bins_per_value))
+        y = draw_subsampled_distinct(np.full(n, int(u)), q_source, q_target, a, K, rng, share,
+                                     prior)
         total += wu * float(unit_deviance(y, np.full(n, mu_u)).mean())
     return total
 
