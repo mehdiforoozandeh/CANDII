@@ -22,6 +22,11 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
 H=fir
+# Outputs too big for git (AGENTS.md section 4.11 item 7): <manifest dir>:<abs folder on Fir>.
+# Every file in the Fir folder gets one MANIFEST.tsv row with where = fir:<abs path>.
+FIR_DIRS=(
+  "legB_spaces/records:/project/def-maxwl/mforooz/t396/legB_spaces/records"
+)
 
 sha() {  # sha <file> -> hex digest (macOS shasum or GNU sha256sum)
   if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d' ' -f1
@@ -61,6 +66,15 @@ if [ ! -s MANIFEST.tsv ]; then
     listed | while IFS= read -r p; do
       [ -f "$p" ] || { echo "missing output $p" >&2; exit 1; }
       printf '%s\t%s\t%s\tgit\n' "$p" "$(wc -c < "$p" | tr -d ' ')" "$(sha "$p")"
+    done
+    for e in "${FIR_DIRS[@]}"; do
+      rc=0
+      rows=$(ssh -o BatchMode=yes "$H" "cd '${e#*:}' && for f in *; do printf '%s\\t%s\\t%s\\n' \"\$f\" \"\$(stat -c %s \"\$f\")\" \"\$(sha256sum \"\$f\" | cut -d' ' -f1)\"; done") || rc=$?
+      if [ "$rc" = 255 ]; then echo "the tunnel to $H is down: run 'hpc up $H', then rerun" >&2; exit 255; fi
+      [ "$rc" = 0 ] && [ -n "$rows" ] || { echo "no Fir rows for ${e#*:} (ssh exit $rc)" >&2; exit 1; }
+      while IFS=$'\t' read -r f b h; do
+        printf '%s/%s\t%s\t%s\tfir:%s/%s\n' "${e%%:*}" "$f" "$b" "$h" "${e#*:}" "$f"
+      done <<< "$rows"
     done
   } > MANIFEST.tsv.tmp
   mv MANIFEST.tsv.tmp MANIFEST.tsv
