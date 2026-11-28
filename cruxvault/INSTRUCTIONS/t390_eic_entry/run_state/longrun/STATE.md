@@ -26,7 +26,7 @@ Exploratory, open. First measured result delivered 2026-11-22: ladder probe on 3
 Handoff: cruxvault/INSTRUCTIONS/t370_recipe/run_state/HANDOFF_CLOSEOUT.md on origin/exp/t370-minicandi-recipe. Never resubmit any job it lists.
 - Avocado chain, Fir: genome 6291946_[14-22] 3 PENDING at 14:10 UTC 2026-11-28, then predict 6291947, bigwig 6291948. On 6291948 done: score the Avocado bigwigs on the 45 validation experiments beside miniCANDI. Fallback if JobArrayTaskLimit with none running: scontrol update JobId=6291946 ArrayTaskThrottle=13 (PI-approved). Watch: scratchpad/avocado_watch.sh.
 - Nibi rebuild ENDED 2026-11-28 14:10: 44 COMPLETED, 7 FAILED testbed check only (D19: base rows usable; t398 open). 61 experiments, 468 dirs, 102 GB on Nibi /scratch/mforooz/onion/measurements.
-- Blind prediction on Nibi (D20): frozen tables eic_v1_2 hold no EIC blind target; an agent builds tables eic_v1_3 (superset), a blind eval set and FREEZE.md on Nibi, plus probe and array sbatch lines (not submitted). Then: chr21 cost probe, price, submit line to the foreman for the PI's yes.
+- Blind prediction on Nibi (D20, D21): kit and run copied (hashes equal). Tables build 28952322 (eic_v1_2_blind) running; then post_build.py (eicx_blind/), FREEZE.md, chr21 probe, price, submit line to the foreman. Open PI ask via foreman: blind inputs training+validation (A, recommended) vs training only (B) vs both.
 
 ## Next
 - DONE 2026-11-25: all 45 validation experiments scored (commit 6714498a, cruxvault/results/t390/val_boards_final45/BOARDS.md). Depth cap (primary) 1 of 11, mean combined rank 3.22; averaged then capped 1 of 11, 3.20; raw 2 of 11, 4.31. Spend 66.73 of 80 CPU-h (sacct eicx_, 537 jobs). No job queued; watchers stopped.

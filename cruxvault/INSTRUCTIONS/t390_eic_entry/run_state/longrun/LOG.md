@@ -105,3 +105,5 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-28T12:25Z glossary: blocked reply with cromwell, pr1, pr2, thinned
 - 2026-11-28T12:27Z glossary: blocked reply with 28737239_501, thinned
 - 2026-11-28T14:14Z 14:10 UTC: Nibi retest ended: 44 COMPLETED, 7 FAILED (testbed check only). 61 experiments rebuilt (468 dirs, 102 GB); 54 are not in tables eic_v1_2, which hold no EIC blind target. D20: predict on Nibi via a superset tables build.
+- 2026-11-28T14:15Z glossary: blocked reply with checksum, d20, superset
+- 2026-11-28T15:03Z kit RCP9 and run seed0 copied to Nibi, hashes equal Fir (kit 6ad8e9ff, run 4afdffa8, ckpt b3bb7b6c). Blind build list 557 rows (62 blind base rows). Build job 28952322 submitted on Nibi. Inputs question (training only vs training plus validation, ruling 21) goes to the PI.
