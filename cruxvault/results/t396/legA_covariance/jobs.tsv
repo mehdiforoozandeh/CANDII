@@ -1,0 +1,9 @@
+job_id	name	depends_on	resources	projected_cpu_h	output
+6771323	sc_calib_probe_fit seed0 3 targets	none	4 cpu 16000M 02:00:00	0.03 measured	/project/def-maxwl/mforooz/t396/legA_covariance/probe/fit_seed0_probe.npz
+6771324	sc_calib_probe_score seed0 3 targets	afterok:6771323	4 cpu 16000M 01:00:00	0.02 measured	/project/def-maxwl/mforooz/t396/legA_covariance/probe/records_seed0_probe.jsonl
+6773698	sc_calib_fit_s0 seed0 43 targets	none	2 cpu 8000M 03:00:00	0.4	/project/def-maxwl/mforooz/t396/legA_covariance/records/fit_seed0.npz
+6773699	sc_calib_score_s0 seed0 43 targets	afterok:6773698	2 cpu 8000M 01:30:00	0.3	/project/def-maxwl/mforooz/t396/legA_covariance/records/records_seed0.jsonl
+6773702	sc_calib_fit_s1 seed1 43 targets	none	2 cpu 8000M 03:00:00	0.4	/project/def-maxwl/mforooz/t396/legA_covariance/records/fit_seed1.npz
+6773703	sc_calib_score_s1 seed1 43 targets	afterok:6773702	2 cpu 8000M 01:30:00	0.3	/project/def-maxwl/mforooz/t396/legA_covariance/records/records_seed1.jsonl
+6773706	sc_calib_fit_s2 seed2 43 targets	none	2 cpu 8000M 03:00:00	0.4	/project/def-maxwl/mforooz/t396/legA_covariance/records/fit_seed2.npz
+6773707	sc_calib_score_s2 seed2 43 targets	afterok:6773706	2 cpu 8000M 01:30:00	0.3	/project/def-maxwl/mforooz/t396/legA_covariance/records/records_seed2.jsonl
