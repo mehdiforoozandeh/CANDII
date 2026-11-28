@@ -99,3 +99,7 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-27T22:15Z glossary: blocked reply with t357
 - 2026-11-28T01:40Z glossary: blocked reply with mergeable
 - 2026-11-28T01:42Z run memory moved to cruxvault/INSTRUCTIONS/t390_eic_entry/run_state/longrun; .longrun is a worktree-local symlink (foreman request, PR 64)
+- 2026-11-28T01:43Z glossary: blocked reply with reinject
+- 2026-11-28T11:52Z watcher exited tunnel-down 11:51 UTC 2026-11-28; last read 10:03: Avocado chain fir still 3 PENDING; Nibi blind retest 43 COMPLETED, 7 FAILED, 1 RUNNING (unchanged since 03:47 at least)
+- 2026-11-28T12:25Z 12:30 UTC 2026-11-28: Nibi blind retest verdict: Cromwell crash did not recur. 43 COMPLETED, 1 RUNNING (28737239_501, 31 h of 3 d), 7 FAILED (28737212_512/532/545/549/553/557, 28737239_556) all at the verify step only: pr1/pr2 halves of testbed depth-thinned views exceed base, testbed nodedup halves below base. All 20 (14 for DNase) output folders exist under Nibi /scratch/mforooz/onion/measurements. oom_kill 0. Watch restarted.
+- 2026-11-28T12:25Z glossary: blocked reply with cromwell, pr1, pr2, thinned
