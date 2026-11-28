@@ -1,0 +1,2 @@
+job_id	job_name	cluster	kit	command	submitted_utc
+6726827	sc_untar	fir	SC12a	dedup_1bp.sh untar	2026-11-28T00:07:24Z
