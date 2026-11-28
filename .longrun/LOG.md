@@ -21,3 +21,5 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-28T00:49Z 1 bp: dedup is per replicate (ENCSR956CTX both reps exact; pooled 2.6% repeats); 5 more jobs 6733480-84
 - 2026-11-28T00:55Z wave 1 complete (C5 merged); f158 on h61 against; census: SE pairs 20 from 2 experiments
 - 2026-11-28T01:11Z C10b merged; cap arrays 6737535 6737536
+- 2026-11-28T02:30Z glossary: blocked reply with c10c, handback
+- 2026-11-28T03:34Z C10c merged: start cap beats count law (1.35, CI 0.29-3.41) but neither explains dedup on 43 val pairs (cap gap -0.56); h58 mixed

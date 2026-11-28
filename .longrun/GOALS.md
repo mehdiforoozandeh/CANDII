@@ -48,7 +48,7 @@ Provenance: PI doc, PI, agent proposal approved.
 | R40 | P0 | start the longrun, iteration 1 onward | D6 | PI | done | 2026-11-27 kickoff |
 | R41 | P1 | it.1: leg B deconvolution, three score spaces, pseudoreplicate floors | B s3 | agent proposal approved (D6) | open | |
 | R42 | P1 | it.1: covariance term in the start-to-count conversion | B s3 | agent proposal approved (D6) | open | |
-| R43 | P1 | it.1: closed-form dedup cap, start vs count space, 312 view pairs | B s3 | agent proposal approved (D6) | open | |
+| R43 | P1 | it.1: closed-form dedup cap, start vs count space, 312 view pairs | B s3 | agent proposal approved (D6) | done | results/t396/dedup_cap/DEDUP_CAP.md: cap beats count law (diff 1.35, CI 0.29-3.41) but gap closed -0.56 on 43 val pairs; no law explains except DNase |
 | R44 | P1 | it.1: SE/PE cap plus fragment kernel on PE/SE views | B s3 | agent proposal approved (D6) | open | |
 | R45 | P2 | it.1: does log2_depth count PE mates twice | B s3 | agent proposal approved (D6) | done | f158: counts and depth both count mates; results/t396/pe_depth/PE_DEPTH.md |
 | R46 | P1 | it.2: 2x2 arms with kernel head | B s3, D3 | PI | open | |
