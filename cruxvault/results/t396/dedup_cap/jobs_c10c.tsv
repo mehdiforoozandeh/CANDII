@@ -2,4 +2,6 @@ job_id	kind	array	cpus	mem	time	kit	out	note
 6743006	fit probe	35	1	4000M	03:00:00	SC10c	/project/def-maxwl/mforooz/t396/dedup_cap	chipseq-control: COMPLETED 43:57 wall, 41 CPU-min, MaxRSS 414 MB
 6743022	floor-count probe	28	2	8000M	03:00:00	SC10c	/scratch/mforooz/sc396/caps/probe_dedup_floor	largest val pair, placeholder fit: COMPLETED 3:16 wall, MaxRSS 2.47 GB
 6743460	score probe	6	1	4000M	03:00:00	SC10c	/scratch/mforooz/sc396/caps/probe_dedup_score	heaviest 30-pair group, placeholder fit: COMPLETED 3:44 wall, MaxRSS 402 MB
-6749920	fit	0-34,36%20	1	4000M	05:00:00	SC10c	/project/def-maxwl/mforooz/t396/dedup_cap	remaining 35 assays + all/all point fit; submitted 2026-11-28
+6749920	fit	0-34,36%20	1	4000M	05:00:00	SC10c	/project/def-maxwl/mforooz/t396/dedup_cap	remaining 35 assays + all/all point fit; 36/36 COMPLETED; merge-fit on login node -> per_assay.tsv (88 rows)
+6756694	floor-count	0-10 (GROUP=4, 43 val pairs)	2	8000M	01:00:00	SC10c	/scratch/mforooz/sc396/caps/dedup_floor	slurm/t396/dedup_cap.sh floor-count, FIT=per_assay.tsv; submitted 2026-11-28
+6756695	score	0-11 (GROUP=30, 355 pairs)	1	4000M	01:00:00	SC10c	/project/def-maxwl/mforooz/t396/dedup_cap	fir_job.sh score, afterok:6756694; submitted 2026-11-28
