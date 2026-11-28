@@ -1,0 +1,3 @@
+job_id	kind	array	group	cpus	mem	time	kit	unit_rule	out	logs	submitted_utc	probe_measure
+6736415	probe	201	1	2	8000M	03:00:00	/project/def-maxwl/mforooz/onion_kit/SC10b	/project/def-maxwl/mforooz/onion_kit/SC10b/cruxvault/results/t396/dedup_1bp/UNIT_RULE.json	/scratch/mforooz/sc396/caps/probe_dedup	/scratch/mforooz/sc396/logs	2026-11-28	ENCSR477RTP (largest reads_off, 314M): wall 131 s, TotalCPU 23.5 s, MaxRSS 1.83 GB, COMPLETED
+6737535	stats	0-11%12	30	1	4000M	01:00:00	/project/def-maxwl/mforooz/onion_kit/SC10b	/project/def-maxwl/mforooz/onion_kit/SC10b/cruxvault/results/t396/dedup_1bp/UNIT_RULE.json	/scratch/mforooz/sc396/caps/dedup	/scratch/mforooz/sc396/logs	2026-11-28	355 pairs, 30 per task
