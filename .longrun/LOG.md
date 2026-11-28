@@ -26,3 +26,5 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-28T03:34Z glossary: blocked reply with bootstrap
 - 2026-11-28T03:34Z glossary: admitted 'bootstrap' (English word, Zipf 2.9)
 - 2026-11-28T07:08Z C15 merged: leg A calibration gap was a conversion artifact; covariance term 1.258->1.032 vs ref 1.064
+- 2026-11-28T07:09Z glossary: blocked reply with scorable
+- 2026-11-28T07:09Z C14 merged: leg B start-space test void (deconvolution gate failed); ref leads in count and 1 kb; D17
