@@ -1,0 +1,21 @@
+law	space	parent_run_type	run_type	in_eic	scope	gap_closed_vs_depth_scaling	gap_closed_vs_identity	attainable_floor	bootstrap_spread	bootstrap_lo	bootstrap_hi	n_pairs	n_experiments	deviance_law	deviance_depth_scaling	deviance_identity	explains	beats_other_law
+count_saturation	count	mixed		all	genome	-3.33751	-0.0228392	5.08629e+08	25.2727	-14.8811	10.3917	9	9	8.21081e+08	5.80664e+08	8.14104e+08	no	no
+thinned_dm_distinct	start	mixed		all	genome	-0.552133	0.0877302	3.38099e+08	13.4716	-6.66997	6.80158	9	9	4.82722e+08	4.31276e+08	4.9663e+08	no	no
+count_saturation	count	mixed		all	top1pct	-2.21723	0.374794	5.54073e+06	10.7308	-11.1606	-0.429755	9	9	2.68534e+07	1.21653e+07	3.96298e+07	no	no
+thinned_dm_distinct	start	mixed		all	top1pct	3.12666	0.520949	1.37824e+07	39.9114	-14.2593	25.6521	9	9	1.79381e+07	1.18283e+07	2.24572e+07	yes	no
+count_saturation	count	mixed		train	genome	3.54925	0.288608	4.56392e+08	29.432	-7.67771	21.7543	8	8	5.84928e+08	4.05971e+08	6.37074e+08	yes	no
+thinned_dm_distinct	start	mixed		train	genome	-2.19773	0.264603	3.07354e+08	59.3136	-29.5916	29.722	8	8	3.68597e+08	3.26506e+08	3.90633e+08	no	no
+count_saturation	count	mixed		train	top1pct	-5.49459	0.367704	4.93024e+06	14.1988	-16.431	-2.23227	8	8	2.31269e+07	7.73205e+06	3.37089e+07	no	no
+thinned_dm_distinct	start	mixed		train	top1pct	2.22994	0.569191	1.23081e+07	4.11073	0.984958	5.09569	8	8	1.55712e+07	9.65504e+06	1.98824e+07	yes	yes
+count_saturation	count	mixed		val	genome	-0.501905	-0.473765	5.22365e+07	0	-0.501905	-0.501905	1	1	2.36154e+08	1.74692e+08	1.77031e+08	no	no
+thinned_dm_distinct	start	mixed		val	genome	-0.12638	-0.108007	3.07451e+07	0	-0.12638	-0.12638	1	1	1.14125e+08	1.0477e+08	1.05997e+08	no	yes
+count_saturation	count	mixed		val	top1pct	0.184866	0.413216	610494	0	0.184866	0.184866	1	1	3.72654e+06	4.43323e+06	5.92087e+06	no	yes
+thinned_dm_distinct	start	mixed		val	top1pct	-0.277048	0.188918	1.47429e+06	0	-0.277048	-0.277048	1	1	2.36689e+06	2.17325e+06	2.5748e+06	no	no
+count_saturation	count	paired-ended		all	genome	-0.0511519	0.876116	5.8097e+08	0.153912	-0.13919	0.0147214	12	12	7.60293e+08	7.51567e+08	2.02848e+09	no	no
+thinned_dm_distinct	start	paired-ended		all	genome	-0.00332943	0.663301	4.50408e+08	0.0839448	-0.0540974	0.0298474	12	12	6.23858e+08	6.23283e+08	9.65556e+08	no	no
+count_saturation	count	paired-ended		all	top1pct	-0.117108	0.94111	6.82886e+06	0.924435	-0.442782	0.481653	12	12	2.29813e+07	2.1288e+07	2.8111e+08	no	no
+thinned_dm_distinct	start	paired-ended		all	top1pct	0.365394	0.957533	1.72109e+07	0.621795	-0.0734688	0.548327	12	12	2.08085e+07	2.28799e+07	1.01925e+08	no	no
+count_saturation	count	paired-ended		train	genome	-0.0511519	0.876116	5.8097e+08	0.150637	-0.133482	0.0171549	12	12	7.60293e+08	7.51567e+08	2.02848e+09	no	no
+thinned_dm_distinct	start	paired-ended		train	genome	-0.00332943	0.663301	4.50408e+08	0.0836555	-0.0538766	0.029779	12	12	6.23858e+08	6.23283e+08	9.65556e+08	no	no
+count_saturation	count	paired-ended		train	top1pct	-0.117108	0.94111	6.82886e+06	0.914261	-0.437357	0.476905	12	12	2.29813e+07	2.1288e+07	2.8111e+08	no	no
+thinned_dm_distinct	start	paired-ended		train	top1pct	0.365394	0.957533	1.72109e+07	0.625348	-0.0760805	0.549267	12	12	2.08085e+07	2.28799e+07	1.01925e+08	no	no

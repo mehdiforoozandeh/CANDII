@@ -1,0 +1,5 @@
+job_id	kind	array	group	cpus	mem	time	kit	out	submitted_utc	probe_measure
+6742771	fit	-	21	2	8000M	01:00:00	/project/def-maxwl/mforooz/onion_kit/SC10b	/project/def-maxwl/mforooz/t396/sepe_cap/per_assay.tsv	2026-11-28	wall 232 s, MaxRSS 0.12 GB, COMPLETED
+6744223	floor-count probe	10	1	2	8000M	01:00:00	/project/def-maxwl/mforooz/onion_kit/SC10b	/scratch/mforooz/sc396/caps/sepe_floor	2026-11-28	ENCSR113MBR (largest parent, 134M reads): wall 147 s, MaxRSS 2.34 GB, COMPLETED
+6745574	floor-count	0-10%12	2	2	8000M	00:30:00	/project/def-maxwl/mforooz/onion_kit/SC10b	/scratch/mforooz/sc396/caps/sepe_floor	2026-11-28	11 tasks COMPLETED, 198-405 s each; 21 npz
+6747271	score	-	21	2	8000M	01:00:00	/project/def-maxwl/mforooz/onion_kit/SC10b	/project/def-maxwl/mforooz/t396/sepe_cap	2026-11-28	wall 60 s, MaxRSS 0.13 GB, COMPLETED
