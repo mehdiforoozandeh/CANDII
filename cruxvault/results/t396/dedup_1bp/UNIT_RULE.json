@@ -1,0 +1,8 @@
+{
+ "dedup_unit": "replicate",
+ "max_share_absent": 0.0,
+ "n_experiments": 6,
+ "n_multi_unit_experiments": 3,
+ "on_equals_distinct_off": true,
+ "tol": 0.001
+}

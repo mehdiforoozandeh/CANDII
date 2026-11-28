@@ -1,0 +1,65 @@
+{
+ "K_25bp": 25.0,
+ "dirichlet_a_1bp": 0.005412278004849603,
+ "dirichlet_a_25bp_caps_fit_shape": 0.006601200722357059,
+ "experiment": "ENCSR928HYM",
+ "hist_off_reads_per_position": {
+  "1": 5844546,
+  "2": 2226056,
+  "3": 650500,
+  "4": 154258,
+  "5": 31110,
+  "6": 5535,
+  "7": 926,
+  "8": 157,
+  "9": 54,
+  "10": 12,
+  "11": 6,
+  "12": 7,
+  "13": 6,
+  "16": 2,
+  "22": 1,
+  "27": 1,
+  "31": 1
+ },
+ "label": "br1",
+ "n_on_reads_outside_off_bins": 0,
+ "n_strand_bins_with_off_reads": 8475915,
+ "n_top_strand_bins": 2470617,
+ "n_units": 1,
+ "off": [
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR928HYM/br1.uniform/nodedup/pr1.tagAlign.gz",
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR928HYM/br1.uniform/nodedup/pr2.tagAlign.gz"
+ ],
+ "on": [
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR928HYM/br1.uniform/base/pr1.tagAlign.gz",
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR928HYM/br1.uniform/base/pr2.tagAlign.gz"
+ ],
+ "top1pct": {
+  "dm_distinct_a_1bp": {
+   "deviance_distinct_off": 288703.9991915852,
+   "deviance_on": 288703.9991915852,
+   "rel_err_vs_distinct_off": -0.010423731318498941,
+   "rel_err_vs_on": -0.010423731318498941,
+   "sum_pred": 2829407.3527531032
+  },
+  "dm_distinct_a_25bp": {
+   "deviance_distinct_off": 285184.8092341632,
+   "deviance_on": 285184.8092341632,
+   "rel_err_vs_distinct_off": 0.013620203506588435,
+   "rel_err_vs_on": 0.013620203506588435,
+   "sum_pred": 2898154.0356882764
+  },
+  "occupancy": {
+   "deviance_distinct_off": 2490287.3122910326,
+   "deviance_on": 2490287.3122910326,
+   "rel_err_vs_distinct_off": 1.144349469115486,
+   "rel_err_vs_on": 1.144349469115486,
+   "sum_pred": 6131147.5899391575
+  },
+  "sum_distinct_off": 2859211,
+  "sum_off": 6366866,
+  "sum_on": 2859211
+ },
+ "top_denominator": "genome_strand_bins"
+}

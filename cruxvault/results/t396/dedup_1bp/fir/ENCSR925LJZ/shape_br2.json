@@ -1,0 +1,65 @@
+{
+ "K_25bp": 25.0,
+ "dirichlet_a_1bp": 0.015965853010564822,
+ "dirichlet_a_25bp_caps_fit_shape": 0.017084872576963697,
+ "experiment": "ENCSR925LJZ",
+ "hist_off_reads_per_position": {
+  "1": 9949999,
+  "2": 1042050,
+  "3": 93998,
+  "4": 7781,
+  "5": 727,
+  "6": 148,
+  "7": 71,
+  "8": 33,
+  "9": 33,
+  "10": 20,
+  "11": 11,
+  "12": 10,
+  "13": 5,
+  "14": 2,
+  "15": 3,
+  "16": 1,
+  "18": 1
+ },
+ "label": "br2",
+ "n_on_reads_outside_off_bins": 0,
+ "n_strand_bins_with_off_reads": 10660244,
+ "n_top_strand_bins": 2470617,
+ "n_units": 1,
+ "off": [
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR925LJZ/br2.uniform/nodedup/pr1.tagAlign.gz",
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR925LJZ/br2.uniform/nodedup/pr2.tagAlign.gz"
+ ],
+ "on": [
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR925LJZ/br2.uniform/base/pr1.tagAlign.gz",
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR925LJZ/br2.uniform/base/pr2.tagAlign.gz"
+ ],
+ "top1pct": {
+  "dm_distinct_a_1bp": {
+   "deviance_distinct_off": 230441.50846044903,
+   "deviance_on": 230441.50846044903,
+   "rel_err_vs_distinct_off": 0.00010457617528225605,
+   "rel_err_vs_on": 0.00010457617528225605,
+   "sum_pred": 2905569.8216064577
+  },
+  "dm_distinct_a_25bp": {
+   "deviance_distinct_off": 230188.36878570536,
+   "deviance_on": 230188.36878570536,
+   "rel_err_vs_distinct_off": 0.0075542482113339915,
+   "rel_err_vs_on": 0.0075542482113339915,
+   "sum_pred": 2927213.1004839493
+  },
+  "occupancy": {
+   "deviance_distinct_off": 750840.3409512052,
+   "deviance_on": 750840.3409512052,
+   "rel_err_vs_distinct_off": 0.40543065409078394,
+   "rel_err_vs_on": 0.40543065409078394,
+   "sum_pred": 4083149.8946877155
+  },
+  "sum_distinct_off": 2905266,
+  "sum_off": 4163784,
+  "sum_on": 2905266
+ },
+ "top_denominator": "genome_strand_bins"
+}

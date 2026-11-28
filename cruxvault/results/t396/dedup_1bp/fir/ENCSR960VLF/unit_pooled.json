@@ -1,0 +1,23 @@
+{
+ "experiment": "ENCSR960VLF",
+ "label": "pooled",
+ "n_off_absent_from_on": 0,
+ "n_off_distinct": 24977738,
+ "n_off_lines": 25193244,
+ "n_on_absent_from_off": 0,
+ "n_on_distinct": 24977738,
+ "n_on_lines": 24977738,
+ "n_units": 1,
+ "off": [
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR960VLF/pooled.uniform/nodedup/pr1.tagAlign.gz",
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR960VLF/pooled.uniform/nodedup/pr2.tagAlign.gz"
+ ],
+ "on": [
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR960VLF/pooled.uniform/base/pr1.tagAlign.gz",
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR960VLF/pooled.uniform/base/pr2.tagAlign.gz"
+ ],
+ "share_off_absent_from_on": 0.0,
+ "share_off_duplicate_lines": 0.008554118715319076,
+ "share_on_absent_from_off": 0.0,
+ "share_on_repeated_lines": 0.0
+}

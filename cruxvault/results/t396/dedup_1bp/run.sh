@@ -8,37 +8,55 @@ JOB_IDS="6727806 6729250 6733480 6733481 6733482 6733483 6733484"   # sc_1bp job
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../../../.." && pwd)"
+N_FULL_BUILD=2811                                      # measurement folders of the read-start store /scratch/mforooz/rs392/store
 cd "$HERE"
 PY="$(command -v python3 || command -v python)"
 
 # 1. pull the per-unit jsons (small) from Fir
 if [ ! -f fir/.pulled ]; then
   mkdir -p fir
-  rsync -a -e 'ssh -o BatchMode=yes' --include='*/' --include='unit_*.json' --include='shape_*.json' \
+  rsync -a --prune-empty-dirs -e 'ssh -o BatchMode=yes' --include='*/' --include='unit_*.json' --include='shape_*.json' \
     --exclude='*' "fir:$FIR_OUT/" fir/
   touch fir/.pulled
 fi
 
-# 2. measured cost of the sc_1bp jobs (sacct)
+# 2. measured cost of the sc_1bp jobs (sacct), and the cost of a full 1 bp build
+#    full build = mean (and median) CPU-h per experiment over the COMPLETED jobs x N_FULL_BUILD
 if [ ! -f cost.tsv ]; then
   ids="$(echo $JOB_IDS | tr ' ' ',')"
-  { printf 'job_id\tjob_name\texperiment_or_array_task\tstate\telapsed_s\ttotal_cpu_s\tmax_rss\talloc_cpus\n'
-    ssh -o BatchMode=yes fir "sacct -n -P -j $ids -o JobID,JobName,State,ElapsedRaw,TotalCPU,MaxRSS,AllocCPUS" 2>/dev/null \
-      | awk -F'|' '$1 ~ /\.batch$/ {print}' \
-      | "$PY" -c '
-import sys
+  ssh -o BatchMode=yes fir "sacct -n -P -j $ids -o JobID,State,ElapsedRaw,TotalCPU,MaxRSS,AllocCPUS" 2>/dev/null \
+    | awk -F'|' '$1 ~ /\.batch$/' > cost.sacct.tmp
+  "$PY" - "$N_FULL_BUILD" <<'EOF2'
+import statistics, sys
+n_full = int(sys.argv[1])
 def secs(t):
     d = 0
     if "-" in t: d, t = t.split("-"); d = int(d)
     p = [float(x) for x in t.split(":")]
     while len(p) < 3: p.insert(0, 0.0)
     return d * 86400 + p[0] * 3600 + p[1] * 60 + p[2]
-for line in sys.stdin:
-    j, n, s, e, c, r, a = line.rstrip("\n").split("|")
-    print("\t".join([j.split(".")[0], "sc_1bp", j.split(".")[0], s, e, "%.0f" % secs(c), r, a]))
-'
-  } > cost.tsv.tmp
-  mv cost.tsv.tmp cost.tsv
+exp = {}
+for line in open("jobs.tsv"):
+    f = line.rstrip("\n").split("\t")
+    if len(f) > 4 and "EXP=" in f[4]:
+        exp[f[0]] = f[4].split("EXP=")[1].split()[0]
+cols = ["row_type", "job_id", "experiment", "state", "elapsed_s", "total_cpu_s", "cpu_h", "max_rss_kb", "alloc_cpus"]
+rows, done = [], []
+for line in open("cost.sacct.tmp"):
+    j, st, el, cpu, rss, nc = line.rstrip("\n").split("|")
+    j = j.split(".")[0]; c = secs(cpu)
+    rows.append(["job", j, exp.get(j, ""), st, el, "%.0f" % c, "%.4f" % (c / 3600), rss.rstrip("K"), nc])
+    if st == "COMPLETED": done.append(c / 3600)
+mean, med = statistics.mean(done), statistics.median(done)
+rows.append(["mean_cpu_h_per_experiment", "", "%d completed" % len(done), "", "", "", "%.4f" % mean, "", ""])
+rows.append(["median_cpu_h_per_experiment", "", "%d completed" % len(done), "", "", "", "%.4f" % med, "", ""])
+rows.append(["full_build_cpu_h_mean_x%d" % n_full, "", "", "", "", "", "%.1f" % (mean * n_full), "", ""])
+rows.append(["full_build_cpu_h_median_x%d" % n_full, "", "", "", "", "", "%.1f" % (med * n_full), "", ""])
+with open("cost.tsv", "w") as f:
+    f.write("\t".join(cols) + "\n")
+    for r in rows: f.write("\t".join(r) + "\n")
+EOF2
+  rm -f cost.sacct.tmp
 fi
 
 # 3. the unit rule (dedup_1bp.py rule, C12a)

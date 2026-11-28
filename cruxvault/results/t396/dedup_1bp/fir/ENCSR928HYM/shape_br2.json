@@ -1,0 +1,74 @@
+{
+ "K_25bp": 25.0,
+ "dirichlet_a_1bp": 0.787285159587106,
+ "dirichlet_a_25bp_caps_fit_shape": 1.5512913366553884,
+ "experiment": "ENCSR928HYM",
+ "hist_off_reads_per_position": {
+  "1": 9613717,
+  "2": 237319,
+  "3": 10336,
+  "4": 741,
+  "5": 111,
+  "6": 37,
+  "7": 26,
+  "8": 15,
+  "9": 13,
+  "10": 14,
+  "11": 9,
+  "12": 5,
+  "13": 4,
+  "14": 3,
+  "15": 1,
+  "16": 2,
+  "17": 2,
+  "18": 1,
+  "19": 2,
+  "20": 2,
+  "21": 3,
+  "22": 1,
+  "23": 1,
+  "28": 1,
+  "29": 1,
+  "62": 1
+ },
+ "label": "br2",
+ "n_on_reads_outside_off_bins": 0,
+ "n_strand_bins_with_off_reads": 8401526,
+ "n_top_strand_bins": 2470617,
+ "n_units": 1,
+ "off": [
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR928HYM/br2.uniform/nodedup/pr1.tagAlign.gz",
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR928HYM/br2.uniform/nodedup/pr2.tagAlign.gz"
+ ],
+ "on": [
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR928HYM/br2.uniform/base/pr1.tagAlign.gz",
+  "/scratch/mforooz/sc396/work/onion/work/ENCSR928HYM/br2.uniform/base/pr2.tagAlign.gz"
+ ],
+ "top1pct": {
+  "dm_distinct_a_1bp": {
+   "deviance_distinct_off": 99452.62792441042,
+   "deviance_on": 99452.62792441042,
+   "rel_err_vs_distinct_off": 0.0012883159198984195,
+   "rel_err_vs_on": 0.0012883159198984195,
+   "sum_pred": 3936523.9612181275
+  },
+  "dm_distinct_a_25bp": {
+   "deviance_distinct_off": 97446.6084112375,
+   "deviance_on": 97446.6084112375,
+   "rel_err_vs_distinct_off": 0.016251334981406407,
+   "rel_err_vs_on": 0.016251334981406407,
+   "sum_pred": 3995350.457174665
+  },
+  "occupancy": {
+   "deviance_distinct_off": 100175.29387425436,
+   "deviance_on": 100175.29387425436,
+   "rel_err_vs_distinct_off": 0.033647248144195174,
+   "rel_err_vs_on": 0.033647248144195174,
+   "sum_pred": 4063741.776541729
+  },
+  "sum_distinct_off": 3931459,
+  "sum_off": 4193411,
+  "sum_on": 3931459
+ },
+ "top_denominator": "genome_strand_bins"
+}
