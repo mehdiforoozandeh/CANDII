@@ -11,7 +11,8 @@ No deadline, no cap (D13). Target: iteration 1 measured result by 2026-11-30; la
 - Branch exp/start-vs-count-dedup, draft PR 68 (base exp/t370-minicandi-recipe).
 
 - Fir 6726827 sc_untar: 6 train experiments' tagAligns from tar 005 -> /scratch/mforooz/sc396/work (for the 1 bp dedup test).
-- Merged: C1 C2 C3 C4 C12a. Waiting: C5 builder, C6 reviewer.
+- Merged: C1 C2 C3 C4 C6 C12a (sc_untar 6726827 COMPLETED). C5 (audits, golden) still running.
+- Wave 2 running: C7a dump submit, C8 scoring tool, C9 leg A tool, C10a cap test tools, C12b 1 bp run + unit rule, C13 kernel head (iteration 2 prep).
 
 ## Next
 1. Planner writes the iteration 1 chunks (leg B deconvolution + 3 score spaces; covariance conversion; dedup cap test; SE/PE cap test; PE depth check).

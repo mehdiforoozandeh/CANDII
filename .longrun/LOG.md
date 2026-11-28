@@ -12,3 +12,4 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-27T23:53Z plan review done: 6 factual errors + unsound dedup floor; planner amending once
 - 2026-11-27T23:59Z wave 1 spawned: 7 opus builders from dadf6b59
 - 2026-11-28T00:07Z wave 1: C1 C2 C3 C4 C12a merged; Fir job 6726827 sc_untar pending
+- 2026-11-28T00:10Z wave 2 spawned: C7a C8 C9 C10a C12b C13
