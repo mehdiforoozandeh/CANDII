@@ -34,3 +34,5 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-28T12:06Z iteration 2 planner (fable) launched: factorial + controlled SE/PE and dedup pairs (D18); plan file .orchestrate/plan_it2.md
 - 2026-11-28T12:06Z glossary: blocked reply with lagged
 - 2026-11-28T12:16Z it2 plan written (17 chunks, 8 waves); D19-D23 logged; cold review running
+- 2026-11-28T12:16Z glossary: blocked reply with d19, d23, h100
+- 2026-11-28T12:21Z it2 plan review: 4 factual errors, fairness holes (one-sided calibration, gate e hash, lr grid edge); D24 supersedes D23; planner amending
