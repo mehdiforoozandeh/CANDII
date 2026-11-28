@@ -158,24 +158,26 @@ def test_pe_depth_cli_writes_files(world, tmp_path):
     assert head == au.ROW_COLS
 
 
-def test_count_names_strips_mate_suffix():
-    bedpe = ["chr1\t1\t37\tr1\t1000\t+", "chr1\t90\t126\tr1\t1000\t-",
-             "chr1\t5\t41\tr2\t1000\t+", "chr1\t50\t86\tr2\t1000\t-"]
-    assert au.count_names(bedpe) == (4, 2)
-    plain = ["chr1\t1\t37\tr1/1\t1000\t+", "chr1\t90\t126\tr1/2\t1000\t-",
-             "chr1\t5\t41\tr2/1\t1000\t+"]
-    assert au.count_names(plain) == (3, 2)
+def test_count_mate_pairs():
+    bedpe = ["chr1\t1\t37\tN\t1000\t+", "chr1\t90\t126\tN\t1000\t-",
+             "chr1\t5\t41\tN\t1000\t+", "chr1\t50\t86\tN\t1000\t-"]
+    assert au.count_mate_pairs(bedpe) == (4, 2)
+    se = ["chr1\t1\t37\tN\t1000\t+", "chr1\t90\t126\tN\t1000\t+",      # same strand
+          "chr1\t5\t41\tN\t1000\t+", "chr2\t50\t86\tN\t1000\t-",       # other chrom
+          "chr1\t5\t41\tN\t1000\t+", "chr1\t5000\t5036\tN\t1000\t-",   # too far
+          "chr1\t5\t41\tN\t1000\t+"]
+    assert au.count_mate_pairs(se) == (7, 0)
 
 
 def test_stream_counts_from_tar(tmp_path):
-    lines = "".join(f"chr1\t{i}\t{i + 36}\tr{i // 2}\t1000\t{'+-'[i % 2]}\n" for i in range(10))
+    lines = "".join(f"chr1\t{i}\t{i + 36}\tN\t1000\t{'+-'[i % 2]}\n" for i in range(11))
     gz = gzip.compress(lines.encode())
     tar = tmp_path / "t.tar"
     with tarfile.open(tar, "w") as tf:
         ti = tarfile.TarInfo("onion/work/E1/pr1.tagAlign.gz")
         ti.size = len(gz)
         tf.addfile(ti, io.BytesIO(gz))
-    assert au._stream_counts(tar, "onion/work/E1/pr1.tagAlign.gz", str(tmp_path)) == (10, 5)
+    assert au._stream_counts(tar, "onion/work/E1/pr1.tagAlign.gz", str(tmp_path)) == (11, 5)
 
 
 def test_member_index_and_pick(world, tmp_path):

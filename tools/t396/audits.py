@@ -12,9 +12,9 @@ counts, the total overlap count of chr1 from the read-count store (`counts_path`
 `blind` keep their table columns; no store file of theirs is read. Writes `rows.tsv`,
 `summary.tsv` (per run type) and `listed_rows.tsv` (the rows named in the h61 audit).
 
-tag-fragments (h61): counts lines and distinct read names (a trailing /1 or /2 removed) in the
-pr1 tagAlign of a few PE, mixed and SE rows, streamed out of the tagAlign tars. Both mates of a
-fragment carry one name, so distinct names = fragments. Writes `tag_fragments.tsv`.
+tag-fragments (h61): counts lines and adjacent mate pairs (`count_mate_pairs`) in the pr1 tagAlign
+of a few PE, mixed and SE rows, streamed out of the tagAlign tars (the name column is "N", so
+names cannot count fragments). Writes `tag_fragments.tsv`.
 
 pair-census (R39, decision D4): every pair of `pairs.tsv` and every correction pair of the
 evaluation set, with the covariates that differ, split, never_trained, subset_pair, store and
@@ -226,36 +226,40 @@ def cmd_pe_depth(a) -> None:
 
 # --------------------------------------------------------------------------- tag-fragments
 
-def strip_mate(name: str) -> str:
-    return name[:-2] if name.endswith(("/1", "/2")) else name
+MATE_SPAN = 2000   # bp: the widest fragment counted as one adjacent mate pair
 
 
-def count_names(lines) -> tuple[int, int]:
-    """(n_lines, n_distinct_names) of tagAlign lines (name = column 4, mate suffix removed)."""
-    n, names = 0, set()
+def count_mate_pairs(lines) -> tuple[int, int]:
+    """(n_lines, n_adjacent_mate_pairs) of tagAlign lines. Line 2k and line 2k+1 form a mate pair
+    when they share a chromosome, have opposite strands and span at most MATE_SPAN bp. The ENCODE
+    PE tagAlign (bamtobed -bedpe, split in two lines) writes both mates of a fragment this way, and
+    its name column is "N", so this count is the fragment count of such a file."""
+    n = pairs = 0
+    prev = None
     for ln in lines:
+        f = ln.rstrip("\n").split("\t")
         n += 1
-        names.add(strip_mate(ln.split("\t")[3]))
-    return n, len(names)
+        if n % 2 == 1:
+            prev = f
+            continue
+        if (f[0] == prev[0] and f[5] != prev[5]
+                and max(int(f[2]), int(prev[2])) - min(int(f[1]), int(prev[1])) <= MATE_SPAN):
+            pairs += 1
+    return n, pairs
 
 
 def _stream_counts(tar: Path, member: str, tmp: str) -> tuple[int, int]:
-    """Same as `count_names`, for a member of a tar, through tar | gzip | sort -u (bounded memory)."""
+    """Same as `count_mate_pairs`, for a gzipped member of a tar, streamed through awk."""
+    awk = ("awk -F'\\t' 'NR%2==1{c=$1;s=$2;e=$3;t=$6;next} "
+           "{lo=(s+0<$2+0)?s+0:$2+0; hi=(e+0>$3+0)?e+0:$3+0; "
+           f"if($1==c && $6!=t && hi-lo<={MATE_SPAN}) p++}} END{{print NR, p+0}}'")
     sh = (f"set -o pipefail; OCC=-q; tar --version 2>/dev/null | grep -q GNU && OCC=--occurrence=1; "
-          f"tar -xOf '{tar}' $OCC '{member}' | gzip -dc | cut -f4 "
-          f"| tee >(wc -l > '{tmp}/lines') | sed -E 's#/[12]$##' | LC_ALL=C sort -u -S 1500M "
-          f"-T '{tmp}' | wc -l")
+          f"tar -xOf '{tar}' $OCC '{member}' | gzip -dc | {awk}")
     r = subprocess.run(["bash", "-c", sh], capture_output=True, text=True, timeout=1800)
     if r.returncode != 0:
         raise RuntimeError(r.stderr[-500:])
-    distinct = int(r.stdout.split()[0])
-    import time
-    for _ in range(50):
-        t = Path(tmp, "lines").read_text().strip()
-        if t:
-            break
-        time.sleep(0.2)
-    return int(t), distinct
+    n, p = r.stdout.split()
+    return int(n), int(p)
 
 
 def member_index(members: Path) -> dict[str, str]:
@@ -313,14 +317,16 @@ def cmd_tag_fragments(a) -> None:
                 err = ""
             except Exception as e:  # noqa: BLE001 -- recorded in the table, the loop goes on
                 n, d, err = -1, -1, str(e).replace("\t", " ").replace("\n", " ")[:200]
-        res.append(dict(s, tag_lines_pr1=n, tag_distinct_names_pr1=d,
-                        tag_lines_per_name=n / d if d > 0 else float("nan"),
+        res.append(dict(s, tag_lines_pr1=n, tag_adjacent_mate_pairs_pr1=d,
+                        tag_lines_per_mate_pair=n / d if d > 0 else float("nan"),
+                        tag_fraction_lines_in_mate_pairs=2 * d / n if n > 0 else float("nan"),
                         lines_match_store=int(n == s["n_lines_store_pr1"]), error=err))
-        print(f"tag-fragments: {s['measurement_id']} lines={n} names={d}", flush=True)
+        print(f"tag-fragments: {s['measurement_id']} lines={n} mate_pairs={d}", flush=True)
     write_tsv(out / "tag_fragments.tsv", res,
               ["measurement_id", "run_type", "pipeline", "reads_per_fragment_table",
                "lines_per_fragment_store", "member", "n_lines_store_pr1", "tag_lines_pr1",
-               "tag_distinct_names_pr1", "tag_lines_per_name", "lines_match_store", "error"])
+               "tag_adjacent_mate_pairs_pr1", "tag_lines_per_mate_pair",
+               "tag_fraction_lines_in_mate_pairs", "lines_match_store", "error"])
 
 
 # --------------------------------------------------------------------------- pair-census
