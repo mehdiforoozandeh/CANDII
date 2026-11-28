@@ -1,0 +1,7 @@
+job_id	name	array	resources	projected_cpu_h
+6727795	sc_dump probe model seed0 1 target 256 regions	none	8 cpu 32000M 01:00:00	0.12 measured
+6727796	sc_dump probe truth 1 target	none	8 cpu 32000M 01:00:00	0.03 measured
+6731315	sc_dump truth 43 targets	0-3%3	8 cpu 32000M 01:00:00	1.1
+6731316	sc_dump model seed0 43 targets	0-3%3	5 cpu 20000M 06:00:00	5.2
+6731317	sc_dump model seed1 43 targets	0-3%3	5 cpu 20000M 06:00:00	5.2
+6731318	sc_dump model seed2 43 targets	0-3%3	5 cpu 20000M 06:00:00	5.2
