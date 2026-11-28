@@ -1,0 +1,953 @@
+source_file	pair_id	a	b	rung	assay	cell	knobs	nodedup	se	crop	mapq	depth	split	never_trained	subset_pair	in_evalset	both_in_count_store	halves_present	both_in_start_store	parents_in_both_stores	headline_now	widened_candidate
+pairs.tsv	pc7f766dca82e	ENCSR000APD.pooled.uniform.base	ENCSR000APD.pooled.uniform.nodedup	designed	H3K79me2	C24	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p8dced3f2af13	ENCSR000APD.pooled.uniform.depth0.125	ENCSR000APD.pooled.uniform.nodedup	designed	H3K79me2	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p08421d5e4cbe	ENCSR000APD.pooled.uniform.depth0.25	ENCSR000APD.pooled.uniform.nodedup	designed	H3K79me2	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	peb39ab4214a4	ENCSR000APD.pooled.uniform.depth0.50	ENCSR000APD.pooled.uniform.nodedup	designed	H3K79me2	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pe0bf7ca2e399	ENCSR000APD.pooled.uniform.mapq0	ENCSR000APD.pooled.uniform.nodedup	designed	H3K79me2	C24	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p98b6e2b7e1fb	ENCSR000APD.pooled.uniform.nodedup	ENCSR000APD.pooled.uniform.base	designed	H3K79me2	C24	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p756ea93b7068	ENCSR000APD.pooled.uniform.nodedup	ENCSR000APD.pooled.uniform.depth0.125	designed	H3K79me2	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	peac30ccda03a	ENCSR000APD.pooled.uniform.nodedup	ENCSR000APD.pooled.uniform.depth0.25	designed	H3K79me2	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p0483951a472b	ENCSR000APD.pooled.uniform.nodedup	ENCSR000APD.pooled.uniform.depth0.50	designed	H3K79me2	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pd0fe2fd528e0	ENCSR000APD.pooled.uniform.nodedup	ENCSR000APD.pooled.uniform.mapq0	designed	H3K79me2	C24	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pab038249140d	ENCSR000AQW.pooled.uniform.base	ENCSR000AQW.pooled.uniform.nodedup	designed	H3K27ac	C12	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p7c238d5f865c	ENCSR000AQW.pooled.uniform.depth0.125	ENCSR000AQW.pooled.uniform.nodedup	designed	H3K27ac	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p5cd470f8e9f3	ENCSR000AQW.pooled.uniform.depth0.25	ENCSR000AQW.pooled.uniform.nodedup	designed	H3K27ac	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p91b3182322c6	ENCSR000AQW.pooled.uniform.depth0.50	ENCSR000AQW.pooled.uniform.nodedup	designed	H3K27ac	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p2a9a3d168456	ENCSR000AQW.pooled.uniform.mapq0	ENCSR000AQW.pooled.uniform.nodedup	designed	H3K27ac	C12	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p0ed4c3b525ed	ENCSR000AQW.pooled.uniform.nodedup	ENCSR000AQW.pooled.uniform.base	designed	H3K27ac	C12	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p906d5a22c588	ENCSR000AQW.pooled.uniform.nodedup	ENCSR000AQW.pooled.uniform.depth0.125	designed	H3K27ac	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pbf661969a64c	ENCSR000AQW.pooled.uniform.nodedup	ENCSR000AQW.pooled.uniform.depth0.25	designed	H3K27ac	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p5c5ed5c0307b	ENCSR000AQW.pooled.uniform.nodedup	ENCSR000AQW.pooled.uniform.depth0.50	designed	H3K27ac	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p0f0d542f1ac6	ENCSR000AQW.pooled.uniform.nodedup	ENCSR000AQW.pooled.uniform.mapq0	designed	H3K27ac	C12	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p0d30c082350b	ENCSR000ARC.pooled.uniform.base	ENCSR000ARC.pooled.uniform.nodedup	designed	H4K20me1	C12	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p430f8db22374	ENCSR000ARC.pooled.uniform.depth0.125	ENCSR000ARC.pooled.uniform.nodedup	designed	H4K20me1	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p3d2fe750381a	ENCSR000ARC.pooled.uniform.depth0.25	ENCSR000ARC.pooled.uniform.nodedup	designed	H4K20me1	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pc10f7bdcb478	ENCSR000ARC.pooled.uniform.depth0.50	ENCSR000ARC.pooled.uniform.nodedup	designed	H4K20me1	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p9bd90d2fd2ba	ENCSR000ARC.pooled.uniform.mapq0	ENCSR000ARC.pooled.uniform.nodedup	designed	H4K20me1	C12	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pa0f74d54a76e	ENCSR000ARC.pooled.uniform.nodedup	ENCSR000ARC.pooled.uniform.base	designed	H4K20me1	C12	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p11e90fd1df43	ENCSR000ARC.pooled.uniform.nodedup	ENCSR000ARC.pooled.uniform.depth0.125	designed	H4K20me1	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pd34ceae47ffb	ENCSR000ARC.pooled.uniform.nodedup	ENCSR000ARC.pooled.uniform.depth0.25	designed	H4K20me1	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p130ace1d0f9a	ENCSR000ARC.pooled.uniform.nodedup	ENCSR000ARC.pooled.uniform.depth0.50	designed	H4K20me1	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf04bf9d194b3	ENCSR000ARC.pooled.uniform.nodedup	ENCSR000ARC.pooled.uniform.mapq0	designed	H4K20me1	C12	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p7f2349de77bf	ENCSR000DQU.pooled.uniform.base	ENCSR000DQU.pooled.uniform.nodedup	designed	H3K27me3	C16	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pe9e978b32e92	ENCSR000DQU.pooled.uniform.depth0.125	ENCSR000DQU.pooled.uniform.nodedup	designed	H3K27me3	C16	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p00848dc2a5ca	ENCSR000DQU.pooled.uniform.depth0.25	ENCSR000DQU.pooled.uniform.nodedup	designed	H3K27me3	C16	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p6ea6f62fa0da	ENCSR000DQU.pooled.uniform.depth0.50	ENCSR000DQU.pooled.uniform.nodedup	designed	H3K27me3	C16	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pdfbcc4c9add4	ENCSR000DQU.pooled.uniform.mapq0	ENCSR000DQU.pooled.uniform.nodedup	designed	H3K27me3	C16	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p279bb52f4ba3	ENCSR000DQU.pooled.uniform.nodedup	ENCSR000DQU.pooled.uniform.base	designed	H3K27me3	C16	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pb330e34a5e91	ENCSR000DQU.pooled.uniform.nodedup	ENCSR000DQU.pooled.uniform.depth0.125	designed	H3K27me3	C16	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p63681f83985f	ENCSR000DQU.pooled.uniform.nodedup	ENCSR000DQU.pooled.uniform.depth0.25	designed	H3K27me3	C16	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pad38def09d65	ENCSR000DQU.pooled.uniform.nodedup	ENCSR000DQU.pooled.uniform.depth0.50	designed	H3K27me3	C16	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pdbcc9ce1f797	ENCSR000DQU.pooled.uniform.nodedup	ENCSR000DQU.pooled.uniform.mapq0	designed	H3K27me3	C16	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p1fe90bb320ff	ENCSR000EWB.pooled.uniform.base	ENCSR000EWB.pooled.uniform.nodedup	designed	H3K27me3	C24	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pc637da6157c1	ENCSR000EWB.pooled.uniform.depth0.125	ENCSR000EWB.pooled.uniform.nodedup	designed	H3K27me3	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p3e955b63d51e	ENCSR000EWB.pooled.uniform.depth0.25	ENCSR000EWB.pooled.uniform.nodedup	designed	H3K27me3	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pdfe32c4e3be9	ENCSR000EWB.pooled.uniform.depth0.50	ENCSR000EWB.pooled.uniform.nodedup	designed	H3K27me3	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	peb2db533d128	ENCSR000EWB.pooled.uniform.mapq0	ENCSR000EWB.pooled.uniform.nodedup	designed	H3K27me3	C24	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p1d87b75e9c3e	ENCSR000EWB.pooled.uniform.nodedup	ENCSR000EWB.pooled.uniform.base	designed	H3K27me3	C24	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p444decaa99c1	ENCSR000EWB.pooled.uniform.nodedup	ENCSR000EWB.pooled.uniform.depth0.125	designed	H3K27me3	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p34c3f566b506	ENCSR000EWB.pooled.uniform.nodedup	ENCSR000EWB.pooled.uniform.depth0.25	designed	H3K27me3	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pdf09d8d084b5	ENCSR000EWB.pooled.uniform.nodedup	ENCSR000EWB.pooled.uniform.depth0.50	designed	H3K27me3	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p215ee0fc9c14	ENCSR000EWB.pooled.uniform.nodedup	ENCSR000EWB.pooled.uniform.mapq0	designed	H3K27me3	C24	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p7b5ef8d6412f	ENCSR038OIN.pooled.uniform.base	ENCSR038OIN.pooled.uniform.nodedup	designed	H3K36me3	C46	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p2a530973914a	ENCSR038OIN.pooled.uniform.depth0.125	ENCSR038OIN.pooled.uniform.nodedup	designed	H3K36me3	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p7c8b01fa19f2	ENCSR038OIN.pooled.uniform.depth0.25	ENCSR038OIN.pooled.uniform.nodedup	designed	H3K36me3	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pd1f7215fa0b6	ENCSR038OIN.pooled.uniform.depth0.50	ENCSR038OIN.pooled.uniform.nodedup	designed	H3K36me3	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pad77543222b4	ENCSR038OIN.pooled.uniform.mapq0	ENCSR038OIN.pooled.uniform.nodedup	designed	H3K36me3	C46	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p3bbdd7bca07a	ENCSR038OIN.pooled.uniform.nodedup	ENCSR038OIN.pooled.uniform.base	designed	H3K36me3	C46	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pfb106c9bffe6	ENCSR038OIN.pooled.uniform.nodedup	ENCSR038OIN.pooled.uniform.depth0.125	designed	H3K36me3	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf4d06f15ff64	ENCSR038OIN.pooled.uniform.nodedup	ENCSR038OIN.pooled.uniform.depth0.25	designed	H3K36me3	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf135f9792a6a	ENCSR038OIN.pooled.uniform.nodedup	ENCSR038OIN.pooled.uniform.depth0.50	designed	H3K36me3	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p20ba236f0f62	ENCSR038OIN.pooled.uniform.nodedup	ENCSR038OIN.pooled.uniform.mapq0	designed	H3K36me3	C46	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p8ec09a520c69	ENCSR054BKO.pooled.uniform.base	ENCSR054BKO.pooled.uniform.nodedup	designed	H3K27ac	C48	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf3b3b181fd2d	ENCSR054BKO.pooled.uniform.crop36	ENCSR054BKO.pooled.uniform.nodedup	designed	H3K27ac	C48	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pe8f0c66ef8de	ENCSR054BKO.pooled.uniform.depth0.125	ENCSR054BKO.pooled.uniform.nodedup	designed	H3K27ac	C48	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pd445adffc6ea	ENCSR054BKO.pooled.uniform.depth0.25	ENCSR054BKO.pooled.uniform.nodedup	designed	H3K27ac	C48	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p4758bc224848	ENCSR054BKO.pooled.uniform.depth0.50	ENCSR054BKO.pooled.uniform.nodedup	designed	H3K27ac	C48	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p58bc4b22c349	ENCSR054BKO.pooled.uniform.mapq0	ENCSR054BKO.pooled.uniform.nodedup	designed	H3K27ac	C48	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pc3a21455c6d8	ENCSR054BKO.pooled.uniform.nodedup	ENCSR054BKO.pooled.uniform.base	designed	H3K27ac	C48	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p138c1ed8fe7b	ENCSR054BKO.pooled.uniform.nodedup	ENCSR054BKO.pooled.uniform.crop36	designed	H3K27ac	C48	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pc4f140f94098	ENCSR054BKO.pooled.uniform.nodedup	ENCSR054BKO.pooled.uniform.depth0.125	designed	H3K27ac	C48	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pc5c384696f3b	ENCSR054BKO.pooled.uniform.nodedup	ENCSR054BKO.pooled.uniform.depth0.25	designed	H3K27ac	C48	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pd7d89a3b8d5e	ENCSR054BKO.pooled.uniform.nodedup	ENCSR054BKO.pooled.uniform.depth0.50	designed	H3K27ac	C48	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pcaf64d49d1dc	ENCSR054BKO.pooled.uniform.nodedup	ENCSR054BKO.pooled.uniform.mapq0	designed	H3K27ac	C48	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pd73ec0663732	ENCSR080PZL.pooled.uniform.base	ENCSR080PZL.pooled.uniform.nodedup	designed	DNase-seq	C03	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pc8c903c2379a	ENCSR080PZL.pooled.uniform.depth0.125	ENCSR080PZL.pooled.uniform.nodedup	designed	DNase-seq	C03	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pb06c59309b45	ENCSR080PZL.pooled.uniform.depth0.25	ENCSR080PZL.pooled.uniform.nodedup	designed	DNase-seq	C03	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf955b922a96a	ENCSR080PZL.pooled.uniform.depth0.50	ENCSR080PZL.pooled.uniform.nodedup	designed	DNase-seq	C03	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p88dc34470452	ENCSR080PZL.pooled.uniform.mapq0	ENCSR080PZL.pooled.uniform.nodedup	designed	DNase-seq	C03	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p0164cc643ef6	ENCSR080PZL.pooled.uniform.nodedup	ENCSR080PZL.pooled.uniform.base	designed	DNase-seq	C03	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p1820f4a07017	ENCSR080PZL.pooled.uniform.nodedup	ENCSR080PZL.pooled.uniform.depth0.125	designed	DNase-seq	C03	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf0a5291cae09	ENCSR080PZL.pooled.uniform.nodedup	ENCSR080PZL.pooled.uniform.depth0.25	designed	DNase-seq	C03	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p4be1e6db2f0b	ENCSR080PZL.pooled.uniform.nodedup	ENCSR080PZL.pooled.uniform.depth0.50	designed	DNase-seq	C03	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p10d518f8daef	ENCSR080PZL.pooled.uniform.nodedup	ENCSR080PZL.pooled.uniform.mapq0	designed	DNase-seq	C03	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pd39cd17b3a89	ENCSR123JZO.pooled.uniform.base	ENCSR123JZO.pooled.uniform.nodedup	designed	H2BK15ac	C32	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p1c6c08e41b2d	ENCSR123JZO.pooled.uniform.depth0.125	ENCSR123JZO.pooled.uniform.nodedup	designed	H2BK15ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p0cb94e319f49	ENCSR123JZO.pooled.uniform.depth0.25	ENCSR123JZO.pooled.uniform.nodedup	designed	H2BK15ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pd0761e3764ab	ENCSR123JZO.pooled.uniform.depth0.50	ENCSR123JZO.pooled.uniform.nodedup	designed	H2BK15ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p5871c973625a	ENCSR123JZO.pooled.uniform.mapq0	ENCSR123JZO.pooled.uniform.nodedup	designed	H2BK15ac	C32	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pa991e134b6ba	ENCSR123JZO.pooled.uniform.nodedup	ENCSR123JZO.pooled.uniform.base	designed	H2BK15ac	C32	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p23e768f2f940	ENCSR123JZO.pooled.uniform.nodedup	ENCSR123JZO.pooled.uniform.depth0.125	designed	H2BK15ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p93c5de696924	ENCSR123JZO.pooled.uniform.nodedup	ENCSR123JZO.pooled.uniform.depth0.25	designed	H2BK15ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	paeb7ef512dac	ENCSR123JZO.pooled.uniform.nodedup	ENCSR123JZO.pooled.uniform.depth0.50	designed	H2BK15ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p7ceb32fd2fbc	ENCSR123JZO.pooled.uniform.nodedup	ENCSR123JZO.pooled.uniform.mapq0	designed	H2BK15ac	C32	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p180a4a39eb8f	ENCSR124DYB.pooled.uniform.base	ENCSR124DYB.pooled.uniform.nodedup	designed	H2AFZ	C23	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pfbf725871c02	ENCSR124DYB.pooled.uniform.depth0.125	ENCSR124DYB.pooled.uniform.nodedup	designed	H2AFZ	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf5190dc7f437	ENCSR124DYB.pooled.uniform.depth0.25	ENCSR124DYB.pooled.uniform.nodedup	designed	H2AFZ	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pefe8e724e926	ENCSR124DYB.pooled.uniform.depth0.50	ENCSR124DYB.pooled.uniform.nodedup	designed	H2AFZ	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p54614bd7139e	ENCSR124DYB.pooled.uniform.mapq0	ENCSR124DYB.pooled.uniform.nodedup	designed	H2AFZ	C23	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pbe0138840e76	ENCSR124DYB.pooled.uniform.nodedup	ENCSR124DYB.pooled.uniform.base	designed	H2AFZ	C23	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p2ff878e93f45	ENCSR124DYB.pooled.uniform.nodedup	ENCSR124DYB.pooled.uniform.depth0.125	designed	H2AFZ	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p07178c41ae46	ENCSR124DYB.pooled.uniform.nodedup	ENCSR124DYB.pooled.uniform.depth0.25	designed	H2AFZ	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p9eee48614737	ENCSR124DYB.pooled.uniform.nodedup	ENCSR124DYB.pooled.uniform.depth0.50	designed	H2AFZ	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p44d4e547e5d8	ENCSR124DYB.pooled.uniform.nodedup	ENCSR124DYB.pooled.uniform.mapq0	designed	H2AFZ	C23	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pcf9d8de73f65	ENCSR130EML.pooled.uniform.base	ENCSR130EML.pooled.uniform.nodedup	designed	H3K4ac	C17	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p0d9dbb43f25a	ENCSR130EML.pooled.uniform.depth0.125	ENCSR130EML.pooled.uniform.nodedup	designed	H3K4ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pd071eef20a49	ENCSR130EML.pooled.uniform.depth0.25	ENCSR130EML.pooled.uniform.nodedup	designed	H3K4ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p66f7accdf0c7	ENCSR130EML.pooled.uniform.depth0.50	ENCSR130EML.pooled.uniform.nodedup	designed	H3K4ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p308196eb13f5	ENCSR130EML.pooled.uniform.mapq0	ENCSR130EML.pooled.uniform.nodedup	designed	H3K4ac	C17	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p3815e55c14c8	ENCSR130EML.pooled.uniform.nodedup	ENCSR130EML.pooled.uniform.base	designed	H3K4ac	C17	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pfc0c5fbfb113	ENCSR130EML.pooled.uniform.nodedup	ENCSR130EML.pooled.uniform.depth0.125	designed	H3K4ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p2b9294b54c51	ENCSR130EML.pooled.uniform.nodedup	ENCSR130EML.pooled.uniform.depth0.25	designed	H3K4ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pc91ba72903f5	ENCSR130EML.pooled.uniform.nodedup	ENCSR130EML.pooled.uniform.depth0.50	designed	H3K4ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pabe99a0abdc0	ENCSR130EML.pooled.uniform.nodedup	ENCSR130EML.pooled.uniform.mapq0	designed	H3K4ac	C17	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pce59876a9f99	ENCSR133QBG.pooled.uniform.base	ENCSR133QBG.pooled.uniform.nodedup	designed	H3K9me3	C37	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pd23a29cb124b	ENCSR133QBG.pooled.uniform.crop36	ENCSR133QBG.pooled.uniform.nodedup	designed	H3K9me3	C37	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p4a37407f451e	ENCSR133QBG.pooled.uniform.crop50	ENCSR133QBG.pooled.uniform.nodedup	designed	H3K9me3	C37	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pfc638170172b	ENCSR133QBG.pooled.uniform.depth0.125	ENCSR133QBG.pooled.uniform.nodedup	designed	H3K9me3	C37	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p4320401eb5c4	ENCSR133QBG.pooled.uniform.depth0.25	ENCSR133QBG.pooled.uniform.nodedup	designed	H3K9me3	C37	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pbe4bf6fa7f26	ENCSR133QBG.pooled.uniform.depth0.50	ENCSR133QBG.pooled.uniform.nodedup	designed	H3K9me3	C37	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p5ae2f6d91943	ENCSR133QBG.pooled.uniform.mapq0	ENCSR133QBG.pooled.uniform.nodedup	designed	H3K9me3	C37	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pa7ffea440ee1	ENCSR133QBG.pooled.uniform.nodedup	ENCSR133QBG.pooled.uniform.base	designed	H3K9me3	C37	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pbdcf3de3bff5	ENCSR133QBG.pooled.uniform.nodedup	ENCSR133QBG.pooled.uniform.crop36	designed	H3K9me3	C37	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf9f11eebd7a3	ENCSR133QBG.pooled.uniform.nodedup	ENCSR133QBG.pooled.uniform.crop50	designed	H3K9me3	C37	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pdebf3f6920df	ENCSR133QBG.pooled.uniform.nodedup	ENCSR133QBG.pooled.uniform.depth0.125	designed	H3K9me3	C37	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p82e6111df6ef	ENCSR133QBG.pooled.uniform.nodedup	ENCSR133QBG.pooled.uniform.depth0.25	designed	H3K9me3	C37	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pb276d589e866	ENCSR133QBG.pooled.uniform.nodedup	ENCSR133QBG.pooled.uniform.depth0.50	designed	H3K9me3	C37	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p768be0999cca	ENCSR133QBG.pooled.uniform.nodedup	ENCSR133QBG.pooled.uniform.mapq0	designed	H3K9me3	C37	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p1d01dd38073a	ENCSR162MGR.pooled.native.base	ENCSR162MGR.pooled.native.nodedup	designed	H3K36me3	C36	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf834c7442619	ENCSR162MGR.pooled.native.depth0.125	ENCSR162MGR.pooled.native.nodedup	designed	H3K36me3	C36	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	padc97af7e5aa	ENCSR162MGR.pooled.native.depth0.25	ENCSR162MGR.pooled.native.nodedup	designed	H3K36me3	C36	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p1e81faf33218	ENCSR162MGR.pooled.native.depth0.50	ENCSR162MGR.pooled.native.nodedup	designed	H3K36me3	C36	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pd10f6f2ea585	ENCSR162MGR.pooled.native.mapq0	ENCSR162MGR.pooled.native.nodedup	designed	H3K36me3	C36	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pbdea241aab75	ENCSR162MGR.pooled.native.nodedup	ENCSR162MGR.pooled.native.base	designed	H3K36me3	C36	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p585431f8aab3	ENCSR162MGR.pooled.native.nodedup	ENCSR162MGR.pooled.native.depth0.125	designed	H3K36me3	C36	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p822814dd4518	ENCSR162MGR.pooled.native.nodedup	ENCSR162MGR.pooled.native.depth0.25	designed	H3K36me3	C36	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p6748f598f088	ENCSR162MGR.pooled.native.nodedup	ENCSR162MGR.pooled.native.depth0.50	designed	H3K36me3	C36	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p4e04a63c27dd	ENCSR162MGR.pooled.native.nodedup	ENCSR162MGR.pooled.native.mapq0	designed	H3K36me3	C36	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pded588a05650	ENCSR188GJE.pooled.uniform.base	ENCSR188GJE.pooled.uniform.nodedup	designed	H3K79me2	C18	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pd4213ece4ead	ENCSR188GJE.pooled.uniform.depth0.125	ENCSR188GJE.pooled.uniform.nodedup	designed	H3K79me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pda31ba316e32	ENCSR188GJE.pooled.uniform.depth0.25	ENCSR188GJE.pooled.uniform.nodedup	designed	H3K79me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p378fa14d6189	ENCSR188GJE.pooled.uniform.depth0.50	ENCSR188GJE.pooled.uniform.nodedup	designed	H3K79me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p79b5f68442a7	ENCSR188GJE.pooled.uniform.mapq0	ENCSR188GJE.pooled.uniform.nodedup	designed	H3K79me2	C18	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p6b411128d018	ENCSR188GJE.pooled.uniform.nodedup	ENCSR188GJE.pooled.uniform.base	designed	H3K79me2	C18	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pe86ed2c62889	ENCSR188GJE.pooled.uniform.nodedup	ENCSR188GJE.pooled.uniform.depth0.125	designed	H3K79me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pde4da2d5ed9e	ENCSR188GJE.pooled.uniform.nodedup	ENCSR188GJE.pooled.uniform.depth0.25	designed	H3K79me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p2f9b1aff640b	ENCSR188GJE.pooled.uniform.nodedup	ENCSR188GJE.pooled.uniform.depth0.50	designed	H3K79me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p447d0661332b	ENCSR188GJE.pooled.uniform.nodedup	ENCSR188GJE.pooled.uniform.mapq0	designed	H3K79me2	C18	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pe8b809746ba3	ENCSR213TIR.pooled.uniform.base	ENCSR213TIR.pooled.uniform.nodedup	designed	H2BK5ac	C46	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p83999c89928b	ENCSR213TIR.pooled.uniform.depth0.125	ENCSR213TIR.pooled.uniform.nodedup	designed	H2BK5ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p9f5dc9e1ff90	ENCSR213TIR.pooled.uniform.depth0.25	ENCSR213TIR.pooled.uniform.nodedup	designed	H2BK5ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pdfada7c00c46	ENCSR213TIR.pooled.uniform.depth0.50	ENCSR213TIR.pooled.uniform.nodedup	designed	H2BK5ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p9e38ad3a2a86	ENCSR213TIR.pooled.uniform.mapq0	ENCSR213TIR.pooled.uniform.nodedup	designed	H2BK5ac	C46	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pbbdc4a1777fb	ENCSR213TIR.pooled.uniform.nodedup	ENCSR213TIR.pooled.uniform.base	designed	H2BK5ac	C46	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf1d46d10338d	ENCSR213TIR.pooled.uniform.nodedup	ENCSR213TIR.pooled.uniform.depth0.125	designed	H2BK5ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p5eb3d91da7b4	ENCSR213TIR.pooled.uniform.nodedup	ENCSR213TIR.pooled.uniform.depth0.25	designed	H2BK5ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pc2376e926784	ENCSR213TIR.pooled.uniform.nodedup	ENCSR213TIR.pooled.uniform.depth0.50	designed	H2BK5ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p61209d698e55	ENCSR213TIR.pooled.uniform.nodedup	ENCSR213TIR.pooled.uniform.mapq0	designed	H2BK5ac	C46	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p3a65742f1a3f	ENCSR219MYH.pooled.uniform.base	ENCSR219MYH.pooled.uniform.nodedup	designed	H3K9ac	C23	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p35d4e4202758	ENCSR219MYH.pooled.uniform.depth0.125	ENCSR219MYH.pooled.uniform.nodedup	designed	H3K9ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pfbae665708d0	ENCSR219MYH.pooled.uniform.depth0.25	ENCSR219MYH.pooled.uniform.nodedup	designed	H3K9ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p4b535ce03e7f	ENCSR219MYH.pooled.uniform.depth0.50	ENCSR219MYH.pooled.uniform.nodedup	designed	H3K9ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pa7df1514ee16	ENCSR219MYH.pooled.uniform.mapq0	ENCSR219MYH.pooled.uniform.nodedup	designed	H3K9ac	C23	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pf253369857c3	ENCSR219MYH.pooled.uniform.nodedup	ENCSR219MYH.pooled.uniform.base	designed	H3K9ac	C23	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pd73df37be402	ENCSR219MYH.pooled.uniform.nodedup	ENCSR219MYH.pooled.uniform.depth0.125	designed	H3K9ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p03aee21a4c3d	ENCSR219MYH.pooled.uniform.nodedup	ENCSR219MYH.pooled.uniform.depth0.25	designed	H3K9ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p1a1ebc17e512	ENCSR219MYH.pooled.uniform.nodedup	ENCSR219MYH.pooled.uniform.depth0.50	designed	H3K9ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p1872927d8e48	ENCSR219MYH.pooled.uniform.nodedup	ENCSR219MYH.pooled.uniform.mapq0	designed	H3K9ac	C23	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p93bdc08931a2	ENCSR234YIU.pooled.uniform.base	ENCSR234YIU.pooled.uniform.nodedup	designed	H3K4me3	C02	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p8f1459d512e8	ENCSR234YIU.pooled.uniform.depth0.125	ENCSR234YIU.pooled.uniform.nodedup	designed	H3K4me3	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p6dee1c4c54d3	ENCSR234YIU.pooled.uniform.depth0.25	ENCSR234YIU.pooled.uniform.nodedup	designed	H3K4me3	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p0243683d3f90	ENCSR234YIU.pooled.uniform.depth0.50	ENCSR234YIU.pooled.uniform.nodedup	designed	H3K4me3	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p19a2a5a633a4	ENCSR234YIU.pooled.uniform.mapq0	ENCSR234YIU.pooled.uniform.nodedup	designed	H3K4me3	C02	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p79f43b6942f8	ENCSR234YIU.pooled.uniform.nodedup	ENCSR234YIU.pooled.uniform.base	designed	H3K4me3	C02	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p73d47a6e0bef	ENCSR234YIU.pooled.uniform.nodedup	ENCSR234YIU.pooled.uniform.depth0.125	designed	H3K4me3	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pc9e5c907d4d2	ENCSR234YIU.pooled.uniform.nodedup	ENCSR234YIU.pooled.uniform.depth0.25	designed	H3K4me3	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p233d62bbc5d6	ENCSR234YIU.pooled.uniform.nodedup	ENCSR234YIU.pooled.uniform.depth0.50	designed	H3K4me3	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p0ac35843bc0c	ENCSR234YIU.pooled.uniform.nodedup	ENCSR234YIU.pooled.uniform.mapq0	designed	H3K4me3	C02	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p33d695d87cd8	ENCSR241JLU.pooled.native.base	ENCSR241JLU.pooled.native.nodedup	designed	H3K27me3	C10	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p44fd016a8010	ENCSR241JLU.pooled.native.depth0.125	ENCSR241JLU.pooled.native.nodedup	designed	H3K27me3	C10	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pe3f04186642f	ENCSR241JLU.pooled.native.depth0.25	ENCSR241JLU.pooled.native.nodedup	designed	H3K27me3	C10	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pcc576f40b1ea	ENCSR241JLU.pooled.native.depth0.50	ENCSR241JLU.pooled.native.nodedup	designed	H3K27me3	C10	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p6c4330567f45	ENCSR241JLU.pooled.native.mapq0	ENCSR241JLU.pooled.native.nodedup	designed	H3K27me3	C10	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p3e6e19768108	ENCSR241JLU.pooled.native.nodedup	ENCSR241JLU.pooled.native.base	designed	H3K27me3	C10	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pee683fc169af	ENCSR241JLU.pooled.native.nodedup	ENCSR241JLU.pooled.native.depth0.125	designed	H3K27me3	C10	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p7f99129394e8	ENCSR241JLU.pooled.native.nodedup	ENCSR241JLU.pooled.native.depth0.25	designed	H3K27me3	C10	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p0bdf28e865ad	ENCSR241JLU.pooled.native.nodedup	ENCSR241JLU.pooled.native.depth0.50	designed	H3K27me3	C10	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pda5bd56abdaf	ENCSR241JLU.pooled.native.nodedup	ENCSR241JLU.pooled.native.mapq0	designed	H3K27me3	C10	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p28002d46f5ec	ENCSR241PXI.pooled.native.base	ENCSR241PXI.pooled.native.nodedup	designed	H3K9me3	C29	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p9fa6e345f4a0	ENCSR241PXI.pooled.native.depth0.125	ENCSR241PXI.pooled.native.nodedup	designed	H3K9me3	C29	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pa24ae14828af	ENCSR241PXI.pooled.native.depth0.25	ENCSR241PXI.pooled.native.nodedup	designed	H3K9me3	C29	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p5c6c36c00424	ENCSR241PXI.pooled.native.depth0.50	ENCSR241PXI.pooled.native.nodedup	designed	H3K9me3	C29	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p76efb2582db9	ENCSR241PXI.pooled.native.mapq0	ENCSR241PXI.pooled.native.nodedup	designed	H3K9me3	C29	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p5a0d580a5ab9	ENCSR241PXI.pooled.native.nodedup	ENCSR241PXI.pooled.native.base	designed	H3K9me3	C29	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p0a65a50eca50	ENCSR241PXI.pooled.native.nodedup	ENCSR241PXI.pooled.native.depth0.125	designed	H3K9me3	C29	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf6ff3bd468ed	ENCSR241PXI.pooled.native.nodedup	ENCSR241PXI.pooled.native.depth0.25	designed	H3K9me3	C29	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p86f22471242b	ENCSR241PXI.pooled.native.nodedup	ENCSR241PXI.pooled.native.depth0.50	designed	H3K9me3	C29	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pd82397ea4b65	ENCSR241PXI.pooled.native.nodedup	ENCSR241PXI.pooled.native.mapq0	designed	H3K9me3	C29	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	peb029988fb7d	ENCSR254NLC.pooled.uniform.base	ENCSR254NLC.pooled.uniform.nodedup	designed	H3K4me1	C32	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p98aa091c5a8d	ENCSR254NLC.pooled.uniform.depth0.125	ENCSR254NLC.pooled.uniform.nodedup	designed	H3K4me1	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p5f1b3cda5407	ENCSR254NLC.pooled.uniform.depth0.25	ENCSR254NLC.pooled.uniform.nodedup	designed	H3K4me1	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p67ab32f4cab3	ENCSR254NLC.pooled.uniform.depth0.50	ENCSR254NLC.pooled.uniform.nodedup	designed	H3K4me1	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p506dc9f0efc7	ENCSR254NLC.pooled.uniform.mapq0	ENCSR254NLC.pooled.uniform.nodedup	designed	H3K4me1	C32	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p7b293298f978	ENCSR254NLC.pooled.uniform.nodedup	ENCSR254NLC.pooled.uniform.base	designed	H3K4me1	C32	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p805349931d9d	ENCSR254NLC.pooled.uniform.nodedup	ENCSR254NLC.pooled.uniform.depth0.125	designed	H3K4me1	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf280d8937a23	ENCSR254NLC.pooled.uniform.nodedup	ENCSR254NLC.pooled.uniform.depth0.25	designed	H3K4me1	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p714159d51672	ENCSR254NLC.pooled.uniform.nodedup	ENCSR254NLC.pooled.uniform.depth0.50	designed	H3K4me1	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf9ac5eadf8b6	ENCSR254NLC.pooled.uniform.nodedup	ENCSR254NLC.pooled.uniform.mapq0	designed	H3K4me1	C32	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pd60b37ba6e07	ENCSR339FOO.pooled.uniform.base	ENCSR339FOO.pooled.uniform.nodedup	designed	H3K79me2	C31	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p9fd466eeb78d	ENCSR339FOO.pooled.uniform.crop36	ENCSR339FOO.pooled.uniform.nodedup	designed	H3K79me2	C31	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p63986a33ef8b	ENCSR339FOO.pooled.uniform.crop50	ENCSR339FOO.pooled.uniform.nodedup	designed	H3K79me2	C31	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	paf19b4a2c947	ENCSR339FOO.pooled.uniform.depth0.125	ENCSR339FOO.pooled.uniform.nodedup	designed	H3K79me2	C31	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pfe4331e1f46c	ENCSR339FOO.pooled.uniform.depth0.25	ENCSR339FOO.pooled.uniform.nodedup	designed	H3K79me2	C31	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p363e5a57757c	ENCSR339FOO.pooled.uniform.depth0.50	ENCSR339FOO.pooled.uniform.nodedup	designed	H3K79me2	C31	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pea2f791a63e4	ENCSR339FOO.pooled.uniform.mapq0	ENCSR339FOO.pooled.uniform.nodedup	designed	H3K79me2	C31	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pfe335fc11a60	ENCSR339FOO.pooled.uniform.nodedup	ENCSR339FOO.pooled.uniform.base	designed	H3K79me2	C31	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p5062cc7ae4a3	ENCSR339FOO.pooled.uniform.nodedup	ENCSR339FOO.pooled.uniform.crop36	designed	H3K79me2	C31	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pa287b8b90918	ENCSR339FOO.pooled.uniform.nodedup	ENCSR339FOO.pooled.uniform.crop50	designed	H3K79me2	C31	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p10d10f2e25bf	ENCSR339FOO.pooled.uniform.nodedup	ENCSR339FOO.pooled.uniform.depth0.125	designed	H3K79me2	C31	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p8dbd1351ff5f	ENCSR339FOO.pooled.uniform.nodedup	ENCSR339FOO.pooled.uniform.depth0.25	designed	H3K79me2	C31	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p50cc9abeeb40	ENCSR339FOO.pooled.uniform.nodedup	ENCSR339FOO.pooled.uniform.depth0.50	designed	H3K79me2	C31	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p68c03aa97815	ENCSR339FOO.pooled.uniform.nodedup	ENCSR339FOO.pooled.uniform.mapq0	designed	H3K79me2	C31	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pe39ce1f9476a	ENCSR371FHD.pooled.uniform.base	ENCSR371FHD.pooled.uniform.nodedup	designed	H4K91ac	C46	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pef538ef48d99	ENCSR371FHD.pooled.uniform.depth0.125	ENCSR371FHD.pooled.uniform.nodedup	designed	H4K91ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p41258fc0759a	ENCSR371FHD.pooled.uniform.depth0.25	ENCSR371FHD.pooled.uniform.nodedup	designed	H4K91ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pb7607abf84fc	ENCSR371FHD.pooled.uniform.depth0.50	ENCSR371FHD.pooled.uniform.nodedup	designed	H4K91ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p6eb5ab96943d	ENCSR371FHD.pooled.uniform.mapq0	ENCSR371FHD.pooled.uniform.nodedup	designed	H4K91ac	C46	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p59929b017d45	ENCSR371FHD.pooled.uniform.nodedup	ENCSR371FHD.pooled.uniform.base	designed	H4K91ac	C46	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p1a90f8de2721	ENCSR371FHD.pooled.uniform.nodedup	ENCSR371FHD.pooled.uniform.depth0.125	designed	H4K91ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p927eca5b468b	ENCSR371FHD.pooled.uniform.nodedup	ENCSR371FHD.pooled.uniform.depth0.25	designed	H4K91ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p9d4c73de12a2	ENCSR371FHD.pooled.uniform.nodedup	ENCSR371FHD.pooled.uniform.depth0.50	designed	H4K91ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p2efb9907fb06	ENCSR371FHD.pooled.uniform.nodedup	ENCSR371FHD.pooled.uniform.mapq0	designed	H4K91ac	C46	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pf60716adf874	ENCSR430RVP.pooled.native.base	ENCSR430RVP.pooled.native.nodedup	designed	H3K27ac	C04	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pd1061301a241	ENCSR430RVP.pooled.native.depth0.125	ENCSR430RVP.pooled.native.nodedup	designed	H3K27ac	C04	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p2d765e57fb38	ENCSR430RVP.pooled.native.depth0.25	ENCSR430RVP.pooled.native.nodedup	designed	H3K27ac	C04	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pfa92b10d2a12	ENCSR430RVP.pooled.native.depth0.50	ENCSR430RVP.pooled.native.nodedup	designed	H3K27ac	C04	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pb19ad0df1903	ENCSR430RVP.pooled.native.mapq0	ENCSR430RVP.pooled.native.nodedup	designed	H3K27ac	C04	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pe55519a29786	ENCSR430RVP.pooled.native.nodedup	ENCSR430RVP.pooled.native.base	designed	H3K27ac	C04	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p71833e4f97b0	ENCSR430RVP.pooled.native.nodedup	ENCSR430RVP.pooled.native.depth0.125	designed	H3K27ac	C04	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pb7acf8084554	ENCSR430RVP.pooled.native.nodedup	ENCSR430RVP.pooled.native.depth0.25	designed	H3K27ac	C04	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf12c12d89ee2	ENCSR430RVP.pooled.native.nodedup	ENCSR430RVP.pooled.native.depth0.50	designed	H3K27ac	C04	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p28fef5a381f9	ENCSR430RVP.pooled.native.nodedup	ENCSR430RVP.pooled.native.mapq0	designed	H3K27ac	C04	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p49941193e0f2	ENCSR444TMC.pooled.uniform.base	ENCSR444TMC.pooled.uniform.nodedup	designed	H4K8ac	C23	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p1607b898e1bf	ENCSR444TMC.pooled.uniform.depth0.125	ENCSR444TMC.pooled.uniform.nodedup	designed	H4K8ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf2e76f33acac	ENCSR444TMC.pooled.uniform.depth0.25	ENCSR444TMC.pooled.uniform.nodedup	designed	H4K8ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pe584824f450e	ENCSR444TMC.pooled.uniform.depth0.50	ENCSR444TMC.pooled.uniform.nodedup	designed	H4K8ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pdca8c0af1b55	ENCSR444TMC.pooled.uniform.mapq0	ENCSR444TMC.pooled.uniform.nodedup	designed	H4K8ac	C23	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pbeeebb4b9f0f	ENCSR444TMC.pooled.uniform.nodedup	ENCSR444TMC.pooled.uniform.base	designed	H4K8ac	C23	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p5ddf4efbe00c	ENCSR444TMC.pooled.uniform.nodedup	ENCSR444TMC.pooled.uniform.depth0.125	designed	H4K8ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pa58358610e97	ENCSR444TMC.pooled.uniform.nodedup	ENCSR444TMC.pooled.uniform.depth0.25	designed	H4K8ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p9462815ee0e1	ENCSR444TMC.pooled.uniform.nodedup	ENCSR444TMC.pooled.uniform.depth0.50	designed	H4K8ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pfae9c86f9e13	ENCSR444TMC.pooled.uniform.nodedup	ENCSR444TMC.pooled.uniform.mapq0	designed	H4K8ac	C23	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p8fcf5639a9af	ENCSR521AIV.pooled.uniform.crop36	ENCSR521AIV.pooled.uniform.se	designed	H3K9ac	C25	crop+se	0	1	1	0	0	val	0	0	1	1	1	1	0	0	1
+pairs.tsv	pb0ea2166bf1c	ENCSR521AIV.pooled.uniform.crop50	ENCSR521AIV.pooled.uniform.se	designed	H3K9ac	C25	crop+se	0	1	1	0	0	val	1	0	1	1	1	1	0	1	1
+pairs.tsv	pef68b8dd1b77	ENCSR521AIV.pooled.uniform.se	ENCSR521AIV.pooled.uniform.crop36	designed	H3K9ac	C25	crop+se	0	1	1	0	0	val	0	0	1	1	1	1	0	0	1
+pairs.tsv	p774645c77492	ENCSR521AIV.pooled.uniform.se	ENCSR521AIV.pooled.uniform.crop50	designed	H3K9ac	C25	crop+se	0	1	1	0	0	val	1	0	1	1	1	1	0	1	1
+pairs.tsv	p666dc3463ab3	ENCSR523ENE.pooled.uniform.base	ENCSR523ENE.pooled.uniform.nodedup	designed	H2BK12ac	C23	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pdfd78117c688	ENCSR523ENE.pooled.uniform.depth0.125	ENCSR523ENE.pooled.uniform.nodedup	designed	H2BK12ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pb11e7c4ae90f	ENCSR523ENE.pooled.uniform.depth0.25	ENCSR523ENE.pooled.uniform.nodedup	designed	H2BK12ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p5cb6805fd0ed	ENCSR523ENE.pooled.uniform.depth0.50	ENCSR523ENE.pooled.uniform.nodedup	designed	H2BK12ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p68516e37d585	ENCSR523ENE.pooled.uniform.mapq0	ENCSR523ENE.pooled.uniform.nodedup	designed	H2BK12ac	C23	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pf3b9e03a9b1e	ENCSR523ENE.pooled.uniform.nodedup	ENCSR523ENE.pooled.uniform.base	designed	H2BK12ac	C23	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pb097a379a0ee	ENCSR523ENE.pooled.uniform.nodedup	ENCSR523ENE.pooled.uniform.depth0.125	designed	H2BK12ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf9c3d38e7e8b	ENCSR523ENE.pooled.uniform.nodedup	ENCSR523ENE.pooled.uniform.depth0.25	designed	H2BK12ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p4b68bd62c08e	ENCSR523ENE.pooled.uniform.nodedup	ENCSR523ENE.pooled.uniform.depth0.50	designed	H2BK12ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p1e404921b2c8	ENCSR523ENE.pooled.uniform.nodedup	ENCSR523ENE.pooled.uniform.mapq0	designed	H2BK12ac	C23	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p7fcba6c84774	ENCSR526NKM.pooled.uniform.base	ENCSR526NKM.pooled.uniform.nodedup	designed	H2AFZ	C27	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p3d98ddbd5cd8	ENCSR526NKM.pooled.uniform.depth0.125	ENCSR526NKM.pooled.uniform.nodedup	designed	H2AFZ	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p2c5fe5b53660	ENCSR526NKM.pooled.uniform.depth0.25	ENCSR526NKM.pooled.uniform.nodedup	designed	H2AFZ	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pca2bb4a6bbbe	ENCSR526NKM.pooled.uniform.depth0.50	ENCSR526NKM.pooled.uniform.nodedup	designed	H2AFZ	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p5fc0317a1550	ENCSR526NKM.pooled.uniform.mapq0	ENCSR526NKM.pooled.uniform.nodedup	designed	H2AFZ	C27	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p7d2458d93872	ENCSR526NKM.pooled.uniform.nodedup	ENCSR526NKM.pooled.uniform.base	designed	H2AFZ	C27	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p3835abc17235	ENCSR526NKM.pooled.uniform.nodedup	ENCSR526NKM.pooled.uniform.depth0.125	designed	H2AFZ	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p553411c61a8b	ENCSR526NKM.pooled.uniform.nodedup	ENCSR526NKM.pooled.uniform.depth0.25	designed	H2AFZ	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p4e91e333c16f	ENCSR526NKM.pooled.uniform.nodedup	ENCSR526NKM.pooled.uniform.depth0.50	designed	H2AFZ	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf479d834409b	ENCSR526NKM.pooled.uniform.nodedup	ENCSR526NKM.pooled.uniform.mapq0	designed	H2AFZ	C27	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p78f344ce6791	ENCSR594AQO.pooled.uniform.base	ENCSR594AQO.pooled.uniform.nodedup	designed	H3K79me1	C27	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pe0f78bf3862d	ENCSR594AQO.pooled.uniform.depth0.125	ENCSR594AQO.pooled.uniform.nodedup	designed	H3K79me1	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pe6d64645acb5	ENCSR594AQO.pooled.uniform.depth0.25	ENCSR594AQO.pooled.uniform.nodedup	designed	H3K79me1	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p4f69fca34c30	ENCSR594AQO.pooled.uniform.depth0.50	ENCSR594AQO.pooled.uniform.nodedup	designed	H3K79me1	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p66466ace5199	ENCSR594AQO.pooled.uniform.mapq0	ENCSR594AQO.pooled.uniform.nodedup	designed	H3K79me1	C27	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	padaf6bffed03	ENCSR594AQO.pooled.uniform.nodedup	ENCSR594AQO.pooled.uniform.base	designed	H3K79me1	C27	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pd29afb66b3a1	ENCSR594AQO.pooled.uniform.nodedup	ENCSR594AQO.pooled.uniform.depth0.125	designed	H3K79me1	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pe68cc79210f1	ENCSR594AQO.pooled.uniform.nodedup	ENCSR594AQO.pooled.uniform.depth0.25	designed	H3K79me1	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p795f46031d79	ENCSR594AQO.pooled.uniform.nodedup	ENCSR594AQO.pooled.uniform.depth0.50	designed	H3K79me1	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p9635d540e281	ENCSR594AQO.pooled.uniform.nodedup	ENCSR594AQO.pooled.uniform.mapq0	designed	H3K79me1	C27	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p50e0dd58f80d	ENCSR604THF.pooled.uniform.base	ENCSR604THF.pooled.uniform.nodedup	designed	H3K18ac	C27	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p4ab006e19626	ENCSR604THF.pooled.uniform.depth0.125	ENCSR604THF.pooled.uniform.nodedup	designed	H3K18ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf5dc87074b38	ENCSR604THF.pooled.uniform.depth0.25	ENCSR604THF.pooled.uniform.nodedup	designed	H3K18ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p3e5146ed0f5a	ENCSR604THF.pooled.uniform.depth0.50	ENCSR604THF.pooled.uniform.nodedup	designed	H3K18ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p6da2e843fd5d	ENCSR604THF.pooled.uniform.mapq0	ENCSR604THF.pooled.uniform.nodedup	designed	H3K18ac	C27	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p2d5e27fcc255	ENCSR604THF.pooled.uniform.nodedup	ENCSR604THF.pooled.uniform.base	designed	H3K18ac	C27	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p87fd27402e46	ENCSR604THF.pooled.uniform.nodedup	ENCSR604THF.pooled.uniform.depth0.125	designed	H3K18ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pcfe66c2f6860	ENCSR604THF.pooled.uniform.nodedup	ENCSR604THF.pooled.uniform.depth0.25	designed	H3K18ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pc99cf5cccfe1	ENCSR604THF.pooled.uniform.nodedup	ENCSR604THF.pooled.uniform.depth0.50	designed	H3K18ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pdf2b35505186	ENCSR604THF.pooled.uniform.nodedup	ENCSR604THF.pooled.uniform.mapq0	designed	H3K18ac	C27	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pb934502421fe	ENCSR611DJQ.pooled.uniform.base	ENCSR611DJQ.pooled.uniform.nodedup	designed	H3K4me3	C45	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p88cefbdbd8aa	ENCSR611DJQ.pooled.uniform.crop36	ENCSR611DJQ.pooled.uniform.nodedup	designed	H3K4me3	C45	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p9230b7b66f11	ENCSR611DJQ.pooled.uniform.crop50	ENCSR611DJQ.pooled.uniform.nodedup	designed	H3K4me3	C45	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf8b3d4b20e92	ENCSR611DJQ.pooled.uniform.depth0.125	ENCSR611DJQ.pooled.uniform.nodedup	designed	H3K4me3	C45	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p136a45a82e9c	ENCSR611DJQ.pooled.uniform.depth0.25	ENCSR611DJQ.pooled.uniform.nodedup	designed	H3K4me3	C45	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pa32709fe1e9e	ENCSR611DJQ.pooled.uniform.depth0.50	ENCSR611DJQ.pooled.uniform.nodedup	designed	H3K4me3	C45	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p8923b7b5cdc2	ENCSR611DJQ.pooled.uniform.mapq0	ENCSR611DJQ.pooled.uniform.nodedup	designed	H3K4me3	C45	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pe67b609c2247	ENCSR611DJQ.pooled.uniform.nodedup	ENCSR611DJQ.pooled.uniform.base	designed	H3K4me3	C45	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pb52bd7b0e0b5	ENCSR611DJQ.pooled.uniform.nodedup	ENCSR611DJQ.pooled.uniform.crop36	designed	H3K4me3	C45	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p0830d4af8980	ENCSR611DJQ.pooled.uniform.nodedup	ENCSR611DJQ.pooled.uniform.crop50	designed	H3K4me3	C45	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p9e5ab84d716d	ENCSR611DJQ.pooled.uniform.nodedup	ENCSR611DJQ.pooled.uniform.depth0.125	designed	H3K4me3	C45	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p7dcfbd7171e6	ENCSR611DJQ.pooled.uniform.nodedup	ENCSR611DJQ.pooled.uniform.depth0.25	designed	H3K4me3	C45	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p100a51ec764c	ENCSR611DJQ.pooled.uniform.nodedup	ENCSR611DJQ.pooled.uniform.depth0.50	designed	H3K4me3	C45	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p9b8fafc87370	ENCSR611DJQ.pooled.uniform.nodedup	ENCSR611DJQ.pooled.uniform.mapq0	designed	H3K4me3	C45	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p7287a485ab2e	ENCSR687EBF.pooled.uniform.base	ENCSR687EBF.pooled.uniform.nodedup	designed	H3K14ac	C32	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf5d76d6b01dc	ENCSR687EBF.pooled.uniform.depth0.125	ENCSR687EBF.pooled.uniform.nodedup	designed	H3K14ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pa2f033914695	ENCSR687EBF.pooled.uniform.depth0.25	ENCSR687EBF.pooled.uniform.nodedup	designed	H3K14ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p4a1426e30be0	ENCSR687EBF.pooled.uniform.depth0.50	ENCSR687EBF.pooled.uniform.nodedup	designed	H3K14ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pe9d837ff1117	ENCSR687EBF.pooled.uniform.mapq0	ENCSR687EBF.pooled.uniform.nodedup	designed	H3K14ac	C32	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pf583e12bb071	ENCSR687EBF.pooled.uniform.nodedup	ENCSR687EBF.pooled.uniform.base	designed	H3K14ac	C32	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pdcf0f3803542	ENCSR687EBF.pooled.uniform.nodedup	ENCSR687EBF.pooled.uniform.depth0.125	designed	H3K14ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p7e5011e60d50	ENCSR687EBF.pooled.uniform.nodedup	ENCSR687EBF.pooled.uniform.depth0.25	designed	H3K14ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p90cfedc732d3	ENCSR687EBF.pooled.uniform.nodedup	ENCSR687EBF.pooled.uniform.depth0.50	designed	H3K14ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pb0f7083f846c	ENCSR687EBF.pooled.uniform.nodedup	ENCSR687EBF.pooled.uniform.mapq0	designed	H3K14ac	C32	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pc7d8a609581a	ENCSR701KJD.pooled.uniform.base	ENCSR701KJD.pooled.uniform.nodedup	designed	H3K9ac	C27	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p9e6c80bff5d5	ENCSR701KJD.pooled.uniform.depth0.125	ENCSR701KJD.pooled.uniform.nodedup	designed	H3K9ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p0b1d7de4fd1f	ENCSR701KJD.pooled.uniform.depth0.25	ENCSR701KJD.pooled.uniform.nodedup	designed	H3K9ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p28dd272a99fa	ENCSR701KJD.pooled.uniform.depth0.50	ENCSR701KJD.pooled.uniform.nodedup	designed	H3K9ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p75f4d9d77d0e	ENCSR701KJD.pooled.uniform.mapq0	ENCSR701KJD.pooled.uniform.nodedup	designed	H3K9ac	C27	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p8ec2ec68ff41	ENCSR701KJD.pooled.uniform.nodedup	ENCSR701KJD.pooled.uniform.base	designed	H3K9ac	C27	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p8ec35a91fe59	ENCSR701KJD.pooled.uniform.nodedup	ENCSR701KJD.pooled.uniform.depth0.125	designed	H3K9ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p2ef8a4a34e5d	ENCSR701KJD.pooled.uniform.nodedup	ENCSR701KJD.pooled.uniform.depth0.25	designed	H3K9ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p0c78af6661ed	ENCSR701KJD.pooled.uniform.nodedup	ENCSR701KJD.pooled.uniform.depth0.50	designed	H3K9ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf6e55b1538d5	ENCSR701KJD.pooled.uniform.nodedup	ENCSR701KJD.pooled.uniform.mapq0	designed	H3K9ac	C27	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p8e5c9cb0feab	ENCSR703KXH.pooled.uniform.base	ENCSR703KXH.pooled.uniform.nodedup	designed	H2AK5ac	C17	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	paa2b27d11a2f	ENCSR703KXH.pooled.uniform.depth0.125	ENCSR703KXH.pooled.uniform.nodedup	designed	H2AK5ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p2ef044b6a93b	ENCSR703KXH.pooled.uniform.depth0.25	ENCSR703KXH.pooled.uniform.nodedup	designed	H2AK5ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p2e3d305a390a	ENCSR703KXH.pooled.uniform.depth0.50	ENCSR703KXH.pooled.uniform.nodedup	designed	H2AK5ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf71bea2a3114	ENCSR703KXH.pooled.uniform.mapq0	ENCSR703KXH.pooled.uniform.nodedup	designed	H2AK5ac	C17	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p4aea374be0e9	ENCSR703KXH.pooled.uniform.nodedup	ENCSR703KXH.pooled.uniform.base	designed	H2AK5ac	C17	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pde4727572eed	ENCSR703KXH.pooled.uniform.nodedup	ENCSR703KXH.pooled.uniform.depth0.125	designed	H2AK5ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p89b058635a0b	ENCSR703KXH.pooled.uniform.nodedup	ENCSR703KXH.pooled.uniform.depth0.25	designed	H2AK5ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p848ea8a07335	ENCSR703KXH.pooled.uniform.nodedup	ENCSR703KXH.pooled.uniform.depth0.50	designed	H2AK5ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p1654f8efdd38	ENCSR703KXH.pooled.uniform.nodedup	ENCSR703KXH.pooled.uniform.mapq0	designed	H2AK5ac	C17	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p4003c07260de	ENCSR728SZE.pooled.uniform.base	ENCSR728SZE.pooled.uniform.nodedup	designed	H4K20me1	C17	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p7ef3ecff55db	ENCSR728SZE.pooled.uniform.depth0.125	ENCSR728SZE.pooled.uniform.nodedup	designed	H4K20me1	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pea4338ccd867	ENCSR728SZE.pooled.uniform.depth0.25	ENCSR728SZE.pooled.uniform.nodedup	designed	H4K20me1	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p05728fa61e4d	ENCSR728SZE.pooled.uniform.depth0.50	ENCSR728SZE.pooled.uniform.nodedup	designed	H4K20me1	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pb7e87721bce6	ENCSR728SZE.pooled.uniform.mapq0	ENCSR728SZE.pooled.uniform.nodedup	designed	H4K20me1	C17	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p36c569e1cdfb	ENCSR728SZE.pooled.uniform.nodedup	ENCSR728SZE.pooled.uniform.base	designed	H4K20me1	C17	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pe5499250f198	ENCSR728SZE.pooled.uniform.nodedup	ENCSR728SZE.pooled.uniform.depth0.125	designed	H4K20me1	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p546cbdced84b	ENCSR728SZE.pooled.uniform.nodedup	ENCSR728SZE.pooled.uniform.depth0.25	designed	H4K20me1	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pc2905023db3a	ENCSR728SZE.pooled.uniform.nodedup	ENCSR728SZE.pooled.uniform.depth0.50	designed	H4K20me1	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p1c30d767659d	ENCSR728SZE.pooled.uniform.nodedup	ENCSR728SZE.pooled.uniform.mapq0	designed	H4K20me1	C17	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p03b8f371970a	ENCSR730POX.pooled.uniform.base	ENCSR730POX.pooled.uniform.nodedup	designed	H3K4me2	C18	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p3ac243aae0f7	ENCSR730POX.pooled.uniform.depth0.125	ENCSR730POX.pooled.uniform.nodedup	designed	H3K4me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf11f6118c9a5	ENCSR730POX.pooled.uniform.depth0.25	ENCSR730POX.pooled.uniform.nodedup	designed	H3K4me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p450fcc83cc42	ENCSR730POX.pooled.uniform.depth0.50	ENCSR730POX.pooled.uniform.nodedup	designed	H3K4me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pa351ac6aa04b	ENCSR730POX.pooled.uniform.mapq0	ENCSR730POX.pooled.uniform.nodedup	designed	H3K4me2	C18	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pf6f3361c8e65	ENCSR730POX.pooled.uniform.nodedup	ENCSR730POX.pooled.uniform.base	designed	H3K4me2	C18	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p16eab22d5be5	ENCSR730POX.pooled.uniform.nodedup	ENCSR730POX.pooled.uniform.depth0.125	designed	H3K4me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pb9addef4b2ea	ENCSR730POX.pooled.uniform.nodedup	ENCSR730POX.pooled.uniform.depth0.25	designed	H3K4me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p1cfd79646c3c	ENCSR730POX.pooled.uniform.nodedup	ENCSR730POX.pooled.uniform.depth0.50	designed	H3K4me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p1dabb5aa885a	ENCSR730POX.pooled.uniform.nodedup	ENCSR730POX.pooled.uniform.mapq0	designed	H3K4me2	C18	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pf6b9b6d41291	ENCSR747ZDF.pooled.uniform.base	ENCSR747ZDF.pooled.uniform.nodedup	designed	H4K20me1	C34	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p4415666cc4dc	ENCSR747ZDF.pooled.uniform.depth0.125	ENCSR747ZDF.pooled.uniform.nodedup	designed	H4K20me1	C34	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p32ed392f6e49	ENCSR747ZDF.pooled.uniform.depth0.25	ENCSR747ZDF.pooled.uniform.nodedup	designed	H4K20me1	C34	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p93eec1cc2c1e	ENCSR747ZDF.pooled.uniform.depth0.50	ENCSR747ZDF.pooled.uniform.nodedup	designed	H4K20me1	C34	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p54935198003f	ENCSR747ZDF.pooled.uniform.mapq0	ENCSR747ZDF.pooled.uniform.nodedup	designed	H4K20me1	C34	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pbb968b6f2476	ENCSR747ZDF.pooled.uniform.nodedup	ENCSR747ZDF.pooled.uniform.base	designed	H4K20me1	C34	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p5b2b16cbd9a5	ENCSR747ZDF.pooled.uniform.nodedup	ENCSR747ZDF.pooled.uniform.depth0.125	designed	H4K20me1	C34	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p7fbd2d067e36	ENCSR747ZDF.pooled.uniform.nodedup	ENCSR747ZDF.pooled.uniform.depth0.25	designed	H4K20me1	C34	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p96a8879eb634	ENCSR747ZDF.pooled.uniform.nodedup	ENCSR747ZDF.pooled.uniform.depth0.50	designed	H4K20me1	C34	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pe417c7152dd4	ENCSR747ZDF.pooled.uniform.nodedup	ENCSR747ZDF.pooled.uniform.mapq0	designed	H4K20me1	C34	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p69abf8c2ef2f	ENCSR806XIU.pooled.uniform.base	ENCSR806XIU.pooled.uniform.nodedup	designed	H3K4me2	C25	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p55f686acccfb	ENCSR806XIU.pooled.uniform.base	ENCSR806XIU.pooled.uniform.se	designed	H3K4me2	C25	se	0	1	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p360773a198dd	ENCSR806XIU.pooled.uniform.crop36	ENCSR806XIU.pooled.uniform.nodedup	designed	H3K4me2	C25	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf6d3bbe655a2	ENCSR806XIU.pooled.uniform.crop36	ENCSR806XIU.pooled.uniform.se	designed	H3K4me2	C25	crop+se	0	1	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pc512e17504af	ENCSR806XIU.pooled.uniform.crop50	ENCSR806XIU.pooled.uniform.nodedup	designed	H3K4me2	C25	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf0fd7e5621fa	ENCSR806XIU.pooled.uniform.crop50	ENCSR806XIU.pooled.uniform.se	designed	H3K4me2	C25	crop+se	0	1	1	0	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p5747a1d1958b	ENCSR806XIU.pooled.uniform.depth0.125	ENCSR806XIU.pooled.uniform.nodedup	designed	H3K4me2	C25	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p28d7654e4ee6	ENCSR806XIU.pooled.uniform.depth0.125	ENCSR806XIU.pooled.uniform.se	designed	H3K4me2	C25	depth+se	0	1	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p6790efe72e59	ENCSR806XIU.pooled.uniform.depth0.25	ENCSR806XIU.pooled.uniform.nodedup	designed	H3K4me2	C25	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p5b9334154e63	ENCSR806XIU.pooled.uniform.depth0.25	ENCSR806XIU.pooled.uniform.se	designed	H3K4me2	C25	depth+se	0	1	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pcc7c97bc4451	ENCSR806XIU.pooled.uniform.depth0.50	ENCSR806XIU.pooled.uniform.nodedup	designed	H3K4me2	C25	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p197782c46a7a	ENCSR806XIU.pooled.uniform.depth0.50	ENCSR806XIU.pooled.uniform.se	designed	H3K4me2	C25	depth+se	0	1	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p39e47d54fa06	ENCSR806XIU.pooled.uniform.mapq0	ENCSR806XIU.pooled.uniform.nodedup	designed	H3K4me2	C25	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pc1f56c0587a2	ENCSR806XIU.pooled.uniform.mapq0	ENCSR806XIU.pooled.uniform.se	designed	H3K4me2	C25	mapq+se	0	1	0	1	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p9d99a4461c6c	ENCSR806XIU.pooled.uniform.nodedup	ENCSR806XIU.pooled.uniform.base	designed	H3K4me2	C25	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p5de05c6a0e5e	ENCSR806XIU.pooled.uniform.nodedup	ENCSR806XIU.pooled.uniform.crop36	designed	H3K4me2	C25	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p3e5d67690c83	ENCSR806XIU.pooled.uniform.nodedup	ENCSR806XIU.pooled.uniform.crop50	designed	H3K4me2	C25	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p220acc171a1a	ENCSR806XIU.pooled.uniform.nodedup	ENCSR806XIU.pooled.uniform.depth0.125	designed	H3K4me2	C25	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p9418b0c08b6d	ENCSR806XIU.pooled.uniform.nodedup	ENCSR806XIU.pooled.uniform.depth0.25	designed	H3K4me2	C25	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p64bdaada5eb2	ENCSR806XIU.pooled.uniform.nodedup	ENCSR806XIU.pooled.uniform.depth0.50	designed	H3K4me2	C25	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p70fe6469467c	ENCSR806XIU.pooled.uniform.nodedup	ENCSR806XIU.pooled.uniform.mapq0	designed	H3K4me2	C25	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p3b3be7db4381	ENCSR806XIU.pooled.uniform.nodedup	ENCSR806XIU.pooled.uniform.se	designed	H3K4me2	C25	nodedup+se	1	1	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pa08608e76711	ENCSR806XIU.pooled.uniform.se	ENCSR806XIU.pooled.uniform.base	designed	H3K4me2	C25	se	0	1	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pbfe942d2e808	ENCSR806XIU.pooled.uniform.se	ENCSR806XIU.pooled.uniform.crop36	designed	H3K4me2	C25	crop+se	0	1	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p495325bb35b2	ENCSR806XIU.pooled.uniform.se	ENCSR806XIU.pooled.uniform.crop50	designed	H3K4me2	C25	crop+se	0	1	1	0	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pf29c6440c20c	ENCSR806XIU.pooled.uniform.se	ENCSR806XIU.pooled.uniform.depth0.125	designed	H3K4me2	C25	depth+se	0	1	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p4d9afa401149	ENCSR806XIU.pooled.uniform.se	ENCSR806XIU.pooled.uniform.depth0.25	designed	H3K4me2	C25	depth+se	0	1	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pc12bbf58c391	ENCSR806XIU.pooled.uniform.se	ENCSR806XIU.pooled.uniform.depth0.50	designed	H3K4me2	C25	depth+se	0	1	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pa5ad93e05c37	ENCSR806XIU.pooled.uniform.se	ENCSR806XIU.pooled.uniform.mapq0	designed	H3K4me2	C25	mapq+se	0	1	0	1	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p9367f07d700f	ENCSR806XIU.pooled.uniform.se	ENCSR806XIU.pooled.uniform.nodedup	designed	H3K4me2	C25	nodedup+se	1	1	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p1c649edc4439	ENCSR815BDB.pooled.uniform.base	ENCSR815BDB.pooled.uniform.nodedup	designed	chipseq-control	C02	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p4eda4ceee5fb	ENCSR815BDB.pooled.uniform.depth0.125	ENCSR815BDB.pooled.uniform.nodedup	designed	chipseq-control	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pebad1fecbe3e	ENCSR815BDB.pooled.uniform.depth0.25	ENCSR815BDB.pooled.uniform.nodedup	designed	chipseq-control	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pe23349b1ed87	ENCSR815BDB.pooled.uniform.depth0.50	ENCSR815BDB.pooled.uniform.nodedup	designed	chipseq-control	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p7da59377d832	ENCSR815BDB.pooled.uniform.mapq0	ENCSR815BDB.pooled.uniform.nodedup	designed	chipseq-control	C02	mapq+nodedup	1	0	0	1	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p7b29a83a67cf	ENCSR815BDB.pooled.uniform.nodedup	ENCSR815BDB.pooled.uniform.base	designed	chipseq-control	C02	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p4214fada2020	ENCSR815BDB.pooled.uniform.nodedup	ENCSR815BDB.pooled.uniform.depth0.125	designed	chipseq-control	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p222b874d8312	ENCSR815BDB.pooled.uniform.nodedup	ENCSR815BDB.pooled.uniform.depth0.25	designed	chipseq-control	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p55e592ec528f	ENCSR815BDB.pooled.uniform.nodedup	ENCSR815BDB.pooled.uniform.depth0.50	designed	chipseq-control	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p0eb7dc4b21e8	ENCSR815BDB.pooled.uniform.nodedup	ENCSR815BDB.pooled.uniform.mapq0	designed	chipseq-control	C02	mapq+nodedup	1	0	0	1	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p578fe283a7df	ENCSR817QHX.pooled.native.base	ENCSR817QHX.pooled.native.nodedup	designed	H3K4me1	C13	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pa13b4db71041	ENCSR817QHX.pooled.native.depth0.125	ENCSR817QHX.pooled.native.nodedup	designed	H3K4me1	C13	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p8c2791c1ecc4	ENCSR817QHX.pooled.native.depth0.25	ENCSR817QHX.pooled.native.nodedup	designed	H3K4me1	C13	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p4d759aae8701	ENCSR817QHX.pooled.native.depth0.50	ENCSR817QHX.pooled.native.nodedup	designed	H3K4me1	C13	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pc591efd98c28	ENCSR817QHX.pooled.native.mapq0	ENCSR817QHX.pooled.native.nodedup	designed	H3K4me1	C13	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p938b82583b7e	ENCSR817QHX.pooled.native.nodedup	ENCSR817QHX.pooled.native.base	designed	H3K4me1	C13	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pb665cf3c23ae	ENCSR817QHX.pooled.native.nodedup	ENCSR817QHX.pooled.native.depth0.125	designed	H3K4me1	C13	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pde863be1d679	ENCSR817QHX.pooled.native.nodedup	ENCSR817QHX.pooled.native.depth0.25	designed	H3K4me1	C13	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p18d4e3bbff4a	ENCSR817QHX.pooled.native.nodedup	ENCSR817QHX.pooled.native.depth0.50	designed	H3K4me1	C13	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p5751f8beead7	ENCSR817QHX.pooled.native.nodedup	ENCSR817QHX.pooled.native.mapq0	designed	H3K4me1	C13	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pad3b6c5fdae7	ENCSR869GBP.pooled.uniform.base	ENCSR869GBP.pooled.uniform.nodedup	designed	H3K36me3	C47	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pcfbee4e6b722	ENCSR869GBP.pooled.uniform.crop36	ENCSR869GBP.pooled.uniform.nodedup	designed	H3K36me3	C47	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pc468b26874ea	ENCSR869GBP.pooled.uniform.crop50	ENCSR869GBP.pooled.uniform.nodedup	designed	H3K36me3	C47	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf2ef55742d13	ENCSR869GBP.pooled.uniform.depth0.125	ENCSR869GBP.pooled.uniform.nodedup	designed	H3K36me3	C47	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	peca6c9f9e9db	ENCSR869GBP.pooled.uniform.depth0.25	ENCSR869GBP.pooled.uniform.nodedup	designed	H3K36me3	C47	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p297241c20493	ENCSR869GBP.pooled.uniform.depth0.50	ENCSR869GBP.pooled.uniform.nodedup	designed	H3K36me3	C47	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p84ed2cdfba5b	ENCSR869GBP.pooled.uniform.mapq0	ENCSR869GBP.pooled.uniform.nodedup	designed	H3K36me3	C47	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p068be71c6a36	ENCSR869GBP.pooled.uniform.nodedup	ENCSR869GBP.pooled.uniform.base	designed	H3K36me3	C47	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p9447c7926fb8	ENCSR869GBP.pooled.uniform.nodedup	ENCSR869GBP.pooled.uniform.crop36	designed	H3K36me3	C47	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pe550e8a623d8	ENCSR869GBP.pooled.uniform.nodedup	ENCSR869GBP.pooled.uniform.crop50	designed	H3K36me3	C47	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p7f38a69b0d64	ENCSR869GBP.pooled.uniform.nodedup	ENCSR869GBP.pooled.uniform.depth0.125	designed	H3K36me3	C47	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p1da386c9d976	ENCSR869GBP.pooled.uniform.nodedup	ENCSR869GBP.pooled.uniform.depth0.25	designed	H3K36me3	C47	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p412744322bfe	ENCSR869GBP.pooled.uniform.nodedup	ENCSR869GBP.pooled.uniform.depth0.50	designed	H3K36me3	C47	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p79c25f7cc76c	ENCSR869GBP.pooled.uniform.nodedup	ENCSR869GBP.pooled.uniform.mapq0	designed	H3K36me3	C47	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p295930c22b49	ENCSR883AQJ.pooled.uniform.base	ENCSR883AQJ.pooled.uniform.nodedup	designed	H3K9me3	C17	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pd367efe0c820	ENCSR883AQJ.pooled.uniform.depth0.125	ENCSR883AQJ.pooled.uniform.nodedup	designed	H3K9me3	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p07fa7dafe2cc	ENCSR883AQJ.pooled.uniform.depth0.25	ENCSR883AQJ.pooled.uniform.nodedup	designed	H3K9me3	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p9a64df568d42	ENCSR883AQJ.pooled.uniform.depth0.50	ENCSR883AQJ.pooled.uniform.nodedup	designed	H3K9me3	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pb2a4720598d2	ENCSR883AQJ.pooled.uniform.mapq0	ENCSR883AQJ.pooled.uniform.nodedup	designed	H3K9me3	C17	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p2757d2a2ba0d	ENCSR883AQJ.pooled.uniform.nodedup	ENCSR883AQJ.pooled.uniform.base	designed	H3K9me3	C17	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p697147bfad92	ENCSR883AQJ.pooled.uniform.nodedup	ENCSR883AQJ.pooled.uniform.depth0.125	designed	H3K9me3	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pbe05d87e1a18	ENCSR883AQJ.pooled.uniform.nodedup	ENCSR883AQJ.pooled.uniform.depth0.25	designed	H3K9me3	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p7cbc555884dd	ENCSR883AQJ.pooled.uniform.nodedup	ENCSR883AQJ.pooled.uniform.depth0.50	designed	H3K9me3	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p8765cc3889ca	ENCSR883AQJ.pooled.uniform.nodedup	ENCSR883AQJ.pooled.uniform.mapq0	designed	H3K9me3	C17	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p207d16e9e143	ENCSR887ESB.pooled.native.base	ENCSR887ESB.pooled.native.nodedup	designed	H3K4me1	C09	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pfdb0a53f04be	ENCSR887ESB.pooled.native.depth0.125	ENCSR887ESB.pooled.native.nodedup	designed	H3K4me1	C09	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p4d56887a3408	ENCSR887ESB.pooled.native.depth0.25	ENCSR887ESB.pooled.native.nodedup	designed	H3K4me1	C09	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pc39de3b8a6dd	ENCSR887ESB.pooled.native.depth0.50	ENCSR887ESB.pooled.native.nodedup	designed	H3K4me1	C09	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p7c2d3877e6ee	ENCSR887ESB.pooled.native.mapq0	ENCSR887ESB.pooled.native.nodedup	designed	H3K4me1	C09	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	paa0d7b93d8f4	ENCSR887ESB.pooled.native.nodedup	ENCSR887ESB.pooled.native.base	designed	H3K4me1	C09	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pea6f97c9fd41	ENCSR887ESB.pooled.native.nodedup	ENCSR887ESB.pooled.native.depth0.125	designed	H3K4me1	C09	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p18c248e979ce	ENCSR887ESB.pooled.native.nodedup	ENCSR887ESB.pooled.native.depth0.25	designed	H3K4me1	C09	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pdf9ad89ffb1e	ENCSR887ESB.pooled.native.nodedup	ENCSR887ESB.pooled.native.depth0.50	designed	H3K4me1	C09	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pd486b6a443cf	ENCSR887ESB.pooled.native.nodedup	ENCSR887ESB.pooled.native.mapq0	designed	H3K4me1	C09	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p395c3f9e9a69	ENCSR901SIL.pooled.uniform.base	ENCSR901SIL.pooled.uniform.nodedup	designed	H3K4me3	C20	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p459abd4ffdd5	ENCSR901SIL.pooled.uniform.crop36	ENCSR901SIL.pooled.uniform.nodedup	designed	H3K4me3	C20	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pfbd5d81ddb85	ENCSR901SIL.pooled.uniform.crop50	ENCSR901SIL.pooled.uniform.nodedup	designed	H3K4me3	C20	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p0772465a7ddd	ENCSR901SIL.pooled.uniform.depth0.125	ENCSR901SIL.pooled.uniform.nodedup	designed	H3K4me3	C20	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pe96bf4440962	ENCSR901SIL.pooled.uniform.depth0.25	ENCSR901SIL.pooled.uniform.nodedup	designed	H3K4me3	C20	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pa05174f401ba	ENCSR901SIL.pooled.uniform.depth0.50	ENCSR901SIL.pooled.uniform.nodedup	designed	H3K4me3	C20	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pbbb8d306c31a	ENCSR901SIL.pooled.uniform.mapq0	ENCSR901SIL.pooled.uniform.nodedup	designed	H3K4me3	C20	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p2e5006b7e099	ENCSR901SIL.pooled.uniform.nodedup	ENCSR901SIL.pooled.uniform.base	designed	H3K4me3	C20	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p7ee107b93ca7	ENCSR901SIL.pooled.uniform.nodedup	ENCSR901SIL.pooled.uniform.crop36	designed	H3K4me3	C20	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pfa5ff03c5e0d	ENCSR901SIL.pooled.uniform.nodedup	ENCSR901SIL.pooled.uniform.crop50	designed	H3K4me3	C20	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p1db0b865f9b9	ENCSR901SIL.pooled.uniform.nodedup	ENCSR901SIL.pooled.uniform.depth0.125	designed	H3K4me3	C20	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pc3694d4dc045	ENCSR901SIL.pooled.uniform.nodedup	ENCSR901SIL.pooled.uniform.depth0.25	designed	H3K4me3	C20	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pee6bbe85a71e	ENCSR901SIL.pooled.uniform.nodedup	ENCSR901SIL.pooled.uniform.depth0.50	designed	H3K4me3	C20	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pee067b1ac33f	ENCSR901SIL.pooled.uniform.nodedup	ENCSR901SIL.pooled.uniform.mapq0	designed	H3K4me3	C20	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	p6eea90b2ae6b	ENCSR941QJQ.pooled.uniform.base	ENCSR941QJQ.pooled.uniform.nodedup	designed	H3K4me2	C46	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p0e2ee0ce6f45	ENCSR941QJQ.pooled.uniform.depth0.125	ENCSR941QJQ.pooled.uniform.nodedup	designed	H3K4me2	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pb3090566fc56	ENCSR941QJQ.pooled.uniform.depth0.25	ENCSR941QJQ.pooled.uniform.nodedup	designed	H3K4me2	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p3ebde5fde846	ENCSR941QJQ.pooled.uniform.depth0.50	ENCSR941QJQ.pooled.uniform.nodedup	designed	H3K4me2	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pf940ffab15c4	ENCSR941QJQ.pooled.uniform.mapq0	ENCSR941QJQ.pooled.uniform.nodedup	designed	H3K4me2	C46	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+pairs.tsv	pf9d19895853c	ENCSR941QJQ.pooled.uniform.nodedup	ENCSR941QJQ.pooled.uniform.base	designed	H3K4me2	C46	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p9c332b332535	ENCSR941QJQ.pooled.uniform.nodedup	ENCSR941QJQ.pooled.uniform.depth0.125	designed	H3K4me2	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p4b603884e684	ENCSR941QJQ.pooled.uniform.nodedup	ENCSR941QJQ.pooled.uniform.depth0.25	designed	H3K4me2	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	p1b8973eddae7	ENCSR941QJQ.pooled.uniform.nodedup	ENCSR941QJQ.pooled.uniform.depth0.50	designed	H3K4me2	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+pairs.tsv	pa3e5943c4f77	ENCSR941QJQ.pooled.uniform.nodedup	ENCSR941QJQ.pooled.uniform.mapq0	designed	H3K4me2	C46	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pc7f766dca82e	ENCSR000APD.pooled.uniform.base	ENCSR000APD.pooled.uniform.nodedup		H3K79me2	C24	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p8dced3f2af13	ENCSR000APD.pooled.uniform.depth0.125	ENCSR000APD.pooled.uniform.nodedup		H3K79me2	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p08421d5e4cbe	ENCSR000APD.pooled.uniform.depth0.25	ENCSR000APD.pooled.uniform.nodedup		H3K79me2	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	peb39ab4214a4	ENCSR000APD.pooled.uniform.depth0.50	ENCSR000APD.pooled.uniform.nodedup		H3K79me2	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pe0bf7ca2e399	ENCSR000APD.pooled.uniform.mapq0	ENCSR000APD.pooled.uniform.nodedup		H3K79me2	C24	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p98b6e2b7e1fb	ENCSR000APD.pooled.uniform.nodedup	ENCSR000APD.pooled.uniform.base		H3K79me2	C24	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p756ea93b7068	ENCSR000APD.pooled.uniform.nodedup	ENCSR000APD.pooled.uniform.depth0.125		H3K79me2	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	peac30ccda03a	ENCSR000APD.pooled.uniform.nodedup	ENCSR000APD.pooled.uniform.depth0.25		H3K79me2	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p0483951a472b	ENCSR000APD.pooled.uniform.nodedup	ENCSR000APD.pooled.uniform.depth0.50		H3K79me2	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pd0fe2fd528e0	ENCSR000APD.pooled.uniform.nodedup	ENCSR000APD.pooled.uniform.mapq0		H3K79me2	C24	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pab038249140d	ENCSR000AQW.pooled.uniform.base	ENCSR000AQW.pooled.uniform.nodedup		H3K27ac	C12	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p7c238d5f865c	ENCSR000AQW.pooled.uniform.depth0.125	ENCSR000AQW.pooled.uniform.nodedup		H3K27ac	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p5cd470f8e9f3	ENCSR000AQW.pooled.uniform.depth0.25	ENCSR000AQW.pooled.uniform.nodedup		H3K27ac	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p91b3182322c6	ENCSR000AQW.pooled.uniform.depth0.50	ENCSR000AQW.pooled.uniform.nodedup		H3K27ac	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p2a9a3d168456	ENCSR000AQW.pooled.uniform.mapq0	ENCSR000AQW.pooled.uniform.nodedup		H3K27ac	C12	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p0ed4c3b525ed	ENCSR000AQW.pooled.uniform.nodedup	ENCSR000AQW.pooled.uniform.base		H3K27ac	C12	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p906d5a22c588	ENCSR000AQW.pooled.uniform.nodedup	ENCSR000AQW.pooled.uniform.depth0.125		H3K27ac	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pbf661969a64c	ENCSR000AQW.pooled.uniform.nodedup	ENCSR000AQW.pooled.uniform.depth0.25		H3K27ac	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p5c5ed5c0307b	ENCSR000AQW.pooled.uniform.nodedup	ENCSR000AQW.pooled.uniform.depth0.50		H3K27ac	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p0f0d542f1ac6	ENCSR000AQW.pooled.uniform.nodedup	ENCSR000AQW.pooled.uniform.mapq0		H3K27ac	C12	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p0d30c082350b	ENCSR000ARC.pooled.uniform.base	ENCSR000ARC.pooled.uniform.nodedup		H4K20me1	C12	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p430f8db22374	ENCSR000ARC.pooled.uniform.depth0.125	ENCSR000ARC.pooled.uniform.nodedup		H4K20me1	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p3d2fe750381a	ENCSR000ARC.pooled.uniform.depth0.25	ENCSR000ARC.pooled.uniform.nodedup		H4K20me1	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pc10f7bdcb478	ENCSR000ARC.pooled.uniform.depth0.50	ENCSR000ARC.pooled.uniform.nodedup		H4K20me1	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p9bd90d2fd2ba	ENCSR000ARC.pooled.uniform.mapq0	ENCSR000ARC.pooled.uniform.nodedup		H4K20me1	C12	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pa0f74d54a76e	ENCSR000ARC.pooled.uniform.nodedup	ENCSR000ARC.pooled.uniform.base		H4K20me1	C12	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p11e90fd1df43	ENCSR000ARC.pooled.uniform.nodedup	ENCSR000ARC.pooled.uniform.depth0.125		H4K20me1	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pd34ceae47ffb	ENCSR000ARC.pooled.uniform.nodedup	ENCSR000ARC.pooled.uniform.depth0.25		H4K20me1	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p130ace1d0f9a	ENCSR000ARC.pooled.uniform.nodedup	ENCSR000ARC.pooled.uniform.depth0.50		H4K20me1	C12	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pf04bf9d194b3	ENCSR000ARC.pooled.uniform.nodedup	ENCSR000ARC.pooled.uniform.mapq0		H4K20me1	C12	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p7f2349de77bf	ENCSR000DQU.pooled.uniform.base	ENCSR000DQU.pooled.uniform.nodedup		H3K27me3	C16	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pe9e978b32e92	ENCSR000DQU.pooled.uniform.depth0.125	ENCSR000DQU.pooled.uniform.nodedup		H3K27me3	C16	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p00848dc2a5ca	ENCSR000DQU.pooled.uniform.depth0.25	ENCSR000DQU.pooled.uniform.nodedup		H3K27me3	C16	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p6ea6f62fa0da	ENCSR000DQU.pooled.uniform.depth0.50	ENCSR000DQU.pooled.uniform.nodedup		H3K27me3	C16	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pdfbcc4c9add4	ENCSR000DQU.pooled.uniform.mapq0	ENCSR000DQU.pooled.uniform.nodedup		H3K27me3	C16	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p279bb52f4ba3	ENCSR000DQU.pooled.uniform.nodedup	ENCSR000DQU.pooled.uniform.base		H3K27me3	C16	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pb330e34a5e91	ENCSR000DQU.pooled.uniform.nodedup	ENCSR000DQU.pooled.uniform.depth0.125		H3K27me3	C16	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p63681f83985f	ENCSR000DQU.pooled.uniform.nodedup	ENCSR000DQU.pooled.uniform.depth0.25		H3K27me3	C16	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pad38def09d65	ENCSR000DQU.pooled.uniform.nodedup	ENCSR000DQU.pooled.uniform.depth0.50		H3K27me3	C16	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pdbcc9ce1f797	ENCSR000DQU.pooled.uniform.nodedup	ENCSR000DQU.pooled.uniform.mapq0		H3K27me3	C16	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p1fe90bb320ff	ENCSR000EWB.pooled.uniform.base	ENCSR000EWB.pooled.uniform.nodedup		H3K27me3	C24	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pc637da6157c1	ENCSR000EWB.pooled.uniform.depth0.125	ENCSR000EWB.pooled.uniform.nodedup		H3K27me3	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p3e955b63d51e	ENCSR000EWB.pooled.uniform.depth0.25	ENCSR000EWB.pooled.uniform.nodedup		H3K27me3	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pdfe32c4e3be9	ENCSR000EWB.pooled.uniform.depth0.50	ENCSR000EWB.pooled.uniform.nodedup		H3K27me3	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	peb2db533d128	ENCSR000EWB.pooled.uniform.mapq0	ENCSR000EWB.pooled.uniform.nodedup		H3K27me3	C24	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p1d87b75e9c3e	ENCSR000EWB.pooled.uniform.nodedup	ENCSR000EWB.pooled.uniform.base		H3K27me3	C24	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p444decaa99c1	ENCSR000EWB.pooled.uniform.nodedup	ENCSR000EWB.pooled.uniform.depth0.125		H3K27me3	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p34c3f566b506	ENCSR000EWB.pooled.uniform.nodedup	ENCSR000EWB.pooled.uniform.depth0.25		H3K27me3	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pdf09d8d084b5	ENCSR000EWB.pooled.uniform.nodedup	ENCSR000EWB.pooled.uniform.depth0.50		H3K27me3	C24	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p215ee0fc9c14	ENCSR000EWB.pooled.uniform.nodedup	ENCSR000EWB.pooled.uniform.mapq0		H3K27me3	C24	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p7b5ef8d6412f	ENCSR038OIN.pooled.uniform.base	ENCSR038OIN.pooled.uniform.nodedup		H3K36me3	C46	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p2a530973914a	ENCSR038OIN.pooled.uniform.depth0.125	ENCSR038OIN.pooled.uniform.nodedup		H3K36me3	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p7c8b01fa19f2	ENCSR038OIN.pooled.uniform.depth0.25	ENCSR038OIN.pooled.uniform.nodedup		H3K36me3	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pd1f7215fa0b6	ENCSR038OIN.pooled.uniform.depth0.50	ENCSR038OIN.pooled.uniform.nodedup		H3K36me3	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pad77543222b4	ENCSR038OIN.pooled.uniform.mapq0	ENCSR038OIN.pooled.uniform.nodedup		H3K36me3	C46	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p3bbdd7bca07a	ENCSR038OIN.pooled.uniform.nodedup	ENCSR038OIN.pooled.uniform.base		H3K36me3	C46	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pfb106c9bffe6	ENCSR038OIN.pooled.uniform.nodedup	ENCSR038OIN.pooled.uniform.depth0.125		H3K36me3	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pf4d06f15ff64	ENCSR038OIN.pooled.uniform.nodedup	ENCSR038OIN.pooled.uniform.depth0.25		H3K36me3	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pf135f9792a6a	ENCSR038OIN.pooled.uniform.nodedup	ENCSR038OIN.pooled.uniform.depth0.50		H3K36me3	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p20ba236f0f62	ENCSR038OIN.pooled.uniform.nodedup	ENCSR038OIN.pooled.uniform.mapq0		H3K36me3	C46	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p8ec09a520c69	ENCSR054BKO.pooled.uniform.base	ENCSR054BKO.pooled.uniform.nodedup		H3K27ac	C48	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pf3b3b181fd2d	ENCSR054BKO.pooled.uniform.crop36	ENCSR054BKO.pooled.uniform.nodedup		H3K27ac	C48	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pe8f0c66ef8de	ENCSR054BKO.pooled.uniform.depth0.125	ENCSR054BKO.pooled.uniform.nodedup		H3K27ac	C48	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pd445adffc6ea	ENCSR054BKO.pooled.uniform.depth0.25	ENCSR054BKO.pooled.uniform.nodedup		H3K27ac	C48	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p4758bc224848	ENCSR054BKO.pooled.uniform.depth0.50	ENCSR054BKO.pooled.uniform.nodedup		H3K27ac	C48	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p58bc4b22c349	ENCSR054BKO.pooled.uniform.mapq0	ENCSR054BKO.pooled.uniform.nodedup		H3K27ac	C48	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pc3a21455c6d8	ENCSR054BKO.pooled.uniform.nodedup	ENCSR054BKO.pooled.uniform.base		H3K27ac	C48	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p138c1ed8fe7b	ENCSR054BKO.pooled.uniform.nodedup	ENCSR054BKO.pooled.uniform.crop36		H3K27ac	C48	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pc4f140f94098	ENCSR054BKO.pooled.uniform.nodedup	ENCSR054BKO.pooled.uniform.depth0.125		H3K27ac	C48	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pc5c384696f3b	ENCSR054BKO.pooled.uniform.nodedup	ENCSR054BKO.pooled.uniform.depth0.25		H3K27ac	C48	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pd7d89a3b8d5e	ENCSR054BKO.pooled.uniform.nodedup	ENCSR054BKO.pooled.uniform.depth0.50		H3K27ac	C48	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pcaf64d49d1dc	ENCSR054BKO.pooled.uniform.nodedup	ENCSR054BKO.pooled.uniform.mapq0		H3K27ac	C48	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pd73ec0663732	ENCSR080PZL.pooled.uniform.base	ENCSR080PZL.pooled.uniform.nodedup		DNase-seq	C03	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pc8c903c2379a	ENCSR080PZL.pooled.uniform.depth0.125	ENCSR080PZL.pooled.uniform.nodedup		DNase-seq	C03	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pb06c59309b45	ENCSR080PZL.pooled.uniform.depth0.25	ENCSR080PZL.pooled.uniform.nodedup		DNase-seq	C03	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pf955b922a96a	ENCSR080PZL.pooled.uniform.depth0.50	ENCSR080PZL.pooled.uniform.nodedup		DNase-seq	C03	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p88dc34470452	ENCSR080PZL.pooled.uniform.mapq0	ENCSR080PZL.pooled.uniform.nodedup		DNase-seq	C03	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p0164cc643ef6	ENCSR080PZL.pooled.uniform.nodedup	ENCSR080PZL.pooled.uniform.base		DNase-seq	C03	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p1820f4a07017	ENCSR080PZL.pooled.uniform.nodedup	ENCSR080PZL.pooled.uniform.depth0.125		DNase-seq	C03	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pf0a5291cae09	ENCSR080PZL.pooled.uniform.nodedup	ENCSR080PZL.pooled.uniform.depth0.25		DNase-seq	C03	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p4be1e6db2f0b	ENCSR080PZL.pooled.uniform.nodedup	ENCSR080PZL.pooled.uniform.depth0.50		DNase-seq	C03	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p10d518f8daef	ENCSR080PZL.pooled.uniform.nodedup	ENCSR080PZL.pooled.uniform.mapq0		DNase-seq	C03	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pd39cd17b3a89	ENCSR123JZO.pooled.uniform.base	ENCSR123JZO.pooled.uniform.nodedup		H2BK15ac	C32	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p1c6c08e41b2d	ENCSR123JZO.pooled.uniform.depth0.125	ENCSR123JZO.pooled.uniform.nodedup		H2BK15ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p0cb94e319f49	ENCSR123JZO.pooled.uniform.depth0.25	ENCSR123JZO.pooled.uniform.nodedup		H2BK15ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pd0761e3764ab	ENCSR123JZO.pooled.uniform.depth0.50	ENCSR123JZO.pooled.uniform.nodedup		H2BK15ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p5871c973625a	ENCSR123JZO.pooled.uniform.mapq0	ENCSR123JZO.pooled.uniform.nodedup		H2BK15ac	C32	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pa991e134b6ba	ENCSR123JZO.pooled.uniform.nodedup	ENCSR123JZO.pooled.uniform.base		H2BK15ac	C32	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p23e768f2f940	ENCSR123JZO.pooled.uniform.nodedup	ENCSR123JZO.pooled.uniform.depth0.125		H2BK15ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p93c5de696924	ENCSR123JZO.pooled.uniform.nodedup	ENCSR123JZO.pooled.uniform.depth0.25		H2BK15ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	paeb7ef512dac	ENCSR123JZO.pooled.uniform.nodedup	ENCSR123JZO.pooled.uniform.depth0.50		H2BK15ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p7ceb32fd2fbc	ENCSR123JZO.pooled.uniform.nodedup	ENCSR123JZO.pooled.uniform.mapq0		H2BK15ac	C32	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p180a4a39eb8f	ENCSR124DYB.pooled.uniform.base	ENCSR124DYB.pooled.uniform.nodedup		H2AFZ	C23	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pfbf725871c02	ENCSR124DYB.pooled.uniform.depth0.125	ENCSR124DYB.pooled.uniform.nodedup		H2AFZ	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pf5190dc7f437	ENCSR124DYB.pooled.uniform.depth0.25	ENCSR124DYB.pooled.uniform.nodedup		H2AFZ	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pefe8e724e926	ENCSR124DYB.pooled.uniform.depth0.50	ENCSR124DYB.pooled.uniform.nodedup		H2AFZ	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p54614bd7139e	ENCSR124DYB.pooled.uniform.mapq0	ENCSR124DYB.pooled.uniform.nodedup		H2AFZ	C23	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pbe0138840e76	ENCSR124DYB.pooled.uniform.nodedup	ENCSR124DYB.pooled.uniform.base		H2AFZ	C23	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p2ff878e93f45	ENCSR124DYB.pooled.uniform.nodedup	ENCSR124DYB.pooled.uniform.depth0.125		H2AFZ	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p07178c41ae46	ENCSR124DYB.pooled.uniform.nodedup	ENCSR124DYB.pooled.uniform.depth0.25		H2AFZ	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p9eee48614737	ENCSR124DYB.pooled.uniform.nodedup	ENCSR124DYB.pooled.uniform.depth0.50		H2AFZ	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p44d4e547e5d8	ENCSR124DYB.pooled.uniform.nodedup	ENCSR124DYB.pooled.uniform.mapq0		H2AFZ	C23	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pcf9d8de73f65	ENCSR130EML.pooled.uniform.base	ENCSR130EML.pooled.uniform.nodedup		H3K4ac	C17	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p0d9dbb43f25a	ENCSR130EML.pooled.uniform.depth0.125	ENCSR130EML.pooled.uniform.nodedup		H3K4ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pd071eef20a49	ENCSR130EML.pooled.uniform.depth0.25	ENCSR130EML.pooled.uniform.nodedup		H3K4ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p66f7accdf0c7	ENCSR130EML.pooled.uniform.depth0.50	ENCSR130EML.pooled.uniform.nodedup		H3K4ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p308196eb13f5	ENCSR130EML.pooled.uniform.mapq0	ENCSR130EML.pooled.uniform.nodedup		H3K4ac	C17	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p3815e55c14c8	ENCSR130EML.pooled.uniform.nodedup	ENCSR130EML.pooled.uniform.base		H3K4ac	C17	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pfc0c5fbfb113	ENCSR130EML.pooled.uniform.nodedup	ENCSR130EML.pooled.uniform.depth0.125		H3K4ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p2b9294b54c51	ENCSR130EML.pooled.uniform.nodedup	ENCSR130EML.pooled.uniform.depth0.25		H3K4ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pc91ba72903f5	ENCSR130EML.pooled.uniform.nodedup	ENCSR130EML.pooled.uniform.depth0.50		H3K4ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pabe99a0abdc0	ENCSR130EML.pooled.uniform.nodedup	ENCSR130EML.pooled.uniform.mapq0		H3K4ac	C17	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pce59876a9f99	ENCSR133QBG.pooled.uniform.base	ENCSR133QBG.pooled.uniform.nodedup		H3K9me3	C37	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pd23a29cb124b	ENCSR133QBG.pooled.uniform.crop36	ENCSR133QBG.pooled.uniform.nodedup		H3K9me3	C37	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p4a37407f451e	ENCSR133QBG.pooled.uniform.crop50	ENCSR133QBG.pooled.uniform.nodedup		H3K9me3	C37	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pfc638170172b	ENCSR133QBG.pooled.uniform.depth0.125	ENCSR133QBG.pooled.uniform.nodedup		H3K9me3	C37	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p4320401eb5c4	ENCSR133QBG.pooled.uniform.depth0.25	ENCSR133QBG.pooled.uniform.nodedup		H3K9me3	C37	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pbe4bf6fa7f26	ENCSR133QBG.pooled.uniform.depth0.50	ENCSR133QBG.pooled.uniform.nodedup		H3K9me3	C37	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p5ae2f6d91943	ENCSR133QBG.pooled.uniform.mapq0	ENCSR133QBG.pooled.uniform.nodedup		H3K9me3	C37	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pa7ffea440ee1	ENCSR133QBG.pooled.uniform.nodedup	ENCSR133QBG.pooled.uniform.base		H3K9me3	C37	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pbdcf3de3bff5	ENCSR133QBG.pooled.uniform.nodedup	ENCSR133QBG.pooled.uniform.crop36		H3K9me3	C37	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pf9f11eebd7a3	ENCSR133QBG.pooled.uniform.nodedup	ENCSR133QBG.pooled.uniform.crop50		H3K9me3	C37	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pdebf3f6920df	ENCSR133QBG.pooled.uniform.nodedup	ENCSR133QBG.pooled.uniform.depth0.125		H3K9me3	C37	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p82e6111df6ef	ENCSR133QBG.pooled.uniform.nodedup	ENCSR133QBG.pooled.uniform.depth0.25		H3K9me3	C37	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pb276d589e866	ENCSR133QBG.pooled.uniform.nodedup	ENCSR133QBG.pooled.uniform.depth0.50		H3K9me3	C37	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p768be0999cca	ENCSR133QBG.pooled.uniform.nodedup	ENCSR133QBG.pooled.uniform.mapq0		H3K9me3	C37	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p1d01dd38073a	ENCSR162MGR.pooled.native.base	ENCSR162MGR.pooled.native.nodedup		H3K36me3	C36	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pf834c7442619	ENCSR162MGR.pooled.native.depth0.125	ENCSR162MGR.pooled.native.nodedup		H3K36me3	C36	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	padc97af7e5aa	ENCSR162MGR.pooled.native.depth0.25	ENCSR162MGR.pooled.native.nodedup		H3K36me3	C36	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p1e81faf33218	ENCSR162MGR.pooled.native.depth0.50	ENCSR162MGR.pooled.native.nodedup		H3K36me3	C36	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pd10f6f2ea585	ENCSR162MGR.pooled.native.mapq0	ENCSR162MGR.pooled.native.nodedup		H3K36me3	C36	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pbdea241aab75	ENCSR162MGR.pooled.native.nodedup	ENCSR162MGR.pooled.native.base		H3K36me3	C36	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p585431f8aab3	ENCSR162MGR.pooled.native.nodedup	ENCSR162MGR.pooled.native.depth0.125		H3K36me3	C36	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p822814dd4518	ENCSR162MGR.pooled.native.nodedup	ENCSR162MGR.pooled.native.depth0.25		H3K36me3	C36	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p6748f598f088	ENCSR162MGR.pooled.native.nodedup	ENCSR162MGR.pooled.native.depth0.50		H3K36me3	C36	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p4e04a63c27dd	ENCSR162MGR.pooled.native.nodedup	ENCSR162MGR.pooled.native.mapq0		H3K36me3	C36	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pded588a05650	ENCSR188GJE.pooled.uniform.base	ENCSR188GJE.pooled.uniform.nodedup		H3K79me2	C18	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pd4213ece4ead	ENCSR188GJE.pooled.uniform.depth0.125	ENCSR188GJE.pooled.uniform.nodedup		H3K79me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pda31ba316e32	ENCSR188GJE.pooled.uniform.depth0.25	ENCSR188GJE.pooled.uniform.nodedup		H3K79me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p378fa14d6189	ENCSR188GJE.pooled.uniform.depth0.50	ENCSR188GJE.pooled.uniform.nodedup		H3K79me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p79b5f68442a7	ENCSR188GJE.pooled.uniform.mapq0	ENCSR188GJE.pooled.uniform.nodedup		H3K79me2	C18	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p6b411128d018	ENCSR188GJE.pooled.uniform.nodedup	ENCSR188GJE.pooled.uniform.base		H3K79me2	C18	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pe86ed2c62889	ENCSR188GJE.pooled.uniform.nodedup	ENCSR188GJE.pooled.uniform.depth0.125		H3K79me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pde4da2d5ed9e	ENCSR188GJE.pooled.uniform.nodedup	ENCSR188GJE.pooled.uniform.depth0.25		H3K79me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p2f9b1aff640b	ENCSR188GJE.pooled.uniform.nodedup	ENCSR188GJE.pooled.uniform.depth0.50		H3K79me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p447d0661332b	ENCSR188GJE.pooled.uniform.nodedup	ENCSR188GJE.pooled.uniform.mapq0		H3K79me2	C18	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pe8b809746ba3	ENCSR213TIR.pooled.uniform.base	ENCSR213TIR.pooled.uniform.nodedup		H2BK5ac	C46	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p83999c89928b	ENCSR213TIR.pooled.uniform.depth0.125	ENCSR213TIR.pooled.uniform.nodedup		H2BK5ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p9f5dc9e1ff90	ENCSR213TIR.pooled.uniform.depth0.25	ENCSR213TIR.pooled.uniform.nodedup		H2BK5ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pdfada7c00c46	ENCSR213TIR.pooled.uniform.depth0.50	ENCSR213TIR.pooled.uniform.nodedup		H2BK5ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p9e38ad3a2a86	ENCSR213TIR.pooled.uniform.mapq0	ENCSR213TIR.pooled.uniform.nodedup		H2BK5ac	C46	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pbbdc4a1777fb	ENCSR213TIR.pooled.uniform.nodedup	ENCSR213TIR.pooled.uniform.base		H2BK5ac	C46	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pf1d46d10338d	ENCSR213TIR.pooled.uniform.nodedup	ENCSR213TIR.pooled.uniform.depth0.125		H2BK5ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p5eb3d91da7b4	ENCSR213TIR.pooled.uniform.nodedup	ENCSR213TIR.pooled.uniform.depth0.25		H2BK5ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pc2376e926784	ENCSR213TIR.pooled.uniform.nodedup	ENCSR213TIR.pooled.uniform.depth0.50		H2BK5ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p61209d698e55	ENCSR213TIR.pooled.uniform.nodedup	ENCSR213TIR.pooled.uniform.mapq0		H2BK5ac	C46	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p3a65742f1a3f	ENCSR219MYH.pooled.uniform.base	ENCSR219MYH.pooled.uniform.nodedup		H3K9ac	C23	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p35d4e4202758	ENCSR219MYH.pooled.uniform.depth0.125	ENCSR219MYH.pooled.uniform.nodedup		H3K9ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pfbae665708d0	ENCSR219MYH.pooled.uniform.depth0.25	ENCSR219MYH.pooled.uniform.nodedup		H3K9ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p4b535ce03e7f	ENCSR219MYH.pooled.uniform.depth0.50	ENCSR219MYH.pooled.uniform.nodedup		H3K9ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pa7df1514ee16	ENCSR219MYH.pooled.uniform.mapq0	ENCSR219MYH.pooled.uniform.nodedup		H3K9ac	C23	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pf253369857c3	ENCSR219MYH.pooled.uniform.nodedup	ENCSR219MYH.pooled.uniform.base		H3K9ac	C23	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pd73df37be402	ENCSR219MYH.pooled.uniform.nodedup	ENCSR219MYH.pooled.uniform.depth0.125		H3K9ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p03aee21a4c3d	ENCSR219MYH.pooled.uniform.nodedup	ENCSR219MYH.pooled.uniform.depth0.25		H3K9ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p1a1ebc17e512	ENCSR219MYH.pooled.uniform.nodedup	ENCSR219MYH.pooled.uniform.depth0.50		H3K9ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p1872927d8e48	ENCSR219MYH.pooled.uniform.nodedup	ENCSR219MYH.pooled.uniform.mapq0		H3K9ac	C23	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p93bdc08931a2	ENCSR234YIU.pooled.uniform.base	ENCSR234YIU.pooled.uniform.nodedup		H3K4me3	C02	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p8f1459d512e8	ENCSR234YIU.pooled.uniform.depth0.125	ENCSR234YIU.pooled.uniform.nodedup		H3K4me3	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p6dee1c4c54d3	ENCSR234YIU.pooled.uniform.depth0.25	ENCSR234YIU.pooled.uniform.nodedup		H3K4me3	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p0243683d3f90	ENCSR234YIU.pooled.uniform.depth0.50	ENCSR234YIU.pooled.uniform.nodedup		H3K4me3	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p19a2a5a633a4	ENCSR234YIU.pooled.uniform.mapq0	ENCSR234YIU.pooled.uniform.nodedup		H3K4me3	C02	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p79f43b6942f8	ENCSR234YIU.pooled.uniform.nodedup	ENCSR234YIU.pooled.uniform.base		H3K4me3	C02	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p73d47a6e0bef	ENCSR234YIU.pooled.uniform.nodedup	ENCSR234YIU.pooled.uniform.depth0.125		H3K4me3	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pc9e5c907d4d2	ENCSR234YIU.pooled.uniform.nodedup	ENCSR234YIU.pooled.uniform.depth0.25		H3K4me3	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p233d62bbc5d6	ENCSR234YIU.pooled.uniform.nodedup	ENCSR234YIU.pooled.uniform.depth0.50		H3K4me3	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p0ac35843bc0c	ENCSR234YIU.pooled.uniform.nodedup	ENCSR234YIU.pooled.uniform.mapq0		H3K4me3	C02	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p33d695d87cd8	ENCSR241JLU.pooled.native.base	ENCSR241JLU.pooled.native.nodedup		H3K27me3	C10	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p44fd016a8010	ENCSR241JLU.pooled.native.depth0.125	ENCSR241JLU.pooled.native.nodedup		H3K27me3	C10	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pe3f04186642f	ENCSR241JLU.pooled.native.depth0.25	ENCSR241JLU.pooled.native.nodedup		H3K27me3	C10	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pcc576f40b1ea	ENCSR241JLU.pooled.native.depth0.50	ENCSR241JLU.pooled.native.nodedup		H3K27me3	C10	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p6c4330567f45	ENCSR241JLU.pooled.native.mapq0	ENCSR241JLU.pooled.native.nodedup		H3K27me3	C10	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p3e6e19768108	ENCSR241JLU.pooled.native.nodedup	ENCSR241JLU.pooled.native.base		H3K27me3	C10	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pee683fc169af	ENCSR241JLU.pooled.native.nodedup	ENCSR241JLU.pooled.native.depth0.125		H3K27me3	C10	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p7f99129394e8	ENCSR241JLU.pooled.native.nodedup	ENCSR241JLU.pooled.native.depth0.25		H3K27me3	C10	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p0bdf28e865ad	ENCSR241JLU.pooled.native.nodedup	ENCSR241JLU.pooled.native.depth0.50		H3K27me3	C10	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pda5bd56abdaf	ENCSR241JLU.pooled.native.nodedup	ENCSR241JLU.pooled.native.mapq0		H3K27me3	C10	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p28002d46f5ec	ENCSR241PXI.pooled.native.base	ENCSR241PXI.pooled.native.nodedup		H3K9me3	C29	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p9fa6e345f4a0	ENCSR241PXI.pooled.native.depth0.125	ENCSR241PXI.pooled.native.nodedup		H3K9me3	C29	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pa24ae14828af	ENCSR241PXI.pooled.native.depth0.25	ENCSR241PXI.pooled.native.nodedup		H3K9me3	C29	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p5c6c36c00424	ENCSR241PXI.pooled.native.depth0.50	ENCSR241PXI.pooled.native.nodedup		H3K9me3	C29	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p76efb2582db9	ENCSR241PXI.pooled.native.mapq0	ENCSR241PXI.pooled.native.nodedup		H3K9me3	C29	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p5a0d580a5ab9	ENCSR241PXI.pooled.native.nodedup	ENCSR241PXI.pooled.native.base		H3K9me3	C29	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p0a65a50eca50	ENCSR241PXI.pooled.native.nodedup	ENCSR241PXI.pooled.native.depth0.125		H3K9me3	C29	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pf6ff3bd468ed	ENCSR241PXI.pooled.native.nodedup	ENCSR241PXI.pooled.native.depth0.25		H3K9me3	C29	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p86f22471242b	ENCSR241PXI.pooled.native.nodedup	ENCSR241PXI.pooled.native.depth0.50		H3K9me3	C29	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pd82397ea4b65	ENCSR241PXI.pooled.native.nodedup	ENCSR241PXI.pooled.native.mapq0		H3K9me3	C29	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	peb029988fb7d	ENCSR254NLC.pooled.uniform.base	ENCSR254NLC.pooled.uniform.nodedup		H3K4me1	C32	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p98aa091c5a8d	ENCSR254NLC.pooled.uniform.depth0.125	ENCSR254NLC.pooled.uniform.nodedup		H3K4me1	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p5f1b3cda5407	ENCSR254NLC.pooled.uniform.depth0.25	ENCSR254NLC.pooled.uniform.nodedup		H3K4me1	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p67ab32f4cab3	ENCSR254NLC.pooled.uniform.depth0.50	ENCSR254NLC.pooled.uniform.nodedup		H3K4me1	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p506dc9f0efc7	ENCSR254NLC.pooled.uniform.mapq0	ENCSR254NLC.pooled.uniform.nodedup		H3K4me1	C32	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p7b293298f978	ENCSR254NLC.pooled.uniform.nodedup	ENCSR254NLC.pooled.uniform.base		H3K4me1	C32	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p805349931d9d	ENCSR254NLC.pooled.uniform.nodedup	ENCSR254NLC.pooled.uniform.depth0.125		H3K4me1	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pf280d8937a23	ENCSR254NLC.pooled.uniform.nodedup	ENCSR254NLC.pooled.uniform.depth0.25		H3K4me1	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p714159d51672	ENCSR254NLC.pooled.uniform.nodedup	ENCSR254NLC.pooled.uniform.depth0.50		H3K4me1	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pf9ac5eadf8b6	ENCSR254NLC.pooled.uniform.nodedup	ENCSR254NLC.pooled.uniform.mapq0		H3K4me1	C32	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pd60b37ba6e07	ENCSR339FOO.pooled.uniform.base	ENCSR339FOO.pooled.uniform.nodedup		H3K79me2	C31	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p9fd466eeb78d	ENCSR339FOO.pooled.uniform.crop36	ENCSR339FOO.pooled.uniform.nodedup		H3K79me2	C31	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p63986a33ef8b	ENCSR339FOO.pooled.uniform.crop50	ENCSR339FOO.pooled.uniform.nodedup		H3K79me2	C31	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	paf19b4a2c947	ENCSR339FOO.pooled.uniform.depth0.125	ENCSR339FOO.pooled.uniform.nodedup		H3K79me2	C31	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pfe4331e1f46c	ENCSR339FOO.pooled.uniform.depth0.25	ENCSR339FOO.pooled.uniform.nodedup		H3K79me2	C31	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p363e5a57757c	ENCSR339FOO.pooled.uniform.depth0.50	ENCSR339FOO.pooled.uniform.nodedup		H3K79me2	C31	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pea2f791a63e4	ENCSR339FOO.pooled.uniform.mapq0	ENCSR339FOO.pooled.uniform.nodedup		H3K79me2	C31	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pfe335fc11a60	ENCSR339FOO.pooled.uniform.nodedup	ENCSR339FOO.pooled.uniform.base		H3K79me2	C31	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p5062cc7ae4a3	ENCSR339FOO.pooled.uniform.nodedup	ENCSR339FOO.pooled.uniform.crop36		H3K79me2	C31	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pa287b8b90918	ENCSR339FOO.pooled.uniform.nodedup	ENCSR339FOO.pooled.uniform.crop50		H3K79me2	C31	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p10d10f2e25bf	ENCSR339FOO.pooled.uniform.nodedup	ENCSR339FOO.pooled.uniform.depth0.125		H3K79me2	C31	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p8dbd1351ff5f	ENCSR339FOO.pooled.uniform.nodedup	ENCSR339FOO.pooled.uniform.depth0.25		H3K79me2	C31	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p50cc9abeeb40	ENCSR339FOO.pooled.uniform.nodedup	ENCSR339FOO.pooled.uniform.depth0.50		H3K79me2	C31	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p68c03aa97815	ENCSR339FOO.pooled.uniform.nodedup	ENCSR339FOO.pooled.uniform.mapq0		H3K79me2	C31	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pe39ce1f9476a	ENCSR371FHD.pooled.uniform.base	ENCSR371FHD.pooled.uniform.nodedup		H4K91ac	C46	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pef538ef48d99	ENCSR371FHD.pooled.uniform.depth0.125	ENCSR371FHD.pooled.uniform.nodedup		H4K91ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p41258fc0759a	ENCSR371FHD.pooled.uniform.depth0.25	ENCSR371FHD.pooled.uniform.nodedup		H4K91ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pb7607abf84fc	ENCSR371FHD.pooled.uniform.depth0.50	ENCSR371FHD.pooled.uniform.nodedup		H4K91ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p6eb5ab96943d	ENCSR371FHD.pooled.uniform.mapq0	ENCSR371FHD.pooled.uniform.nodedup		H4K91ac	C46	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p59929b017d45	ENCSR371FHD.pooled.uniform.nodedup	ENCSR371FHD.pooled.uniform.base		H4K91ac	C46	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p1a90f8de2721	ENCSR371FHD.pooled.uniform.nodedup	ENCSR371FHD.pooled.uniform.depth0.125		H4K91ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p927eca5b468b	ENCSR371FHD.pooled.uniform.nodedup	ENCSR371FHD.pooled.uniform.depth0.25		H4K91ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p9d4c73de12a2	ENCSR371FHD.pooled.uniform.nodedup	ENCSR371FHD.pooled.uniform.depth0.50		H4K91ac	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p2efb9907fb06	ENCSR371FHD.pooled.uniform.nodedup	ENCSR371FHD.pooled.uniform.mapq0		H4K91ac	C46	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pf60716adf874	ENCSR430RVP.pooled.native.base	ENCSR430RVP.pooled.native.nodedup		H3K27ac	C04	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pd1061301a241	ENCSR430RVP.pooled.native.depth0.125	ENCSR430RVP.pooled.native.nodedup		H3K27ac	C04	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p2d765e57fb38	ENCSR430RVP.pooled.native.depth0.25	ENCSR430RVP.pooled.native.nodedup		H3K27ac	C04	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pfa92b10d2a12	ENCSR430RVP.pooled.native.depth0.50	ENCSR430RVP.pooled.native.nodedup		H3K27ac	C04	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pb19ad0df1903	ENCSR430RVP.pooled.native.mapq0	ENCSR430RVP.pooled.native.nodedup		H3K27ac	C04	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pe55519a29786	ENCSR430RVP.pooled.native.nodedup	ENCSR430RVP.pooled.native.base		H3K27ac	C04	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p71833e4f97b0	ENCSR430RVP.pooled.native.nodedup	ENCSR430RVP.pooled.native.depth0.125		H3K27ac	C04	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pb7acf8084554	ENCSR430RVP.pooled.native.nodedup	ENCSR430RVP.pooled.native.depth0.25		H3K27ac	C04	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pf12c12d89ee2	ENCSR430RVP.pooled.native.nodedup	ENCSR430RVP.pooled.native.depth0.50		H3K27ac	C04	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p28fef5a381f9	ENCSR430RVP.pooled.native.nodedup	ENCSR430RVP.pooled.native.mapq0		H3K27ac	C04	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p49941193e0f2	ENCSR444TMC.pooled.uniform.base	ENCSR444TMC.pooled.uniform.nodedup		H4K8ac	C23	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p1607b898e1bf	ENCSR444TMC.pooled.uniform.depth0.125	ENCSR444TMC.pooled.uniform.nodedup		H4K8ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pf2e76f33acac	ENCSR444TMC.pooled.uniform.depth0.25	ENCSR444TMC.pooled.uniform.nodedup		H4K8ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pe584824f450e	ENCSR444TMC.pooled.uniform.depth0.50	ENCSR444TMC.pooled.uniform.nodedup		H4K8ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pdca8c0af1b55	ENCSR444TMC.pooled.uniform.mapq0	ENCSR444TMC.pooled.uniform.nodedup		H4K8ac	C23	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pbeeebb4b9f0f	ENCSR444TMC.pooled.uniform.nodedup	ENCSR444TMC.pooled.uniform.base		H4K8ac	C23	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p5ddf4efbe00c	ENCSR444TMC.pooled.uniform.nodedup	ENCSR444TMC.pooled.uniform.depth0.125		H4K8ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pa58358610e97	ENCSR444TMC.pooled.uniform.nodedup	ENCSR444TMC.pooled.uniform.depth0.25		H4K8ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p9462815ee0e1	ENCSR444TMC.pooled.uniform.nodedup	ENCSR444TMC.pooled.uniform.depth0.50		H4K8ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pfae9c86f9e13	ENCSR444TMC.pooled.uniform.nodedup	ENCSR444TMC.pooled.uniform.mapq0		H4K8ac	C23	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p8fcf5639a9af	ENCSR521AIV.pooled.uniform.crop36	ENCSR521AIV.pooled.uniform.se		H3K9ac	C25	crop+se	0	1	1	0	0	val	0	0	1	1	1	1	0	0	1
+evalset	pb0ea2166bf1c	ENCSR521AIV.pooled.uniform.crop50	ENCSR521AIV.pooled.uniform.se		H3K9ac	C25	crop+se	0	1	1	0	0	val	1	0	1	1	1	1	0	1	1
+evalset	pef68b8dd1b77	ENCSR521AIV.pooled.uniform.se	ENCSR521AIV.pooled.uniform.crop36		H3K9ac	C25	crop+se	0	1	1	0	0	val	0	0	1	1	1	1	0	0	1
+evalset	p774645c77492	ENCSR521AIV.pooled.uniform.se	ENCSR521AIV.pooled.uniform.crop50		H3K9ac	C25	crop+se	0	1	1	0	0	val	1	0	1	1	1	1	0	1	1
+evalset	p666dc3463ab3	ENCSR523ENE.pooled.uniform.base	ENCSR523ENE.pooled.uniform.nodedup		H2BK12ac	C23	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pdfd78117c688	ENCSR523ENE.pooled.uniform.depth0.125	ENCSR523ENE.pooled.uniform.nodedup		H2BK12ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pb11e7c4ae90f	ENCSR523ENE.pooled.uniform.depth0.25	ENCSR523ENE.pooled.uniform.nodedup		H2BK12ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p5cb6805fd0ed	ENCSR523ENE.pooled.uniform.depth0.50	ENCSR523ENE.pooled.uniform.nodedup		H2BK12ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p68516e37d585	ENCSR523ENE.pooled.uniform.mapq0	ENCSR523ENE.pooled.uniform.nodedup		H2BK12ac	C23	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pf3b9e03a9b1e	ENCSR523ENE.pooled.uniform.nodedup	ENCSR523ENE.pooled.uniform.base		H2BK12ac	C23	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pb097a379a0ee	ENCSR523ENE.pooled.uniform.nodedup	ENCSR523ENE.pooled.uniform.depth0.125		H2BK12ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pf9c3d38e7e8b	ENCSR523ENE.pooled.uniform.nodedup	ENCSR523ENE.pooled.uniform.depth0.25		H2BK12ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p4b68bd62c08e	ENCSR523ENE.pooled.uniform.nodedup	ENCSR523ENE.pooled.uniform.depth0.50		H2BK12ac	C23	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p1e404921b2c8	ENCSR523ENE.pooled.uniform.nodedup	ENCSR523ENE.pooled.uniform.mapq0		H2BK12ac	C23	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p7fcba6c84774	ENCSR526NKM.pooled.uniform.base	ENCSR526NKM.pooled.uniform.nodedup		H2AFZ	C27	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p3d98ddbd5cd8	ENCSR526NKM.pooled.uniform.depth0.125	ENCSR526NKM.pooled.uniform.nodedup		H2AFZ	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p2c5fe5b53660	ENCSR526NKM.pooled.uniform.depth0.25	ENCSR526NKM.pooled.uniform.nodedup		H2AFZ	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pca2bb4a6bbbe	ENCSR526NKM.pooled.uniform.depth0.50	ENCSR526NKM.pooled.uniform.nodedup		H2AFZ	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p5fc0317a1550	ENCSR526NKM.pooled.uniform.mapq0	ENCSR526NKM.pooled.uniform.nodedup		H2AFZ	C27	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p7d2458d93872	ENCSR526NKM.pooled.uniform.nodedup	ENCSR526NKM.pooled.uniform.base		H2AFZ	C27	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p3835abc17235	ENCSR526NKM.pooled.uniform.nodedup	ENCSR526NKM.pooled.uniform.depth0.125		H2AFZ	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p553411c61a8b	ENCSR526NKM.pooled.uniform.nodedup	ENCSR526NKM.pooled.uniform.depth0.25		H2AFZ	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p4e91e333c16f	ENCSR526NKM.pooled.uniform.nodedup	ENCSR526NKM.pooled.uniform.depth0.50		H2AFZ	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pf479d834409b	ENCSR526NKM.pooled.uniform.nodedup	ENCSR526NKM.pooled.uniform.mapq0		H2AFZ	C27	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p78f344ce6791	ENCSR594AQO.pooled.uniform.base	ENCSR594AQO.pooled.uniform.nodedup		H3K79me1	C27	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pe0f78bf3862d	ENCSR594AQO.pooled.uniform.depth0.125	ENCSR594AQO.pooled.uniform.nodedup		H3K79me1	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pe6d64645acb5	ENCSR594AQO.pooled.uniform.depth0.25	ENCSR594AQO.pooled.uniform.nodedup		H3K79me1	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p4f69fca34c30	ENCSR594AQO.pooled.uniform.depth0.50	ENCSR594AQO.pooled.uniform.nodedup		H3K79me1	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p66466ace5199	ENCSR594AQO.pooled.uniform.mapq0	ENCSR594AQO.pooled.uniform.nodedup		H3K79me1	C27	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	padaf6bffed03	ENCSR594AQO.pooled.uniform.nodedup	ENCSR594AQO.pooled.uniform.base		H3K79me1	C27	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pd29afb66b3a1	ENCSR594AQO.pooled.uniform.nodedup	ENCSR594AQO.pooled.uniform.depth0.125		H3K79me1	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pe68cc79210f1	ENCSR594AQO.pooled.uniform.nodedup	ENCSR594AQO.pooled.uniform.depth0.25		H3K79me1	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p795f46031d79	ENCSR594AQO.pooled.uniform.nodedup	ENCSR594AQO.pooled.uniform.depth0.50		H3K79me1	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p9635d540e281	ENCSR594AQO.pooled.uniform.nodedup	ENCSR594AQO.pooled.uniform.mapq0		H3K79me1	C27	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p50e0dd58f80d	ENCSR604THF.pooled.uniform.base	ENCSR604THF.pooled.uniform.nodedup		H3K18ac	C27	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p4ab006e19626	ENCSR604THF.pooled.uniform.depth0.125	ENCSR604THF.pooled.uniform.nodedup		H3K18ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pf5dc87074b38	ENCSR604THF.pooled.uniform.depth0.25	ENCSR604THF.pooled.uniform.nodedup		H3K18ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p3e5146ed0f5a	ENCSR604THF.pooled.uniform.depth0.50	ENCSR604THF.pooled.uniform.nodedup		H3K18ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p6da2e843fd5d	ENCSR604THF.pooled.uniform.mapq0	ENCSR604THF.pooled.uniform.nodedup		H3K18ac	C27	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p2d5e27fcc255	ENCSR604THF.pooled.uniform.nodedup	ENCSR604THF.pooled.uniform.base		H3K18ac	C27	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p87fd27402e46	ENCSR604THF.pooled.uniform.nodedup	ENCSR604THF.pooled.uniform.depth0.125		H3K18ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pcfe66c2f6860	ENCSR604THF.pooled.uniform.nodedup	ENCSR604THF.pooled.uniform.depth0.25		H3K18ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pc99cf5cccfe1	ENCSR604THF.pooled.uniform.nodedup	ENCSR604THF.pooled.uniform.depth0.50		H3K18ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pdf2b35505186	ENCSR604THF.pooled.uniform.nodedup	ENCSR604THF.pooled.uniform.mapq0		H3K18ac	C27	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pb934502421fe	ENCSR611DJQ.pooled.uniform.base	ENCSR611DJQ.pooled.uniform.nodedup		H3K4me3	C45	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p88cefbdbd8aa	ENCSR611DJQ.pooled.uniform.crop36	ENCSR611DJQ.pooled.uniform.nodedup		H3K4me3	C45	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p9230b7b66f11	ENCSR611DJQ.pooled.uniform.crop50	ENCSR611DJQ.pooled.uniform.nodedup		H3K4me3	C45	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pf8b3d4b20e92	ENCSR611DJQ.pooled.uniform.depth0.125	ENCSR611DJQ.pooled.uniform.nodedup		H3K4me3	C45	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p136a45a82e9c	ENCSR611DJQ.pooled.uniform.depth0.25	ENCSR611DJQ.pooled.uniform.nodedup		H3K4me3	C45	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pa32709fe1e9e	ENCSR611DJQ.pooled.uniform.depth0.50	ENCSR611DJQ.pooled.uniform.nodedup		H3K4me3	C45	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p8923b7b5cdc2	ENCSR611DJQ.pooled.uniform.mapq0	ENCSR611DJQ.pooled.uniform.nodedup		H3K4me3	C45	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pe67b609c2247	ENCSR611DJQ.pooled.uniform.nodedup	ENCSR611DJQ.pooled.uniform.base		H3K4me3	C45	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pb52bd7b0e0b5	ENCSR611DJQ.pooled.uniform.nodedup	ENCSR611DJQ.pooled.uniform.crop36		H3K4me3	C45	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p0830d4af8980	ENCSR611DJQ.pooled.uniform.nodedup	ENCSR611DJQ.pooled.uniform.crop50		H3K4me3	C45	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p9e5ab84d716d	ENCSR611DJQ.pooled.uniform.nodedup	ENCSR611DJQ.pooled.uniform.depth0.125		H3K4me3	C45	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p7dcfbd7171e6	ENCSR611DJQ.pooled.uniform.nodedup	ENCSR611DJQ.pooled.uniform.depth0.25		H3K4me3	C45	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p100a51ec764c	ENCSR611DJQ.pooled.uniform.nodedup	ENCSR611DJQ.pooled.uniform.depth0.50		H3K4me3	C45	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p9b8fafc87370	ENCSR611DJQ.pooled.uniform.nodedup	ENCSR611DJQ.pooled.uniform.mapq0		H3K4me3	C45	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p7287a485ab2e	ENCSR687EBF.pooled.uniform.base	ENCSR687EBF.pooled.uniform.nodedup		H3K14ac	C32	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pf5d76d6b01dc	ENCSR687EBF.pooled.uniform.depth0.125	ENCSR687EBF.pooled.uniform.nodedup		H3K14ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pa2f033914695	ENCSR687EBF.pooled.uniform.depth0.25	ENCSR687EBF.pooled.uniform.nodedup		H3K14ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p4a1426e30be0	ENCSR687EBF.pooled.uniform.depth0.50	ENCSR687EBF.pooled.uniform.nodedup		H3K14ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pe9d837ff1117	ENCSR687EBF.pooled.uniform.mapq0	ENCSR687EBF.pooled.uniform.nodedup		H3K14ac	C32	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pf583e12bb071	ENCSR687EBF.pooled.uniform.nodedup	ENCSR687EBF.pooled.uniform.base		H3K14ac	C32	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pdcf0f3803542	ENCSR687EBF.pooled.uniform.nodedup	ENCSR687EBF.pooled.uniform.depth0.125		H3K14ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p7e5011e60d50	ENCSR687EBF.pooled.uniform.nodedup	ENCSR687EBF.pooled.uniform.depth0.25		H3K14ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p90cfedc732d3	ENCSR687EBF.pooled.uniform.nodedup	ENCSR687EBF.pooled.uniform.depth0.50		H3K14ac	C32	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pb0f7083f846c	ENCSR687EBF.pooled.uniform.nodedup	ENCSR687EBF.pooled.uniform.mapq0		H3K14ac	C32	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pc7d8a609581a	ENCSR701KJD.pooled.uniform.base	ENCSR701KJD.pooled.uniform.nodedup		H3K9ac	C27	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p9e6c80bff5d5	ENCSR701KJD.pooled.uniform.depth0.125	ENCSR701KJD.pooled.uniform.nodedup		H3K9ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p0b1d7de4fd1f	ENCSR701KJD.pooled.uniform.depth0.25	ENCSR701KJD.pooled.uniform.nodedup		H3K9ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p28dd272a99fa	ENCSR701KJD.pooled.uniform.depth0.50	ENCSR701KJD.pooled.uniform.nodedup		H3K9ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p75f4d9d77d0e	ENCSR701KJD.pooled.uniform.mapq0	ENCSR701KJD.pooled.uniform.nodedup		H3K9ac	C27	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p8ec2ec68ff41	ENCSR701KJD.pooled.uniform.nodedup	ENCSR701KJD.pooled.uniform.base		H3K9ac	C27	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p8ec35a91fe59	ENCSR701KJD.pooled.uniform.nodedup	ENCSR701KJD.pooled.uniform.depth0.125		H3K9ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p2ef8a4a34e5d	ENCSR701KJD.pooled.uniform.nodedup	ENCSR701KJD.pooled.uniform.depth0.25		H3K9ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p0c78af6661ed	ENCSR701KJD.pooled.uniform.nodedup	ENCSR701KJD.pooled.uniform.depth0.50		H3K9ac	C27	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pf6e55b1538d5	ENCSR701KJD.pooled.uniform.nodedup	ENCSR701KJD.pooled.uniform.mapq0		H3K9ac	C27	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p8e5c9cb0feab	ENCSR703KXH.pooled.uniform.base	ENCSR703KXH.pooled.uniform.nodedup		H2AK5ac	C17	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	paa2b27d11a2f	ENCSR703KXH.pooled.uniform.depth0.125	ENCSR703KXH.pooled.uniform.nodedup		H2AK5ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p2ef044b6a93b	ENCSR703KXH.pooled.uniform.depth0.25	ENCSR703KXH.pooled.uniform.nodedup		H2AK5ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p2e3d305a390a	ENCSR703KXH.pooled.uniform.depth0.50	ENCSR703KXH.pooled.uniform.nodedup		H2AK5ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pf71bea2a3114	ENCSR703KXH.pooled.uniform.mapq0	ENCSR703KXH.pooled.uniform.nodedup		H2AK5ac	C17	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p4aea374be0e9	ENCSR703KXH.pooled.uniform.nodedup	ENCSR703KXH.pooled.uniform.base		H2AK5ac	C17	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pde4727572eed	ENCSR703KXH.pooled.uniform.nodedup	ENCSR703KXH.pooled.uniform.depth0.125		H2AK5ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p89b058635a0b	ENCSR703KXH.pooled.uniform.nodedup	ENCSR703KXH.pooled.uniform.depth0.25		H2AK5ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p848ea8a07335	ENCSR703KXH.pooled.uniform.nodedup	ENCSR703KXH.pooled.uniform.depth0.50		H2AK5ac	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p1654f8efdd38	ENCSR703KXH.pooled.uniform.nodedup	ENCSR703KXH.pooled.uniform.mapq0		H2AK5ac	C17	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p4003c07260de	ENCSR728SZE.pooled.uniform.base	ENCSR728SZE.pooled.uniform.nodedup		H4K20me1	C17	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p7ef3ecff55db	ENCSR728SZE.pooled.uniform.depth0.125	ENCSR728SZE.pooled.uniform.nodedup		H4K20me1	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pea4338ccd867	ENCSR728SZE.pooled.uniform.depth0.25	ENCSR728SZE.pooled.uniform.nodedup		H4K20me1	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p05728fa61e4d	ENCSR728SZE.pooled.uniform.depth0.50	ENCSR728SZE.pooled.uniform.nodedup		H4K20me1	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pb7e87721bce6	ENCSR728SZE.pooled.uniform.mapq0	ENCSR728SZE.pooled.uniform.nodedup		H4K20me1	C17	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p36c569e1cdfb	ENCSR728SZE.pooled.uniform.nodedup	ENCSR728SZE.pooled.uniform.base		H4K20me1	C17	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pe5499250f198	ENCSR728SZE.pooled.uniform.nodedup	ENCSR728SZE.pooled.uniform.depth0.125		H4K20me1	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p546cbdced84b	ENCSR728SZE.pooled.uniform.nodedup	ENCSR728SZE.pooled.uniform.depth0.25		H4K20me1	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pc2905023db3a	ENCSR728SZE.pooled.uniform.nodedup	ENCSR728SZE.pooled.uniform.depth0.50		H4K20me1	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p1c30d767659d	ENCSR728SZE.pooled.uniform.nodedup	ENCSR728SZE.pooled.uniform.mapq0		H4K20me1	C17	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p03b8f371970a	ENCSR730POX.pooled.uniform.base	ENCSR730POX.pooled.uniform.nodedup		H3K4me2	C18	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p3ac243aae0f7	ENCSR730POX.pooled.uniform.depth0.125	ENCSR730POX.pooled.uniform.nodedup		H3K4me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pf11f6118c9a5	ENCSR730POX.pooled.uniform.depth0.25	ENCSR730POX.pooled.uniform.nodedup		H3K4me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p450fcc83cc42	ENCSR730POX.pooled.uniform.depth0.50	ENCSR730POX.pooled.uniform.nodedup		H3K4me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pa351ac6aa04b	ENCSR730POX.pooled.uniform.mapq0	ENCSR730POX.pooled.uniform.nodedup		H3K4me2	C18	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pf6f3361c8e65	ENCSR730POX.pooled.uniform.nodedup	ENCSR730POX.pooled.uniform.base		H3K4me2	C18	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p16eab22d5be5	ENCSR730POX.pooled.uniform.nodedup	ENCSR730POX.pooled.uniform.depth0.125		H3K4me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pb9addef4b2ea	ENCSR730POX.pooled.uniform.nodedup	ENCSR730POX.pooled.uniform.depth0.25		H3K4me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p1cfd79646c3c	ENCSR730POX.pooled.uniform.nodedup	ENCSR730POX.pooled.uniform.depth0.50		H3K4me2	C18	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p1dabb5aa885a	ENCSR730POX.pooled.uniform.nodedup	ENCSR730POX.pooled.uniform.mapq0		H3K4me2	C18	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pf6b9b6d41291	ENCSR747ZDF.pooled.uniform.base	ENCSR747ZDF.pooled.uniform.nodedup		H4K20me1	C34	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p4415666cc4dc	ENCSR747ZDF.pooled.uniform.depth0.125	ENCSR747ZDF.pooled.uniform.nodedup		H4K20me1	C34	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p32ed392f6e49	ENCSR747ZDF.pooled.uniform.depth0.25	ENCSR747ZDF.pooled.uniform.nodedup		H4K20me1	C34	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p93eec1cc2c1e	ENCSR747ZDF.pooled.uniform.depth0.50	ENCSR747ZDF.pooled.uniform.nodedup		H4K20me1	C34	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p54935198003f	ENCSR747ZDF.pooled.uniform.mapq0	ENCSR747ZDF.pooled.uniform.nodedup		H4K20me1	C34	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pbb968b6f2476	ENCSR747ZDF.pooled.uniform.nodedup	ENCSR747ZDF.pooled.uniform.base		H4K20me1	C34	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p5b2b16cbd9a5	ENCSR747ZDF.pooled.uniform.nodedup	ENCSR747ZDF.pooled.uniform.depth0.125		H4K20me1	C34	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p7fbd2d067e36	ENCSR747ZDF.pooled.uniform.nodedup	ENCSR747ZDF.pooled.uniform.depth0.25		H4K20me1	C34	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p96a8879eb634	ENCSR747ZDF.pooled.uniform.nodedup	ENCSR747ZDF.pooled.uniform.depth0.50		H4K20me1	C34	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pe417c7152dd4	ENCSR747ZDF.pooled.uniform.nodedup	ENCSR747ZDF.pooled.uniform.mapq0		H4K20me1	C34	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p69abf8c2ef2f	ENCSR806XIU.pooled.uniform.base	ENCSR806XIU.pooled.uniform.nodedup		H3K4me2	C25	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p55f686acccfb	ENCSR806XIU.pooled.uniform.base	ENCSR806XIU.pooled.uniform.se		H3K4me2	C25	se	0	1	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p360773a198dd	ENCSR806XIU.pooled.uniform.crop36	ENCSR806XIU.pooled.uniform.nodedup		H3K4me2	C25	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pf6d3bbe655a2	ENCSR806XIU.pooled.uniform.crop36	ENCSR806XIU.pooled.uniform.se		H3K4me2	C25	crop+se	0	1	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pc512e17504af	ENCSR806XIU.pooled.uniform.crop50	ENCSR806XIU.pooled.uniform.nodedup		H3K4me2	C25	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pf0fd7e5621fa	ENCSR806XIU.pooled.uniform.crop50	ENCSR806XIU.pooled.uniform.se		H3K4me2	C25	crop+se	0	1	1	0	0	val	1	0	1	1	1	1	1	1	1
+evalset	p5747a1d1958b	ENCSR806XIU.pooled.uniform.depth0.125	ENCSR806XIU.pooled.uniform.nodedup		H3K4me2	C25	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p28d7654e4ee6	ENCSR806XIU.pooled.uniform.depth0.125	ENCSR806XIU.pooled.uniform.se		H3K4me2	C25	depth+se	0	1	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p6790efe72e59	ENCSR806XIU.pooled.uniform.depth0.25	ENCSR806XIU.pooled.uniform.nodedup		H3K4me2	C25	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p5b9334154e63	ENCSR806XIU.pooled.uniform.depth0.25	ENCSR806XIU.pooled.uniform.se		H3K4me2	C25	depth+se	0	1	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pcc7c97bc4451	ENCSR806XIU.pooled.uniform.depth0.50	ENCSR806XIU.pooled.uniform.nodedup		H3K4me2	C25	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p197782c46a7a	ENCSR806XIU.pooled.uniform.depth0.50	ENCSR806XIU.pooled.uniform.se		H3K4me2	C25	depth+se	0	1	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p39e47d54fa06	ENCSR806XIU.pooled.uniform.mapq0	ENCSR806XIU.pooled.uniform.nodedup		H3K4me2	C25	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pc1f56c0587a2	ENCSR806XIU.pooled.uniform.mapq0	ENCSR806XIU.pooled.uniform.se		H3K4me2	C25	mapq+se	0	1	0	1	0	val	0	0	1	1	1	1	1	0	1
+evalset	p9d99a4461c6c	ENCSR806XIU.pooled.uniform.nodedup	ENCSR806XIU.pooled.uniform.base		H3K4me2	C25	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p5de05c6a0e5e	ENCSR806XIU.pooled.uniform.nodedup	ENCSR806XIU.pooled.uniform.crop36		H3K4me2	C25	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p3e5d67690c83	ENCSR806XIU.pooled.uniform.nodedup	ENCSR806XIU.pooled.uniform.crop50		H3K4me2	C25	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p220acc171a1a	ENCSR806XIU.pooled.uniform.nodedup	ENCSR806XIU.pooled.uniform.depth0.125		H3K4me2	C25	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p9418b0c08b6d	ENCSR806XIU.pooled.uniform.nodedup	ENCSR806XIU.pooled.uniform.depth0.25		H3K4me2	C25	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p64bdaada5eb2	ENCSR806XIU.pooled.uniform.nodedup	ENCSR806XIU.pooled.uniform.depth0.50		H3K4me2	C25	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p70fe6469467c	ENCSR806XIU.pooled.uniform.nodedup	ENCSR806XIU.pooled.uniform.mapq0		H3K4me2	C25	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p3b3be7db4381	ENCSR806XIU.pooled.uniform.nodedup	ENCSR806XIU.pooled.uniform.se		H3K4me2	C25	nodedup+se	1	1	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pa08608e76711	ENCSR806XIU.pooled.uniform.se	ENCSR806XIU.pooled.uniform.base		H3K4me2	C25	se	0	1	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pbfe942d2e808	ENCSR806XIU.pooled.uniform.se	ENCSR806XIU.pooled.uniform.crop36		H3K4me2	C25	crop+se	0	1	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p495325bb35b2	ENCSR806XIU.pooled.uniform.se	ENCSR806XIU.pooled.uniform.crop50		H3K4me2	C25	crop+se	0	1	1	0	0	val	1	0	1	1	1	1	1	1	1
+evalset	pf29c6440c20c	ENCSR806XIU.pooled.uniform.se	ENCSR806XIU.pooled.uniform.depth0.125		H3K4me2	C25	depth+se	0	1	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p4d9afa401149	ENCSR806XIU.pooled.uniform.se	ENCSR806XIU.pooled.uniform.depth0.25		H3K4me2	C25	depth+se	0	1	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pc12bbf58c391	ENCSR806XIU.pooled.uniform.se	ENCSR806XIU.pooled.uniform.depth0.50		H3K4me2	C25	depth+se	0	1	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pa5ad93e05c37	ENCSR806XIU.pooled.uniform.se	ENCSR806XIU.pooled.uniform.mapq0		H3K4me2	C25	mapq+se	0	1	0	1	0	val	0	0	1	1	1	1	1	0	1
+evalset	p9367f07d700f	ENCSR806XIU.pooled.uniform.se	ENCSR806XIU.pooled.uniform.nodedup		H3K4me2	C25	nodedup+se	1	1	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p1c649edc4439	ENCSR815BDB.pooled.uniform.base	ENCSR815BDB.pooled.uniform.nodedup		chipseq-control	C02	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p4eda4ceee5fb	ENCSR815BDB.pooled.uniform.depth0.125	ENCSR815BDB.pooled.uniform.nodedup		chipseq-control	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pebad1fecbe3e	ENCSR815BDB.pooled.uniform.depth0.25	ENCSR815BDB.pooled.uniform.nodedup		chipseq-control	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pe23349b1ed87	ENCSR815BDB.pooled.uniform.depth0.50	ENCSR815BDB.pooled.uniform.nodedup		chipseq-control	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p7da59377d832	ENCSR815BDB.pooled.uniform.mapq0	ENCSR815BDB.pooled.uniform.nodedup		chipseq-control	C02	mapq+nodedup	1	0	0	1	0	val	0	0	1	1	1	1	1	0	1
+evalset	p7b29a83a67cf	ENCSR815BDB.pooled.uniform.nodedup	ENCSR815BDB.pooled.uniform.base		chipseq-control	C02	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p4214fada2020	ENCSR815BDB.pooled.uniform.nodedup	ENCSR815BDB.pooled.uniform.depth0.125		chipseq-control	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p222b874d8312	ENCSR815BDB.pooled.uniform.nodedup	ENCSR815BDB.pooled.uniform.depth0.25		chipseq-control	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p55e592ec528f	ENCSR815BDB.pooled.uniform.nodedup	ENCSR815BDB.pooled.uniform.depth0.50		chipseq-control	C02	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p0eb7dc4b21e8	ENCSR815BDB.pooled.uniform.nodedup	ENCSR815BDB.pooled.uniform.mapq0		chipseq-control	C02	mapq+nodedup	1	0	0	1	0	val	0	0	1	1	1	1	1	0	1
+evalset	p578fe283a7df	ENCSR817QHX.pooled.native.base	ENCSR817QHX.pooled.native.nodedup		H3K4me1	C13	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pa13b4db71041	ENCSR817QHX.pooled.native.depth0.125	ENCSR817QHX.pooled.native.nodedup		H3K4me1	C13	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p8c2791c1ecc4	ENCSR817QHX.pooled.native.depth0.25	ENCSR817QHX.pooled.native.nodedup		H3K4me1	C13	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p4d759aae8701	ENCSR817QHX.pooled.native.depth0.50	ENCSR817QHX.pooled.native.nodedup		H3K4me1	C13	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pc591efd98c28	ENCSR817QHX.pooled.native.mapq0	ENCSR817QHX.pooled.native.nodedup		H3K4me1	C13	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p938b82583b7e	ENCSR817QHX.pooled.native.nodedup	ENCSR817QHX.pooled.native.base		H3K4me1	C13	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pb665cf3c23ae	ENCSR817QHX.pooled.native.nodedup	ENCSR817QHX.pooled.native.depth0.125		H3K4me1	C13	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pde863be1d679	ENCSR817QHX.pooled.native.nodedup	ENCSR817QHX.pooled.native.depth0.25		H3K4me1	C13	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p18d4e3bbff4a	ENCSR817QHX.pooled.native.nodedup	ENCSR817QHX.pooled.native.depth0.50		H3K4me1	C13	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p5751f8beead7	ENCSR817QHX.pooled.native.nodedup	ENCSR817QHX.pooled.native.mapq0		H3K4me1	C13	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pad3b6c5fdae7	ENCSR869GBP.pooled.uniform.base	ENCSR869GBP.pooled.uniform.nodedup		H3K36me3	C47	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pcfbee4e6b722	ENCSR869GBP.pooled.uniform.crop36	ENCSR869GBP.pooled.uniform.nodedup		H3K36me3	C47	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pc468b26874ea	ENCSR869GBP.pooled.uniform.crop50	ENCSR869GBP.pooled.uniform.nodedup		H3K36me3	C47	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pf2ef55742d13	ENCSR869GBP.pooled.uniform.depth0.125	ENCSR869GBP.pooled.uniform.nodedup		H3K36me3	C47	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	peca6c9f9e9db	ENCSR869GBP.pooled.uniform.depth0.25	ENCSR869GBP.pooled.uniform.nodedup		H3K36me3	C47	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p297241c20493	ENCSR869GBP.pooled.uniform.depth0.50	ENCSR869GBP.pooled.uniform.nodedup		H3K36me3	C47	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p84ed2cdfba5b	ENCSR869GBP.pooled.uniform.mapq0	ENCSR869GBP.pooled.uniform.nodedup		H3K36me3	C47	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p068be71c6a36	ENCSR869GBP.pooled.uniform.nodedup	ENCSR869GBP.pooled.uniform.base		H3K36me3	C47	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p9447c7926fb8	ENCSR869GBP.pooled.uniform.nodedup	ENCSR869GBP.pooled.uniform.crop36		H3K36me3	C47	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pe550e8a623d8	ENCSR869GBP.pooled.uniform.nodedup	ENCSR869GBP.pooled.uniform.crop50		H3K36me3	C47	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p7f38a69b0d64	ENCSR869GBP.pooled.uniform.nodedup	ENCSR869GBP.pooled.uniform.depth0.125		H3K36me3	C47	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p1da386c9d976	ENCSR869GBP.pooled.uniform.nodedup	ENCSR869GBP.pooled.uniform.depth0.25		H3K36me3	C47	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p412744322bfe	ENCSR869GBP.pooled.uniform.nodedup	ENCSR869GBP.pooled.uniform.depth0.50		H3K36me3	C47	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p79c25f7cc76c	ENCSR869GBP.pooled.uniform.nodedup	ENCSR869GBP.pooled.uniform.mapq0		H3K36me3	C47	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p295930c22b49	ENCSR883AQJ.pooled.uniform.base	ENCSR883AQJ.pooled.uniform.nodedup		H3K9me3	C17	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pd367efe0c820	ENCSR883AQJ.pooled.uniform.depth0.125	ENCSR883AQJ.pooled.uniform.nodedup		H3K9me3	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p07fa7dafe2cc	ENCSR883AQJ.pooled.uniform.depth0.25	ENCSR883AQJ.pooled.uniform.nodedup		H3K9me3	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p9a64df568d42	ENCSR883AQJ.pooled.uniform.depth0.50	ENCSR883AQJ.pooled.uniform.nodedup		H3K9me3	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pb2a4720598d2	ENCSR883AQJ.pooled.uniform.mapq0	ENCSR883AQJ.pooled.uniform.nodedup		H3K9me3	C17	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p2757d2a2ba0d	ENCSR883AQJ.pooled.uniform.nodedup	ENCSR883AQJ.pooled.uniform.base		H3K9me3	C17	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p697147bfad92	ENCSR883AQJ.pooled.uniform.nodedup	ENCSR883AQJ.pooled.uniform.depth0.125		H3K9me3	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pbe05d87e1a18	ENCSR883AQJ.pooled.uniform.nodedup	ENCSR883AQJ.pooled.uniform.depth0.25		H3K9me3	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p7cbc555884dd	ENCSR883AQJ.pooled.uniform.nodedup	ENCSR883AQJ.pooled.uniform.depth0.50		H3K9me3	C17	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p8765cc3889ca	ENCSR883AQJ.pooled.uniform.nodedup	ENCSR883AQJ.pooled.uniform.mapq0		H3K9me3	C17	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p207d16e9e143	ENCSR887ESB.pooled.native.base	ENCSR887ESB.pooled.native.nodedup		H3K4me1	C09	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pfdb0a53f04be	ENCSR887ESB.pooled.native.depth0.125	ENCSR887ESB.pooled.native.nodedup		H3K4me1	C09	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p4d56887a3408	ENCSR887ESB.pooled.native.depth0.25	ENCSR887ESB.pooled.native.nodedup		H3K4me1	C09	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pc39de3b8a6dd	ENCSR887ESB.pooled.native.depth0.50	ENCSR887ESB.pooled.native.nodedup		H3K4me1	C09	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p7c2d3877e6ee	ENCSR887ESB.pooled.native.mapq0	ENCSR887ESB.pooled.native.nodedup		H3K4me1	C09	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	paa0d7b93d8f4	ENCSR887ESB.pooled.native.nodedup	ENCSR887ESB.pooled.native.base		H3K4me1	C09	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pea6f97c9fd41	ENCSR887ESB.pooled.native.nodedup	ENCSR887ESB.pooled.native.depth0.125		H3K4me1	C09	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p18c248e979ce	ENCSR887ESB.pooled.native.nodedup	ENCSR887ESB.pooled.native.depth0.25		H3K4me1	C09	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pdf9ad89ffb1e	ENCSR887ESB.pooled.native.nodedup	ENCSR887ESB.pooled.native.depth0.50		H3K4me1	C09	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pd486b6a443cf	ENCSR887ESB.pooled.native.nodedup	ENCSR887ESB.pooled.native.mapq0		H3K4me1	C09	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p395c3f9e9a69	ENCSR901SIL.pooled.uniform.base	ENCSR901SIL.pooled.uniform.nodedup		H3K4me3	C20	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p459abd4ffdd5	ENCSR901SIL.pooled.uniform.crop36	ENCSR901SIL.pooled.uniform.nodedup		H3K4me3	C20	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pfbd5d81ddb85	ENCSR901SIL.pooled.uniform.crop50	ENCSR901SIL.pooled.uniform.nodedup		H3K4me3	C20	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p0772465a7ddd	ENCSR901SIL.pooled.uniform.depth0.125	ENCSR901SIL.pooled.uniform.nodedup		H3K4me3	C20	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pe96bf4440962	ENCSR901SIL.pooled.uniform.depth0.25	ENCSR901SIL.pooled.uniform.nodedup		H3K4me3	C20	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pa05174f401ba	ENCSR901SIL.pooled.uniform.depth0.50	ENCSR901SIL.pooled.uniform.nodedup		H3K4me3	C20	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pbbb8d306c31a	ENCSR901SIL.pooled.uniform.mapq0	ENCSR901SIL.pooled.uniform.nodedup		H3K4me3	C20	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p2e5006b7e099	ENCSR901SIL.pooled.uniform.nodedup	ENCSR901SIL.pooled.uniform.base		H3K4me3	C20	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p7ee107b93ca7	ENCSR901SIL.pooled.uniform.nodedup	ENCSR901SIL.pooled.uniform.crop36		H3K4me3	C20	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	pfa5ff03c5e0d	ENCSR901SIL.pooled.uniform.nodedup	ENCSR901SIL.pooled.uniform.crop50		H3K4me3	C20	crop+nodedup	1	0	1	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p1db0b865f9b9	ENCSR901SIL.pooled.uniform.nodedup	ENCSR901SIL.pooled.uniform.depth0.125		H3K4me3	C20	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pc3694d4dc045	ENCSR901SIL.pooled.uniform.nodedup	ENCSR901SIL.pooled.uniform.depth0.25		H3K4me3	C20	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pee6bbe85a71e	ENCSR901SIL.pooled.uniform.nodedup	ENCSR901SIL.pooled.uniform.depth0.50		H3K4me3	C20	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pee067b1ac33f	ENCSR901SIL.pooled.uniform.nodedup	ENCSR901SIL.pooled.uniform.mapq0		H3K4me3	C20	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	p6eea90b2ae6b	ENCSR941QJQ.pooled.uniform.base	ENCSR941QJQ.pooled.uniform.nodedup		H3K4me2	C46	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p0e2ee0ce6f45	ENCSR941QJQ.pooled.uniform.depth0.125	ENCSR941QJQ.pooled.uniform.nodedup		H3K4me2	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pb3090566fc56	ENCSR941QJQ.pooled.uniform.depth0.25	ENCSR941QJQ.pooled.uniform.nodedup		H3K4me2	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p3ebde5fde846	ENCSR941QJQ.pooled.uniform.depth0.50	ENCSR941QJQ.pooled.uniform.nodedup		H3K4me2	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pf940ffab15c4	ENCSR941QJQ.pooled.uniform.mapq0	ENCSR941QJQ.pooled.uniform.nodedup		H3K4me2	C46	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
+evalset	pf9d19895853c	ENCSR941QJQ.pooled.uniform.nodedup	ENCSR941QJQ.pooled.uniform.base		H3K4me2	C46	nodedup	1	0	0	0	0	val	0	0	1	1	1	1	1	0	1
+evalset	p9c332b332535	ENCSR941QJQ.pooled.uniform.nodedup	ENCSR941QJQ.pooled.uniform.depth0.125		H3K4me2	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p4b603884e684	ENCSR941QJQ.pooled.uniform.nodedup	ENCSR941QJQ.pooled.uniform.depth0.25		H3K4me2	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	p1b8973eddae7	ENCSR941QJQ.pooled.uniform.nodedup	ENCSR941QJQ.pooled.uniform.depth0.50		H3K4me2	C46	depth+nodedup	1	0	0	0	1	val	0	0	1	1	1	1	1	0	1
+evalset	pa3e5943c4f77	ENCSR941QJQ.pooled.uniform.nodedup	ENCSR941QJQ.pooled.uniform.mapq0		H3K4me2	C46	mapq+nodedup	1	0	0	1	0	val	1	0	1	1	1	1	1	1	1
