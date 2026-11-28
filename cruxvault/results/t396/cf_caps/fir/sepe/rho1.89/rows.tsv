@@ -1,0 +1,15 @@
+source_id	target_id	covariate	experiment	assay	layer	run_type	in_eic	read_length	units	lines_source	lines_target	lines_per_fragment_source	lines_per_fragment_target	share	total_source	total_target	q_source	q_target	q_origin	in_store
+ENCSR061UOM.pooled.testbed.nodedup	ENCSR061UOM.pooled.testbed.base	dedup	ENCSR061UOM	H3K4me1	testbed	single-ended	blind	101	1	30000000	30000000	1	1	1	NA	205681163		0.14585682	fitted	1
+ENCSR131DVD.pooled.testbed.nodedup	ENCSR131DVD.pooled.testbed.base	dedup	ENCSR131DVD	H3K27ac	testbed	single-ended	blind	101	1	30000000	30000000	1	1	1	NA	176237758		0.17022459	fitted	1
+ENCSR401WUV.pooled.testbed.nodedup	ENCSR401WUV.pooled.testbed.base	dedup	ENCSR401WUV	H3K9me3	testbed	single-ended	blind	101	1	30000000	30000000	1	1	1	NA	217273310		0.13807494	fitted	1
+ENCSR564OSQ.pooled.testbed.nodedup	ENCSR564OSQ.pooled.testbed.base	dedup	ENCSR564OSQ	H3K27me3	testbed	single-ended	blind	101	1	30000000	30000000	1	1	1	NA	207716224		0.14442781	fitted	1
+ENCSR643QXU.pooled.testbed.nodedup	ENCSR643QXU.pooled.testbed.base	dedup	ENCSR643QXU	H3K36me3	testbed	single-ended	blind	101	1	30000000	30000000	1	1	1	NA	239733719		0.12513884	fitted	1
+ENCSR882CQE.pooled.testbed.nodedup	ENCSR882CQE.pooled.testbed.base	dedup	ENCSR882CQE	H3K4me3	testbed	single-ended	blind	101	1	30000000	30000000	1	1	1	NA	174409214		0.17200926	fitted	1
+ENCSR903SKE.pooled.testbed.nodedup	ENCSR903SKE.pooled.testbed.base	dedup	ENCSR903SKE	DNase-seq	testbed	single-ended	blind	76	1	50000000	50000000	1	1	1	NA	134815660		0.3708768	fitted	1
+ENCSR061UOM.pooled.testbed.pe	ENCSR061UOM.pooled.testbed.base	run_type	ENCSR061UOM	H3K4me1	testbed	single-ended	blind	101	1	30000000	30000000	2	1	0.5	388737398	205681163	0.07717292	0.14585682	fixed	1
+ENCSR131DVD.pooled.testbed.pe	ENCSR131DVD.pooled.testbed.base	run_type	ENCSR131DVD	H3K27ac	testbed	single-ended	blind	101	1	30000000	30000000	2	1	0.5	333089363	176237758	0.09006592	0.17022459	fixed	1
+ENCSR401WUV.pooled.testbed.pe	ENCSR401WUV.pooled.testbed.base	run_type	ENCSR401WUV	H3K9me3	testbed	single-ended	blind	101	1	30000000	30000000	2	1	0.5	410646556	217273310	0.073055526	0.13807494	fixed	1
+ENCSR564OSQ.pooled.testbed.pe	ENCSR564OSQ.pooled.testbed.base	run_type	ENCSR564OSQ	H3K27me3	testbed	single-ended	blind	101	1	30000000	30000000	2	1	0.5	392583663	207716224	0.076416832	0.14442781	fixed	1
+ENCSR643QXU.pooled.testbed.pe	ENCSR643QXU.pooled.testbed.base	run_type	ENCSR643QXU	H3K36me3	testbed	single-ended	blind	101	1	30000000	30000000	2	1	0.5	453096729	239733719	0.066211028	0.12513884	fixed	1
+ENCSR882CQE.pooled.testbed.pe	ENCSR882CQE.pooled.testbed.base	run_type	ENCSR882CQE	H3K4me3	testbed	single-ended	blind	101	1	30000000	30000000	2	1	0.5	329633414	174409214	0.091010191	0.17200926	fixed	1
+ENCSR903SKE.pooled.testbed.pe	ENCSR903SKE.pooled.testbed.base	run_type	ENCSR903SKE	DNase-seq	testbed	single-ended	blind	76	1	50000000	50000000	2	1	0.5	254801597	134815660	0.19623111	0.3708768	fixed	1

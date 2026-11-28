@@ -1,0 +1,37 @@
+covariate	shape	assay_group	law	space	scope	gap_closed_vs_depth_scaling	gap_closed_vs_identity	attainable_floor	halves_floor	bootstrap_spread	bootstrap_lo	bootstrap_hi	n_pairs	n_experiments	n_q_fitted	deviance_law	deviance_depth_scaling	deviance_identity	explains	beats_other_law
+run_type	iteration1	DNase-seq	count_saturation	count	genome	0.764273	0.764418	1.40448e+08	3.16031e+08	0	0.764273	0.764273	1	1	1	2.56777e+08	6.33935e+08	6.3424e+08	no	yes
+run_type	iteration1	DNase-seq	dm_distinct_unsubsampled	start	genome	0.051071	0.0509755	1.6682e+07	2.25525e+08	0	0.051071	0.051071	1	1	1	3.17281e+08	3.33459e+08	3.33427e+08	no	
+run_type	iteration1	DNase-seq	subsampled_dm_distinct	start	genome	0.731382	0.731346	9.6028e+07	2.25525e+08	0	0.731382	0.731382	1	1	1	1.59806e+08	3.33459e+08	3.33427e+08	no	no
+run_type	iteration1	DNase-seq	count_saturation	count	top1pct	0.930384	0.930922	1.17819e+06	2.57333e+06	0	0.930384	0.930384	1	1	1	5.27197e+06	5.99837e+07	6.04415e+07	yes	yes
+run_type	iteration1	DNase-seq	dm_distinct_unsubsampled	start	top1pct	0.811129	0.810907	1.23951e+06	1.12849e+07	0	0.811129	0.811129	1	1	1	4.58059e+06	1.89292e+07	1.89085e+07	yes	
+run_type	iteration1	DNase-seq	subsampled_dm_distinct	start	top1pct	0.848653	0.848462	2.4458e+06	1.12849e+07	0	0.848653	0.848653	1	1	1	4.94052e+06	1.89292e+07	1.89085e+07	yes	no
+run_type	iteration1	all	count_saturation	count	genome	0.911377	0.911371	1.00918e+09	3.37177e+09	0.0877739	0.857838	0.945612	7	7	7	1.29173e+09	4.1975e+09	4.19726e+09	yes	yes
+run_type	iteration1	all	dm_distinct_unsubsampled	start	genome	0.0627977	0.062628	1.25302e+08	1.34917e+09	0.00715448	0.0583767	0.0655312	7	7	7	1.99415e+09	2.11937e+09	2.11901e+09	no	
+run_type	iteration1	all	subsampled_dm_distinct	start	genome	0.868173	0.868139	7.43277e+08	1.34917e+09	0.10836	0.810087	0.918447	7	7	7	9.24683e+08	2.11937e+09	2.11901e+09	yes	no
+run_type	iteration1	all	count_saturation	count	top1pct	0.82237	0.822995	9.34764e+06	3.32213e+07	0.920606	-0.00577811	0.914828	7	7	7	2.73221e+07	1.10538e+08	1.10895e+08	yes	no
+run_type	iteration1	all	dm_distinct_unsubsampled	start	top1pct	0.749286	0.748876	1.00455e+07	5.73063e+07	0.0815836	0.702406	0.78399	7	7	7	2.30722e+07	6.20041e+07	6.19194e+07	no	
+run_type	iteration1	all	subsampled_dm_distinct	start	top1pct	0.793686	0.793315	1.48052e+07	5.73063e+07	0.118969	0.717055	0.836024	7	7	7	2.4543e+07	6.20041e+07	6.19194e+07	no	no
+run_type	iteration1	histone	count_saturation	count	genome	0.938316	0.938303	8.68729e+08	3.05574e+09	0.021942	0.926657	0.948599	6	6	6	1.03496e+09	3.56356e+09	3.56302e+09	yes	yes
+run_type	iteration1	histone	dm_distinct_unsubsampled	start	genome	0.0650125	0.0648289	1.0862e+08	1.12365e+09	0.00141303	0.0643458	0.0657588	6	6	6	1.67687e+09	1.78591e+09	1.78558e+09	no	
+run_type	iteration1	histone	subsampled_dm_distinct	start	genome	0.896697	0.896667	6.4725e+08	1.12365e+09	0.0671743	0.859934	0.927108	6	6	6	7.64877e+08	1.78591e+09	1.78558e+09	yes	no
+run_type	iteration1	histone	count_saturation	count	top1pct	0.67251	0.671732	8.16945e+06	3.0648e+07	1.04049	-0.148588	0.891898	6	6	6	2.20501e+07	5.05544e+07	5.0454e+07	no	no
+run_type	iteration1	histone	dm_distinct_unsubsampled	start	top1pct	0.717362	0.716834	8.80596e+06	4.60214e+07	0.0371498	0.700479	0.737629	6	6	6	1.84916e+07	4.30748e+07	4.30109e+07	no	
+run_type	iteration1	histone	subsampled_dm_distinct	start	top1pct	0.764188	0.763696	1.23594e+07	4.60214e+07	0.130227	0.69589	0.826116	6	6	6	1.96025e+07	4.30748e+07	4.30109e+07	no	no
+run_type	loto	DNase-seq	count_saturation	count	genome	0.768465	0.768608	1.40448e+08	3.16031e+08	0	0.768465	0.768465	1	1	1	2.54708e+08	6.33935e+08	6.3424e+08	no	yes
+run_type	loto	DNase-seq	dm_distinct_unsubsampled	start	genome	0.0502117	0.0501161	1.66255e+07	2.25525e+08	0	0.0502117	0.0502117	1	1	1	3.1755e+08	3.33459e+08	3.33427e+08	no	
+run_type	loto	DNase-seq	subsampled_dm_distinct	start	genome	0.754415	0.754381	9.90131e+07	2.25525e+08	0	0.754415	0.754415	1	1	1	1.5659e+08	3.33459e+08	3.33427e+08	no	no
+run_type	loto	DNase-seq	count_saturation	count	top1pct	0.944588	0.945016	1.17819e+06	2.57333e+06	0	0.944588	0.944588	1	1	1	4.43673e+06	5.99837e+07	6.04415e+07	yes	no
+run_type	loto	DNase-seq	dm_distinct_unsubsampled	start	top1pct	0.796683	0.796443	1.31005e+06	1.12849e+07	0	0.796683	0.796683	1	1	1	4.89234e+06	1.89292e+07	1.89085e+07	no	
+run_type	loto	DNase-seq	subsampled_dm_distinct	start	top1pct	0.968548	0.968508	2.65288e+06	1.12849e+07	0	0.968548	0.968548	1	1	1	3.1648e+06	1.89292e+07	1.89085e+07	yes	yes
+run_type	loto	all	count_saturation	count	genome	0.917072	0.917066	1.00918e+09	3.37177e+09	0.0895836	0.863484	0.953068	7	7	7	1.27358e+09	4.1975e+09	4.19726e+09	yes	no
+run_type	loto	all	dm_distinct_unsubsampled	start	genome	0.0620347	0.0618648	1.25833e+08	1.34917e+09	0.00716173	0.0576388	0.0648005	7	7	7	1.9957e+09	2.11937e+09	2.11901e+09	no	
+run_type	loto	all	subsampled_dm_distinct	start	genome	0.929319	0.9293	8.19253e+08	1.34917e+09	0.143753	0.853352	0.997104	7	7	7	9.11146e+08	2.11937e+09	2.11901e+09	yes	no
+run_type	loto	all	count_saturation	count	top1pct	0.909292	0.909611	9.34764e+06	3.32213e+07	0.234863	0.701202	0.936065	7	7	7	1.85265e+07	1.10538e+08	1.10895e+08	yes	no
+run_type	loto	all	dm_distinct_unsubsampled	start	top1pct	0.732868	0.732423	1.10062e+07	5.73063e+07	0.0827232	0.686212	0.768935	7	7	7	2.46294e+07	6.20041e+07	6.19194e+07	no	
+run_type	loto	all	subsampled_dm_distinct	start	top1pct	0.937063	0.936945	1.69571e+07	5.73063e+07	0.0463499	0.909333	0.955683	7	7	7	1.97922e+07	6.20041e+07	6.19194e+07	yes	yes
+run_type	loto	histone	count_saturation	count	genome	0.944285	0.944274	8.68729e+08	3.05574e+09	0.0231995	0.930489	0.953689	6	6	6	1.01887e+09	3.56356e+09	3.56302e+09	yes	no
+run_type	loto	histone	dm_distinct_unsubsampled	start	genome	0.0642688	0.0640851	1.09208e+08	1.12365e+09	0.00146229	0.0636001	0.0650624	6	6	6	1.67815e+09	1.78591e+09	1.78558e+09	no	
+run_type	loto	histone	subsampled_dm_distinct	start	genome	0.967798	0.967788	7.2024e+08	1.12365e+09	0.0882029	0.912011	1.00021	6	6	6	7.54557e+08	1.78591e+09	1.78558e+09	yes	no
+run_type	loto	histone	count_saturation	count	top1pct	0.860321	0.859989	8.16945e+06	3.0648e+07	0.276185	0.643065	0.919249	6	6	6	1.40898e+07	5.05544e+07	5.0454e+07	yes	no
+run_type	loto	histone	dm_distinct_unsubsampled	start	top1pct	0.699183	0.698605	9.69613e+06	4.60214e+07	0.0316304	0.685115	0.716746	6	6	6	1.9737e+07	4.30748e+07	4.30109e+07	no	
+run_type	loto	histone	subsampled_dm_distinct	start	top1pct	0.919251	0.919071	1.43042e+07	4.60214e+07	0.0328849	0.904281	0.937166	6	6	6	1.66274e+07	4.30748e+07	4.30109e+07	yes	yes
