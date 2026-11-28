@@ -48,8 +48,8 @@ Provenance: PI doc, PI, agent proposal approved.
 | R40 | P0 | start the longrun, iteration 1 onward | D6 | PI | done | 2026-11-27 kickoff |
 | R41 | P1 | it.1: leg B deconvolution, three score spaces, pseudoreplicate floors | B s3 | agent proposal approved (D6) | partial | LEG_B.md: three spaces and floors done; deconvolution void (D17) |
 | R42 | P1 | it.1: covariance term in the start-to-count conversion | B s3 | agent proposal approved (D6) | done | results/t396/legA_covariance/LEG_A.md: ratio 1.258 -> 1.032 vs ref 1.064; like-for-like inside seed range |
-| R43 | P1 | it.1: closed-form dedup cap, start vs count space, 312 view pairs | B s3 | agent proposal approved (D6) | done | results/t396/dedup_cap/DEDUP_CAP.md: cap beats count law (diff 1.35, CI 0.29-3.41) but gap closed -0.56 on 43 val pairs; no law explains except DNase |
-| R44 | P1 | it.1: SE/PE cap plus fragment kernel on PE/SE views | B s3 | agent proposal approved (D6) | partial | results/t396/sepe_cap/SEPE_CAP.md: gate d failed, inconclusive (f160); fragment kernel half not run; controlled pairs per D18 |
+| R43 | P1 | it.1: closed-form dedup cap, start vs count space, 312 view pairs | B s3 | agent proposal approved (D6) | done | results/t396/dedup_cap/DEDUP_CAP.md: cap beats count law (diff 1.35, CI 0.29-3.41) but gap closed -0.56 on 43 val pairs; no law explains except DNase; controlled pairs: start cap 0.94-0.98, beats count law (f164, cf_caps/CF_CAPS.md) |
+| R44 | P1 | it.1: SE/PE cap plus fragment kernel on PE/SE views | B s3 | agent proposal approved (D6) | done | results/t396/cf_caps/CF_CAPS.md: controlled pairs, start cap explains run type 0.93-0.94 (plausible ratio), beats count law at every ratio (f165) |
 | R45 | P2 | it.1: does log2_depth count PE mates twice | B s3 | agent proposal approved (D6) | done | f158: counts and depth both count mates; results/t396/pe_depth/PE_DEPTH.md |
 | R46 | P1 | it.2: 2x2 arms with kernel head | B s3, D3 | PI | open | |
 | R47 | P0 | it.2 equal terms: tagAligns, windows, params, seeds, tuning sweep, 256 regions, three spaces | B s3, D3 | PI | open | |

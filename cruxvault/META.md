@@ -136,9 +136,9 @@ Root: [[candii]]
     - ◐ `q80` [Q] [[q80_does_the_final_minicandi_follow_a_change|**Does the final miniCANDI follow a changed output covariate in the direction stated before the run?**]] — *leaning* · moderate
       - ○ `q92` [Q] [[q92_which_output_covariates_make_sense_as_pr|**Which output covariates make sense as prompts for an imputed experiment that was never done?**]] — *open*
       - ◐ `q95` [Q] [[q95_why_does_minicandi_fail_to_follow_the_de|**Why does miniCANDI fail to follow the deduplication and single-end/paired-end covariates while it follows depth, and can a closed-form processing layer or more counterfactual views fix it?**]] — *leaning* · weak
-        - ◐ `h58` [H] [[h58_deduplication_is_a_per_position_cap_whos|Deduplication is a per-position cap whose expected effect is closed form in read-start space: kept starts per strand per 25 bp bin = 25(1-(1+lambda/(25a))^-a), with one fitted shape a per assay.]] — *leaning* · moderate · mixed
+        - ◐ `h58` [H] [[h58_deduplication_is_a_per_position_cap_whos|Deduplication is a per-position cap whose expected effect is closed form in read-start space: kept starts per strand per 25 bp bin = 25(1-(1+lambda/(25a))^-a), with one fitted shape a per assay.]] — *leaning* · moderate · supports
         - ○ `h59` [H] [[h59_the_dedup_failure_is_a_missing_mechanism|The dedup failure is a missing mechanism, not missing data: correction of dedup does not rise with more dedup-off views, but rises with a closed-form cap layer.]] — *open*
-        - ○ `h60` [H] [[h60_the_se_pe_failure_is_first_a_data_gap_38|The SE/PE failure is first a data gap: 38 SE views covering 13 of 36 assays and 12 PE base experiments are too few.]] — *open*
+        - ◐ `h60` [H] [[h60_the_se_pe_failure_is_first_a_data_gap_38|The SE/PE failure is first a data gap: 38 SE views covering 13 of 36 assays and 12 PE base experiments are too few.]] — *leaning* · moderate · supports
         - ◐ `h61` [H] [[h61_our_log2_depth_counts_both_mates_of_pair|Our log2_depth counts both mates of paired-end reads, so PE depth is about 2x the depth MACS2 and our counts see.]] — *leaning* · moderate · against
     - ◐ `q81` [Q] [[q81_why_does_the_read_start_minicandi_lose_t|**Why does the read-start miniCANDI lose to the read-count version on imputation and calibration?**]] — *leaning* · moderate
       - ◐ `h50` [H] [[h50_the_nb_moment_match_which_treats_neighbo|The NB moment match, which treats neighbouring start counts as independent, understates the converted variance and causes the read-start model's overconfidence]] — *leaning* · weak · supports
@@ -155,6 +155,6 @@ Root: [[candii]]
 ## Dashboard
 
 - **Questions** (85): open 25 · leaning 49 · settled 11 · parked 0
-- **Hypotheses** (60): open 19 · leaning 28 · settled 7 · parked 6
-- **Confidence**: weak 27 · moderate 50 · strong 18
-- **Findings**: 161
+- **Hypotheses** (60): open 18 · leaning 29 · settled 7 · parked 6
+- **Confidence**: weak 27 · moderate 51 · strong 18
+- **Findings**: 163
