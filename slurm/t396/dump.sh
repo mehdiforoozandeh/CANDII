@@ -2,7 +2,7 @@
 # t396 C6: one shard of tools/t396/dump_native.py (truth or model) inside an ONION code kit.
 #
 #   export KIT=/project/def-maxwl/mforooz/onion_kit/SC7a
-#   sbatch --job-name=sc_dump --output=<logs>/%x_%A_%a.out --array=0-3 \
+#   sbatch --job-name=sc_dump --output=<logs>/%x_%A_%a.out --array=0-3%12 \
 #       [--time=...] "$KIT/slurm/t396/dump.sh" "$KIT" truth --evalset <json> --tables <dir> \
 #       --rs-config <rs run dir> --out <dir>
 #   sbatch ... "$KIT/slurm/t396/dump.sh" "$KIT" model --run <rs run dir> --evalset <json> \
@@ -10,7 +10,7 @@
 #
 # Shards: when the arguments carry no --shard and the job is an array task, the script appends
 # `--shard $SLURM_ARRAY_TASK_ID/$SLURM_ARRAY_TASK_COUNT` (target j belongs to shard j mod N; the
-# array must be 0..N-1). Both modes import torch (read-start dataset, model), so the environment is
+# array must be 0..N-1; write it as --array=0-<N-1>%12, the cap on torch-importing arrays). Both modes import torch (read-start dataset, model), so the environment is
 # the kit venv of slurm/onion_eval/predict.sh. An existing output file is skipped.
 # DRY_RUN=1 prints the command and runs nothing.
 #SBATCH --account=def-maxwl

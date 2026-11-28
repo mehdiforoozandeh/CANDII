@@ -275,3 +275,19 @@ def test_differing_average_ids_exit_1(env, run, tmp_path):
     assert D.main(["truth", "--evalset", str(env["evalset"]), "--tables", str(env["tables"]),
                    "--rs-config", str(rdir), "--out", str(out)]) == 1
     assert not list(out.glob("*.npz")) if out.exists() else True
+
+
+def test_perturbed_store_fails_gate_a_exit_3(env, run, pred_store, tmp_path):
+    from onion_eval import predict_store as PS
+    bad = tmp_path / "bad_store"
+    shutil.copytree(pred_store, bad)
+    mid = _targets(env)[0]                      # target 0 is in shard 0 of any N
+    f = bad / PS.key_file(f"item/{mid}/leave_one_assay_out")
+    with np.load(f) as z:
+        arr = {k: z[k] for k in z.files}
+    arr["mu"] = arr["mu"] * np.float32(1.01)
+    np.savez(f, **arr)
+    out = tmp_path / "arrays"
+    assert D.main(["model", "--run", str(run), "--evalset", str(env["evalset"]),
+                   "--pred-store", str(bad), "--out", str(out), "--shard", "0/4"]) == 3
+    assert not (out / f"{mid}.npz").exists()

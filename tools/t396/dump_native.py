@@ -39,6 +39,8 @@ model -> `<out>/<target id>.npz` (R = the 256 regions, or the pair regions under
   max_abs_rel_diff_region (float): the same against one conversion per whole region (open edges
     at the region ends only); the batch edges inside a region make it larger than gate (a);
   region_indices int64 [R]: positions in the evaluation set's region list.
+  Gate (a) is enforced: when max_abs_rel_diff > GATE_A (1e-4), that target's file is NOT written,
+  the value is printed to stderr, and the command exits 3 without dumping further targets.
 
 The read-count reference needs no dump: its `mu`, `n` are read from its prediction store.
 """
@@ -57,6 +59,7 @@ if str(_TOOLS) not in sys.path:
     sys.path.insert(0, str(_TOOLS))
 
 REGIME = "leave_one_assay_out"
+GATE_A = 1e-4                # gate (a): max_abs_rel_diff of the fresh conversion
 
 
 def _quiet(*_a, **_k):
@@ -344,6 +347,11 @@ def cmd_model(a) -> int:
                 print(f"model: {p.name} exists, skipped", flush=True)
                 continue
             arr = model_arrays(sc, model, tap, store, j, region_idx, B)
+            if not float(arr["max_abs_rel_diff"]) <= GATE_A:
+                print(f"model: gate (a) failed for {j['target']}: max_abs_rel_diff "
+                      f"{float(arr['max_abs_rel_diff']):.3g} > {GATE_A}; nothing written",
+                      file=sys.stderr)
+                return 3
             save_npz(p, arr)
             print(f"model: wrote {p} max_abs_rel_diff {float(arr['max_abs_rel_diff']):.3g} "
                   f"(region {float(arr['max_abs_rel_diff_region']):.3g})", flush=True)
