@@ -3,7 +3,7 @@
 Rewritten, never appended. Cap: 5 KB.
 
 ## Goal now
-Find and test a fair count-to-p-value route that puts miniCANDI on the EIC board (q90, task t390). Branch implementation/t390-eic-pvalue-entry, draft PR 64, never merged.
+Find and test a fair count-to-p-value route that puts miniCANDI on the EIC board (q90, task t390). Branch implementation/t390-eic-pvalue-entry, PR 64 ready (PI asked 2026-11-27 to make it merge-ready; merges after PR 63; merging is the PI's). Run memory lives in cruxvault/INSTRUCTIONS/t390_eic_entry/run_state/longrun; .longrun is a worktree-local symlink.
 
 ## Horizon
 Exploratory, open. First measured result delivered 2026-11-22: ladder probe on 3 blind experiments.

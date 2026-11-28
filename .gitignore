@@ -56,3 +56,4 @@ cruxvault/results/*
 !cruxvault/results/t370/
 cruxvault/results/t370/*
 !cruxvault/results/t370/recal_study/
+/.longrun

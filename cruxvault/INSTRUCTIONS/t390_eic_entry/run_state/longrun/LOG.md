@@ -96,3 +96,6 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-25T11:24Z glossary: blocked reply with c25m26, c34m02, c46m18, c46m21, c46m35, c50m02
 - 2026-11-25T15:24Z glossary: blocked reply with 5761693_22
 - 2026-11-25T18:42Z glossary: blocked reply with nmse
+- 2026-11-27T22:15Z glossary: blocked reply with t357
+- 2026-11-28T01:40Z glossary: blocked reply with mergeable
+- 2026-11-28T01:42Z run memory moved to cruxvault/INSTRUCTIONS/t390_eic_entry/run_state/longrun; .longrun is a worktree-local symlink (foreman request, PR 64)
