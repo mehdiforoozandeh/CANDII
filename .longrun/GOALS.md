@@ -16,9 +16,9 @@ Provenance: PI doc, PI, agent proposal approved.
 | R8 | P0 | fairness: no advantage in "data availability" | T:5 | PI doc | open | |
 | R9 | P0 | fairness: no advantage in "more compute" | T:5 | PI doc | open | |
 | R10 | P0 | "find the actual scientific explanation" for which formulation does better | T:7 | PI doc | open | |
-| R11 | P0 | leg A: "take the read start model, extend the reads ... evaluate that against the read counts" | T:3 | PI doc (Max) | partial | ran as t392 (16 regions, 80k windows); redo in the factorial |
-| R12 | P1 | leg A reading: worse start model = "more evidence that indeed the read start model is worse" | T:3 | PI doc (Max) | open | |
-| R13 | P0 | leg B: "Take the read count model, use just the starts ... and evaluate" against read starts | T:3 | PI doc (Max) | open | |
+| R11 | P0 | leg A: "take the read start model, extend the reads ... evaluate that against the read counts" | T:3 | PI doc (Max) | partial | t392 + covariance redo: results/t396/legA_covariance/LEG_A.md (1.258 -> 1.032 vs ref 1.064); factorial redo in it.2 |
+| R12 | P1 | leg A reading: worse start model = "more evidence that indeed the read start model is worse" | T:3 | PI doc (Max) | partial | LEG_A.md: like-for-like calibration inside seed range; count-space skill gap remains (LEG_B.md 0.543 vs 0.375) |
+| R13 | P0 | leg B: "Take the read count model, use just the starts ... and evaluate" against read starts | T:3 | PI doc (Max) | partial | ran by deconvolution: results/t396/legB_spaces/LEG_B.md; start space void (gate c); factorial arm per D17, pending PI confirm |
 | R14 | P0 | slam dunk: "the read count model still does better when predicting read starts" | T:3 | PI doc (Max) | open | |
 | R15 | P0 | the two predict "different things", so score both on a common target | T:3 | PI doc (Max) | open | |
 | R16 | P1 | "check Sprint 19 in max's github repo for the analysis on SE/PE deduplication" | T:10 | PI doc | done | none on GitHub or Fir s19; see R17 |
@@ -46,10 +46,10 @@ Provenance: PI doc, PI, agent proposal approved.
 | R38 | P3 | no 320,000-window arms in iteration 2 | D3 | PI | open | |
 | R39 | P0 | correction headline gets dedup and SE pairs, breakdown per covariate | D4 | PI | partial | census: 458 dedup pairs (43 exp), 20 SE pairs (2 exp); results/t396/pair_census/ |
 | R40 | P0 | start the longrun, iteration 1 onward | D6 | PI | done | 2026-11-27 kickoff |
-| R41 | P1 | it.1: leg B deconvolution, three score spaces, pseudoreplicate floors | B s3 | agent proposal approved (D6) | open | |
+| R41 | P1 | it.1: leg B deconvolution, three score spaces, pseudoreplicate floors | B s3 | agent proposal approved (D6) | partial | LEG_B.md: three spaces and floors done; deconvolution void (D17) |
 | R42 | P1 | it.1: covariance term in the start-to-count conversion | B s3 | agent proposal approved (D6) | done | results/t396/legA_covariance/LEG_A.md: ratio 1.258 -> 1.032 vs ref 1.064; like-for-like inside seed range |
 | R43 | P1 | it.1: closed-form dedup cap, start vs count space, 312 view pairs | B s3 | agent proposal approved (D6) | done | results/t396/dedup_cap/DEDUP_CAP.md: cap beats count law (diff 1.35, CI 0.29-3.41) but gap closed -0.56 on 43 val pairs; no law explains except DNase |
-| R44 | P1 | it.1: SE/PE cap plus fragment kernel on PE/SE views | B s3 | agent proposal approved (D6) | open | |
+| R44 | P1 | it.1: SE/PE cap plus fragment kernel on PE/SE views | B s3 | agent proposal approved (D6) | partial | results/t396/sepe_cap/SEPE_CAP.md: gate d failed, inconclusive (f160); fragment kernel half not run; controlled pairs per D18 |
 | R45 | P2 | it.1: does log2_depth count PE mates twice | B s3 | agent proposal approved (D6) | done | f158: counts and depth both count mates; results/t396/pe_depth/PE_DEPTH.md |
 | R46 | P1 | it.2: 2x2 arms with kernel head | B s3, D3 | PI | open | |
 | R47 | P0 | it.2 equal terms: tagAligns, windows, params, seeds, tuning sweep, 256 regions, three spaces | B s3, D3 | PI | open | |
