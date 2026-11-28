@@ -314,9 +314,19 @@ def _tsv_rows(tmp):
 def test_append_runs_under_flock_and_the_line_is_unchanged(env, phases):
     tmp, e = env
     over = {**PH, "SCORE_SUBDIR": "p16_sv"} if phases else {"SEEDS": "0 1"}
-    # without flock on PATH: the unlocked fallback
-    bare = {**e, "PATH": ":".join(p for p in e["PATH"].split(":")
-                                  if not (Path(p) / "flock").exists())}
+    # without flock on PATH: the unlocked fallback. A directory that holds flock is replaced by a
+    # copy of links to its other entries, because on Linux flock shares /usr/bin with bash.
+    dirs = []
+    for p in e["PATH"].split(":"):
+        if p and (Path(p) / "flock").exists():
+            shadow = tmp / f"noflock{len(dirs)}"
+            shadow.mkdir()
+            for f in Path(p).iterdir():
+                if f.name != "flock":
+                    (shadow / f.name).symlink_to(f)
+            p = str(shadow)
+        dirs.append(p)
+    bare = {**e, "PATH": ":".join(dirs)}
     submit(SUBMIT, tmp, bare, f"x={CFG4}", DRY_RUN=0, **over)
     plain = _tsv_rows(tmp)
     (tmp / "runs/SUBMITTED.tsv").unlink()
