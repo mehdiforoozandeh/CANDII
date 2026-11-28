@@ -13,3 +13,5 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-27T23:59Z wave 1 spawned: 7 opus builders from dadf6b59
 - 2026-11-28T00:07Z wave 1: C1 C2 C3 C4 C12a merged; Fir job 6726827 sc_untar pending
 - 2026-11-28T00:10Z wave 2 spawned: C7a C8 C9 C10a C12b C13
+- 2026-11-28T00:15Z glossary: blocked reply with stub
+- 2026-11-28T00:23Z C8 C9 C10a C13 merged; D15 shared-weight dedup law primary; C12b retry 1 (OOM)
