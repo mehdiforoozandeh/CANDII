@@ -44,13 +44,13 @@ Provenance: PI doc, PI, agent proposal approved.
 | R36 | P1 | the factorial, about 2,350 CPU-h | D3 | PI | open | |
 | R37 | P2 | under-training: later, on the factorial winner | D3 | PI | open | |
 | R38 | P3 | no 320,000-window arms in iteration 2 | D3 | PI | open | |
-| R39 | P0 | correction headline gets dedup and SE pairs, breakdown per covariate | D4 | PI | open | |
+| R39 | P0 | correction headline gets dedup and SE pairs, breakdown per covariate | D4 | PI | partial | census: 458 dedup pairs (43 exp), 20 SE pairs (2 exp); results/t396/pair_census/ |
 | R40 | P0 | start the longrun, iteration 1 onward | D6 | PI | done | 2026-11-27 kickoff |
 | R41 | P1 | it.1: leg B deconvolution, three score spaces, pseudoreplicate floors | B s3 | agent proposal approved (D6) | open | |
 | R42 | P1 | it.1: covariance term in the start-to-count conversion | B s3 | agent proposal approved (D6) | open | |
 | R43 | P1 | it.1: closed-form dedup cap, start vs count space, 312 view pairs | B s3 | agent proposal approved (D6) | open | |
 | R44 | P1 | it.1: SE/PE cap plus fragment kernel on PE/SE views | B s3 | agent proposal approved (D6) | open | |
-| R45 | P2 | it.1: does log2_depth count PE mates twice | B s3 | agent proposal approved (D6) | open | |
+| R45 | P2 | it.1: does log2_depth count PE mates twice | B s3 | agent proposal approved (D6) | done | f158: counts and depth both count mates; results/t396/pe_depth/PE_DEPTH.md |
 | R46 | P1 | it.2: 2x2 arms with kernel head | B s3, D3 | PI | open | |
 | R47 | P0 | it.2 equal terms: tagAligns, windows, params, seeds, tuning sweep, 256 regions, three spaces | B s3, D3 | PI | open | |
 | R48 | P1 | it.3: closed-form cap as an output layer; prompt test and dedup/SE pairs | B s3, D1 | PI | open | |
