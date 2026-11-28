@@ -1,0 +1,7 @@
+experiment	assay	in_eic	run_type	read_length	layer	n_replicates	units	base_gib	nodedup_gib	n_members
+ENCSR956CTX	H3K4me3	train	single-ended	36	uniform	2	br1,br2	0.829745	0.881883	8
+ENCSR928HYM	H3K27me3	train	single-ended	36	uniform	2	br1,br2	0.126676	0.141964	8
+ENCSR925LJZ	H3K36me3	train	single-ended	36	uniform	2	br1,br2	0.143219	0.149461	8
+ENCSR902EEI	H3K4ac	train	single-ended	36	uniform	1	pooled	0.122298	0.154201	4
+ENCSR972SMV	H3K9me3	train	single-ended	36	uniform	1	pooled	0.109625	0.112025	4
+ENCSR960VLF	chipseq-control	train	single-ended	36	uniform	1	pooled	0.165693	0.166422	4
