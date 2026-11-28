@@ -147,14 +147,14 @@ Root: [[candii]]
       - ◐ `h53` [H] [[h53_the_read_start_model_s_inputs_observed_t|The read-start model's inputs (observed tracks, average-signal input, input transform, covariates, masking) were built differently from the reference by mistake]] — *leaning* · moderate · against
       - ○ `h54` [H] [[h54_the_fixed_training_budget_80_000_windows|The fixed training budget (80,000 windows, about 1M parameters) is too small for the noisier start target, so the read-start model is under-trained]] — *open*
       - ◐ `h55` [H] [[h55_the_read_start_model_s_h3k36me3_loss_is_|The read-start model's H3K36me3 loss is a broad level error: it misplaces the total starts over gene-body domains, not per-bin noise]] — *leaning* · weak · supports
-  - ○ `q94` [Q] [[q94_is_the_read_start_or_the_read_count_form|**Is the read-start or the read-count formulation better for the scaled miniCANDI when both get equal data, windows, parameters and tuning, judged in count space, start space and 1 kb sums, and what explains the winner?**]] — *open*
+  - ◐ `q94` [Q] [[q94_is_the_read_start_or_the_read_count_form|**Is the read-start or the read-count formulation better for the scaled miniCANDI when both get equal data, windows, parameters and tuning, judged in count space, start space and 1 kb sums, and what explains the winner?**]] — *leaning* · moderate
     - ○ `h56` [H] [[h56_the_read_count_model_s_advantage_comes_f|The read-count model's advantage comes from target smoothing (statistical efficiency), not from more information: a read-start-input model trained on count targets through a fixed fragment-span kernel layer matches the read-count model.]] — *open*
     - ○ `h57` [H] [[h57_the_read_count_model_still_beats_the_rea|The read-count model still beats the read-start model when both are scored in strand-summed read-start space (Max's slam dunk).]] — *open*
 - ○ `q73` [Q] [[q73_how_does_the_final_minicandi_score_on_th|**How does the final miniCANDI score on the 51 EIC blind tracks, against the published EIC board and the baselines, once the blind rows are built?**]] — *open*
 
 ## Dashboard
 
-- **Questions** (85): open 26 · leaning 48 · settled 11 · parked 0
+- **Questions** (85): open 25 · leaning 49 · settled 11 · parked 0
 - **Hypotheses** (60): open 19 · leaning 28 · settled 7 · parked 6
-- **Confidence**: weak 27 · moderate 49 · strong 18
-- **Findings**: 159
+- **Confidence**: weak 27 · moderate 50 · strong 18
+- **Findings**: 160

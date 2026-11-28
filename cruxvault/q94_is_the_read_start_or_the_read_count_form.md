@@ -35,8 +35,9 @@ Decides the input and target representation of the scaled model, and whether a p
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**2 children** · open 2, leaning 0, settled 0, parked 0
+**2 children** · open 2, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
 
 - `h56` [[h56_the_read_count_model_s_advantage_comes_f|The read-count model's advantage comes from target smoothing (statistical efficiency), not from more information: a read-start-input model trained on count targets through a fixed fragment-span kernel layer matches the read-count model.]] — *open*
 - `h57` [[h57_the_read_count_model_still_beats_the_rea|The read-count model still beats the read-start model when both are scored in strand-summed read-start space (Max's slam dunk).]] — *open*
+- `f162` finding (moderate) [[f162_leg_a_redone_the_read_start_model_s_coun|Leg A, redone: the read-start model's count-space overconfidence was a…]]
 <!-- crux:ledger:end -->

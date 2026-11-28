@@ -35,8 +35,8 @@ This is the next session's main task: it turns the settled prototype design into
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**2 children** · open 1, leaning 0, settled 1, parked 0
+**2 children** · open 0, leaning 1, settled 1, parked 0
 
 - `q75` _(Q)_ [[q75_can_one_minicandi_recipe_match_or_beat_t|Can one miniCANDI recipe match or beat the best base model on imputation, correction and calibration at the same time (Pareto dominance over the conv autoencoder, conv + attention and U-Net bases on eic_v1_2)?]] — *settled · strong*
-- `q94` _(Q)_ [[q94_is_the_read_start_or_the_read_count_form|Is the read-start or the read-count formulation better for the scaled miniCANDI when both get equal data, windows, parameters and tuning, judged in count space, start space and 1 kb sums, and what explains the winner?]] — *open*
+- `q94` _(Q)_ [[q94_is_the_read_start_or_the_read_count_form|Is the read-start or the read-count formulation better for the scaled miniCANDI when both get equal data, windows, parameters and tuning, judged in count space, start space and 1 kb sums, and what explains the winner?]] — *leaning · moderate*
 <!-- crux:ledger:end -->

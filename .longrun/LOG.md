@@ -23,3 +23,6 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-28T01:11Z C10b merged; cap arrays 6737535 6737536
 - 2026-11-28T02:30Z glossary: blocked reply with c10c, handback
 - 2026-11-28T03:34Z C10c merged: start cap beats count law (1.35, CI 0.29-3.41) but neither explains dedup on 43 val pairs (cap gap -0.56); h58 mixed
+- 2026-11-28T03:34Z glossary: blocked reply with bootstrap
+- 2026-11-28T03:34Z glossary: admitted 'bootstrap' (English word, Zipf 2.9)
+- 2026-11-28T07:08Z C15 merged: leg A calibration gap was a conversion artifact; covariance term 1.258->1.032 vs ref 1.064
