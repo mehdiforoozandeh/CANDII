@@ -1,0 +1,33 @@
+{
+ "C1_floor_max_abs_error": 0.001339382958845614,
+ "C1_pass": true,
+ "C2_worst_drift": 0.02134087194548595,
+ "C2_worst_label": "('scale', 'x4.0')",
+ "C2_fail_labels": [],
+ "C2_pass": true,
+ "contrast_log1p_worst_drift": 0.4673794500818082,
+ "C3_pass": true,
+ "C4_true_size_max_abs": 0.0074004340983123695,
+ "C4_pass": true,
+ "C4_summary": {
+  "overconfident_x4": {
+   "min": 1.025,
+   "max": 1.932,
+   "mean": 1.332
+  },
+  "true_size": {
+   "min": 0.993,
+   "max": 1.005,
+   "mean": 0.999
+  },
+  "underconfident_div4": {
+   "min": 0.513,
+   "max": 0.909,
+   "mean": 0.677
+  }
+ },
+ "C5_depth_only_max_abs": 0.0,
+ "C5_truth_min": 0.9988892570687311,
+ "C5_truth_max": 1.0009563148055842,
+ "C5_pass": true
+}

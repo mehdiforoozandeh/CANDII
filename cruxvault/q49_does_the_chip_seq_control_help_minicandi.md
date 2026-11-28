@@ -35,7 +35,8 @@ Decides whether the control stays in the input and the output of the settled des
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+**1 children** · open 0, leaning 1, settled 0, parked 0 · 1 finding(s) on this question
 
+- `q76` _(Q)_ [[q76_can_minicandi_predict_the_chip_seq_contr|Can miniCANDI predict the ChIP-seq control well enough to stand in for an observed control in the signal p-value and fold change of a target with no control?]] — *leaning · moderate*
 - `f91` finding (weak) [[f91_one_model_beyond_the_range_for_the_input|One model beyond the range for the input; mixed sign for the output.]]
 <!-- crux:ledger:end -->

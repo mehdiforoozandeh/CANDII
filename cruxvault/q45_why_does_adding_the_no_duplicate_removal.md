@@ -35,5 +35,7 @@ If the cause is shared DNA fragments between source and target on duplicate-keep
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-_(no children yet)_
+**0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+
+- `f141` finding (moderate) [[f141_reading_of_existing_runs_16_region_tiers|Reading of existing runs; 16-region tiers only; U-Net alignment arm has 2…]]
 <!-- crux:ledger:end -->

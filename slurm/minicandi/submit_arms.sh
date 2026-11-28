@@ -94,6 +94,13 @@
 # --dependency=afterok (and --kill-on-invalid-dep=yes, so a failed training never leaves a pending
 # job that blocks a resubmission). Both jobs carry that name. Each submission appends
 # "arm seed train_job score_job time" to <runs root>/SUBMITTED.tsv.
+# JOB_PREFIX (task t370, chunk C4; unset = "mc_", every line byte for byte as before): the job
+#   name is ${JOB_PREFIX}<run dir name>_s<seed> with the suffixes above (_fc..., _nd); every
+#   live-job match by name (the skip test, SCORE_ONLY's training lookup) uses the same prefix.
+#   JOB_PREFIX="" names the job after the run dir alone (t370 run dirs start with rcp_).
+# The append to SUBMITTED.tsv (header included) runs under `flock <runs root>/SUBMITTED.tsv.lock`,
+#   so two submissions at the same time never interleave a line; the line is unchanged. Where
+#   flock is absent (macOS, the tests) the append runs without the lock.
 set -euo pipefail
 USAGE='usage: submit_arms.sh <kit dir> <tables dir> <evalset.json|""> <runs root> <rung> [arm ...]'
 [ "$#" -ge 5 ] || { echo "$USAGE" >&2; exit 2; }
@@ -205,6 +212,19 @@ COMMON=(--account=def-maxwl --parsable)
 [ -z "${TRAIN_TIME:-}" ] || [[ "$TRAIN_TIME" =~ ^([0-9]+-)?[0-9]+:[0-9]{2}:[0-9]{2}$ ]] || \
   { echo "TRAIN_TIME must be [d-]hh:mm:ss" >&2; exit 2; }
 TSV="$ROOT/SUBMITTED.tsv"
+JP="${JOB_PREFIX-mc_}"
+# append one line to SUBMITTED.tsv, header first when the file is new, under flock when present
+append_tsv() {
+  local head line="$1"
+  head="$(printf 'arm\tseed\ttrain_job\tscore_job\ttime')"
+  if command -v flock > /dev/null 2>&1; then
+    flock "$TSV.lock" bash -c '[ -f "$1" ] || printf "%s\n" "$2" > "$1"; printf "%s\n" "$3" >> "$1"' \
+      _ "$TSV" "$head" "$line"
+  else
+    [ -f "$TSV" ] || printf '%s\n' "$head" > "$TSV"
+    printf '%s\n' "$line" >> "$TSV"
+  fi
+}
 n_sub=0; n_skip=0
 
 for spec in "${ARGS_ARMS[@]}"; do
@@ -247,7 +267,7 @@ for spec in "${ARGS_ARMS[@]}"; do
   fi
   for SEED in "${SEED_LIST[@]}"; do
     RUN="$ARMDIR/seed$SEED"
-    JOB="mc_$(basename "$ARMDIR")_s$SEED"
+    JOB="${JP}$(basename "$ARMDIR")_s$SEED"
     [ -z "$FC" ] || JOB="${JOB}_fc${FC}_s$FCS"   # E5: a foreign scoring has its own job name
     [ -z "$ND" ] || JOB="${JOB}_nd"              # mix-and-match: a native-depth scoring too
     SOUT="$RUN${SUB:+/$SUB}"   # the score dir (SCORE_SUBDIR)
@@ -369,10 +389,9 @@ for spec in "${ARGS_ARMS[@]}"; do
         echo "$MJ $RNAME $SEED metrics -"
       fi
       if [ "$DRY" != 1 ]; then
-        [ -f "$TSV" ] || printf 'arm\tseed\ttrain_job\tscore_job\ttime\n' > "$TSV"
         PL="$(IFS=:; echo "${PIDS[*]-}")"
-        printf '%s\t%s\t%s\t%s\t%s\n' "$RNAME" "$SEED" "$TJ" "predict=${PL:--};metrics=$MJ" \
-          "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$TSV"
+        append_tsv "$(printf '%s\t%s\t%s\t%s\t%s' "$RNAME" "$SEED" "$TJ" "predict=${PL:--};metrics=$MJ" \
+          "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
       fi
       n_sub=$((n_sub + 1)); continue
     fi
@@ -402,9 +421,8 @@ for spec in "${ARGS_ARMS[@]}"; do
       SJ="$("${SCORE[@]:0:3}" ${DEP[@]+"${DEP[@]}"} "${SCORE[@]:3}")"
     fi
     SJ="${SJ%%;*}"
-    [ -f "$TSV" ] || printf 'arm\tseed\ttrain_job\tscore_job\ttime\n' > "$TSV"
-    printf '%s\t%s\t%s\t%s\t%s\n' "$(basename "$ARMDIR")" "$SEED" "$TJ" "$SJ" \
-      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$TSV"
+    append_tsv "$(printf '%s\t%s\t%s\t%s\t%s' "$(basename "$ARMDIR")" "$SEED" "$TJ" "$SJ" \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
     echo "submit $JOB: train $TJ, score $SJ"
     n_sub=$((n_sub + 1))
   done

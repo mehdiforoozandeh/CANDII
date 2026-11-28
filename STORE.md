@@ -1229,6 +1229,77 @@ ones without closing them (closing a parent's HDF5 handle from a child damages t
 store objects also pickle without their handles, so `spawn` behaves like `fork`. If you add a new
 file to the reader, take it from the pool — never call `h5py.File` at module or constructor level.
 
+## The read-start store (t392)
+
+A separate store, outside CANDI_STORE, written by `tools/onion_data/read_starts.py::run` and read
+by `tools/minicandi/rs_dataset.py::ReadStartDataset`. It holds, per `eic_v1_2` measurement, the
+reads that START in each 25 bp bin, one column per strand. The overlap counts stay in `eic_v1_2`.
+
+```
+<store root>/<measurement id>/
+  starts.h5        all reads (= starts_pr1 + starts_pr2, bin for bin; `verify` checks it)
+  starts_pr1.h5    pseudoreplicate half 1
+  starts_pr2.h5    pseudoreplicate half 2
+  provenance.json  read files, sha256 of each output, per file the gate and the floor
+```
+
+```bash
+python tools/onion_data/read_starts.py run --measurement <id> --measurements <eic_v1_2 dirs> \
+    --work-root <prefix> --out <store root> [--reach 8]
+python tools/onion_data/read_starts.py verify --out <store root>/<id>
+```
+
+### One `[n_bins, 2]` dataset per chromosome
+
+Column 0 is plus-strand starts, column 1 is minus-strand starts. Every assay is stored with both
+strands; the dataset folds the unstranded tracks (`DATA.md`). The dtype is `uint16`, or `uint32`
+when a value is above 65,535 (`read_starts.py::write_starts`). Chunks are `(min(4096, n_bins), 2)`,
+gzip level 4 with shuffle. The grid is the shape of the same chromosome's dataset in the
+measurement's `counts.h5` (`len // 25` bins), for the chromosomes of `bin25.MAIN_CHROMS`.
+
+Root attributes, on each of the three files:
+
+| attr | value |
+|---|---|
+| `schema` | `1` |
+| `counting_rule` | `"read_start"` |
+| `resolution` | `25` |
+| `strand_columns` | `"plus,minus"` |
+| `measurement_id` | the `eic_v1_2` id |
+| `depth_reads` | copied from the reference overlap file; `-1.0` when that file has none |
+| `n_reads_strand` | int64 `[2]`, starts kept on the grid, per strand |
+| `n_off_grid` | lines whose start bin is past the grid end |
+| `kernel_counts` | int64 `[2, 2 * reach + 1]` |
+| `kernel` | float64 `[2, 2 * reach + 1]`, each `kernel_counts` row over its `n_reads_strand` (0 if none) |
+| `conversion_floor_nmse` | the floor, below |
+
+`reach` is `REACH = 8` unless `--reach` sets it, so the kernel is `[2, 17]` by default.
+
+### The read-start rule is the 5' base
+
+The 5' base of a tagAlign line is `start` on strand `+` and `end - 1` on strand `-`
+(`recount.py::point_positions(start, end, strand, 0)`). The start bin is that base `// 25`. Each
+line is one read, as in `bin25.counts_from_tagalign`, so a file with two lines per fragment counts
+both lines. A line whose start bin is not on the grid adds no start and goes into `n_off_grid`.
+
+### The gate rebuilds `eic_v1_2` from the same scan, every bin (D9)
+
+In the same scan, each line's overlap span is placed as a box of bin offsets from its own start
+bin, under `records.COUNT_RULE` and the edge rule of `bin25.counts_from_tagalign`. The boxes
+rebuild the overlap counts. `read_starts.py::gate` compares them with the measurement's
+`counts.h5`, `pr1.h5` and `pr2.h5` on every bin. A chromosome on one side only, or of another
+length, counts all its bins as differing. Any differing bin gives exit 1, after the files are
+written. A span that goes more than `reach` bins from its start bin raises. `gate` is the only
+function that decides pass or fail.
+
+### The conversion floor is the error of the kernel map on true starts
+
+`conversion_floor_nmse` is `mean((a - b)^2) / var(b)` over all bins of the file, where `a` is
+the starts convolved per strand with the span kernel (zero outside the chromosome) and `b` is the
+rebuilt overlap counts (`read_starts.py::conversion_floor`). It is the error that the true starts
+give after the kernel map, so it is a floor for a read-start model scored on overlap counts.
+`read_start.py::convert_nb` uses the same kernel but takes edge values past the array end.
+
 ## What is not here yet
 
 Every module of the store is written: `layout` / `writer` / `manifest` / `cli` (t6), `genome`

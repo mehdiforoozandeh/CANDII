@@ -173,7 +173,7 @@ is off at its default, and the defaults give bit-identical batches.
                    cell left with no track is not drawn. An empty list or an unknown name raises
                    ValueError, and so does a list that leaves no training track. Pseudoreplicate
                    halves (`pr1.h5`, `pr2.h5`) are files of a view, not views: the training sampler
-                   never reads them in any arm (it reads `counts` only), so this key does not touch
+                   reads them only under `train_halves` (else `counts` only), so this key does not touch
                    them. The key never changes validation or blind items, the leave-one-cell-out
                    average (`train_base` keeps the base view of every training track), `train_cells`
                    (the expression z-score set) or `withheld.tsv` checks.
@@ -182,6 +182,28 @@ is off at its default, and the defaults give bit-identical batches.
                    across tracks) then holds only same-view pairs, so no cross-view (kind 2)
                    entry is ever drawn. Below 1.0 the fallback list is today's (every ordered
                    pair of views), so the default 0.5 is unchanged.
+
+Read-disjoint training pairs (t370 chunk C29, decision D29). Train mode only; off by default.
+  train_halves     absent or null = today's sampler, bit for bit. `pairs`: in a training window
+                   every correction (kind 2) and same-view (kind 3) pair reads its source from the
+                   source view's `pr1` file and its target from the target view's `pr2` file, each
+                   described at half depth (C and C' at depth scale 0.5, as the scored correction
+                   items), so source and target share no reads. A pair keeps the kind the sampler
+                   drew: a same-view pair stays kind 3 with today's bin mask. Imputation targets
+                   (kind 1) and unhalved inputs read `counts`. A store: row has no halves and
+                   raises on read. With the key set, `meta["halves_tracks"]` lists the halved
+                   tracks.
+  train_halves_prob  default 1.0. Under `pairs`, each kind 2 / kind 3 pair of a window is halved
+                   with this probability: one draw per pair, after the bin masks, none at 1.0.
+
+Held-out controls (t370 chunk C15, decision D9). Train mode only; off by default.
+  control_holdout_cells  absent or null = today's sampler, bit for bit. A list of cell ids: in
+                   train mode the control track (`chipseq-control`) of each listed cell is
+                   removed from the sampler's candidates, so it is never an input and never a
+                   target of a training window (the cell keeps its other tracks). Val and blind
+                   modes, `train_cells`, `train_base` and the leave-one-cell-out average are
+                   unchanged (the average of a window already leaves its own cell out). A string,
+                   or a listed cell with no row in `measurements.tsv`, raises ValueError.
 
 Leave-one-cell-out average (`average_input`): with `config["average_h5"]` (built once by
 `build_average_h5`) it reads one per-track sum of training-cell rates and subtracts the window's
@@ -381,6 +403,12 @@ class OnionDataset(IterableDataset):
                              ("bin_mask_shape", BIN_MASK_SHAPES)):
             if self.config[key] not in allowed:
                 raise ValueError(f"{key} {self.config[key]!r} not in {allowed}")
+        self.train_halves = self.config.get("train_halves")
+        if self.train_halves not in (None, "pairs"):
+            raise ValueError(f"train_halves {self.train_halves!r} not in (None, 'pairs')")
+        self.train_halves_prob = float(self.config.get("train_halves_prob", 1.0))
+        if not 0.0 <= self.train_halves_prob <= 1.0:
+            raise ValueError(f"train_halves_prob {self.train_halves_prob} not in [0, 1]")
         self.train_on_validation = bool(self.config["train_on_validation"])
         if self.train_on_validation and not self.config["final_model"]:
             raise RoleError("train_on_validation needs config['final_model'] = true (PI ruling "
@@ -431,6 +459,7 @@ class OnionDataset(IterableDataset):
         self.train_base = {k: min(v, key=lambda m: (view_of(self.rows[m])[0] != "base",
                                                      _base_rank(self.rows[m])))
                            for k, v in self.train_tracks.items()}
+        self._init_control_holdout()
         self._init_train_views()
 
         gdir = self.config.get("genome_dir") or (self.tables_dir.parent.parent / "genome")
@@ -476,17 +505,36 @@ class OnionDataset(IterableDataset):
             raise ValueError(f"train_views {sorted(self.train_views)}: no training track "
                              f"keeps a view of these kinds")
 
+    def _init_control_holdout(self) -> None:
+        """`control_holdout_cells` (module docstring, Held-out controls); train mode only."""
+        cells = self.config.get("control_holdout_cells")
+        self.control_holdout = frozenset()
+        if cells is None:
+            return
+        if isinstance(cells, str):
+            raise ValueError(f"control_holdout_cells {cells!r}: want a list of cell ids")
+        cells = {str(c) for c in cells}
+        unknown = sorted(cells - {r["cell"] for r in self.rows.values()})
+        if unknown:
+            raise ValueError(f"control_holdout_cells names cells with no row: {unknown}")
+        if self.mode == "train":
+            self.control_holdout = frozenset(cells)
+
     def _sampled(self) -> tuple[dict, list]:
         """(tracks, cells) the training sampler draws from: `train_tracks` and `train_cells`
-        without `train_views`; else each track's views of the listed kinds, tracks with none
-        dropped, and the cells that keep a track."""
-        if self.train_views is None:
+        without `train_views` and `control_holdout_cells`; else each track's views of the listed
+        kinds, minus the control track of each held-out cell, tracks with none dropped, and the
+        cells that keep a track."""
+        if self.train_views is None and not self.control_holdout:
             return self.train_tracks, self.train_cells
         cache = self._sampled_cache
         if cache is None or cache[0] is not self.train_tracks:
             tracks = {}
             for k, mids in self.train_tracks.items():
-                keep = [m for m in mids if view_of(self.rows[m])[0] in self.train_views]
+                if k[1] == C.CONTROL and k[0] in self.control_holdout:
+                    continue
+                keep = [m for m in mids if self.train_views is None
+                        or view_of(self.rows[m])[0] in self.train_views]
                 if keep:
                     tracks[k] = keep
             cache = self._sampled_cache = (self.train_tracks, tracks,
@@ -1039,13 +1087,17 @@ class OnionDataset(IterableDataset):
                target_file: str = "counts", target_depth_scale: float | None = None,
                input_file: str = "counts", input_depth_scale: float | None = None,
                x_bin_mask: np.ndarray | None = None, avg: bool | None = None,
-               extra_meta: dict | None = None) -> dict:
+               extra_meta: dict | None = None, halves_tracks=None) -> dict:
         """One explicit window (no B axis). Kind per target: 1 when its track is not an input,
         3 when the input is the same measurement read from the same file, else 2. In training
         mode a withheld combination raises WithheldError. `x_bin_mask` [L, A] is applied to
         available tracks. A depth scale left None is 0.5 for a pr1/pr2 half and 1 otherwise.
         `control_input` / `predict_control` false drop the control from inputs / targets.
+        `halves_tracks` (assay names; `train_halves`): on these tracks the input reads `pr1` and
+        the target `pr2`, both at depth scale 0.5, and the kind is 3 when the input and target
+        are one measurement, else 2. None: no track is halved and meta is unchanged.
         """
+        halved = frozenset(halves_tracks or ())
         L = self.L
         if input_depth_scale is None:
             input_depth_scale = 0.5 if input_file in HALVES else 1.0
@@ -1090,17 +1142,19 @@ class OnionDataset(IterableDataset):
                 raise ValueError(f"two inputs for track {r['assay']}")
             x_avail[t] = True
             m_in[t] = m
-            x_counts[:, t] = self.read(m, chrom, start_bin, L, input_file)
+            f_in, s_in = (("pr1", 0.5) if r["assay"] in halved
+                          else (input_file, input_depth_scale))
+            x_counts[:, t] = self.read(m, chrom, start_bin, L, f_in)
             c_in[t] = self.encoder.c_in(
-                self.qc_input_row(m, r, input_file, targets) if self.qc_on_input else r,
-                self.qc_on_input, input_depth_scale)
+                self.qc_input_row(m, r, f_in, targets) if self.qc_on_input else r,
+                self.qc_on_input, s_in)
             if fixed_in:
                 ref = FIXED_BASE_LOG2_DEPTH[r["assay_class"]]
                 if c_in[t, C.LOG2_DEPTH_COL] > ref:
                     native_x[t] = x_counts[:, t].copy()
                     q = 2.0 ** (ref - float(c_in[t, C.LOG2_DEPTH_COL]))
                     rng = np.random.default_rng(np.random.SeedSequence(
-                        [stable_hash(m), stable_hash(input_file), stable_hash(chrom),
+                        [stable_hash(m), stable_hash(f_in), stable_hash(chrom),
                          int(start_bin), 16]))
                     x_counts[:, t] = thin_counts(x_counts[:, t], 1.0 / q, rng)
                     c_in[t, C.LOG2_DEPTH_COL] = ref
@@ -1110,6 +1164,13 @@ class OnionDataset(IterableDataset):
                 raise ValueError(f"two targets for track {r['assay']}")
             y_avail[t] = True
             m_out[t] = m
+            if m_in[t] and r["assay"] in halved:   # read-disjoint pair: pr1 -> pr2
+                y_kind[t] = C.KIND_SAME if m_in[t] == m else C.KIND_CORRECT
+                y_counts[:, t] = self.read(m, chrom, start_bin, L, "pr2")
+                c_out[t] = self.encoder.c_out(r, 0.5)
+                if two:
+                    c_base[t], y_base[:, t] = self._base_leg(m, chrom, start_bin, L)
+                continue
             same = m_in[t] == m and target_file == input_file
             y_kind[t] = (C.KIND_IMPUTE if not m_in[t]
                          else C.KIND_SAME if same else C.KIND_CORRECT)
@@ -1144,6 +1205,8 @@ class OnionDataset(IterableDataset):
                 "inputs": list(inputs), "targets": list(targets),
                 "measurements_in": m_in, "measurements_out": m_out,
                 "input_file": input_file, "target_file": target_file}
+        if halves_tracks is not None:
+            meta["halves_tracks"] = sorted(halved)
         meta.update(extra_meta or {})
         win["meta"] = meta
         return win
@@ -1155,8 +1218,15 @@ class OnionDataset(IterableDataset):
         for a, v_in, v_out, kind in plan["entries"]:
             if kind == C.KIND_SAME:
                 bm[:, C.TRACK_INDEX[a]] = self._bin_mask(rng, self.config["bin_mask_shape"])
+        halves = None
+        if self.train_halves == "pairs":            # read-disjoint pairs (C29); else no draw
+            p = self.train_halves_prob
+            halves = [a for a, v_in, v_out, kind in plan["entries"]
+                      if kind in (C.KIND_SAME, C.KIND_CORRECT)
+                      and (p >= 1.0 or rng.random() < p)]
         win = self.window(plan["chrom"], plan["start_bin"], inputs, targets, x_bin_mask=bm,
-                          extra_meta={"kinds": {e[0]: int(e[3]) for e in plan["entries"]}})
+                          extra_meta={"kinds": {e[0]: int(e[3]) for e in plan["entries"]}},
+                          halves_tracks=halves)
         if self.aug_revcomp and rng.random() < REVCOMP_PROB:   # training windows only
             win = revcomp_window(win)
             win["meta"] = dict(win["meta"], revcomp=True)

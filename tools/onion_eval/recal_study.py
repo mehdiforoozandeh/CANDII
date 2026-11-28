@@ -1,0 +1,829 @@
+"""Recalibration study of the per-assay NB dispersion factor (task t370, chunk recalstudy).
+
+PI request: does one per-assay dispersion factor c (n' = n / c, mu unchanged;
+`ensemble_store.recalibrate`) fitted on held-out regions carry over to other regions, to other
+cells, and from observed-data pairs to imputation items? Per seed of the final model.
+
+forward. Draws held-out calibration regions (`ensemble_store.calibration_regions`: candidate
+blocks in no `regions` / `fit_regions` of the eval sets, and, with --exclude-regions-from, in no
+region of an earlier forward), writes `<out>/calibration_evalset.json` as `ensemble_store.fit`
+does (except that the pair jobs run on every calibration region: no `pair_regions`), and runs every
+model over
+  (a) the imputation items of `ensemble_store.FIT_REGIMES`, exactly as `ensemble_store.fit` does
+      (`Scorer.ds.window` of the item's inputs and target), and
+  (b) the correction pairs of `Scorer.jobs()` (source pr1 in, target pr2 scored, through
+      `Scorer._pair_window`; `Scorer.jobs()` already drops the pairs with read_disjoint 0, and
+      their count is recorded).
+Per item it writes `<out>/items/<sha1 of key>.npz` with y [B] and n, mu [K, B] (float32; K runs,
+B bins in region then window order) and `meta` (json: kind imputation|pair, key, cell, assay,
+target, source, regime). `<out>/index.json` (written last) lists the items and the map from every
+pair key of the Scorer (correction, replicate, same-view) to its target assay. A rerun skips a
+stored item, and skips the whole command when index.json exists.
+
+    python tools/onion_eval/recal_study.py forward --runs <seed0> <seed1> <seed2>
+        --evalset <json> [--exclude-evalset <json> ...] --n-regions 32 --region-seed <int>
+        [--exclude-regions-from <forward out dir>] --out <dir> [--max-bins 300000]
+        [--infer-batch 8] [--device cpu]
+
+analyze. Per seed k and per kind (imputation, pair), the pooled PIT deviation per assay
+(`ensemble_store.pit_dev`, the quantity `ensemble_store.fit` minimizes) on the SCORE forward, with
+bins chosen by `ensemble_store.fit_index` (finite in every run, n > 0, seeded subsample of at most
+--max-bins), under the conditions
+  none        c = 1;
+  same_cells  c per assay fitted (`fit_factor`) on the FIT forward, all cells, same kind;
+  cross_cell  2-fold cross-fit over cells: the distinct cells of the FIT forward's items of that
+              kind, sorted, fold = position % 2; a SCORE item of a cell in fold f takes the factor
+              fitted on the FIT items of the cells of the other fold. An assay with no fit data in
+              that fold, or a cell not in the FIT forward, takes c = 1 and is counted;
+  shipped     (imputation only) the same_cells factor of the pair kind applied to the imputation
+              items (c = 1 and counted for an assay with no pair fit data).
+Reports per seed, the mean and the range (max - min) over seeds, per assay and mean over assays,
+with bins and items, every factor and its `at_bound`. Every condition leaves mu unchanged
+(asserted). Writes <prefix>.json, <prefix>.md and <prefix>.pair_factors.json (factor sets seed<k>
+and ensemble fitted on the FIT forward's pair items, with the pair -> target assay map; the input of
+`ensemble_store.py combine --pair-factors`).
+
+    python tools/onion_eval/recal_study.py analyze --fit <forward dir> --score <forward dir>
+        --out <prefix> [--max-bins 300000]
+
+coverage. PI request: do the NB intervals capture large peaks where mu under- or overshoots? Per
+kind, condition (none, same_cells, cross_cell; factors from analyze's fits, `kind_fits`, on the FIT
+forward), seed and assay, the empirical coverage of the central intervals of LEVELS on the SCORE
+forward: covered iff ppf((1 - L) / 2) <= y <= ppf((1 + L) / 2), with frac_above (y > upper) and
+frac_below (y < lower). Strata per assay (pooled bins): all, and the top 10%, 1%, 0.1% by observed
+y and by that seed's mu (value >= np.quantile, ties kept, bin count recorded). Every finite bin is
+scored (no subsample). One assay per job, --workers processes. Writes <prefix>.json, <prefix>.md.
+
+    python tools/onion_eval/recal_study.py coverage --fit <forward dir> --score <forward dir>
+        --out <prefix> [--max-bins 300000] [--workers 4]
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import time
+from pathlib import Path
+
+import numpy as np
+
+_TOOLS = Path(__file__).resolve().parents[1]
+if str(_TOOLS) not in sys.path:
+    sys.path.insert(0, str(_TOOLS))
+
+from onion_eval import ensemble_store as ES  # noqa: E402
+
+KINDS = ("imputation", "pair")
+CONDITIONS = ("none", "same_cells", "cross_cell", "shipped")
+INDEX = "index.json"
+
+
+def _read_json(p) -> dict:
+    return json.loads(Path(p).read_text(encoding="utf-8"))
+
+
+def _write_json(p: Path, doc) -> None:
+    tmp = p.with_name("." + p.name + ".part")
+    tmp.write_text(json.dumps(doc, indent=1) + "\n", encoding="utf-8")
+    os.replace(tmp, p)
+
+
+# ------------------------------------------------------------------------------------ forward
+
+def calibration_evalset(ev: dict, regions, meta: dict) -> dict:
+    """The eval set of the calibration regions: `ev` with `regions` replaced, no strata, and no
+    `pair_regions` (the pair jobs run on every calibration region)."""
+    cal = dict(ev)
+    cal.update({"regions": [list(x) for x in regions], "strata": [], "calibration_of": meta})
+    cal.pop("pair_regions", None)
+    cal.pop("pair_regions_p", None)
+    return cal
+
+
+def item_key(kind: str, job: dict) -> str:
+    """The prediction-store key of a job: item/<target>/<regime> or pair/<pair key>."""
+    if kind == "imputation":
+        return f"item/{job['target']}/{job['regime']}"
+    return "pair/" + (job.get("pair_id") or job["source"] + ">" + job["target"])
+
+
+def item_meta(kind: str, job: dict, assay: str, cell: str) -> dict:
+    return {"kind": kind, "key": item_key(kind, job), "cell": cell, "assay": assay,
+            "target": job["target"], "source": job.get("source"), "regime": job.get("regime")}
+
+
+def write_item(out: Path, meta: dict, y, n, mu) -> Path:
+    """Write one item (y [B]; n, mu [K, B]) atomically to <out>/items/<sha1 of key>.npz."""
+    from onion_eval import predict_store as P
+    y = np.asarray(y, np.float32)
+    n = np.asarray(n, np.float32)
+    mu = np.asarray(mu, np.float32)
+    if n.shape != mu.shape or n.ndim != 2 or n.shape[1] != y.size:
+        raise ValueError(f"{meta['key']}: y {y.shape}, n {n.shape}, mu {mu.shape}")
+    d = Path(out) / "items"
+    d.mkdir(parents=True, exist_ok=True)
+    f = d / P.key_file(meta["key"])
+    tmp = d / ("." + f.name + ".part")
+    with open(tmp, "wb") as fh:
+        np.savez(fh, y=y, n=n, mu=mu, meta=np.array(json.dumps(meta, sort_keys=True)))
+    os.replace(tmp, f)
+    return f
+
+
+def read_item(f: Path) -> dict:
+    with np.load(f) as z:
+        it = json.loads(str(z["meta"]))
+        it.update(y=z["y"], n=z["n"], mu=z["mu"])
+    return it
+
+
+def prior_regions_doc(forward_dir) -> dict:
+    """An earlier forward's calibration eval set, as an eval set to exclude the regions of."""
+    p = Path(forward_dir) / "calibration_evalset.json"
+    if not p.is_file():
+        raise SystemExit(f"refused: {p} does not exist")
+    return _read_json(p)
+
+
+def forward(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="recal_study.py forward", description="model forwards of "
+                                 "imputation items and correction pairs on calibration regions")
+    ap.add_argument("--runs", nargs="+", required=True, help="seed run dirs; the first is seed0")
+    ap.add_argument("--evalset", required=True)
+    ap.add_argument("--exclude-evalset", nargs="*", default=[])
+    ap.add_argument("--exclude-regions-from", default=None,
+                    help="an earlier forward out dir whose calibration regions are avoided")
+    ap.add_argument("--n-regions", type=int, default=32)
+    ap.add_argument("--region-seed", type=int, required=True)
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--max-bins", type=int, default=300000,
+                    help="recorded only; analyze applies the subsample")
+    ap.add_argument("--infer-batch", type=int, default=8)
+    ap.add_argument("--device", default="cpu")
+    a = ap.parse_args(argv)
+
+    def log(*m):
+        print(*m, flush=True)
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    if (out / INDEX).is_file():
+        log(f"forward: skip, {out / INDEX} exists")
+        return 0
+    from onion_eval import score as S
+    from onion_eval import predict_store as P
+    from minicandi.registry import load_run
+    S.set_threads()
+    S.tf32_off()
+    t0 = time.time()
+    ev = _read_json(a.evalset)
+    exc = [_read_json(p) for p in a.exclude_evalset]
+    if a.exclude_regions_from:
+        exc.append(prior_regions_doc(a.exclude_regions_from))
+    shas = {S.run_tables_sha256(r) for r in a.runs}
+    if len(shas) != 1:
+        raise SystemExit("refused: the runs were trained on different tables")
+    models = [load_run(r) for r in a.runs]
+    cfg0 = {k: v for k, v in models[0][1].items() if k != "seed"}
+    for r, (_, cfg) in zip(a.runs[1:], models[1:]):
+        d = sorted(k for k in set(cfg0) | set(cfg) if k != "seed" and cfg0.get(k) != cfg.get(k))
+        if d:
+            log(f"forward: WARNING: {r} config differs from the first run's in {d}")
+    regions = ES.calibration_regions(ev, Path(ev["tables_dir"]), exc, a.n_regions, a.region_seed)
+    meta = {"evalset": str(Path(a.evalset).resolve()), "evalset_sha256": S.sha256_file(a.evalset),
+            "excluded": [str(Path(p).resolve()) for p in a.exclude_evalset],
+            "excluded_regions_from": (str(Path(a.exclude_regions_from).resolve())
+                                      if a.exclude_regions_from else None),
+            "n_regions": a.n_regions, "region_seed": a.region_seed}
+    cal_path = out / "calibration_evalset.json"
+    _write_json(cal_path, calibration_evalset(ev, regions, meta))
+    sc = S.Scorer(str(cal_path), main="model", model=models[0][0], config=models[0][1],
+                  device=a.device, run_tables_sha256=shas.pop(), log=log, n_boot=0)
+    preds = [S.ModelPredictor(m, a.device) for m, _ in models]
+    imp, cor, rep, _ = sc.jobs()
+    jobs = ([("imputation", j) for j in imp if j["regime"] in ES.FIT_REGIMES]
+            + [("pair", j) for j in cor])
+    pair_map = {S._pair_key(j): sc._row(j["target"])["assay"]
+                for j in cor + rep + S.same_view_jobs(cor)}
+    log(f"forward: {len(jobs)} items ({sum(k == 'pair' for k, _ in jobs)} correction pairs; "
+        f"{sc.n_pairs_not_read_disjoint} pairs not read-disjoint left out), {len(regions)} "
+        f"calibration regions, {len(preds)} models")
+    tm = time.time()
+    metas = []
+    for ji, (kind, job) in enumerate(jobs):
+        row = sc._row(job["target"])
+        t = sc.C.TRACK_INDEX[row["assay"]]
+        assay = job["assay"] if kind == "imputation" else row["assay"]
+        m = item_meta(kind, job, assay, job.get("cell") or row["cell"])
+        f = out / "items" / P.key_file(m["key"])
+        metas.append(dict(m, file=f.name))
+        if f.is_file():
+            log(f"forward: item {ji + 1}/{len(jobs)} {m['key']} stored, skip")
+            continue
+        keep = set(range(len(sc.regions))) if kind == "imputation" else set(sc.pair_region_idx)
+        ys, ns, mus = [], [[] for _ in preds], [[] for _ in preds]
+        for ri, tiles in sc._tiles(sc.regions):
+            if ri not in keep:
+                continue
+            sc._set_region(*sc.regions[ri])
+            for b0 in range(0, len(tiles), a.infer_batch):
+                tl = tiles[b0:b0 + a.infer_batch]
+                if kind == "imputation":
+                    wins = [sc.ds.window(c, s, job["inputs"], [job["target"]]) for c, s in tl]
+                else:
+                    wins = [sc._pair_window(job, c, s) for c, s in tl]
+                batch = sc.C.collate(wins)
+                ys.append(batch["y_counts"][:, :, t].numpy().reshape(-1).astype(np.float64))
+                for k, pr in enumerate(preds):
+                    p = pr(batch)
+                    ns[k].append(p["n"][:, :, t].reshape(-1))
+                    mus[k].append(p["mu"][:, :, t].reshape(-1))
+        write_item(out, m, np.concatenate(ys), np.stack([np.concatenate(x) for x in ns]),
+                   np.stack([np.concatenate(x) for x in mus]))
+        log(f"forward: item {ji + 1}/{len(jobs)} {kind} {m['key']} ({time.time() - tm:.0f} s)")
+    doc = {"runs": [str(Path(r).resolve()) for r in a.runs],
+           "calibration_evalset": str(cal_path.resolve()), "calibration_of": meta,
+           "regions": [list(x) for x in regions], "fit_regimes": list(ES.FIT_REGIMES),
+           "n_pairs_not_read_disjoint": int(sc.n_pairs_not_read_disjoint),
+           "infer_batch": a.infer_batch, "device": a.device, "max_bins": a.max_bins,
+           "items": metas, "pair_target_assay": pair_map,
+           "seconds": {"forward": round(time.time() - tm, 1), "total": round(time.time() - t0, 1)}}
+    _write_json(out / INDEX, doc)
+    log(f"forward: wrote {out / INDEX} ({time.time() - t0:.0f} s)")
+    return 0
+
+
+# ------------------------------------------------------------------------------------ analyze
+
+def load_forward(d) -> tuple:
+    """(index, items) of a forward out dir; each item is its meta plus y, n, mu."""
+    d = Path(d)
+    idx = _read_json(d / INDEX)
+    return idx, [read_item(d / "items" / m["file"]) for m in idx["items"]]
+
+
+def pool(items) -> tuple:
+    """(y [B], n [K, B], mu [K, B], item position per bin) of items, concatenated (float64)."""
+    y = np.concatenate([np.asarray(it["y"], np.float64) for it in items])
+    n = np.concatenate([np.asarray(it["n"], np.float64) for it in items], axis=1)
+    mu = np.concatenate([np.asarray(it["mu"], np.float64) for it in items], axis=1)
+    pos = np.concatenate([np.full(np.asarray(it["y"]).size, i) for i, it in enumerate(items)])
+    return y, n, mu, pos
+
+
+def by_assay(items) -> dict:
+    out = {}
+    for it in items:
+        out.setdefault(it["assay"], []).append(it)
+    return dict(sorted(out.items()))
+
+
+def apply_factor(n, mu, c):
+    """(n / c, mu): c a positive scalar or one factor per bin; mu is returned unchanged."""
+    c = np.asarray(c, np.float64)
+    if not np.all(c > 0):
+        raise ValueError("dispersion factors must be positive")
+    return np.asarray(n, np.float64) / c, mu
+
+
+def _short(r: dict) -> dict:
+    return {k: r[k] for k in ("factor", "log2_factor", "at_bound", "pit_at_1", "pit_at_factor")}
+
+
+def fit_per_seed(items, K: int, max_bins: int) -> dict:
+    """{assay: [fit_factor result of seed k for k < K]} over the pooled items of each assay;
+    an assay with no usable bin is left out."""
+    out = {}
+    for assay, its in by_assay(items).items():
+        y, n, mu, _ = pool(its)
+        _, idx = ES.fit_index(y, n, mu, max_bins)
+        if idx.size:
+            out[assay] = [ES.fit_factor(n[k, idx], mu[k, idx], y[idx]) for k in range(K)]
+    return out
+
+
+def cell_folds(items) -> dict:
+    """{cell: fold}: the distinct cells sorted, fold = position % 2."""
+    return {c: i % 2 for i, c in enumerate(sorted({it["cell"] for it in items}))}
+
+
+def _summary(vals) -> dict:
+    v = [x for x in vals if x is not None]
+    if len(v) != len(vals) or not v:
+        return {"mean": None, "range": None, "per_seed": list(vals)}
+    return {"mean": float(np.mean(v)), "range": float(max(v) - min(v)), "per_seed": list(vals)}
+
+
+def kind_fits(fit_items, K: int, max_bins: int, folds=None) -> tuple:
+    """(same, folds, fold_fit) of one kind: the same_cells factors (`fit_per_seed` over every fit
+    item) and the cross_cell factors fitted on the items of each cell fold. `folds` defaults to
+    `cell_folds(fit_items)`; pass the kind's folds when `fit_items` is a subset (one assay)."""
+    same = fit_per_seed(fit_items, K, max_bins)
+    folds = cell_folds(fit_items) if folds is None else folds
+    fold_fit = {f: fit_per_seed([it for it in fit_items if folds[it["cell"]] == f], K, max_bins)
+                for f in (0, 1)}
+    return same, folds, fold_fit
+
+
+def cross_sources(assay: str, its, folds: dict, fold_fit: dict) -> tuple:
+    """(fit fold per item or None for c = 1, fallback entries) of the cross_cell condition: an item
+    of a cell in fold f takes the factor fitted on fold 1 - f."""
+    src, fb = [], []
+    for it in its:
+        f = folds.get(it["cell"])
+        if f is None:
+            src.append(None)
+            fb.append({"assay": assay, "cell": it["cell"], "key": it["key"],
+                       "why": "cell not in the fit set"})
+        elif assay not in fold_fit[1 - f]:
+            src.append(None)
+            fb.append({"assay": assay, "cell": it["cell"], "key": it["key"], "fit_fold": 1 - f,
+                       "why": "no fit data for this assay in the fold"})
+        else:
+            src.append(1 - f)
+    return src, fb
+
+
+def condition_factors(assay: str, k: int, same: dict, fold_fit: dict, src, pos,
+                      shipped=None) -> dict:
+    """{condition: c} of seed k on bins whose item positions are `pos`: a scalar, or one factor per
+    bin for cross_cell."""
+    cs = {"none": 1.0, "same_cells": same[assay][k]["factor"] if assay in same else 1.0}
+    item_c = np.array([1.0 if s is None else fold_fit[s][assay][k]["factor"] for s in src])
+    cs["cross_cell"] = item_c[pos]
+    if shipped is not None:
+        cs["shipped"] = shipped[assay][k]["factor"] if assay in shipped else 1.0
+    return cs
+
+
+def analyze_kind(fit_items, score_items, K: int, max_bins: int, shipped=None) -> dict:
+    """The study of one kind (module docstring). `shipped`: {assay: [per-seed fit_factor result]}
+    to apply as the `shipped` condition, or None."""
+    same, folds, fold_fit = kind_fits(fit_items, K, max_bins)
+    conds = ["none", "same_cells", "cross_cell"] + (["shipped"] if shipped is not None else [])
+    pit = {c: [{} for _ in range(K)] for c in conds}
+    bins, fallback = {}, {c: [] for c in conds if c != "none"}
+    mu_unchanged = True
+    for assay, its in by_assay(score_items).items():
+        y, n, mu, pos = pool(its)
+        ok, idx = ES.fit_index(y, n, mu, max_bins)
+        bins[assay] = {"items": len(its), "bins": int(y.size), "finite": int(ok.sum()),
+                       "used": int(idx.size), "cells": sorted({it["cell"] for it in its})}
+        if assay not in same:
+            fallback["same_cells"].append({"assay": assay, "items": len(its)})
+        if shipped is not None and assay not in shipped:
+            fallback["shipped"].append({"assay": assay, "items": len(its)})
+        src, fb = cross_sources(assay, its, folds, fold_fit)
+        fallback["cross_cell"] += fb
+        for k in range(K):
+            nk, mk, yk = n[k, idx], mu[k, idx], y[idx]
+            if not idx.size:
+                for c in conds:
+                    pit[c][k][assay] = None
+                continue
+            cs = condition_factors(assay, k, same, fold_fit, src, pos[idx], shipped)
+            for c in conds:
+                n2, m2 = apply_factor(nk, mk, cs[c])
+                if not (m2 is mk and np.array_equal(m2, mu[k, idx])):
+                    mu_unchanged = False
+                assert mu_unchanged, f"{assay} {c}: mu changed"
+                pit[c][k][assay] = ES.pit_dev(n2, m2, yk)
+    assays = sorted(bins)
+    res = {"conditions": {}, "bins": bins, "n_items": len(score_items),
+           "n_bins_used": int(sum(b["used"] for b in bins.values())),
+           "fit_n_items": len(fit_items), "folds": folds, "fallback_c1": fallback,
+           "mu_unchanged": mu_unchanged,
+           "factors": {"same_cells": {a: [_short(r) for r in v] for a, v in same.items()},
+                       "cross_cell": {f"fitted_on_fold{f}": {a: [_short(r) for r in v]
+                                                             for a, v in fold_fit[f].items()}
+                                      for f in (0, 1)}}}
+    if shipped is not None:
+        res["factors"]["shipped"] = {a: [_short(r) for r in v] for a, v in shipped.items()}
+    for c in conds:
+        per_seed = []
+        for k in range(K):
+            vals = [pit[c][k][a] for a in assays]
+            ok_vals = [v for v in vals if v is not None]
+            per_seed.append({"per_assay": pit[c][k],
+                             "mean_over_assays": (float(np.mean(ok_vals))
+                                                  if ok_vals and len(ok_vals) == len(vals) else None)})
+        res["conditions"][c] = {
+            "per_seed": per_seed,
+            "per_assay": {a: _summary([pit[c][k][a] for k in range(K)]) for a in assays},
+            "mean_over_assays": _summary([s["mean_over_assays"] for s in per_seed])}
+    return res
+
+
+def pair_factors_doc(fit_items, K: int, max_bins: int, pair_map: dict) -> dict:
+    """The pair factors file of `ensemble_store.combine --pair-factors`: seed<k> and ensemble sets
+    fitted on the pooled pair items of each assay, and the pair key -> target assay map."""
+    sets = {f"seed{k}": {} for k in range(K)}
+    if K > 1:
+        sets["ensemble"] = {}
+    bins = {}
+    for assay, its in by_assay([it for it in fit_items if it["kind"] == "pair"]).items():
+        y, n, mu, _ = pool(its)
+        _, idx = ES.fit_index(y, n, mu, max_bins)
+        if not idx.size:
+            continue
+        res, bins[assay] = ES.assay_factor_sets(y, n, mu, max_bins)
+        for v, r in res.items():
+            sets[v][assay] = r
+    return {"criterion": "least pooled PIT deviation per target assay over the correction pairs "
+                         "of the fit forward; n' = n / factor",
+            "applies_to": "pair/<pair key> prediction store requests, by pair_target_assay",
+            "factor_sets": sets, "pair_target_assay": dict(sorted(pair_map.items())),
+            "bins_per_assay": bins, "max_bins": max_bins, "subsample_seed": 0}
+
+
+def analyze_items(fit_items, score_items, K: int, max_bins: int) -> dict:
+    """{kind: analyze_kind result} with the `shipped` condition on the imputation kind."""
+    fi = {k: [it for it in fit_items if it["kind"] == k] for k in KINDS}
+    si = {k: [it for it in score_items if it["kind"] == k] for k in KINDS}
+    out = {}
+    pair_same = fit_per_seed(fi["pair"], K, max_bins) if fi["pair"] else None
+    for k in KINDS:
+        if not si[k]:
+            continue
+        out[k] = analyze_kind(fi[k], si[k], K, max_bins,
+                              shipped=pair_same if k == "imputation" else None)
+    return out
+
+
+def _fmt(x, w=".4f"):
+    return "n/a" if x is None else format(x, w)
+
+
+def markdown(doc: dict) -> str:
+    K = doc["n_seeds"]
+    L = ["# Recalibration study: pooled PIT deviation per assay", "",
+         f"Fit forward: `{doc['fit']}`. Score forward: `{doc['score']}`. Seeds: {K}. "
+         f"Subsample: at most {doc['max_bins']} bins per assay (seed 0). "
+         "Cells cross-fitted in 2 folds (sorted cells, position % 2). Lower is better.", ""]
+    for kind, r in doc["kinds"].items():
+        conds = list(r["conditions"])
+        L += [f"## {kind}", "",
+              f"Score items {r['n_items']}, bins used {r['n_bins_used']}; fit items "
+              f"{r['fit_n_items']}. Mu unchanged under every condition: {r['mu_unchanged']}.", "",
+              "| condition | mean over assays, mean over seeds | range over seeds | "
+              + " | ".join(f"seed{k}" for k in range(K)) + " |",
+              "|---|---|---|" + "---|" * K]
+        for c in conds:
+            m = r["conditions"][c]["mean_over_assays"]
+            L.append(f"| {c} | {_fmt(m['mean'])} | {_fmt(m['range'])} | "
+                     + " | ".join(_fmt(v) for v in m["per_seed"]) + " |")
+        L += ["", "Per assay: mean over seeds (range over seeds).", "",
+              "| assay | items | bins used | " + " | ".join(conds) + " | same_cells factor per seed |",
+              "|---|---|---|" + "---|" * len(conds) + "---|"]
+        for a, b in r["bins"].items():
+            cells = [r["conditions"][c]["per_assay"][a] for c in conds]
+            fac = r["factors"]["same_cells"].get(a)
+            fs = ("c=1 (no fit data)" if fac is None else ", ".join(
+                f"{x['factor']:.3g}{' (bound)' if x['at_bound'] else ''}" for x in fac))
+            L.append(f"| {a} | {b['items']} | {b['used']} | "
+                     + " | ".join(f"{_fmt(s['mean'])} ({_fmt(s['range'])})" for s in cells)
+                     + f" | {fs} |")
+        fb = {c: len(v) for c, v in r["fallback_c1"].items()}
+        L += ["", "Fallbacks to c = 1 (count of entries): "
+              + ", ".join(f"{c} {v}" for c, v in fb.items()) + ".", ""]
+    return "\n".join(L) + "\n"
+
+
+def analyze(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="recal_study.py analyze", description="pooled PIT deviation "
+                                 "per assay under each recalibration condition")
+    ap.add_argument("--fit", required=True, help="forward out dir the factors are fitted on")
+    ap.add_argument("--score", required=True, help="forward out dir the conditions are scored on")
+    ap.add_argument("--out", required=True, help="output prefix: <prefix>.json, <prefix>.md")
+    ap.add_argument("--max-bins", type=int, default=300000)
+    a = ap.parse_args(argv)
+    t0 = time.time()
+    fidx, fit_items = load_forward(a.fit)
+    sidx, score_items = load_forward(a.score)
+    K = len(fidx["runs"])
+    if len(sidx["runs"]) != K:
+        raise SystemExit(f"refused: {K} runs in the fit forward, {len(sidx['runs'])} in the score")
+    if fidx["runs"] != sidx["runs"]:
+        print("analyze: WARNING: the two forwards list different run dirs", flush=True)
+    shared = sorted({tuple(r) for r in fidx["regions"]} & {tuple(r) for r in sidx["regions"]})
+    if shared:
+        print(f"analyze: WARNING: the forwards share {len(shared)} regions", flush=True)
+    doc = {"fit": str(Path(a.fit).resolve()), "score": str(Path(a.score).resolve()),
+           "runs": fidx["runs"], "n_seeds": K, "max_bins": a.max_bins, "subsample_seed": 0,
+           "shared_regions": [list(r) for r in shared],
+           "criterion": "pooled PIT deviation per assay (ensemble_store.pit_dev); n' = n / c",
+           "kinds": analyze_items(fit_items, score_items, K, a.max_bins)}
+    doc["seconds"] = round(time.time() - t0, 1)
+    out = Path(a.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(out.with_name(out.name + ".json"), doc)
+    out.with_name(out.name + ".md").write_text(markdown(doc), encoding="utf-8")
+    pmap = {**sidx.get("pair_target_assay", {}), **fidx.get("pair_target_assay", {})}
+    pdoc = pair_factors_doc(fit_items, K, a.max_bins, pmap)
+    pdoc["fit_forward"] = doc["fit"]
+    _write_json(out.with_name(out.name + ".pair_factors.json"), pdoc)
+    print(f"analyze: wrote {out}.json, .md, .pair_factors.json ({doc['seconds']} s)", flush=True)
+    return 0
+
+
+# ----------------------------------------------------------------------------------- coverage
+
+LEVELS = (0.50, 0.80, 0.90, 0.95)
+#: (stratum suffix, quantile): a bin is in the stratum when its value >= np.quantile(values, q)
+TOPS = (("top10", 0.90), ("top1", 0.99), ("top0.1", 0.999))
+#: `reference`: what a calibrated model would show. Per bin, a draw y* ~ NB(n, mu) of the
+#: uncalibrated prediction replaces y, and the obs strata are cut on y*; so the obs_top strata of
+#: `reference` give the coverage a perfectly calibrated model would also get when bins are picked
+#: by their observed value (selection on the outcome), and pred strata the nominal-or-above value.
+COV_CONDITIONS = ("none", "same_cells", "cross_cell", "reference")
+REFERENCE_SEED = 20261125
+STRATA = ("all",) + tuple(f"obs_{t}" for t, _ in TOPS) + tuple(f"pred_{t}" for t, _ in TOPS)
+COV_METRICS = ("coverage", "frac_above", "frac_below")
+
+
+def _lk(level: float) -> str:
+    return f"{level:.2f}"
+
+
+def nb_cdf_pair(n, mu, y) -> tuple:
+    """(F(y), F(y - 1)) of NB(n, p) with p = n / (n + mu) (`p_from_mu`, the scorer's conversion);
+    F(-1) = 0."""
+    from scipy.stats import nbinom
+    from candi.bench.distributional import p_from_mu
+    n = np.asarray(n, np.float64)
+    y = np.asarray(y, np.float64)
+    p = p_from_mu(n, mu)
+    fy = nbinom.cdf(y, n, p)
+    fm = np.zeros_like(fy)
+    pos = y > 0
+    fm[pos] = nbinom.cdf(y[pos] - 1.0, n[pos], p[pos])
+    return fy, fm
+
+
+def top_masks(v, prefix: str) -> tuple:
+    """({prefix_top<x>: v >= np.quantile(v, q)}, {prefix_top<x>: the quantile value}); ties at the
+    cut are kept, so a stratum may hold more than its nominal share."""
+    v = np.asarray(v, np.float64)
+    masks, cuts = {}, {}
+    for t, q in TOPS:
+        thr = float(np.quantile(v, q))
+        masks[f"{prefix}_{t}"] = v >= thr
+        cuts[f"{prefix}_{t}"] = thr
+    return masks, cuts
+
+
+def interval_table(fy, fm, masks: dict) -> dict:
+    """{stratum: {level: {n_bins, coverage, frac_above, frac_below}}} of the central intervals
+    [ppf((1 - L) / 2), ppf((1 + L) / 2)]. With ppf(q) the least k with F(k) >= q:
+    y < lower iff F(y) < (1 - L) / 2, and y > upper iff F(y - 1) >= (1 + L) / 2."""
+    out = {s: {} for s in masks}
+    for L in LEVELS:
+        below = fy < (1.0 - L) / 2.0
+        above = fm >= (1.0 + L) / 2.0
+        for s, m in masks.items():
+            nb = int(np.count_nonzero(m))
+            a = int(np.count_nonzero(above & m))
+            b = int(np.count_nonzero(below & m))
+            out[s][_lk(L)] = ({"n_bins": 0, "coverage": None, "frac_above": None,
+                               "frac_below": None} if nb == 0 else
+                              {"n_bins": nb, "coverage": (nb - a - b) / nb,
+                               "frac_above": a / nb, "frac_below": b / nb})
+    return out
+
+
+def coverage_assay(assay: str, its, K: int, folds: dict, same: dict, fold_fit: dict) -> dict:
+    """Coverage tables of one pooled assay of one kind: every bin of `fit_index`'s finite mask (no
+    subsample), per condition of COV_CONDITIONS and seed k."""
+    y, n, mu, pos = pool(its)
+    ok, idx = ES.fit_index(y, n, mu, max(int(y.size), 1))
+    src, fb = cross_sources(assay, its, folds, fold_fit)
+    res = {"bins": {"items": len(its), "bins": int(y.size), "finite": int(ok.sum()),
+                    "used": int(idx.size), "cells": sorted({it["cell"] for it in its})},
+           "fallback": {"same_cells": ([] if assay in same else
+                                       [{"assay": assay, "items": len(its)}]),
+                        "cross_cell": fb},
+           "tables": {c: [None] * K for c in COV_CONDITIONS},
+           "obs_cuts": None, "pred_cuts": [None] * K, "mu_unchanged": True}
+    if not idx.size:
+        return res
+    yk = y[idx]
+    obs, res["obs_cuts"] = top_masks(yk, "obs")
+    for k in range(K):
+        nk, mk = n[k, idx], mu[k, idx]
+        pred, res["pred_cuts"][k] = top_masks(mk, "pred")
+        masks = {"all": np.ones(idx.size, bool), **obs, **pred}
+        cs = condition_factors(assay, k, same, fold_fit, src, pos[idx])
+        for c in COV_CONDITIONS:
+            if c == "reference":
+                from candi.bench.distributional import p_from_mu
+                rng = np.random.default_rng([REFERENCE_SEED, k, len(yk)])
+                ys = rng.negative_binomial(np.asarray(nk, np.float64),
+                                           p_from_mu(np.asarray(nk, np.float64), mk)).astype(np.float64)
+                sim_obs, _ = top_masks(ys, "obs")
+                fy, fm = nb_cdf_pair(nk, mk, ys)
+                res["tables"][c][k] = interval_table(fy, fm, {**masks, **sim_obs})
+                continue
+            n2, m2 = apply_factor(nk, mk, cs[c])
+            if not (m2 is mk and np.array_equal(m2, mu[k, idx])):
+                res["mu_unchanged"] = False
+            assert res["mu_unchanged"], f"{assay} {c}: mu changed"
+            fy, fm = nb_cdf_pair(n2, m2, yk)
+            res["tables"][c][k] = interval_table(fy, fm, masks)
+    return res
+
+
+def _load(d, metas):
+    return [read_item(Path(d) / "items" / m["file"]) for m in metas]
+
+
+def _fit_job(job) -> tuple:
+    d, metas, K, max_bins, folds = job
+    same, _, fold_fit = kind_fits(_load(d, metas), K, max_bins, folds)
+    return same, fold_fit
+
+
+def _score_job(job) -> dict:
+    d, metas, assay, K, folds, same, fold_fit = job
+    return coverage_assay(assay, _load(d, metas), K, folds, same, fold_fit)
+
+
+def _map(fn, jobs, workers: int) -> list:
+    if workers <= 1 or len(jobs) <= 1:
+        return [fn(j) for j in jobs]
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    with ProcessPoolExecutor(min(workers, len(jobs)), mp_context=mp.get_context("fork")) as ex:
+        return list(ex.map(fn, jobs))
+
+
+def coverage_kind(fit_dir, fit_metas, score_dir, score_metas, K: int, max_bins: int,
+                  workers: int = 1) -> dict:
+    """The coverage study of one kind. Factors: `kind_fits` (the analyze code path) on the fit
+    forward, run per assay with the kind's cell folds; scoring: `coverage_assay` per assay, one
+    assay per job."""
+    folds = cell_folds(fit_metas)
+    fit_by = by_assay(fit_metas)
+    same, fold_fit = {}, {0: {}, 1: {}}
+    for s, ff in _map(_fit_job, [(fit_dir, m, K, max_bins, folds) for m in fit_by.values()],
+                      workers):
+        same.update(s)
+        for f in (0, 1):
+            fold_fit[f].update(ff[f])
+    same = dict(sorted(same.items()))
+    fold_fit = {f: dict(sorted(v.items())) for f, v in fold_fit.items()}
+    score_by = by_assay(score_metas)
+    rs = _map(_score_job, [(score_dir, m, a, K, folds, same, fold_fit)
+                           for a, m in score_by.items()], workers)
+    per = dict(zip(score_by, rs))
+    assays = list(per)
+    cov = {}
+    for c in COV_CONDITIONS:
+        cov[c] = {}
+        for st in STRATA:
+            cov[c][st] = {}
+            for L in LEVELS:
+                lk = _lk(L)
+                cell = {k: {a: (None if per[a]["tables"][c][k] is None
+                                else per[a]["tables"][c][k][st][lk]) for a in assays}
+                        for k in range(K)}
+                pa = {a: {"n_bins": [None if cell[k][a] is None else cell[k][a]["n_bins"]
+                                     for k in range(K)],
+                          **{m: _summary([None if cell[k][a] is None else cell[k][a][m]
+                                          for k in range(K)]) for m in COV_METRICS}}
+                      for a in assays}
+                moa = {"n_bins": [sum(cell[k][a]["n_bins"] for a in assays
+                                      if cell[k][a] is not None) for k in range(K)]}
+                for m in COV_METRICS:
+                    ps = []
+                    for k in range(K):
+                        v = [None if cell[k][a] is None else cell[k][a][m] for a in assays]
+                        ps.append(float(np.mean(v)) if v and None not in v else None)
+                    moa[m] = _summary(ps)
+                cov[c][st][lk] = {"per_assay": pa, "mean_over_assays": moa}
+    return {"n_items": len(score_metas), "fit_n_items": len(fit_metas), "folds": folds,
+            "bins": {a: dict(r["bins"], obs_cuts=r["obs_cuts"], pred_cuts=r["pred_cuts"])
+                     for a, r in per.items()},
+            "n_bins_used": int(sum(r["bins"]["used"] for r in per.values())),
+            "fallback_c1": {"same_cells": [x for r in per.values()
+                                           for x in r["fallback"]["same_cells"]],
+                            "cross_cell": [x for r in per.values()
+                                           for x in r["fallback"]["cross_cell"]]},
+            "mu_unchanged": all(r["mu_unchanged"] for r in per.values()),
+            "factors": {"same_cells": {a: [_short(r) for r in v] for a, v in same.items()},
+                        "cross_cell": {f"fitted_on_fold{f}": {a: [_short(r) for r in v]
+                                                              for a, v in fold_fit[f].items()}
+                                       for f in (0, 1)}},
+            "coverage": cov}
+
+
+def _cov_cell(x: dict) -> str:
+    c, a, b = (x[m]["mean"] for m in COV_METRICS)
+    if c is None:
+        return "n/a"
+    return f"{c:.3f} ({a:.3f}/{b:.3f})"
+
+
+def coverage_markdown(doc: dict) -> str:
+    K = doc["n_seeds"]
+    L = ["# Recalibration study: NB central-interval coverage by count stratum", "",
+         f"Fit forward: `{doc['fit']}`. Score forward: `{doc['score']}`. Seeds: {K}.", "",
+         "Interval of level L: lower = ppf((1 - L) / 2), upper = ppf((1 + L) / 2) of NB(n', p), "
+         "p = n' / (n' + mu), n' = n / c, integer counts. A bin is covered when "
+         "lower <= y <= upper; above means y > upper, below means y < lower. Computed as "
+         "F(y) >= (1 - L) / 2 and F(y - 1) < (1 + L) / 2, which is the same rule for ppf(q) = "
+         "the least k with F(k) >= q. The interval is discrete, so a calibrated model covers at "
+         "least L, and more at small counts.", "",
+         "Strata, per assay over its pooled score bins: all; obs_topX = observed y >= "
+         "np.quantile(y, 1 - X) (default linear method); pred_topX = that seed's mu >= "
+         "np.quantile(mu, 1 - X). Ties at the cut stay in, so a stratum can hold more bins "
+         "than its share; the json records each n_bins and cut. Every finite bin is scored "
+         f"(no subsample). Factors: the analyze fits on the fit forward (at most "
+         f"{doc['max_bins']} bins per assay, seeded subsample, seed 0).", "",
+         "Cells: coverage (frac_above/frac_below), mean over assays (unweighted), then mean "
+         "over seeds.", ""]
+    head = [f"{c} {_lk(l)}" for c in COV_CONDITIONS for l in LEVELS]
+    for kind, r in doc["kinds"].items():
+        L += [f"## {kind}", "",
+              f"Score items {r['n_items']}, bins scored {r['n_bins_used']}; fit items "
+              f"{r['fit_n_items']}. Mu unchanged under every condition: {r['mu_unchanged']}. "
+              f"Fallbacks to c = 1: same_cells {len(r['fallback_c1']['same_cells'])}, "
+              f"cross_cell {len(r['fallback_c1']['cross_cell'])}.", "",
+              "| stratum | " + " | ".join(head) + " |", "|---|" + "---|" * len(head)]
+        cov = r["coverage"]
+        for st in STRATA:
+            L.append(f"| {st} | " + " | ".join(
+                _cov_cell(cov[c][st][_lk(l)]["mean_over_assays"])
+                for c in COV_CONDITIONS for l in LEVELS) + " |")
+        sts = ("obs_top1", "pred_top1")
+        L += ["", "Per assay, level 0.90: coverage (frac_above/frac_below), mean over seeds; "
+              "n_bins of seed 0.", "",
+              "| assay | " + " | ".join(f"{st} n_bins | " + " | ".join(
+                  f"{st} {c}" for c in COV_CONDITIONS) for st in sts) + " |",
+              "|---|" + "---|" * (len(sts) * (1 + len(COV_CONDITIONS)))]
+        for a in r["bins"]:
+            row = []
+            for st in sts:
+                pa = {c: cov[c][st]["0.90"]["per_assay"][a] for c in COV_CONDITIONS}
+                nb = pa["none"]["n_bins"][0]
+                row.append("n/a" if nb is None else str(nb))
+                row += [_cov_cell(pa[c]) for c in COV_CONDITIONS]
+            L.append(f"| {a} | " + " | ".join(row) + " |")
+        L.append("")
+    return "\n".join(L) + "\n"
+
+
+def coverage(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="recal_study.py coverage", description="coverage of central "
+                                 "NB prediction intervals by count stratum, per condition")
+    ap.add_argument("--fit", required=True, help="forward out dir the factors are fitted on")
+    ap.add_argument("--score", required=True, help="forward out dir the intervals are scored on")
+    ap.add_argument("--out", required=True, help="output prefix: <prefix>.json, <prefix>.md")
+    ap.add_argument("--max-bins", type=int, default=300000,
+                    help="factor-fit subsample per assay, as analyze; scoring uses every bin")
+    ap.add_argument("--workers", type=int, default=4, help="processes, one assay per job")
+    a = ap.parse_args(argv)
+    t0 = time.time()
+    fidx, sidx = _read_json(Path(a.fit) / INDEX), _read_json(Path(a.score) / INDEX)
+    K = len(fidx["runs"])
+    if len(sidx["runs"]) != K:
+        raise SystemExit(f"refused: {K} runs in the fit forward, {len(sidx['runs'])} in the score")
+    if fidx["runs"] != sidx["runs"]:
+        print("coverage: WARNING: the two forwards list different run dirs", flush=True)
+    shared = sorted({tuple(r) for r in fidx["regions"]} & {tuple(r) for r in sidx["regions"]})
+    if shared:
+        print(f"coverage: WARNING: the forwards share {len(shared)} regions", flush=True)
+    kinds = {}
+    for kind in KINDS:
+        fm = [m for m in fidx["items"] if m["kind"] == kind]
+        sm = [m for m in sidx["items"] if m["kind"] == kind]
+        if not sm:
+            continue
+        kinds[kind] = coverage_kind(a.fit, fm, a.score, sm, K, a.max_bins, a.workers)
+        print(f"coverage: {kind} done ({time.time() - t0:.0f} s)", flush=True)
+    doc = {"fit": str(Path(a.fit).resolve()), "score": str(Path(a.score).resolve()),
+           "runs": fidx["runs"], "n_seeds": K, "max_bins": a.max_bins, "subsample_seed": 0,
+           "scoring_subsample": None, "levels": [_lk(l) for l in LEVELS],
+           "strata": list(STRATA), "tops": {t: q for t, q in TOPS},
+           "conditions": list(COV_CONDITIONS), "shared_regions": [list(r) for r in shared],
+           "rule": "covered iff ppf((1-L)/2) <= y <= ppf((1+L)/2), NB(n/c, p = n'/(n'+mu)); "
+                   "stratum topX: value >= np.quantile(values, 1-X), ties kept",
+           "kinds": kinds}
+    doc["seconds"] = round(time.time() - t0, 1)
+    out = Path(a.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(out.with_name(out.name + ".json"), doc)
+    out.with_name(out.name + ".md").write_text(coverage_markdown(doc), encoding="utf-8")
+    print(f"coverage: wrote {out}.json, .md ({doc['seconds']} s)", flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+    if cmd == "forward":
+        sys.exit(forward(sys.argv[2:]))
+    if cmd == "analyze":
+        sys.exit(analyze(sys.argv[2:]))
+    if cmd == "coverage":
+        sys.exit(coverage(sys.argv[2:]))
+    print(__doc__)
+    sys.exit(2)

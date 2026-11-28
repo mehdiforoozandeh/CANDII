@@ -58,6 +58,16 @@ for `param_budget`, so each key trades width against depth, kernel or bottleneck
 three keys absent the model is today's, parameter for parameter and output for output
 (tests/test_minicandi_tune_rung2.py).
 
+Trunk FiLM (t370 C1, `tools/minicandi/trunk_film.py`): `film_placement` (ends | encoder |
+decoder | bottleneck | all; default ends = today's model, which builds nothing). The sites are the
+`enc` blocks, the `mid` blocks and the `dec` blocks; the condition is the pooled C and C' embedding
+of `inj_in` and `inj_out`. The U-Net keys `skip_film` and `head_skip` raise NotApplicable here.
+
+Control branch (t370 C15): `control_branch` (shared | separate; default shared = today's model,
+which builds nothing). `separate` gives track 35 (the ChIP control) its own copy of `out_mlp` and
+of the NB head (`ctl_mlp`, `ctl_head`, same shapes), built last and fed by the same head
+features; tracks 0 to 34 keep the shared head. The width is fitted with the extra head counted.
+
 Guardrail part 1 holds by construction: the only reads of `x_counts` go through the
 count transform, whose window statistics use visible bins only, and the MaskHandler replaces every
 hidden or missing position before any cross-bin or cross-track mixing.
@@ -85,6 +95,8 @@ from minicandi.components import (ConvBlock, CountTransform, CovariateInjector, 
                                   sub_output, sub_to_fine)
 from minicandi.covariates import drop_field_indices, model_covariates, scramble_mode  # noqa: E402
 from minicandi.dna_fusion import DnaFiLM, DnaPatchDown, fusion_of, without_fusion  # noqa: E402
+from minicandi.trunk_film import (TrunkFiLM, check_unet_only, placement_of,  # noqa: E402
+                                  pooled_condition, sites_of)
 
 RUNG = 2
 NAME = "conv_ae"
@@ -99,6 +111,7 @@ N_LEVELS = 4          # downsampling steps of 2: the latent is at L / 16
 KERNEL = 5
 WIDTH_STEP = 4        # W and every level width are multiples of 4
 WIDTH_RANGE = (16, 1024)
+CONTROL_BRANCHES = ("shared", "separate")   # t370 C15 `control_branch`; shared = today
 
 
 # ---------------------------------------------------------------------------------------------
@@ -145,6 +158,7 @@ class Model(C.MiniCandi):
         super().__init__()
         cfg = {**DEFAULTS, **(config or {})}
         check_rung(cfg)
+        check_unet_only(cfg, NAME)
         if cfg["covariate_injection"] == "tokens":
             raise NotApplicable("rung 2 (conv autoencoder) has no attention to read covariate "
                                 "tokens; covariate_injection = tokens does not apply")
@@ -155,6 +169,13 @@ class Model(C.MiniCandi):
         self._build(cfg, self.width)
         # extra inputs (chunk XI), constructed last; dna = off leaves no DNA features
         self.build_extras(cfg, D_DNA if cfg["dna"] != "off" else None, ("inj_in", "inj_out"))
+        # control branch (t370 C15), constructed last; shared builds nothing
+        self.control_branch = cfg.get("control_branch", "shared")
+        if self.control_branch not in CONTROL_BRANCHES:
+            raise ValueError(f"control_branch {self.control_branch!r} not in {CONTROL_BRANCHES}")
+        if self.control_branch == "separate":
+            self.ctl_mlp = nn.Sequential(nn.GELU(), nn.Linear(D_OUT, D_OUT), nn.GELU())
+            self.ctl_head = NBHead(D_OUT, self.transform, **component_kwargs(cfg)["head"])
 
     # ------------------------------------------------------------------ construction
 
@@ -221,6 +242,17 @@ class Model(C.MiniCandi):
             self.dna_film = DnaFiLM(D_DNA, widths[0])
         elif self.fusion == "late":
             self.dna_down = DnaPatchDown(D_DNA, wb, 2 ** n_lev)
+        # trunk FiLM (t370 C1), built last; film_placement = ends (default) builds nothing
+        self.film_sites = sites_of(placement_of(cfg))
+        if self.film_sites:
+            ch = []
+            if "encoder" in self.film_sites:
+                ch += [widths[i] for i in range(n_lev) for _ in range(nb)]
+            if "bottleneck" in self.film_sites:
+                ch += [wb] * len(self.mid)
+            if "decoder" in self.film_sites:
+                ch += [widths[i] for i in reversed(range(n_lev)) for _ in range(nb)]
+            self.trunk_film = TrunkFiLM(2 * D_COV, ch)
 
     # ------------------------------------------------------------------ forward
 
@@ -275,18 +307,24 @@ class Model(C.MiniCandi):
         z = self.stem(z)
         if self.fusion == "film":
             z = self.dna_film(z, dna)
+        films = iter(())
+        if self.film_sites:
+            films = iter(self.trunk_film(pooled_condition(
+                self.inj_in.embed(c_in), x_avail, self.inj_out.embed(c_out), batch["y_avail"])))
+        enc_f, mid_f, dec_f = (part in self.film_sites
+                               for part in ("encoder", "bottleneck", "decoder"))
         for blocks, down in zip(self.enc, self.down):
             for blk in blocks:
-                z = blk(z)
+                z = blk(z, next(films) if enc_f else None)
             z = down(z)
         if self.fusion == "late":
             z = z + self.dna_down(dna)
         for blk in self.mid:
-            z = blk(z)
+            z = blk(z, next(films) if mid_f else None)
         for up, blocks in zip(self.up, self.dec):
             z = up(z)
             for blk in blocks:
-                z = blk(z)
+                z = blk(z, next(films) if dec_f else None)
         z = z[..., :L].transpose(1, 2)                                     # [B, L, W]
 
         o = self.out_proj(z).reshape(B, L, A, D_OUT) + self.out_track
@@ -294,8 +332,11 @@ class Model(C.MiniCandi):
             o = (o[:, :, None] + self.out_sub_emb[:, None, :]).reshape(B, L * self.out_sub, A,
                                                                         D_OUT)
         o = self.inj_out(o, c_out[:, None])
-        o = self.out_mlp(o)
-        out = self.head(o, c_out_t)
+        out = self.head(self.out_mlp(o), c_out_t)
+        if self.control_branch == "separate":                              # t370 C15
+            ctl, i = self.ctl_head(self.ctl_mlp(o), c_out_t), C.CONTROL_INDEX
+            out = {**out, **{k: torch.cat([out[k][..., :i], ctl[k][..., i:]], dim=-1)
+                             for k in ("n", "mu")}}
         return sub_output(out, self.out_sub) if self.out_sub > 1 else out
 
 

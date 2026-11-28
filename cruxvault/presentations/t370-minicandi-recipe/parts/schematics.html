@@ -1,0 +1,124 @@
+<script>
+/* Schematics. Every typed number here is a design constant read from the code
+   (tools/minicandi/rungs/unet.py, contract.py, dataset.py), listed in the head comment. */
+const AH=`<defs><marker id="sa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#6b6b6b"/></marker>
+<marker id="sr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#b5462e"/></marker>
+<marker id="st" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2f7f86"/></marker></defs>`;
+const box=(x,y,w,h,cls,t,sub,shape)=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="9" class="${cls}"/>`
+  +`<text x="${x+w/2}" y="${y+(sub||shape?24:h/2+6)}" text-anchor="middle" class="schb">${t}</text>`
+  +(sub?`<text x="${x+w/2}" y="${y+46}" text-anchor="middle" class="schs">${sub}</text>`:'')
+  +(shape?`<text x="${x+w/2}" y="${y+h-12}" text-anchor="middle" class="shape">${shape}</text>`:'');
+const ar=(x1,y1,x2,y2,c='flow',m='sa')=>`<path d="M${x1},${y1} L${x2},${y2}" class="${c}" marker-end="url(#${m})"/>`;
+const pa=(d,c='flow',m='sa')=>`<path d="${d}" class="${c}" marker-end="url(#${m})"/>`;
+
+/* slide 2: three objectives */
+put('figGoals', `<svg viewBox="0 0 1160 380" preserveAspectRatio="xMidYMid meet">${AH}
+  ${box(20,40,350,300,'box','Imputation','predict a track the cell never had')}
+  ${box(405,40,350,300,'box','Correction','map a track to another protocol')}
+  ${box(790,40,350,300,'box','Calibration','know how wrong you might be')}
+  <g transform="translate(50,130)">${[0,1,2,3].map(i=>`<rect x="0" y="${i*34}" width="200" height="22" rx="3" fill="${i==2?'#fff':'#d9d6cf'}" stroke="${i==2?'#b5462e':'none'}" stroke-dasharray="${i==2?'5 4':''}"/>`).join('')}
+    <text x="215" y="${2*34+16}" class="sch" fill="#b5462e">? hidden</text><text x="0" y="170" class="schs">other assays of the same cell</text></g>
+  <g transform="translate(430,140)"><path d="M0,40 ${Array.from({length:20},(_,i)=>`L${i*10},${40-((i*37)%23)}`).join(' ')}" fill="none" stroke="#8d8f98" stroke-width="2"/>
+    <text x="0" y="75" class="schs">observed: lab A, 36 bp, shallow</text>${ar(210,30,250,30)}
+    <path d="M260,40 ${Array.from({length:8},(_,i)=>`L${260+i*10},${40-((i*29)%19)*1.1}`).join(' ')}" fill="none" stroke="#b5462e" stroke-width="2.4"/>
+    <text x="230" y="75" class="schs">wanted: reference view C′</text></g>
+  <g transform="translate(820,120)"><path d="M10,140 C70,140 90,20 140,20 C190,20 210,140 270,140" fill="#f3e6e1" stroke="#b5462e" stroke-width="2"/>
+    <line x1="160" y1="10" x2="160" y2="145" stroke="#1a1a1a" stroke-width="2.4"/><text x="166" y="30" class="schs">observed</text>
+    <text x="0" y="175" class="schs">predicted NB(n̂, p̂) per bin; its spread</text><text x="0" y="195" class="schs">should match the real errors</text></g>
+</svg>`);
+
+/* slide 4: the training window */
+(function(){
+  const W=1160,H=520, x0=60,y0=70, cw=16, rows=12, cols=34;
+  const kind=r=>[1,4,9].includes(r)?'imp':[0,3,6,8,11].includes(r)?'cor':'same';
+  const col={imp:'#fff',cor:'#cfe3e3',same:'#e9e6df'};
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${AH}
+  <text x="${x0}" y="40" class="schb">one window: 36 tracks × 1,024 bins of 25 bp (25.6 kb) of one cell type</text>`;
+  for(let r=0;r<rows;r++){const k=kind(r);
+    for(let c=0;c<cols;c++){const hid=k==='same'&&((c*7+r*3)%4===0);
+      s+=`<rect x="${x0+c*cw}" y="${y0+r*30}" width="${cw-2}" height="22" fill="${hid?'#fff':col[k]}" stroke="${k==='imp'||hid?'#b5462e':'none'}" stroke-dasharray="${k==='imp'?'4 3':''}"/>`;}}
+  s+=`<text x="${x0}" y="${y0+rows*30+22}" class="schs">tracks (rows) · bins (columns); 12 of 36 rows drawn</text>`;
+  const bx=660;
+  s+=box(bx,60,470,120,'boxa','Imputation target','tracks hidden whole: each with probability p,','p ~ U(0.2, 0.8) per window');
+  s+=`<text x="${bx+235}" y="146" text-anchor="middle" class="schs">loss on every bin of the hidden track</text>`;
+  s+=box(bx,200,470,120,'boxt','Correction target (visible tracks, half)','source view → another view of the same experiment','source = pr1 reads, target = pr2 reads');
+  s+=box(bx,340,470,120,'boxg','Same-view target (visible tracks, half)','reconstruct own view; 25% of bins hidden','loss on the hidden bins only');
+  s+=`<text x="${bx}" y="490" class="schs">visible tracks: correction or same-view, probability 0.5 each</text>`;
+  put('figWindow', s+`</svg>`);
+})();
+
+/* slide 5: architecture */
+put('figArch', `<svg viewBox="0 0 1160 570" preserveAspectRatio="xMidYMid meet">${AH}
+  ${box(10,40,160,80,'boxg','counts y','raw reads per bin','B×1024×36')}
+  ${box(10,140,160,80,'boxg','covariates C','11 per track','B×36×11')}
+  ${box(10,240,160,80,'boxg','mask','hidden / missing','B×1024×36')}
+  ${box(10,400,160,80,'boxg','DNA','25.6 kb sequence','one-hot')}
+  ${box(205,120,190,120,'boxa','per-track encoder','normalize, MLP, FiLM(C)','B×1024×36×9')}
+  ${ar(170,80,203,150)}${ar(170,180,203,180)}${ar(170,280,203,210)}
+  ${box(420,150,120,60,'box','stem')}
+  <text x="480" y="232" text-anchor="middle" class="schs">1×1 conv, mixes tracks</text>
+  ${ar(395,180,418,180)}
+  ${box(575,60,170,110,'box','count tower','4 levels, ↓2 each','1024 → 64')}
+  ${box(575,400,170,90,'box','DNA tower','conv down to','64 positions')}
+  ${ar(540,175,573,140)}${ar(170,440,573,445)}
+  ${box(780,215,160,120,'boxa','bottleneck','fuse + 2 transformer','64 positions')}
+  ${ar(745,150,778,240)}${ar(745,430,778,320)}
+  ${box(970,40,150,110,'box','decoder','4 levels ↑ to 1024','skips × FiLM(C′)')}
+  ${ar(940,240,968,130)}
+  ${pa('M745,95 L966,95','flowt','st')}
+  ${pa('M745,470 L956,470 L956,140 L966,140','flowt','st')}
+  <text x="855" y="88" text-anchor="middle" class="schs" fill="#2f7f86">level skips (count, DNA)</text>
+  ${box(970,190,150,100,'boxa','per-track head','track embedding','FiLM(C′)/track')}
+  ${ar(1045,150,1045,188)}
+  ${box(970,330,150,90,'box','NB head','n̂, p̂ per bin','B×1024×36×2')}
+  ${ar(1045,290,1045,328)}
+  ${box(970,455,150,70,'boxg','covariates C′','wanted output view')}
+  ${ar(1045,455,1045,422)}
+  ${pa('M300,120 L300,16 L1145,16 L1145,240 L1123,240','flowr','sr')}
+  <text x="640" y="34" text-anchor="middle" class="sch" fill="#b5462e">head skip: each track's own 9 input features, straight to its head</text>
+  <text x="10" y="552" class="schs">B = 8 windows per batch · about 1 M parameters · 80,000 training windows · C′ also sets the depth added back to the NB mean</text>
+</svg>`);
+
+/* slide 6: per-track encoder */
+(function(){
+  const st=[['1','depth removal','x = log2((y + 1) / s), s = 2^(log2 depth − 24)','B×1024×36×1'],
+    ['2','shared MLP + assay embedding','Linear(1→8), GELU, Linear(8→8), + embedding[assay]','B×1024×36×8'],
+    ['3','FiLM by input covariates','11 covariates → 32-d embedding → γ, β; h = γh + β','B×1024×36×8'],
+    ['4','mask tokens','hidden bin → learned token; missing track → another','B×1024×36×8'],
+    ['5','(average-input arm) prior','h += Linear(log(1 + average signal))','B×1024×36×8'],
+    ['6','visibility flag','append 1 if a real count is visible, else 0','B×1024×36×9']];
+  let s=`<svg viewBox="0 0 1160 560" preserveAspectRatio="xMidYMid meet">${AH}
+    ${box(10,10,250,70,'boxg','input count y','one bin of one track','B×1024×36')}`;
+  st.forEach((r,i)=>{const y=100+i*72;
+    s+=`<circle cx="40" cy="${y+28}" r="18" fill="${i===4?'#c98a1c':'#b5462e'}"/><text x="40" y="${y+34}" text-anchor="middle" class="val" fill="#fff">${r[0]}</text>`;
+    s+=`<rect x="70" y="${y}" width="780" height="58" rx="8" class="box"/>`;
+    s+=`<text x="88" y="${y+24}" class="schb">${r[1]}</text><text x="88" y="${y+46}" class="schs">${r[2]}</text>`;
+    s+=`<text x="1000" y="${y+34}" text-anchor="middle" class="shape">${r[3]}</text>`;
+    s+=ar(850,y+29,915,y+29);});
+  s+=`<text x="870" y="40" class="schs">shape after the step</text>`;
+  s+=`<text x="70" y="548" class="schs">then: reshape to B × 324 × 1024 (36 tracks × 9 features) → stem, the first layer that mixes tracks · the 9-feature tensor also feeds the head skip</text>`;
+  put('figEnc', s+`</svg>`);
+})();
+
+/* slide 7: pairs */
+put('figPairs', `<svg viewBox="0 0 1160 430" preserveAspectRatio="xMidYMid meet">${AH}
+  <text x="20" y="34" class="ptitle">(a) Before: two views of the same reads</text>
+  <text x="600" y="34" class="ptitle">(b) Read-disjoint pairs</text>
+  <line x1="580" y1="20" x2="580" y2="420" class="sep"/>
+  ${box(30,60,240,70,'boxg','all reads of one experiment')}
+  ${box(30,190,240,70,'box','input: view A','e.g. crop to 36 bp')}
+  ${box(300,190,240,70,'box','target: view B','e.g. reference processing')}
+  ${ar(150,130,150,188)}${ar(170,130,400,188)}
+  <text x="40" y="300" class="sch" fill="#b5462e">same reads → same sampling noise</text>
+  <text x="40" y="326" class="schs">copying the input already predicts most of the target,</text>
+  <text x="40" y="348" class="schs">so a model with a cheap identity path (the head skip) learns to copy</text>
+  ${box(610,60,240,70,'boxg','all reads of one experiment')}
+  ${box(610,170,110,60,'boxt','pr1','half')}${box(740,170,110,60,'boxt','pr2','other half')}
+  ${ar(690,130,665,168)}${ar(770,130,795,168)}
+  ${box(610,270,240,70,'box','input: pr1, view A','half depth in C')}
+  ${box(880,270,250,70,'box','target: pr2, view B','half depth in C′')}
+  ${ar(665,230,690,268)}${ar(795,230,990,268)}
+  <text x="610" y="380" class="sch" fill="#2f7f86">independent noise → copying no longer predicts the target</text>
+  <text x="610" y="404" class="schs">applies to correction and same-view pairs; imputation pairs unchanged</text>
+</svg>`);
+</script>

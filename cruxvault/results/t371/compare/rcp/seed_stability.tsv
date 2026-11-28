@@ -1,0 +1,26 @@
+metric	between_arm_var	within_var_of_mean	between_share
+imputation_raw	0.0010892	9.3911e-05	0.92063
+correction_v3_raw	0.011181	0.00059214	0.94971
+correction_oracle_all	0.027706	0.00019737	0.99293
+uncertainty_raw	0.053373	0.0029578	0.94749
+count_crps_skill	0.0011213	2.5135e-05	0.97807
+r_spec	0.00015494	2.2729e-05	0.87207
+correction_crps_model_neg	0.001202	9.0154e-06	0.99256
+dev_imputation_skill	0.047874	0.0028083	0.94459
+dev_imputation_r2	0.0045771	0.00020086	0.95796
+dev_imputation_model	0.0045771	0.00020086	0.95796
+dev_imputation_position_average	0	0	
+dev_imputation_floor	3.7113e-05	4.077e-07	0.98913
+dev_imputation_scale_error	0.0013466	6.5497e-05	0.95362
+dev_imputation_monotone_error	0.0024212	0.00014069	0.94509
+dev_correction_gap_closed	0.0066876	4.921e-05	0.9927
+dev_correction_gap_closed_vs_pseudoreplicate	21.82	0.019228	0.99912
+dev_correction_model	0.025788	0.00022128	0.99149
+dev_correction_depth_only	0.48528	0	1
+dev_correction_floor	6.0533e-05	1.0277e-06	0.98331
+dev_correction_pseudoreplicate	0	0	
+dev_calibration_ratio	0.043931	0.0016223	0.96439
+dev_calibration_error	0.030568	0.0011166	0.96476
+nb_logscore_gain_vs_marginal	0.0026651	0.00022495	0.92216
+dev_calibration_error_neg	0.030568	0.0011166	0.96476
+dev_correction_model_neg	0.025788	0.00022128	0.99149

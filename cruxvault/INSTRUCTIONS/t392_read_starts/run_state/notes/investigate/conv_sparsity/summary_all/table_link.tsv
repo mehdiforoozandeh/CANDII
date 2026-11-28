@@ -1,0 +1,4 @@
+file	n_targets	ratio_c1	ratio_cfull	ratio_cextra_w9	ratio_cextra_w41	ratio_cextra_w401	c_to_reach_1.0584	mean_c_full_scorable
+model_seed0.jsonl	43	1.2485	0.9585	1.1246	1.0789	0.9971	4.0919	6.7102
+model_seed1.jsonl	43	1.3450	0.9843	1.1785	1.1203	1.0247	4.8025	6.7102
+model_seed2.jsonl	43	1.3308	1.0275	1.1986	1.1500	1.0665	5.6368	6.7102

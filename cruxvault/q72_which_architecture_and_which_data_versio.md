@@ -35,5 +35,7 @@ This is the next session's main task: it turns the settled prototype design into
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-_(no children yet)_
+**1 children** · open 0, leaning 0, settled 1, parked 0
+
+- `q75` _(Q)_ [[q75_can_one_minicandi_recipe_match_or_beat_t|Can one miniCANDI recipe match or beat the best base model on imputation, correction and calibration at the same time (Pareto dominance over the conv autoencoder, conv + attention and U-Net bases on eic_v1_2)?]] — *settled · strong*
 <!-- crux:ledger:end -->

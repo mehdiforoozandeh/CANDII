@@ -1,0 +1,22 @@
+<style>
+  :root{--base:#8d8f98;--unet:#4b5563;--recipe:#b5462e;--addon:#c98a1c;--diag:#2f7f86;--fix:#c9c6bf}
+  .fig svg{max-height:52vh}
+  .panels .fig svg{max-height:50vh}
+  .fig.tall svg{max-height:60vh}
+  .tag{display:inline-block;border-radius:4px;padding:1px 7px;font-size:13px;font-weight:700;color:#fff}
+  .tag.pass{background:var(--recipe)} .tag.near{background:var(--addon)} .tag.fail{background:var(--base)}
+  .small{font-size:13px;color:var(--muted);line-height:1.45;margin-top:10px}
+  .sch{font:500 17px var(--sans);fill:#2a2a2a}
+  .schs{font:400 14px var(--sans);fill:#77736c}
+  .schb{font:700 18px var(--sans);fill:#1a1a1a}
+  .shape{font:600 15px ui-monospace,Menlo,monospace;fill:#b5462e}
+  .box{fill:#fff;stroke:#cfccc6;stroke-width:1.6}
+  .boxa{fill:#fdf3f0;stroke:#b5462e;stroke-width:2}
+  .boxt{fill:#eef6f6;stroke:#2f7f86;stroke-width:1.8}
+  .boxg{fill:#f6f5f2;stroke:#cfccc6;stroke-width:1.4}
+  .flow{stroke:#6b6b6b;stroke-width:2;fill:none}
+  .flowr{stroke:#b5462e;stroke-width:2.4;fill:none}
+  .flowt{stroke:#2f7f86;stroke-width:2;fill:none;stroke-dasharray:6 4}
+  table.dtable.tight td{padding:7px 12px 7px 0;font-size:14.5px}
+</style>
+</head>

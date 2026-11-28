@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="prezit-arc" content="paper">
+<title>miniCANDI Recipe</title>
+
+<!--
+  prezit · PAPER ARC · task t370 (miniCANDI recipe), lab meeting 2026-11-22.
+
+  arc      motivation -> method -> results -> discussion
+  build    ./refresh_data.sh (pulls tables from Fir, runs pareto_select.py), then
+           python3 build_deck.py  ->  index.html. Source page = parts/*.html, assembled by
+           assemble.sh into deck_src.html.
+  numbers  every measured number comes from DATA (build_deck.py reads data/*.tsv, *.md).
+           Typed: design constants only, marked data-src="literal" (A = 36 tracks, L = 1024
+           bins of 25 bp, K = 11 covariates, 8 features per track, 4 levels, 16x down to 64
+           positions, 2 transformer layers, 1 M parameters, 80,000 windows of batch 8,
+           mask probability 0.2 to 0.8, same-view probability 0.5, 25% hidden bins).
+  notes    every slide carries speaker notes (press n).
+-->
+<script type="application/json" id="deck-sources">{"presentations/t370-minicandi-recipe/build_deck.py": "0ba5cad1660e7ded7d67b8667555e9006675a7182faef0f9e05f984c0ee24fdf", "presentations/t370-minicandi-recipe/data/ROUND2_READ.md": "282e5ffaa3955e60b7fcf77fd4cc57741eca234cff99a1f8a01b5bf5ea286762", "presentations/t370-minicandi-recipe/data/copy_gain_p16_sv.tsv": "ef724901d8a8cadf97b5bf8d959617963f8fc9d1d07c14db174fa1b6af0550de", "presentations/t370-minicandi-recipe/data/deck_arms_p16_sv.tsv": "79202f57bdbf852b3ca35d5fc99766b6fba56f343dadb1b8cc5303fd24955072", "presentations/t370-minicandi-recipe/data/deck_arms_p256_sv.tsv": "79378f9d50bd95b3d8ccb5d1dc0b86a1d4b7362dbd53d766b7f53fa90bee5b8c", "presentations/t370-minicandi-recipe/data/deck_base_p16_sv.tsv": "83184f4dea05aa29fec4ae5687d16d89f43b8869056b75bcc6c22a06fc3ff217", "presentations/t370-minicandi-recipe/data/deck_base_p256_sv.tsv": "a3f0ccc55541f677e3c46a606270346992fee6d19c054ae91047aeb5add20248", "presentations/t370-minicandi-recipe/data/eic_v1_arm_summary_p16_sv.tsv": "c113180fa3dfb061e6660cd170100da2e99121059abc5fbba9ebdc55453f0b1a", "presentations/t370-minicandi-recipe/data/ens_p256_sv.tsv": "ae222229001ac676bcc24cc5f42fd241b783a4a3466a3bfcf6a07ee811afd59c", "presentations/t370-minicandi-recipe/data/pareto_p16_sv.tsv": "dc903ce9cd122b52418353f3b4cf9dba5677d937aa7be1d5946cf9511595e0f0", "presentations/t370-minicandi-recipe/data/pareto_p256_sv.tsv": "94c3b4af99404c081563cb3ba5b6772f5cde90a6c13c6fa6637e1df64b951468", "presentations/t370-minicandi-recipe/data/scores_ladder.md": "f1a6de93e8268eed099dda80d0e9181480c535f8c378764b0253a76bb5ae7daa", "presentations/t370-minicandi-recipe/data/table_unet_vs_average.tsv": "632804162ba22f72158d5f771b353116acb4b44868b2a2f8d60d869d46a42265", "presentations/t370-minicandi-recipe/deck_src.html": "6b3143abbec9e730191472e7949e0ba5da86e297b5d04c5183c57682858493fa"}</script>
+<style>
+  :root{
+    /* --- chrome ------------------------------------------------------- */
+    --paper:#faf9f7;
+    --ink:#1a1a1a;
+    --muted:#77736c;
+    --faint:#a6a29a;
+    --hair:#e6e3dd;
+    --accent:#b5462e;
+
+    /* --- semantic series colours -------------------------------------- */
+    /* One colour per arm, reused identically in chart, legend and bullets.
+       Rename the tokens to your arms; never colour by chart. */
+    --baseline:#8d8f98;
+    --arm-a:#3f7d7a;
+    --arm-b:#b5462e;
+
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--paper);color:var(--ink);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+    overflow:hidden;
+  }
+
+  #progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);
+    width:0;transition:width .5s ease;z-index:50}
+
+  #deck{position:fixed;inset:0}
+  .slide{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column;justify-content:center;
+    padding:5.5vh 8vw 8.5vh;   /* bottom pad clears the fixed foot / counter / nav */
+    opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .6s ease,visibility .6s ease;   /* fade only — no slide, no zoom */
+  }
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+
+  .wrap{width:100%;max-width:1160px;margin:0 auto}
+
+  /* --- typography ----------------------------------------------------- */
+  .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin-bottom:22px}
+  h1{font-family:var(--serif);font-weight:400;line-height:1.12;
+    font-size:clamp(30px,4.6vw,58px);letter-spacing:-.01em}
+  h2{font-weight:600;line-height:1.14;font-size:clamp(24px,3.4vw,42px);
+    letter-spacing:-.015em;margin-bottom:26px}
+  .lead{font-family:var(--serif);font-weight:400;line-height:1.32;
+    font-size:clamp(22px,2.9vw,36px);letter-spacing:-.005em}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;
+    margin-top:22px;max-width:56ch}
+  .note{color:var(--faint);font-size:13px;line-height:1.5;margin-top:26px}
+
+  ul.pts{list-style:none;margin-top:26px;max-width:70ch}
+  ul.pts li{position:relative;padding-left:26px;margin:14px 0;
+    font-size:clamp(15px,1.55vw,19px);line-height:1.5;color:#333}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.62em;
+    width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  .em{color:var(--accent);font-weight:600}
+
+  ul.pts.lg li{font-size:clamp(16px,1.65vw,21px);margin:11px 0}
+  ul.pts.cols{display:grid;grid-template-columns:1fr 1fr;gap:2px 48px;
+    max-width:none;margin-top:18px}
+  @media (max-width:900px){ul.pts.cols{grid-template-columns:1fr}}
+
+  /* numbers the vault owns render in tabular figures so a --refresh that
+     changes a digit does not reflow the sentence around it */
+  [data-src],[data-derived]{font-variant-numeric:tabular-nums;font-weight:600}
+
+  /* --- lineage chain -------------------------------------------------- */
+  .chain{display:flex;align-items:stretch;gap:0;margin-top:34px;flex-wrap:wrap}
+  .node{flex:1;min-width:180px;border:1px solid var(--hair);border-radius:10px;
+    padding:18px 20px;background:#fff}
+  .node .lab{font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);margin-bottom:8px}
+  .node .txt{font-size:15px;line-height:1.4;color:#2a2a2a}
+  .node.now{border-color:var(--accent);box-shadow:0 1px 0 var(--accent)}
+  .node.now .lab{color:var(--accent)}
+  .arrow{display:flex;align-items:center;padding:0 12px;color:var(--faint);font-size:20px}
+
+  /* --- method pipeline ------------------------------------------------ */
+  .pipe{display:flex;align-items:flex-start;gap:0;margin-top:22px;flex-wrap:wrap}
+  .step{flex:1;min-width:150px;padding:14px 16px;text-align:left}
+  .step .n{font-family:var(--serif);font-size:22px;color:var(--accent);line-height:1}
+  .step .t{font-size:14.5px;line-height:1.4;color:#2a2a2a;margin-top:8px}
+  .psep{color:var(--faint);font-size:18px;padding:24px 4px 0}
+
+  /* --- target callout ------------------------------------------------- */
+  .target{border-left:3px solid var(--accent);background:#fff;border-radius:0 8px 8px 0;
+    padding:16px 22px;margin-top:6px}
+  .target .tlab{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin-bottom:8px}
+  .target .ttxt{font-size:clamp(15px,1.55vw,19px);line-height:1.5;color:#333}
+  .target .ttxt b{color:var(--ink);font-weight:600}
+
+  .cols2{display:grid;grid-template-columns:1fr 1.05fr;gap:44px;margin-top:26px;
+    align-items:start}
+  @media (max-width:900px){.cols2{grid-template-columns:1fr}}
+  .blk .blab{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);font-weight:600;margin-bottom:14px}
+
+  /* --- chips: a short fixed list, when a table would be overkill ------ */
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{border:1px solid var(--hair);background:#fff;border-radius:8px;padding:10px 14px;line-height:1.2}
+  .chip .cn{font-size:15px;font-weight:600;color:var(--ink)}
+  .chip .cc{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:3px}
+
+  /* --- tables --------------------------------------------------------- */
+  table.dtable{border-collapse:collapse;width:100%;font-size:15px}
+  table.dtable th{font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--faint);font-weight:600;text-align:left;padding:0 14px 10px 0;
+    border-bottom:1px solid var(--hair)}
+  table.dtable td{padding:11px 14px 11px 0;border-bottom:1px solid var(--hair);
+    color:#333;line-height:1.35}
+  table.dtable td:first-child{font-weight:600;color:var(--ink);white-space:nowrap}
+  table.dtable td.num{font-variant-numeric:tabular-nums}
+  table.dtable td .role{color:var(--muted);font-size:13px}
+
+  /* --- chart ---------------------------------------------------------- */
+  .chartbox{margin:8px 0}
+  .fig{display:flex;justify-content:center}
+  /* Cap chart height so a tall figure can never crowd out its caption bullets.
+     A full-width chart + a legend + four two-line bullets + a footnote is the
+     ceiling for one slide — check the fit after every content edit. */
+  .fig svg{width:100%;height:auto;max-height:44vh;display:block}
+  .fig.wide svg{max-width:1160px}
+  .fig.mid svg{max-width:960px}
+  .legend{display:flex;gap:24px;flex-wrap:wrap;margin-top:10px;justify-content:center;
+    font-size:15px;color:var(--muted)}
+  .legend.big{font-size:16px;gap:30px}
+  .legend .item{display:flex;align-items:center;gap:9px}
+  .legend .sw{width:16px;height:16px;border-radius:3px;flex:none}
+
+  /* SVG text lives in viewBox units and gets scaled DOWN when the svg is placed
+     in a column — so everything here is sized for a projector, ~1.5x what looks
+     right on a laptop. Do not shrink these to taste. */
+  .axlbl{font:500 17px var(--sans);fill:#3a3a3a}
+  .ptitle{font:600 22px var(--sans);fill:#1a1a1a;letter-spacing:.02em}
+  .psub{font:400 14px var(--sans);fill:#8a8a8a}
+  .tick{font:400 15px var(--sans);fill:#9a9a9a}
+  .val{font:600 16px var(--sans)}
+  .cap{font:400 14px var(--sans);fill:#9a9a9a}
+  .grid{stroke:#ececea;stroke-width:1}
+  .axis{stroke:#cfccc6;stroke-width:1.2}
+  .zero{stroke:#bbb;stroke-width:1.6;stroke-dasharray:5 4}
+  .sep{stroke:#e6e3dd;stroke-width:1}
+  .barval{font:600 20px var(--sans)}
+  .mult{font:600 19px var(--sans);fill:#1a1a1a}
+  .xlab{font:600 22px var(--sans);fill:#1a1a1a}
+  .xsub{font:400 15px var(--sans);fill:#8a8a8a}
+  .ylab{font:500 18px var(--sans);fill:#8a8a8a}
+
+  /* --- chrome --------------------------------------------------------- */
+  .foot{position:fixed;bottom:20px;left:8vw;font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:8vw;font-size:12px;color:var(--faint);
+    font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:16px;right:calc(8vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:#fff;color:var(--muted);
+    width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;
+    transition:border-color .2s,color .2s}
+  .nav button:hover{border-color:var(--accent);color:var(--accent)}
+  .hint{margin-top:40px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;
+    border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:#fff}
+
+  /* --- speaker notes ---------------------------------------------------
+     Optional: an <aside class="notes"> inside a slide, written in <p> (an <li>
+     there counts toward the slide's 7 units). Hidden; `n` overlays the active
+     slide's notes; print puts them under each slide. A deck without notes is
+     unaffected. */
+  aside.notes{display:none}
+  body.shownotes .slide.active aside.notes{display:block;position:fixed;left:7vw;right:7vw;
+    bottom:58px;max-height:52vh;overflow:auto;background:#fff;border:1px solid var(--hair);
+    border-left:4px solid var(--accent);border-radius:10px;padding:16px 22px;font-size:16.5px;
+    line-height:1.55;color:#333;z-index:60;box-shadow:0 10px 40px rgba(0,0,0,.18)}
+  aside.notes::before{content:"Speaker notes · n to close";display:block;font-size:11px;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+  aside.notes p{margin:0 0 6px}
+
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint{display:none}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;
+      height:100vh;transition:none}
+    aside.notes{display:block;margin-top:18px;border-top:1px solid #bbb;padding-top:10px;
+      font-size:12.5px;line-height:1.5;color:#333}
+  }
+
+  /* --- paper arc ------------------------------------------------------ */
+  :root{--own:#3f7d7a;--eqc:#b5462e;--data:#3f7d7a;--model:#8d8f98;--noise:#a6a29a}
+  .kicker .sec{display:inline-block;background:var(--accent);color:#fff;padding:3px 9px;
+    border-radius:4px;margin-right:12px;letter-spacing:.14em}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:22px}
+  @media (max-width:900px){.cards{grid-template-columns:1fr}}
+  .card{border:1px solid var(--hair);border-top:3px solid var(--c,var(--accent));background:#fff;
+    border-radius:8px;padding:16px 18px}
+  .card .rl{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--c,var(--accent));
+    font-weight:700;margin-bottom:8px}
+  .card p{font-size:clamp(14px,1.4vw,17px);line-height:1.45;color:#333}
+  .panels{display:grid;grid-template-columns:1fr 1fr;gap:0}
+  .panels>div{padding:0 14px}
+  .panels .fig svg{max-height:40vh}
+  .panels>div+div{border-left:1px solid var(--hair)}
+  @media (max-width:900px){.panels{grid-template-columns:1fr}.panels>div+div{border-left:0;border-top:1px solid var(--hair)}}
+  table.dtable td.run{color:var(--own);font-weight:600}
+  table.dtable td.off{color:var(--faint)}
+</style>
+<style>
+  :root{--base:#8d8f98;--unet:#4b5563;--recipe:#b5462e;--addon:#c98a1c;--diag:#2f7f86;--fix:#c9c6bf}
+  .fig svg{max-height:52vh}
+  .panels .fig svg{max-height:50vh}
+  .fig.tall svg{max-height:60vh}
+  .tag{display:inline-block;border-radius:4px;padding:1px 7px;font-size:13px;font-weight:700;color:#fff}
+  .tag.pass{background:var(--recipe)} .tag.near{background:var(--addon)} .tag.fail{background:var(--base)}
+  .small{font-size:13px;color:var(--muted);line-height:1.45;margin-top:10px}
+  .sch{font:500 17px var(--sans);fill:#2a2a2a}
+  .schs{font:400 14px var(--sans);fill:#77736c}
+  .schb{font:700 18px var(--sans);fill:#1a1a1a}
+  .shape{font:600 15px ui-monospace,Menlo,monospace;fill:#b5462e}
+  .box{fill:#fff;stroke:#cfccc6;stroke-width:1.6}
+  .boxa{fill:#fdf3f0;stroke:#b5462e;stroke-width:2}
+  .boxt{fill:#eef6f6;stroke:#2f7f86;stroke-width:1.8}
+  .boxg{fill:#f6f5f2;stroke:#cfccc6;stroke-width:1.4}
+  .flow{stroke:#6b6b6b;stroke-width:2;fill:none}
+  .flowr{stroke:#b5462e;stroke-width:2.4;fill:none}
+  .flowt{stroke:#2f7f86;stroke-width:2;fill:none;stroke-dasharray:6 4}
+  table.dtable.tight td{padding:7px 12px 7px 0;font-size:14.5px}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- 1 · TITLE
+       job      the result as a headline; scope in one line
+       source   DATA.confirm (class at 256 regions)
+       numbers  none typed; counts from DATA
+       cut      the hint -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">miniCANDI recipe · lab meeting</div>
+      <h1>Training the U-Net on read-disjoint pairs breaks its imputation–correction trade-off</h1>
+      <p class="sub">Three objectives scored on the <span data-src="literal">eic_v1_2</span> tables (the current EIC training-cell data version) against the three base models. Every arm has <span data-src="literal">3</span> seeds (independent training restarts) unless marked.</p>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd> &nbsp;·&nbsp; <kbd>n</kbd> shows the speaker notes</p>
+      <aside class="notes"><p>The deck runs in paper order: what we want, why the U-Net was stuck, how the model and its training work, what we found, and what is left. Every measured number is read from the score tables when the deck is built.</p></aside>
+    </div>
+  </section>
+
+  <!-- 2 · MOTIVATION · the three objectives
+       job      what miniCANDI must do, as a schematic
+       source   PI instruction (mini candi.md), D1
+       numbers  none
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>what we want from one model</div>
+      <h2>One model must impute, correct and know its own uncertainty</h2>
+      <div class="fig wide" id="figGoals"></div>
+      <aside class="notes"><p>Imputation predicts a track that is missing from the input. Correction maps an observed track, made with one protocol, to what a reference protocol would have measured. Calibration asks that the predicted Negative Binomial spread match the real errors. A recipe wins only if it is at least as good as the best base model on all three at once.</p></aside>
+    </div>
+  </section>
+
+  <!-- 3 · MOTIVATION · the trade-off
+       job      the U-Net imputes best but corrects worst, on two data versions
+       source   data/scores_ladder.md (eic_v1), data/deck_base_p16_sv.tsv (eic_v1_2)
+       numbers  from DATA.ladder, DATA.steps
+       cut      the second bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the problem</div>
+      <h2>The U-Net imputes best but corrects worst, on both data versions</h2>
+      <div class="chartbox panels"><div class="fig" id="figLadder"></div><div class="fig" id="figBases"></div></div>
+      <ul class="pts">
+        <li>On <span data-src="literal">eic_v1_2</span> the U-Net gains <span id="tTradeImp"></span> imputation over conv + attention and loses <span id="tTradeCor"></span> correction.</li>
+      </ul>
+      <aside class="notes"><p>Panel a is the six-model ladder on the earlier data version, with an older correction scale, so its numbers are not comparable with panel b. Both show the same shape: adding skip connections moves the model right and down. Axial attention and Perceiver were dropped at the ladder stage.</p></aside>
+    </div>
+  </section>
+
+  <!-- 4 · METHOD · the training window
+       job      what one training example is, and the three target kinds
+       source   tools/minicandi/dataset.py, contract.py (design constants)
+       numbers  design constants, literal
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>one training example</div>
+      <h2>Each window hides some tracks and asks for three kinds of target</h2>
+      <div class="fig wide tall" id="figWindow"></div>
+      <aside class="notes"><p>A window is a stretch of genome from one cell type, with every assay of that cell as a track. A random fraction of tracks is hidden whole, and those are the imputation targets. The visible tracks are either corrected to another processing view of the same experiment, or reconstructed in the same view with a quarter of their bins hidden. The loss on a same-view target counts only the hidden bins, so the model cannot score by copying.</p></aside>
+    </div>
+  </section>
+
+  <!-- 5 · METHOD · architecture
+       job      the data flow of the U-Net, end to end
+       source   tools/minicandi/rungs/unet.py (checked against the code)
+       numbers  design constants, literal
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the architecture</div>
+      <h2>A two-tower U-Net with covariates on both sides and a Negative Binomial head</h2>
+      <div class="fig wide tall" id="figArch"></div>
+      <aside class="notes"><p>Counts and DNA sequence go down separate towers and meet at the bottleneck, where a small transformer sees the whole window. The decoder goes back up to full resolution with skip connections from both towers, each scaled by the output covariates. A per-track head turns the features into a mean and a dispersion for each bin. The head skip, shown in red, brings each track's own input features straight to its head.</p></aside>
+    </div>
+  </section>
+
+  <!-- 6 · METHOD · per-track encoder
+       job      what enters the network, with shapes
+       source   tools/minicandi/rungs/unet.py lines 236-352; components.py CountTransform, MaskHandler
+       numbers  design constants, literal
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the per-track encoder</div>
+      <h2>Each count becomes nine numbers before any bins or tracks mix</h2>
+      <div class="fig wide tall" id="figEnc"></div>
+      <aside class="notes"><p>Each cell of the window, one bin of one track, is handled alone. The count is depth-normalized, lifted to eight features by a shared small network, tagged with which assay it is, and scaled by that experiment's covariates. Hidden bins and missing tracks are replaced by learned tokens before anything mixes, so no hidden value can leak. The first layer that mixes all tracks in a bin is the stem.</p></aside>
+    </div>
+  </section>
+
+  <!-- 7 · METHOD · objective and read-disjoint pairs
+       job      the loss, and why disjoint pairs stop the copy
+       source   tools/minicandi/losses.py, contract.py loss_mask; D29
+       numbers  none
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the objective</div>
+      <h2>Read-disjoint pairs make copying the input useless</h2>
+      <div class="fig wide" id="figPairs"></div>
+      <aside class="notes"><p>The loss is the Negative Binomial negative log-likelihood over the loss mask. Before this change, a correction pair was two processing views of the same reads, so the input already held most of the target's noise, and a model with a cheap identity path could win by copying. With read-disjoint pairs, the input is built from one random half of the reads and the target from the other half. Their noise is independent, so copying the input no longer predicts the target. Imputation pairs are unchanged.</p></aside>
+    </div>
+  </section>
+
+  <!-- 8 · METHOD · how a recipe is selected (the grid of arm families: the deck's one table)
+       job      the three scores, the Pareto rule, and the families of arms tried
+       source   tools/onion_eval/pareto_select.py docstring; D1, D3, D21; recipe_arms.py
+       numbers  design constants, literal
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>selection rule and arms</div>
+      <h2>A recipe wins when it is above the floor on all three and clearly better on one</h2>
+      <div class="cols2">
+        <div class="blk"><div class="blab">Pareto rule (fixed before the runs)</div>
+          <ul class="pts" style="margin-top:0">
+            <li><b>Floor</b> per objective = best base model's mean minus its seed range (max minus min over seeds).</li>
+            <li><b>Eligible</b>: at or above the floor on all three objectives.</li>
+            <li><b>Beyond</b> on one objective: better than the best base by more than the larger of the two seed ranges.</li>
+            <li><b>PASS</b> = eligible and beyond on at least one; <b>NEAR</b> = eligible, none beyond.</li>
+            <li>Correction screened on <span data-src="literal">16</span> genomic regions, confirmed on <span data-src="literal">256</span>.</li>
+          </ul></div>
+        <div class="blk"><div class="blab">Families of arms (U-Net unless noted)</div>
+          <table class="dtable tight"><thead><tr><th>family</th><th>what changes</th></tr></thead><tbody>
+            <tr><td>Skip paths</td><td>head skip off, conditioned head skip, conditioned level skips</td></tr>
+            <tr><td>FiLM placement</td><td>encoder, decoder, bottleneck, everywhere</td></tr>
+            <tr><td>Correction layers</td><td>learned covariate correction before / after the model</td></tr>
+            <tr><td>Inputs</td><td>average signal, Pearson residual, fixed depth, no covariates</td></tr>
+            <tr><td>Training pairs</td><td>read-disjoint pairs (all three models)</td></tr>
+            <tr><td>Combinations</td><td>read-disjoint pairs + one switch each</td></tr>
+          </tbody></table></div>
+      </div>
+      <aside class="notes"><p>The rule was written down before any arm was scored. A seed range is the spread of a mean over the independent training restarts, so beyond means the gain is larger than the noise of either model. Screening uses few regions to be cheap; only arms that pass the screen are scored on the larger set.</p></aside>
+    </div>
+  </section>
+
+  <!-- 9 · RESULTS · (a) the path
+       job      one claim, one figure as its evidence
+       claim    read-disjoint pairs move the U-Net above both floors; no single architectural fix did
+       source   data/deck_*_p16_sv.tsv
+       numbers  DATA.steps, DATA.fixes, DATA.floor16
+       cut      second bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(a) the path to the recipe</div>
+      <h2>Read-disjoint pairs moved the U-Net above both floors; no architectural fix did</h2>
+      <div class="fig wide tall" id="figPath"></div>
+      <ul class="pts">
+        <li>Read-disjoint pairs raised U-Net correction from <span id="tPathC0"></span> to <span id="tPathC1"></span> while imputation stayed at <span id="tPathI1"></span> (floor <span id="tPathIF"></span>).</li>
+      </ul>
+      <aside class="notes"><p>Each point is a seed mean, the bars are seed ranges, and correction here is the sixteen-region screen. The grey points are single fixes to the U-Net without the new pairs: changes to where covariates enter, correction layers and extra inputs. None of them left the U-Net's corner. Removing the head skip restored correction but gave up imputation, which told us where the copy happens.</p></aside>
+    </div>
+  </section>
+
+  <!-- 10 · RESULTS · (b) three objectives per step
+       job      one claim, one figure as its evidence
+       claim    each step's effect on each objective; only the pairs step helps all three
+       source   data/deck_*_p16_sv.tsv
+       numbers  DATA.steps
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(b) each objective, step by step</div>
+      <h2>Pairs helped correction and calibration; the added inputs buy imputation with calibration</h2>
+      <div class="fig wide tall" id="figStrips"></div>
+      <aside class="notes"><p>The steps are numbered as on the previous slide. Dashed lines mark the best base model and dotted lines the floor. The skip connections of the U-Net, step three, gave the largest imputation gain and caused the correction collapse. The pairs, step five, gave the largest correction gain and the best calibration. The two added inputs raise imputation or correction but lower calibration, and their calibration varies widely between seeds.</p></aside>
+    </div>
+  </section>
+
+  <!-- 11 · RESULTS · (c) 256-region confirmation
+       job      one claim, one figure as its evidence
+       claim    at 256 regions the full combination PASSes at 1x and 2x windows; the 2x version is the final architecture
+       source   data/pareto_p256_sv.tsv (pareto_select.py), data/deck_arms_p256_sv.tsv
+       numbers  DATA.confirm, DATA.floor256
+       cut      second bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(c) confirmation on <span data-src="literal">256</span> regions</div>
+      <h2 id="tConfH"></h2>
+      <div class="fig wide tall" id="figConfirm"></div>
+      <ul class="pts" id="tConfList"></ul>
+      <aside class="notes"><p>This is the confirmation set: correction on two hundred and fifty-six regions. Each panel is one objective, with the floor dotted and the best base dashed. The class on the right is the Pareto rule's output, read from the selection script. An arm with fewer than three seeds scored is marked; its class can still change.</p></aside>
+    </div>
+  </section>
+
+  <!-- 11b · RESULTS · what each component adds
+       job      one claim, one grid as its evidence
+       claim    pairs carry correction; average carries imputation; Pearson adds on top only with average; 2x windows narrows the imputation seed range
+       source   data/deck_base_p256_sv.tsv, data/deck_arms_p256_sv.tsv
+       numbers  DATA.comp, DATA.floor256
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>what each component adds (<span data-src="literal">256</span> regions)</div>
+      <h2>Pairs give correction, the average input gives imputation, and the two inputs together give all three</h2>
+      <div class="fig wide" id="figComp"></div>
+      <p class="small">Each cell: mean over <span data-src="literal">3</span> seeds, seed range in brackets, change from the row above (from pairs for the two single-input rows). Values in the recipe color are at or above the best base model; changes in that color are gains.</p>
+      <aside class="notes"><p>Read top to bottom. The pairs alone lift correction past the best base model but leave imputation below the U-Net base. The Pearson input alone adds almost nothing. The average input lifts imputation and correction but costs calibration. Both inputs together are the first row that clears all three bars. Twice the windows changes the means very little; it narrows the imputation seed range and raises calibration, inside the seed range.</p></aside>
+    </div>
+  </section>
+
+  <!-- 11c · RESULTS · recalibration
+       job      one claim, one figure as its evidence
+       claim    per-assay dispersion recalibration lifts calibration and leaves imputation and correction unchanged
+       source   data/ens_p256_sv.tsv
+       numbers  DATA.recal
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>recalibration after training</div>
+      <h2>One dispersion factor per assay lifts calibration and leaves imputation and correction unchanged</h2>
+      <div class="fig wide" id="figRecal"></div>
+      <ul class="pts" id="tRecalLi"></ul>
+      <aside class="notes"><p>Recalibration multiplies the negative binomial dispersion by one factor per assay, fitted on calibration regions after training. The mean prediction does not change, so imputation and correction cannot change. This was measured on the pairs plus Pearson model, as a three-seed ensemble before and after the factors. The factors for the final architecture are not fitted yet. The calibration regions share cells and tracks with the scored set, so this gain is an upper estimate.</p></aside>
+    </div>
+  </section>
+
+  <!-- 12 · RESULTS · (d) the copy path
+       job      one claim, one figure as its evidence
+       claim    the head skip carries the copy; with pairs, removing it ends the copy at no clear cost
+       source   data/copy_gain_p16_sv.tsv; data/eic_v1_arm_summary_p16_sv.tsv
+       numbers  DATA.copy, DATA.skip
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(d) where the U-Net copies</div>
+      <h2 id="tCopyH"></h2>
+      <div class="chartbox panels"><div class="fig" id="figCopy"></div><div class="fig" id="figSkip"></div></div>
+      <ul class="pts" id="tCopyLi"></ul>
+      <p class="small">Copy gain = (CRPS on hidden bins − CRPS on visible bins) / CRPS on hidden bins, same-view reconstruction; near <span data-src="literal">0</span> means no copying. CRPS: a proper score of a predictive distribution, lower is better.</p>
+      <aside class="notes"><p>Panel a: the full U-Net has a copy gain far above the conv models. Removing the head skip alone brings it down to the conv models' level, so the head skip, not the level skips, carries the copy. Read-disjoint pairs cut it by most of the way, and the average-signal input cuts it further. Panel b is the earlier data version: when only DNA skips remain, correction rises and imputation falls. Removing the head skip on top of the pairs ended the copy and kept imputation. Correction fell, but by less than the pairs model's own seed range, and only on the <span data-src="literal">16</span>-region screen; it is not confirmed on <span data-src="literal">256</span> regions.</p></aside>
+    </div>
+  </section>
+
+  <!-- 13 · RESULTS · (e) the negatives
+       job      one claim, one figure as its evidence
+       claim    fifteen single U-Net fixes without pairs all left correction below the floor
+       source   data/deck_arms_p16_sv.tsv
+       numbers  DATA.fixes, DATA.floor16
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(e) what did not work</div>
+      <h2 id="tNegH"></h2>
+      <div class="fig wide tall" id="figNeg"></div>
+      <aside class="notes"><p>These are kept because they rule things out. Moving FiLM conditioning around the network, adding learned covariate correction layers before or after the model, conditioning the skips and adding extra inputs did not stop the copy on their own. The one fix that just reached the floor is fixed input depth, which thins every input to one sequencing depth and was judged unrealistic for deployment. Head skip removal, which pays in imputation, and the training pairs moved correction well past the floor. The pairs also did not help the two conv models, whose correction was already high.</p></aside>
+    </div>
+  </section>
+
+  <!-- 14 · RESULTS · (f) EIC validation
+       job      one claim, one figure as its evidence
+       claim    the U-Net against the challenge's Average baseline on the validation tracks
+       source   data/table_unet_vs_average.tsv (eic_val_compare.py table)
+       numbers  DATA.eic
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(f) EIC validation tracks</div>
+      <h2 id="tEicH"></h2>
+      <div id="eicBody"></div>
+      <aside class="notes"><p>This uses the challenge's own nine measures on its validation tracks. The Average baseline is the mean of the training tracks of the same assay, built from training cells only. The entry is the base U-Net from before the read-disjoint pairs, one seed; the chosen recipe was not scored here. The last column counts tracks, so a better mean can come with fewer than half the tracks better. The retrained Avocado comparison was queued but its training job did not start in time, so it is not in this deck.</p></aside>
+    </div>
+  </section>
+
+  <!-- 15 · DISCUSSION · ruled in / out, limitations
+       job      readings restated; limitations with counts
+       source   restated from results (a)-(f)
+       numbers  none new
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>what this rules in and out</div>
+      <h2>The trade-off came from the training pairs, not from the architecture</h2>
+      <div class="cards">
+        <div class="card" style="--c:var(--recipe)"><div class="rl">Ruled in</div><p>The U-Net's skips learned to copy because correction pairs shared reads. Read-disjoint pairs remove the reward for copying, and the U-Net keeps most of its imputation lead.</p></div>
+        <div class="card" style="--c:var(--base)"><div class="rl">Ruled out</div><p>Fixing the trade-off by moving covariate conditioning, adding correction layers or conditioning the skips: none reached the correction floor. Only fixed input depth did, which needs every input thinned to one depth.</p></div>
+        <div class="card" style="--c:var(--addon)"><div class="rl">Limitations</div><p>One data version, three seeds per arm, one model size. The added inputs lower calibration and vary widely between seeds. Removing the head skip with pairs ends the copy; its correction is screened on <span data-src="literal">16</span> regions only.</p></div>
+      </div>
+      <aside class="notes"><p>The discussion adds no number of its own. Each card restates a result slide.</p></aside>
+    </div>
+  </section>
+
+  <!-- 16 · DISCUSSION · headroom and scaling
+       job      one claim, one figure as its evidence
+       claim    more training without pairs fed the copy; scaling with pairs is untested
+       source   data/ROUND2_READ.md (eic_v1, 80k vs 160k windows)
+       numbers  DATA.win
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>will scaling close the gap?</div>
+      <h2>Twice the training, before the pairs, made the U-Net copy more</h2>
+      <div class="fig mid" id="figWin"></div>
+      <ul class="pts">
+        <li>U-Net correction moved from <span id="tWinC1"></span> to <span id="tWinC2"></span> with twice the windows, while imputation moved from <span id="tWinI1"></span> to <span id="tWinI2"></span>. Model size was never varied.</li>
+      </ul>
+      <aside class="notes"><p>This is the earlier data version with the older correction scale, and these runs predate the pairs. The held-out loss went down with more training, but none of the objectives improved, and the U-Net's correction got worse. Our reading is that more training let it learn the copy better. Whether scaling helps once copying is no longer rewarded is untested; that run is queued.</p></aside>
+    </div>
+  </section>
+
+  <!-- 17 · DISCUSSION · options
+       job      labelled options for the PI; no ranking
+       source   limitations above; D41, D42
+       numbers  none
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>options for the next phase</div>
+      <h2>Options for the next phase</h2>
+      <div class="cards" style="grid-template-columns:repeat(3,1fr)">
+        <div class="card"><div class="rl">Option A · close the copy path</div><p>Pairs with the head skip removed ended the copy with no clear loss (results d). Next: confirm it on <span data-src="literal">256</span> regions, then a blind-spot head skip (output at a bin never sees that bin's input) or skip dropout.</p></div>
+        <div class="card"><div class="rl">Option B · calibration of the added inputs</div><p>Seed ensembling and post-training dispersion recalibration on held-out data. No training; tests whether the imputation gain of the added inputs can keep the pairs model's calibration.</p></div>
+        <div class="card"><div class="rl">Option C · scale with pairs</div><p>Two and four times the parameters, twice the windows, with read-disjoint pairs. About a thousand CPU-hours; tells us whether scaling helps once copying is not rewarded.</p></div>
+      </div>
+      <aside class="notes"><p>These are options, not recommendations. Option A's first run is done; option C is approved and queued.</p></aside>
+    </div>
+  </section>
+
+  <!-- 18 · BACKUP · glossary
+       job      repeat the glosses in one place
+       source   .longrun/GLOSSARY.md
+       numbers  none
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Backup</span>glossary</div>
+      <table class="dtable tight"><tbody>
+        <tr><td>Imputation</td><td>track-specific variance of a hidden track recovered above noise (<span data-src="literal">log1p</span> counts), higher is better</td></tr>
+        <tr><td>Correction</td><td>fraction of the gap to an oracle closed on crop pairs (a track at one processing view mapped to another)</td></tr>
+        <tr><td>Calibration</td><td><span data-src="literal">1</span> − PIT deviation of the model / PIT deviation of a marginal NB (PIT: where each observation falls in its predicted distribution; flat when calibrated). Higher is better</td></tr>
+        <tr><td><span data-src="literal">pr1</span> / <span data-src="literal">pr2</span></td><td>pseudoreplicates: the two disjoint random halves of one experiment's reads</td></tr>
+        <tr><td>FiLM</td><td>feature-wise scale and shift computed from covariates</td></tr>
+        <tr><td>Head skip</td><td>connection from a track's input features straight to its output head</td></tr>
+        <tr><td>Seed range</td><td>maximum minus minimum of a mean over training restarts</td></tr>
+        <tr><td>Covariates (C, C′)</td><td>experiment descriptors of the input (C) and wanted output (C′): depth, read length, lab, antibody, pipeline</td></tr>
+      </tbody></table>
+      <aside class="notes"><p>The same glosses appear on the slides where each term is first used.</p></aside>
+    </div>
+  </section>
+
+</div>
+
+<div class="foot">miniCANDI recipe · read-disjoint pairs</div>
+<div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+<script>
+/* Every measured number comes from DATA (build_deck.py). Comparisons are computed here. */
+const DATA = {"floor16":{"imp":{"best":0.4452,"range":0.038,"floor":0.4072},"cor":{"best":0.6815,"range":0.0324,"floor":0.6491},"cal":{"best":0.646,"range":0.1577,"floor":0.4883}},"floor256":{"imp":{"best":0.4452,"range":0.038,"floor":0.4072},"cor":{"best":0.675,"range":0.0193,"floor":0.6557},"cal":{"best":0.646,"range":0.1577,"floor":0.4883}},"steps":[{"key":"eic_v1_2_rung2_base_heldout","lab":"Conv autoencoder","p16":{"imp":{"m":0.3704,"r":0.0214},"cor":{"m":0.6815,"r":0.0324},"cal":{"m":0.5986,"r":0.1864},"n":3},"p256":{"imp":{"m":0.3704,"r":0.0214},"cor":{"m":0.6636,"r":0.0312},"cal":{"m":0.5986,"r":0.1864},"n":3}},{"key":"eic_v1_2_rung3_base_heldout","lab":"Conv + attention","p16":{"imp":{"m":0.386,"r":0.0298},"cor":{"m":0.671,"r":0.0303},"cal":{"m":0.6272,"r":0.1379},"n":3},"p256":{"imp":{"m":0.386,"r":0.0298},"cor":{"m":0.675,"r":0.0193},"cal":{"m":0.6272,"r":0.1379},"n":3}},{"key":"eic_v1_2_rung4_base_heldout","lab":"U-Net","p16":{"imp":{"m":0.4452,"r":0.038},"cor":{"m":0.5379,"r":0.0592},"cal":{"m":0.646,"r":0.1577},"n":3},"p256":{"imp":{"m":0.4452,"r":0.038},"cor":{"m":0.5352,"r":0.0624},"cal":{"m":0.646,"r":0.1577},"n":3}},{"key":"rcp_headskip_off_unet","lab":"U-Net, head skip removed","p16":{"imp":{"m":0.3761,"r":0.0235},"cor":{"m":0.6754,"r":0.0673},"cal":{"m":0.6069,"r":0.0834},"n":3},"class_p16":"FAIL","score_p16":-1.8184},{"key":"rcp_halves_unet","lab":"U-Net + read-disjoint pairs","p16":{"imp":{"m":0.4263,"r":0.0212},"cor":{"m":0.7535,"r":0.058},"cal":{"m":0.6872,"r":0.0289},"n":3},"p256":{"imp":{"m":0.4263,"r":0.0212},"cor":{"m":0.7299,"r":0.0707},"cal":{"m":0.6872,"r":0.0289},"n":3},"class_p16":"PASS","score_p16":-0.4974,"class_p256":"NEAR","score_p256":-0.4974},{"key":"rcp_halves_mix_pearson_unet","lab":"+ Pearson-residual input","p16":{"imp":{"m":0.4454,"r":0.0642},"cor":{"m":0.7801,"r":0.0321},"cal":{"m":0.6252,"r":0.1444},"n":3},"p256":{"imp":{"m":0.4454,"r":0.0642},"cor":{"m":0.7744,"r":0.0305},"cal":{"m":0.6252,"r":0.1444},"n":3},"class_p16":"PASS","score_p16":-0.1319,"class_p256":"PASS","score_p256":-0.1319},{"key":"rcp_halves_mix_avg_unet","lab":"+ average-signal input","p16":{"imp":{"m":0.483,"r":0.0226},"cor":{"m":0.7812,"r":0.0028},"cal":{"m":0.6077,"r":0.1895},"n":3},"p256":{"imp":{"m":0.483,"r":0.0226},"cor":{"m":0.7792,"r":0.0103},"cal":{"m":0.6077,"r":0.1895},"n":3},"class_p16":"PASS","score_p16":-0.2429,"class_p256":"PASS","score_p256":-0.2429},{"key":"rcp_halves_headskip_off_unet","lab":"pairs + head skip removed","p16":{"imp":{"m":0.4295,"r":0.0348},"cor":{"m":0.6985,"r":0.0286},"cal":{"m":0.6856,"r":0.0642},"n":3},"p256":{"imp":{"m":0.4295,"r":0.0348},"cor":{"m":0.6737,"r":0.039},"cal":{"m":0.6856,"r":0.0642},"n":3},"class_p16":"NEAR","score_p16":-0.4132,"class_p256":"NEAR","score_p256":-0.4132}],"fixes":[{"key":"rcp_cac_cnn_unet","lab":"covariate correction layers (CNN)","imp":{"m":0.4606,"r":0.0068},"cor":{"m":0.5263,"r":0.0768},"cal":{"m":0.6839,"r":0.1684},"n":3},{"key":"rcp_cac_cnn_corefilm_off_unet","lab":"correction layers (CNN), core FiLM off","imp":{"m":0.4355,"r":0.012},"cor":{"m":0.5816,"r":0.0587},"cal":{"m":0.5913,"r":0.3881},"n":3},{"key":"rcp_cac_curve_unet","lab":"covariate correction layers (curve)","imp":{"m":0.4477,"r":0.0065},"cor":{"m":0.5351,"r":0.0984},"cal":{"m":0.6721,"r":0.0807},"n":3},{"key":"rcp_cac_curve_corefilm_off_unet","lab":"correction layers (curve), core FiLM off","imp":{"m":0.4238,"r":0.0118},"cor":{"m":0.4439,"r":0.0541},"cal":{"m":0.7195,"r":0.045},"n":3},{"key":"rcp_film_all_unet","lab":"FiLM everywhere","imp":{"m":0.432,"r":0.053},"cor":{"m":0.5419,"r":0.0266},"cal":{"m":0.6491,"r":0.0836},"n":3},{"key":"rcp_film_bottleneck_unet","lab":"FiLM at the bottleneck only","imp":{"m":0.4227,"r":0.0152},"cor":{"m":0.5013,"r":0.1327},"cal":{"m":0.6713,"r":0.098},"n":3},{"key":"rcp_film_decoder_unet","lab":"FiLM in the decoder only","imp":{"m":0.4406,"r":0.0227},"cor":{"m":0.5343,"r":0.0451},"cal":{"m":0.6373,"r":0.0472},"n":3},{"key":"rcp_film_encoder_unet","lab":"FiLM in the encoder only","imp":{"m":0.4409,"r":0.0139},"cor":{"m":0.5249,"r":0.0153},"cal":{"m":0.6977,"r":0.0752},"n":3},{"key":"rcp_headskip_film_unet","lab":"head skip conditioned by FiLM","imp":{"m":0.4543,"r":0.0163},"cor":{"m":0.5399,"r":0.0561},"cal":{"m":0.6561,"r":0.1359},"n":3},{"key":"rcp_skipfilm_ccp_unet","lab":"level skips conditioned on input + output covariates","imp":{"m":0.4275,"r":0.0167},"cor":{"m":0.5603,"r":0.0047},"cal":{"m":0.6633,"r":0.1644},"n":3},{"key":"rcp_skipfilm_ccp_headskip_film_unet","lab":"both skip conditionings","imp":{"m":0.4544,"r":0.0252},"cor":{"m":0.5671,"r":0.0256},"cal":{"m":0.6098,"r":0.1046},"n":3},{"key":"rcp_mix_avg_unet","lab":"average-signal input","imp":{"m":0.4777,"r":0.0164},"cor":{"m":0.5307,"r":0.0923},"cal":{"m":0.6638,"r":0.0628},"n":3},{"key":"rcp_mix_pearson_unet","lab":"Pearson-residual input","imp":{"m":0.4605,"r":0.0339},"cor":{"m":0.5834,"r":0.0624},"cal":{"m":0.7233,"r":0.096},"n":3},{"key":"rcp_mix_fixdepth_unet","lab":"fixed input depth","imp":{"m":0.4109,"r":0.019},"cor":{"m":0.6555,"r":0.0213},"cal":{"m":0.7135,"r":0.1357},"n":3},{"key":"rcp_nocov_unet","lab":"no covariates","imp":{"m":0.4057,"r":0.0049},"cor":{"m":0.4789,"r":0.0796},"cal":{"m":0.6117,"r":0.0811},"n":3}],"confirm":[{"key":"rcp_halves_unet","p16":{"imp":{"m":0.4263,"r":0.0212},"cor":{"m":0.7535,"r":0.058},"cal":{"m":0.6872,"r":0.0289},"n":3},"p256":{"imp":{"m":0.4263,"r":0.0212},"cor":{"m":0.7299,"r":0.0707},"cal":{"m":0.6872,"r":0.0289},"n":3},"class_p16":"PASS","score_p16":-0.4974,"class_p256":"NEAR","score_p256":-0.4974},{"key":"rcp_halves_headskip_film_unet","p16":{"imp":{"m":0.4166,"r":0.0014},"cor":{"m":0.7662,"r":0.0578},"cal":{"m":0.5937,"r":0.1437},"n":3},"p256":{"imp":{"m":0.4166,"r":0.0014},"cor":{"m":0.7438,"r":0.079},"cal":{"m":0.5937,"r":0.1437},"n":3},"class_p16":"PASS","score_p16":-0.7526,"class_p256":"NEAR","score_p256":-0.7526},{"key":"rcp_halves_mix_pearson_unet","p16":{"imp":{"m":0.4454,"r":0.0642},"cor":{"m":0.7801,"r":0.0321},"cal":{"m":0.6252,"r":0.1444},"n":3},"p256":{"imp":{"m":0.4454,"r":0.0642},"cor":{"m":0.7744,"r":0.0305},"cal":{"m":0.6252,"r":0.1444},"n":3},"class_p16":"PASS","score_p16":-0.1319,"class_p256":"PASS","score_p256":-0.1319},{"key":"rcp_halves_mix_avg_unet","p16":{"imp":{"m":0.483,"r":0.0226},"cor":{"m":0.7812,"r":0.0028},"cal":{"m":0.6077,"r":0.1895},"n":3},"p256":{"imp":{"m":0.483,"r":0.0226},"cor":{"m":0.7792,"r":0.0103},"cal":{"m":0.6077,"r":0.1895},"n":3},"class_p16":"PASS","score_p16":-0.2429,"class_p256":"PASS","score_p256":-0.2429},{"key":"rcp_halves_headskip_off_unet","p16":{"imp":{"m":0.4295,"r":0.0348},"cor":{"m":0.6985,"r":0.0286},"cal":{"m":0.6856,"r":0.0642},"n":3},"p256":{"imp":{"m":0.4295,"r":0.0348},"cor":{"m":0.6737,"r":0.039},"cal":{"m":0.6856,"r":0.0642},"n":3},"class_p16":"NEAR","score_p16":-0.4132,"class_p256":"NEAR","score_p256":-0.4132},{"key":"rcp_halves_mix_avg_pearson_unet","p16":{"imp":{"m":0.4996,"r":0.0349},"cor":{"m":0.8156,"r":0.0105},"cal":{"m":0.6852,"r":0.0924},"n":3},"p256":{"imp":{"m":0.4996,"r":0.0349},"cor":{"m":0.818,"r":0.0135},"cal":{"m":0.6852,"r":0.0924},"n":3},"class_p16":"PASS","score_p16":0.2486,"class_p256":"PASS","score_p256":0.2486},{"key":"rcp_combo_w2x_unet","p16":{"imp":{"m":0.5033,"r":0.0102},"cor":{"m":0.814,"r":0.0131},"cal":{"m":0.7171,"r":0.0775},"n":3},"p256":{"imp":{"m":0.5033,"r":0.0102},"cor":{"m":0.8176,"r":0.0155},"cal":{"m":0.7171,"r":0.0775},"n":3},"class_p16":"PASS","score_p16":0.4509,"class_p256":"PASS","score_p256":0.4509}],"halves_conv":{"convae":{"imp":{"m":0.3936,"r":0.0245},"cor":{"m":0.6485,"r":0.0481},"cal":{"m":-0.0805,"r":0.0958},"n":3},"convattn":{"imp":{"m":0.4064,"r":0.0103},"cor":{"m":0.6742,"r":0.014},"cal":{"m":0.5348,"r":0.2652},"n":3}},"comp":[{"key":"eic_v1_2_rung4_base_heldout","lab":"U-Net (base)","imp":{"m":0.4452,"r":0.038},"cor":{"m":0.5352,"r":0.0624},"cal":{"m":0.646,"r":0.1577},"n":3},{"key":"rcp_halves_unet","lab":"+ read-disjoint pairs","imp":{"m":0.4263,"r":0.0212},"cor":{"m":0.7299,"r":0.0707},"cal":{"m":0.6872,"r":0.0289},"n":3},{"key":"rcp_halves_mix_pearson_unet","lab":"pairs + Pearson-residual input","imp":{"m":0.4454,"r":0.0642},"cor":{"m":0.7744,"r":0.0305},"cal":{"m":0.6252,"r":0.1444},"n":3},{"key":"rcp_halves_mix_avg_unet","lab":"pairs + average-signal input","imp":{"m":0.483,"r":0.0226},"cor":{"m":0.7792,"r":0.0103},"cal":{"m":0.6077,"r":0.1895},"n":3},{"key":"rcp_halves_mix_avg_pearson_unet","lab":"pairs + average + Pearson","imp":{"m":0.4996,"r":0.0349},"cor":{"m":0.818,"r":0.0135},"cal":{"m":0.6852,"r":0.0924},"n":3},{"key":"rcp_combo_w2x_unet","lab":"+ 2\u00d7 windows (final)","imp":{"m":0.5033,"r":0.0102},"cor":{"m":0.8176,"r":0.0155},"cal":{"m":0.7171,"r":0.0775},"n":3}],"recal":{"rcp_halves_mix_pearson_unet__ens3":{"imp":{"m":0.458,"r":0.0},"cor":{"m":0.7901,"r":0.0},"cal":{"m":0.6372,"r":0.0},"n":1},"rcp_halves_mix_pearson_unet__ens3_recal":{"imp":{"m":0.458,"r":0.0},"cor":{"m":0.7901,"r":0.0},"cal":{"m":0.7672,"r":0.0},"n":1}},"copy":{"eic_v1_2_rung2_base_heldout":{"m":0.0447,"r":0.0089,"n":3},"eic_v1_2_rung3_base_heldout":{"m":0.0317,"r":0.0576,"n":3},"eic_v1_2_rung4_base_heldout":{"m":0.6703,"r":0.0172,"n":3},"rcp_headskip_off_unet":{"m":0.0611,"r":0.0119,"n":3},"rcp_headskip_film_unet":{"m":0.6723,"r":0.0313,"n":3},"rcp_mix_avg_unet":{"m":0.6441,"r":0.0182,"n":3},"rcp_mix_pearson_unet":{"m":0.6641,"r":0.0175,"n":3},"rcp_halves_unet":{"m":0.205,"r":0.0301,"n":3},"rcp_halves_mix_avg_unet":{"m":0.1226,"r":0.0174,"n":3},"rcp_halves_mix_pearson_unet":{"m":0.1928,"r":0.0377,"n":3},"rcp_halves_headskip_film_unet":{"m":0.2216,"r":0.045,"n":3},"rcp_halves_headskip_off_unet":{"m":0.013,"r":0.005,"n":3}},"skip":[{"lab":"U-Net, all skips","imp":{"m":0.4319,"r":0.023},"cor":{"m":0.5072,"r":0.0712},"cal":{"m":0.6096,"r":0.1077},"n":3},{"lab":"count skips only","imp":{"m":0.4317,"r":0.0063},"cor":{"m":0.5178,"r":0.0369},"cal":{"m":0.5631,"r":0.1447},"n":3},{"lab":"DNA skips only (no count path)","imp":{"m":0.3799,"r":0.0216},"cor":{"m":0.7336,"r":0.0626},"cal":{"m":0.6396,"r":0.065},"n":3}],"ladder":[{"key":"rung1_base","lab":"MLP, no context","imp":0.3431,"imp_r":0.0029,"cor":0.4743,"cor_r":0.023},{"key":"rung2_base","lab":"Conv autoencoder","imp":0.385,"imp_r":0.0297,"cor":0.5761,"cor_r":0.0125},{"key":"rung3_base","lab":"Conv + attention","imp":0.3885,"imp_r":0.0128,"cor":0.5718,"cor_r":0.0105},{"key":"rung4_base","lab":"U-Net","imp":0.4397,"imp_r":0.0134,"cor":0.2984,"cor_r":0.0519},{"key":"rung5_base","lab":"Axial attention","imp":0.3901,"imp_r":0.0094,"cor":0.4474,"cor_r":0.049},{"key":"rung6_base","lab":"Perceiver IO","imp":0.1541,"imp_r":0.0641,"cor":0.2907,"cor_r":0.0439}],"win":[{"lab":"conv autoencoder","imp2":0.358,"cor2":0.551,"imp1":0.385,"cor1":0.576},{"lab":"conv + attention","imp2":0.353,"cor2":0.518,"imp1":0.389,"cor1":0.572},{"lab":"U-Net","imp2":0.451,"cor2":0.203,"imp1":0.44,"cor1":0.298}],"eic":[{"entry":"Average_train_only","measure":"mse","higher_is_better":"0","n_tracks":"43","n_nan":"0","mean":"6.845567979708571","n_tracks_entry":"45","beats:Average_train_only":"","beats:miniCANDI_UNet_base_s0":"22"},{"entry":"Average_train_only","measure":"gwcorr","higher_is_better":"1","n_tracks":"43","n_nan":"0","mean":"0.5040695188620969","n_tracks_entry":"45","beats:Average_train_only":"","beats:miniCANDI_UNet_base_s0":"28"},{"entry":"Average_train_only","measure":"gwspear","higher_is_better":"1","n_tracks":"43","n_nan":"0","mean":"0.16962711115651793","n_tracks_entry":"45","beats:Average_train_only":"","beats:miniCANDI_UNet_base_s0":"7"},{"entry":"Average_train_only","measure":"mseprom","higher_is_better":"0","n_tracks":"43","n_nan":"0","mean":"131.38038761583098","n_tracks_entry":"45","beats:Average_train_only":"","beats:miniCANDI_UNet_base_s0":"25"},{"entry":"Average_train_only","measure":"msegene","higher_is_better":"0","n_tracks":"43","n_nan":"0","mean":"13.525786902208829","n_tracks_entry":"45","beats:Average_train_only":"","beats:miniCANDI_UNet_base_s0":"22"},{"entry":"Average_train_only","measure":"mseenh","higher_is_better":"0","n_tracks":"43","n_nan":"0","mean":"37.644025553145816","n_tracks_entry":"45","beats:Average_train_only":"","beats:miniCANDI_UNet_base_s0":"23"},{"entry":"Average_train_only","measure":"msevar","higher_is_better":"0","n_tracks":"43","n_nan":"10","mean":"9640.668723825014","n_tracks_entry":"45","beats:Average_train_only":"","beats:miniCANDI_UNet_base_s0":"13"},{"entry":"Average_train_only","measure":"mse1obs","higher_is_better":"0","n_tracks":"43","n_nan":"0","mean":"540.4321625583026","n_tracks_entry":"45","beats:Average_train_only":"","beats:miniCANDI_UNet_base_s0":"15"},{"entry":"Average_train_only","measure":"mse1imp","higher_is_better":"0","n_tracks":"43","n_nan":"0","mean":"577.6301265133346","n_tracks_entry":"45","beats:Average_train_only":"","beats:miniCANDI_UNet_base_s0":"17"},{"entry":"miniCANDI_UNet_base_s0","measure":"mse","higher_is_better":"0","n_tracks":"43","n_nan":"0","mean":"6.562555432369798","n_tracks_entry":"43","beats:Average_train_only":"21","beats:miniCANDI_UNet_base_s0":""},{"entry":"miniCANDI_UNet_base_s0","measure":"gwcorr","higher_is_better":"1","n_tracks":"43","n_nan":"0","mean":"0.4217828630976627","n_tracks_entry":"43","beats:Average_train_only":"15","beats:miniCANDI_UNet_base_s0":""},{"entry":"miniCANDI_UNet_base_s0","measure":"gwspear","higher_is_better":"1","n_tracks":"43","n_nan":"0","mean":"0.3071688619355281","n_tracks_entry":"43","beats:Average_train_only":"36","beats:miniCANDI_UNet_base_s0":""},{"entry":"miniCANDI_UNet_base_s0","measure":"mseprom","higher_is_better":"0","n_tracks":"43","n_nan":"0","mean":"64.28541332506781","n_tracks_entry":"43","beats:Average_train_only":"18","beats:miniCANDI_UNet_base_s0":""},{"entry":"miniCANDI_UNet_base_s0","measure":"msegene","higher_is_better":"0","n_tracks":"43","n_nan":"0","mean":"10.184245890824368","n_tracks_entry":"43","beats:Average_train_only":"21","beats:miniCANDI_UNet_base_s0":""},{"entry":"miniCANDI_UNet_base_s0","measure":"mseenh","higher_is_better":"0","n_tracks":"43","n_nan":"0","mean":"39.05812639672322","n_tracks_entry":"43","beats:Average_train_only":"20","beats:miniCANDI_UNet_base_s0":""},{"entry":"miniCANDI_UNet_base_s0","measure":"msevar","higher_is_better":"0","n_tracks":"43","n_nan":"10","mean":"2619.489685713077","n_tracks_entry":"43","beats:Average_train_only":"20","beats:miniCANDI_UNet_base_s0":""},{"entry":"miniCANDI_UNet_base_s0","measure":"mse1obs","higher_is_better":"0","n_tracks":"43","n_nan":"0","mean":"384.57892029908476","n_tracks_entry":"43","beats:Average_train_only":"28","beats:miniCANDI_UNet_base_s0":""},{"entry":"miniCANDI_UNet_base_s0","measure":"mse1imp","higher_is_better":"0","n_tracks":"43","n_nan":"0","mean":"465.91499956577655","n_tracks_entry":"43","beats:Average_train_only":"26","beats:miniCANDI_UNet_base_s0":""}]};
+const put=(id,html)=>{const e=document.getElementById(id); if(e) e.innerHTML=html;};
+const f3=v=>v==null?'–':v.toFixed(3);
+const sg=v=>(v>=0?'+':'−')+Math.abs(v).toFixed(3);
+const COL={base:'var(--base)',unet:'var(--unet)',recipe:'var(--recipe)',addon:'var(--addon)',diag:'var(--diag)',fix:'var(--fix)'};
+const S=Object.fromEntries(DATA.steps.map(s=>[s.key,s]));
+const stepCol=k=>k.startsWith('eic_v1_2_rung4')?COL.unet:k.startsWith('eic_v1_2')?COL.base:
+  (k==='rcp_headskip_off_unet'||k==='rcp_halves_headskip_off_unet')?COL.diag:k==='rcp_halves_unet'?COL.recipe:COL.addon;
+const F16=DATA.floor16, F256=DATA.floor256;
+
+/* generic scatter: pts {x,xr,y,yr,col,lab,dx,dy,anchor,big} */
+function scatter(o){
+  const W=o.W||900,H=o.H||560,L=86,R=30,T=60,B=70;
+  const X=v=>L+(v-o.x0)/(o.x1-o.x0)*(W-L-R), Y=v=>H-B-(v-o.y0)/(o.y1-o.y0)*(H-T-B);
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+  s+=`<text x="12" y="30" class="ptitle">${o.title}</text>`;
+  if(o.sub) s+=`<text x="12" y="52" class="psub">${o.sub}</text>`;
+  for(const t of o.xt){s+=`<line x1="${X(t)}" y1="${T}" x2="${X(t)}" y2="${H-B}" class="grid"/><text x="${X(t)}" y="${H-B+24}" text-anchor="middle" class="tick">${t.toFixed(2)}</text>`;}
+  for(const t of o.yt){s+=`<line x1="${L}" y1="${Y(t)}" x2="${W-R}" y2="${Y(t)}" class="grid"/><text x="${L-10}" y="${Y(t)+5}" text-anchor="end" class="tick">${t.toFixed(2)}</text>`;}
+  if(o.zone) s+=`<rect x="${X(o.zone.x)}" y="${T}" width="${W-R-X(o.zone.x)}" height="${Y(o.zone.y)-T}" fill="var(--recipe)" opacity=".07"/>`
+    +`<text x="${X(o.zone.x)+8}" y="${Y(o.zone.y)-8}" class="psub" fill="var(--recipe)">${o.zone.lab}</text>`;
+  for(const l of (o.vl||[])) s+=`<line x1="${X(l.v)}" y1="${T}" x2="${X(l.v)}" y2="${H-B}" stroke="#9a9a9a" stroke-dasharray="${l.d}"/><text x="${X(l.v)+4}" y="${H-B-8}" class="cap">${l.lab}</text>`;
+  for(const l of (o.hl||[])) s+=`<line x1="${L}" y1="${Y(l.v)}" x2="${W-R}" y2="${Y(l.v)}" stroke="#9a9a9a" stroke-dasharray="${l.d}"/><text x="${W-R-4}" y="${Y(l.v)-6}" text-anchor="end" class="cap">${l.lab}</text>`;
+  for(const a of (o.arrows||[])) s+=`<line x1="${X(a[0])}" y1="${Y(a[1])}" x2="${X(a[2])}" y2="${Y(a[3])}" stroke="${a[4]||'#555'}" stroke-width="2" ${a[5]?'stroke-dasharray="5 4"':''} marker-end="url(#ah)"/>`;
+  for(const p of o.pts){
+    const c=p.col;
+    if(p.xr) s+=`<line x1="${X(p.x-p.xr/2)}" y1="${Y(p.y)}" x2="${X(p.x+p.xr/2)}" y2="${Y(p.y)}" stroke="${c}" stroke-width="2"/>`;
+    if(p.yr) s+=`<line x1="${X(p.x)}" y1="${Y(p.y-p.yr/2)}" x2="${X(p.x)}" y2="${Y(p.y+p.yr/2)}" stroke="${c}" stroke-width="2"/>`;
+    s+=`<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="${p.big?10:p.lab?7:5.5}" fill="${c}" stroke="#fff" stroke-width="1.5"/>`;
+    if(p.lab) s+=`<text x="${X(p.x)+(p.dx||10)}" y="${Y(p.y)+(p.dy||-10)}" text-anchor="${p.anchor||'start'}" class="axlbl" fill="${c}" style="font-weight:${p.big?700:500}">${p.lab}</text>`;
+  }
+  s+=`<text x="${(L+W-R)/2}" y="${H-18}" text-anchor="middle" class="ylab">${o.xl}</text>`;
+  s+=`<text transform="translate(22,${(T+H-B)/2}) rotate(-90)" text-anchor="middle" class="ylab">${o.yl}</text>`;
+  s+=`<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#555"/></marker></defs>`;
+  return s+`</svg>`;
+}
+
+/* ---------- slide 3: the trade-off ---------- */
+(function(){
+  const lad=DATA.ladder, kept=['rung2_base','rung3_base','rung4_base'];
+  const g=k=>lad.find(r=>r.key===k);
+  put('figLadder', scatter({title:'(a) Six-model ladder, eic_v1', sub:'older correction scale (102 pairs)',
+    x0:0.1,x1:0.5,y0:0.2,y1:0.62,xt:[0.1,0.2,0.3,0.4,0.5],yt:[0.2,0.3,0.4,0.5,0.6],
+    xl:'imputation',yl:'correction',W:640,H:520,
+    arrows:[[g('rung3_base').imp,g('rung3_base').cor,g('rung4_base').imp,g('rung4_base').cor]],
+    pts:lad.map(r=>({x:r.imp,y:r.cor,xr:r.imp_r,yr:r.cor_r,col:kept.includes(r.key)?(r.key==='rung4_base'?COL.unet:COL.base):COL.fix,
+      lab:r.lab+(kept.includes(r.key)?'':' (dropped)'),dx:r.key==='rung2_base'?-10:10,anchor:r.key==='rung2_base'?'end':'start',dy:r.key==='rung3_base'?22:r.key==='rung5_base'?22:-10}))}));
+  const b=DATA.steps.slice(0,3);
+  put('figBases', scatter({title:'(b) Three base models, eic_v1_2', sub:'correction on 16 regions; bars = seed range',
+    x0:0.34,x1:0.48,y0:0.48,y1:0.74,xt:[0.36,0.40,0.44,0.48],yt:[0.5,0.55,0.6,0.65,0.7],
+    xl:'imputation',yl:'correction',W:640,H:520,
+    arrows:[[b[1].p16.imp.m,b[1].p16.cor.m,b[2].p16.imp.m,b[2].p16.cor.m]],
+    pts:b.map((r,i)=>({x:r.p16.imp.m,xr:r.p16.imp.r,y:r.p16.cor.m,yr:r.p16.cor.r,col:stepCol(r.key),lab:r.lab,dx:i==2?-12:12,anchor:i==2?'end':'start'}))}));
+  put('tTradeImp', sg(b[2].p16.imp.m-b[1].p16.imp.m)); put('tTradeCor', sg(b[2].p16.cor.m-b[1].p16.cor.m));
+})();
+
+/* ---------- slide 9: the path ---------- */
+(function(){
+  const st=DATA.steps, pts=[];
+  DATA.fixes.forEach(r=>pts.push({x:r.imp.m,y:r.cor.m,col:COL.fix}));
+  const lab={'eic_v1_2_rung2_base_heldout':[-12,-10,'end'],'eic_v1_2_rung3_base_heldout':[12,34,'start'],
+    'eic_v1_2_rung4_base_heldout':[12,26,'start'],'rcp_headskip_off_unet':[-12,26,'end'],
+    'rcp_halves_unet':[14,30,'start'],'rcp_halves_mix_pearson_unet':[-12,-12,'end'],'rcp_halves_mix_avg_unet':[10,26,'end'],'rcp_halves_headskip_off_unet':[12,-12,'start']};
+  st.forEach((r,i)=>{const L=lab[r.key]||[10,-10,'start'];
+    pts.push({x:r.p16.imp.m,xr:r.p16.imp.r,y:r.p16.cor.m,yr:r.p16.cor.r,col:stepCol(r.key),big:r.key==='rcp_halves_unet',
+      lab:`${i+1}. ${r.lab}`+(r.p16.n<3?` (n=${r.p16.n})`:''),dx:L[0],dy:L[1],anchor:L[2]});});
+  const P=k=>[S[k].p16.imp.m,S[k].p16.cor.m];
+  const ar=(a,b,c,d)=>[...P(a),...P(b),c,d];
+  put('figPath', scatter({title:`Imputation vs correction, eic_v1_2 · grey: ${DATA.fixes.length} single U-Net fixes without pairs`,
+    x0:0.34,x1:0.5,y0:0.42,y1:0.82,xt:[0.34,0.38,0.42,0.46,0.50],yt:[0.45,0.55,0.65,0.75],
+    xl:'imputation (higher is better)',yl:'correction, 16 regions',W:1160,H:560,
+    zone:{x:F16.imp.floor,y:F16.cor.floor,lab:'above every floor on both'},
+    vl:[{v:F16.imp.floor,d:'2 4',lab:'floor'},{v:F16.imp.best,d:'7 4',lab:'best base'}],
+    hl:[{v:F16.cor.floor,d:'2 4',lab:'floor'},{v:F16.cor.best,d:'7 4',lab:'best base'}],
+    arrows:[ar('eic_v1_2_rung2_base_heldout','eic_v1_2_rung3_base_heldout'),ar('eic_v1_2_rung3_base_heldout','eic_v1_2_rung4_base_heldout'),
+      ar('eic_v1_2_rung4_base_heldout','rcp_halves_unet','var(--recipe)'),ar('eic_v1_2_rung4_base_heldout','rcp_headskip_off_unet','var(--diag)',1),
+      ...(S.rcp_halves_mix_avg_unet?[ar('rcp_halves_unet','rcp_halves_mix_avg_unet','var(--addon)',1)]:[]),
+      ...(S.rcp_halves_mix_pearson_unet?[ar('rcp_halves_unet','rcp_halves_mix_pearson_unet','var(--addon)',1)]:[]),
+      ...(S.rcp_halves_headskip_off_unet?[ar('rcp_halves_unet','rcp_halves_headskip_off_unet','var(--diag)',1)]:[])],
+    pts}));
+  const u=S.eic_v1_2_rung4_base_heldout.p16, h=S.rcp_halves_unet.p16;
+  put('tPathC0',f3(u.cor.m)); put('tPathC1',f3(h.cor.m)); put('tPathI1',f3(h.imp.m)); put('tPathIF',f3(F16.imp.floor));
+})();
+
+/* ---------- slide 10: strips ---------- */
+(function(){
+  const SHORT={'eic_v1_2_rung2_base_heldout':'Conv AE','eic_v1_2_rung3_base_heldout':'Conv + attn','eic_v1_2_rung4_base_heldout':'U-Net',
+    'rcp_headskip_off_unet':'no head skip','rcp_halves_unet':'+ pairs','rcp_halves_mix_pearson_unet':'pairs + Pearson','rcp_halves_mix_avg_unet':'pairs + average','rcp_halves_headskip_off_unet':'pairs, no head skip'};
+  const st=DATA.steps, W=1160, H=640, L=120, R=30, rows=[['imp','imputation'],['cor','correction (16 regions; ◇ = 256)'],['cal','calibration']];
+  const n=st.length, bw=(W-L-R)/n, rh=(H-90)/3;
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+  rows.forEach(([k,name],ri)=>{
+    const vals=st.flatMap(r=>[r.p16[k].m-r.p16[k].r/2,r.p16[k].m+r.p16[k].r/2,...(k==='cor'&&r.p256?[r.p256.cor.m]:[])]).concat([F16[k].floor,F16[k].best]);
+    const lo=Math.min(...vals)-0.01, hi=Math.max(...vals)+0.01, top=20+ri*rh, bot=top+rh-30;
+    const Y=v=>bot-(v-lo)/(hi-lo)*(bot-top);
+    s+=`<text x="${L-14}" y="${(top+bot)/2}" text-anchor="end" class="axlbl">${name.split(' (')[0]}</text>`;
+    if(k==='cor') s+=`<text x="${L-14}" y="${(top+bot)/2+20}" text-anchor="end" class="cap">16 regions; ◇ 256</text>`;
+    s+=`<line x1="${L}" y1="${Y(F16[k].best)}" x2="${W-R}" y2="${Y(F16[k].best)}" stroke="#9a9a9a" stroke-dasharray="7 4"/>`;
+    s+=`<line x1="${L}" y1="${Y(F16[k].floor)}" x2="${W-R}" y2="${Y(F16[k].floor)}" stroke="#9a9a9a" stroke-dasharray="2 4"/>`;
+    s+=`<line x1="${L}" y1="${bot+8}" x2="${W-R}" y2="${bot+8}" class="sep"/>`;
+    st.forEach((r,i)=>{const x=L+bw*(i+.5), c=stepCol(r.key), v=r.p16[k];
+      s+=`<line x1="${x}" y1="${Y(v.m-v.r/2)}" x2="${x}" y2="${Y(v.m+v.r/2)}" stroke="${c}" stroke-width="2.4"/>`;
+      s+=`<circle cx="${x}" cy="${Y(v.m)}" r="7" fill="${c}" stroke="#fff" stroke-width="1.5"/>`;
+      s+=`<text x="${x+11}" y="${Y(v.m)+5}" class="cap">${v.m.toFixed(3)}</text>`;
+      if(k==='cor'&&r.p256) s+=`<path d="M${x-22},${Y(r.p256.cor.m)} l6,-6 l6,6 l-6,6 z" fill="#fff" stroke="${c}" stroke-width="2"/>`;
+      if(ri===2){s+=`<text x="${x}" y="${H-30}" text-anchor="middle" class="tick">${i+1}</text>`;
+        s+=`<text x="${x}" y="${H-8}" text-anchor="middle" class="cap" fill="${c}">${SHORT[r.key]||''}</text>`;}});
+  });
+  put('figStrips', s+`</svg>`);
+})();
+
+/* ---------- slide 11: 256-region confirmation ---------- */
+(function(){
+  const C=DATA.confirm.filter(r=>r.p256), W=1160, rowH=58, H=110+C.length*rowH, L=330, gap=24;
+  const names={'rcp_halves_unet':'U-Net + read-disjoint pairs','rcp_halves_headskip_film_unet':'+ conditioned head skip',
+    'rcp_halves_mix_pearson_unet':'+ Pearson-residual input','rcp_halves_mix_avg_unet':'+ average-signal input','rcp_halves_headskip_off_unet':'+ head skip removed',
+    'rcp_halves_mix_avg_pearson_unet':'+ average + Pearson (full combination)','rcp_combo_w2x_unet':'full combination, 2× windows (final)'};
+  const ks=[['imp','imputation'],['cor','correction'],['cal','calibration']], pw=(W-L-140-2*gap)/3;
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+  ks.forEach(([k,nm],j)=>{
+    const vals=C.flatMap(r=>[r.p256[k].m-r.p256[k].r/2,r.p256[k].m+r.p256[k].r/2]).concat([F256[k].floor,F256[k].best]);
+    const lo=Math.min(...vals)-0.01,hi=Math.max(...vals)+0.01,x0=L+j*(pw+gap),X=v=>x0+(v-lo)/(hi-lo)*pw;
+    s+=`<text x="${x0+pw/2}" y="34" text-anchor="middle" class="xlab">${nm}</text>`;
+    s+=`<line x1="${X(F256[k].best)}" y1="50" x2="${X(F256[k].best)}" y2="${H-40}" stroke="#9a9a9a" stroke-dasharray="7 4"/>`;
+    s+=`<line x1="${X(F256[k].floor)}" y1="50" x2="${X(F256[k].floor)}" y2="${H-40}" stroke="#9a9a9a" stroke-dasharray="2 4"/>`;
+    s+=`<text x="${X(F256[k].best)}" y="${H-20}" text-anchor="middle" class="cap">best ${F256[k].best.toFixed(3)}</text>`;
+    s+=`<text x="${X(F256[k].floor)}" y="${H-4}" text-anchor="middle" class="cap">floor ${F256[k].floor.toFixed(3)}</text>`;
+    C.forEach((r,i)=>{const y=74+i*rowH, v=r.p256[k], c=stepCol(r.key);
+      s+=`<line x1="${X(v.m-v.r/2)}" y1="${y}" x2="${X(v.m+v.r/2)}" y2="${y}" stroke="${c}" stroke-width="3"/><circle cx="${X(v.m)}" cy="${y}" r="7" fill="${c}"/>`;
+      s+=`<text x="${X(v.m)}" y="${y-12}" text-anchor="middle" class="cap">${v.m.toFixed(3)}</text>`;});
+  });
+  C.forEach((r,i)=>{const y=74+i*rowH;
+    s+=`<text x="${L-20}" y="${y+6}" text-anchor="end" class="axlbl" fill="${stepCol(r.key)}">${names[r.key]}${r.p256.n<3?` (n=${r.p256.n})`:''}</text>`;
+    const cl=r.class_p256||'–', cc=cl==='PASS'?'var(--recipe)':cl==='NEAR'?'var(--addon)':'var(--base)';
+    s+=`<rect x="${W-110}" y="${y-15}" width="80" height="28" rx="5" fill="${cc}"/><text x="${W-70}" y="${y+5}" text-anchor="middle" class="val" fill="#fff">${cl}</text>`;});
+  put('figConfirm', s+`</svg>`);
+  const pass=C.filter(r=>r.class_p256==='PASS').sort((a,b)=>b.score_p256-a.score_p256);
+  put('tConfH', pass.length?`At 256 regions, ${['no','one','two','three','four','five','six'][pass.length]||pass.length} combinations PASS; the final architecture is the full combination at 2× windows`:'At 256 regions no arm passes yet');
+  const h=C.find(r=>r.key==='rcp_halves_unet');
+  let li=pass.filter(r=>['rcp_combo_w2x_unet','rcp_halves_mix_avg_pearson_unet'].includes(r.key)).map((r,i)=>`<li><b>${names[r.key]}</b>${r.key==='rcp_combo_w2x_unet'?' (the final architecture, PI 2026-11-23)':''}${r.p256.n<3?` (only ${r.p256.n} seeds scored)`:''}: correction ${f3(r.p256.cor.m)} beyond the best base ${f3(F256.cor.best)}; imputation ${f3(r.p256.imp.m)}, calibration ${f3(r.p256.cal.m)} above their floors.</li>`).join('');
+  li+=`<li>The plain pairs U-Net (calibration ${f3(h.p256.cal.m)}) is not enough alone: its correction gain (${sg(h.p256.cor.m-F256.cor.best)}) is inside its own seed range (${f3(h.p256.cor.r)}).</li>`;
+  put('tConfList', li);
+})();
+
+/* ---------- slide 11b: what each component adds ---------- */
+(function(){
+  const C=DATA.comp, ks=[['imp','imputation'],['cor','correction'],['cal','calibration']];
+  const prev={'rcp_halves_mix_avg_unet':'rcp_halves_unet','rcp_halves_mix_pearson_unet':'rcp_halves_unet'};
+  const by=Object.fromEntries(C.map(r=>[r.key,r]));
+  const W=1160,L=360,T=56,rh=62,H=T+C.length*rh+10,cw=(W-L-20)/3;
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+  ks.forEach(([k,nm],j)=>{s+=`<text x="${L+cw*(j+.5)}" y="30" text-anchor="middle" class="xlab">${nm}</text>`;
+    s+=`<text x="${L+cw*(j+.5)}" y="50" text-anchor="middle" class="cap">best base ${F256[k].best.toFixed(3)}</text>`;});
+  C.forEach((r,i)=>{const y=T+i*rh, p=i===0?null:(by[prev[r.key]]||C[i-1]), fin=r.key==='rcp_combo_w2x_unet';
+    s+=`<rect x="10" y="${y+4}" width="${W-20}" height="${rh-8}" rx="6" fill="${fin?'rgba(0,0,0,.05)':'none'}"/>`;
+    s+=`<text x="${L-20}" y="${y+rh/2+6}" text-anchor="end" class="axlbl" fill="${stepCol(r.key)}">${r.lab}</text>`;
+    ks.forEach(([k],j)=>{const v=r[k], x=L+cw*(j+.5), ok=v.m>=F256[k].best;
+      s+=`<text x="${x-14}" y="${y+rh/2+6}" text-anchor="end" class="val" fill="${ok?'var(--recipe)':'currentColor'}">${v.m.toFixed(3)}</text>`;
+      s+=`<text x="${x-8}" y="${y+rh/2+6}" class="cap">(${v.r.toFixed(3)})</text>`;
+      if(p){const d=v.m-p[k].m; s+=`<text x="${x+80}" y="${y+rh/2+6}" class="cap" fill="${d>=0?'var(--recipe)':'var(--base)'}">${sg(d)}</text>`;}});
+  });
+  put('figComp', s+`</svg>`);
+})();
+
+/* ---------- slide 11c: recalibration ---------- */
+(function(){
+  const a=DATA.recal['rcp_halves_mix_pearson_unet__ens3'], b=DATA.recal['rcp_halves_mix_pearson_unet__ens3_recal'];
+  const ks=[['imp','imputation'],['cor','correction'],['cal','calibration']];
+  const W=1160,H=360,L=80,gw=(W-L-40)/3,bw=90,Y=v=>H-70-v*(H-130);
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+  ks.forEach(([k,nm],j)=>{const x0=L+j*gw+gw/2;
+    s+=`<text x="${x0}" y="${H-14}" text-anchor="middle" class="xlab">${nm}</text>`;
+    [[a,'before','var(--addon)',-1],[b,'after','var(--recipe)',1]].forEach(([r,lab,c,sd])=>{const x=x0+sd*(bw/2+6)-bw/2, v=r[k].m;
+      s+=`<rect x="${x}" y="${Y(v)}" width="${bw}" height="${Y(0)-Y(v)}" fill="${c}" rx="3"/>`;
+      s+=`<text x="${x+bw/2}" y="${Y(v)-8}" text-anchor="middle" class="val">${v.toFixed(3)}</text>`;
+      s+=`<text x="${x+bw/2}" y="${Y(0)+18}" text-anchor="middle" class="cap">${lab}</text>`;});
+    s+=`<line x1="${x0-bw-20}" y1="${Y(F256[k].best)}" x2="${x0+bw+20}" y2="${Y(F256[k].best)}" stroke="#9a9a9a" stroke-dasharray="7 4"/>`;});
+  put('figRecal', s+`</svg>`);
+  put('tRecalLi', `<li>Calibration rose from ${f3(a.cal.m)} to ${f3(b.cal.m)} (${sg(b.cal.m-a.cal.m)}); imputation (${f3(b.imp.m)}) and correction (${f3(b.cor.m)}) did not change, as the mean prediction is untouched.</li>`+
+    `<li>Measured on the pairs + Pearson model as a three-seed ensemble. The final architecture's factors are not fitted yet; dashed line: best base model.</li>`);
+})();
+
+/* ---------- slide 12: copy path ---------- */
+(function(){
+  const cp=DATA.copy, rows=[['eic_v1_2_rung2_base_heldout','Conv autoencoder',COL.base],['eic_v1_2_rung3_base_heldout','Conv + attention',COL.base],
+    ['eic_v1_2_rung4_base_heldout','U-Net',COL.unet],['rcp_headskip_off_unet','U-Net, head skip removed',COL.diag],
+    ['rcp_headskip_film_unet','U-Net, conditioned head skip',COL.fix],['rcp_halves_unet','U-Net + pairs',COL.recipe],
+    ['rcp_halves_mix_pearson_unet','+ Pearson-residual input',COL.addon],['rcp_halves_mix_avg_unet','+ average-signal input',COL.addon],
+    ['rcp_halves_headskip_off_unet','+ head skip removed',COL.diag]].filter(r=>cp[r[0]]);
+  const W=640,L=250,R=70,T=60,rh=40,H=T+rows.length*rh+40,X=v=>L+Math.max(v,0)/0.75*(W-L-R);
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet"><text x="12" y="30" class="ptitle">(a) Copy gain, eic_v1_2</text>`;
+  rows.forEach(([k,l,c],i)=>{const y=T+i*rh, v=cp[k];
+    s+=`<text x="${L-10}" y="${y+18}" text-anchor="end" class="axlbl">${l}</text><rect x="${L}" y="${y+4}" width="${X(v.m)-L}" height="${rh-14}" fill="${c}" rx="2"/>`;
+    s+=`<text x="${X(v.m)+6}" y="${y+20}" class="cap">${v.m.toFixed(2)} (${v.r.toFixed(2)})${v.n<3?` n=${v.n}`:''}</text>`;});
+  s+=`<text x="${L}" y="${H-10}" class="cap">mean (seed range); 0 = no copying</text>`;
+  put('figCopy', s+`</svg>`);
+  const hp=S.rcp_halves_unet&&S.rcp_halves_unet.p16, ho=S.rcp_halves_headskip_off_unet&&S.rcp_halves_headskip_off_unet.p16;
+  if(ho&&cp.rcp_halves_headskip_off_unet){
+    put('tCopyH', `With pairs, removing the head skip ends the copy (${cp.rcp_halves_headskip_off_unet.m.toFixed(2)}) and keeps imputation; correction falls, inside the pairs model's seed range`);
+    put('tCopyLi', `<li>Pairs, head skip removed vs pairs: copy gain ${cp.rcp_halves_headskip_off_unet.m.toFixed(3)} vs ${cp.rcp_halves_unet.m.toFixed(3)}; imputation ${f3(ho.imp.m)} vs ${f3(hp.imp.m)}; correction ${f3(ho.cor.m)} vs ${f3(hp.cor.m)} (pairs seed range ${f3(hp.cor.r)}), on 16 regions.</li>`);
+  } else { put('tCopyH','The head skip carries the copy; pairs cut it, but not to the conv models\' level'); put('tCopyLi',''); }
+  const sk=DATA.skip;
+  put('figSkip', scatter({title:'(b) Which skips carry the copy, eic_v1', sub:'correction on 16 regions; bars = seed range',
+    x0:0.36,x1:0.46,y0:0.45,y1:0.8,xt:[0.36,0.38,0.40,0.42,0.44,0.46],yt:[0.5,0.6,0.7,0.8],xl:'imputation',yl:'correction',W:640,H:520,
+    pts:sk.map((r,i)=>({x:r.imp.m,xr:r.imp.r,y:r.cor.m,yr:r.cor.r,col:[COL.unet,COL.base,COL.diag][i],lab:r.lab,dx:i===2?12:-14,anchor:i===2?'start':'end',dy:i===0?-14:i===1?28:-12}))}));
+})();
+
+/* ---------- slide 13: negatives ---------- */
+(function(){
+  const fx=[...DATA.fixes].sort((a,b)=>b.cor.m-a.cor.m), u=S.eic_v1_2_rung4_base_heldout.p16;
+  const W=1160,L=470,R=40,T=50,rh=31,H=T+fx.length*rh+50,lo=0.38,hi=0.74,X=v=>L+(v-lo)/(hi-lo)*(W-L-R);
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+  for(const t of [0.4,0.5,0.6,0.7]) s+=`<line x1="${X(t)}" y1="${T-10}" x2="${X(t)}" y2="${H-40}" class="grid"/><text x="${X(t)}" y="${H-18}" text-anchor="middle" class="tick">${t.toFixed(1)}</text>`;
+  [[F16.cor.floor,'floor','2 4'],[u.cor.m,'U-Net base','7 4']].forEach(([v,l,d])=>s+=`<line x1="${X(v)}" y1="${T-20}" x2="${X(v)}" y2="${H-40}" stroke="#777" stroke-dasharray="${d}"/><text x="${X(v)}" y="${T-24}" text-anchor="middle" class="cap">${l} ${v.toFixed(3)}</text>`);
+  fx.forEach((r,i)=>{const y=T+i*rh+12, c=r.cor.m>=F16.cor.floor?'var(--diag)':'var(--unet)';
+    s+=`<text x="${L-14}" y="${y+5}" text-anchor="end" class="axlbl" style="font-size:15px">${r.lab}</text>`;
+    s+=`<line x1="${X(r.cor.m-r.cor.r/2)}" y1="${y}" x2="${X(r.cor.m+r.cor.r/2)}" y2="${y}" stroke="${c}" stroke-width="2.4"/><circle cx="${X(r.cor.m)}" cy="${y}" r="6" fill="${c}"/>`;});
+  s+=`<text x="${(L+W-R)/2}" y="${H-0}" text-anchor="middle" class="cap">correction on 16 regions, mean and seed range, U-Net without read-disjoint pairs</text>`;
+  put('figNeg', s+`</svg>`);
+  const below=fx.filter(r=>r.cor.m<F16.cor.floor).length;
+  put('tNegH', `${below} of ${fx.length} single U-Net fixes without pairs left correction below the floor`);
+})();
+
+/* ---------- slide 14: EIC ---------- */
+(function(){
+  if(!DATA.eic){ put('tEicH','EIC validation scoring is still running'); put('eicBody','<p class="sub">The U-Net predictions on the validation tracks are complete; the scoring job had not finished when this deck was built. The retrained Avocado entry did not start in time.</p>'); return; }
+  const rows=DATA.eic, ents=[...new Set(rows.map(r=>r.entry))];
+  const meas=[...new Set(rows.map(r=>r.measure))];
+  const un=ents.find(e=>/UNet|U-Net|miniCANDI/i.test(e))||ents[0], av=ents.find(e=>e!==un);
+  const get=(e,m)=>rows.find(r=>r.entry===e&&r.measure===m);
+  let t='<table class="dtable tight"><thead><tr><th>measure</th><th>miniCANDI U-Net</th><th>Average (training cells)</th><th>tracks where U-Net is better</th></tr></thead><tbody>';
+  let wins=0; const lost=[];
+  meas.forEach(m=>{const a=get(un,m), b=get(av,m); if(!a||!b) return;
+    const bk=Object.keys(a).find(k=>k==='beats:'+av); const w=bk?+a[bk]:null; const n=+a.n_tracks;
+    const hb=/corr|spear/.test(m), better=hb?(+a.mean>+b.mean):(+a.mean<+b.mean); if(better) wins++; else lost.push(m);
+    t+=`<tr><td>${m}${hb?' (higher better)':''}</td><td class="num" style="${better?'color:var(--recipe);font-weight:700':''}">${(+a.mean).toPrecision(4)}</td><td class="num">${(+b.mean).toPrecision(4)}</td><td class="num">${w==null?'–':w+' of '+n}</td></tr>`;});
+  put('eicBody', t+'</tbody></table><p class="small">EIC challenge measures on its validation tracks (all 23 chromosomes); MSE measures lower is better. The entry is the base U-Net (trained before the read-disjoint pairs), one seed. Retrained Avocado did not start in time.</p>');
+  put('tEicH', `On the EIC validation tracks the base U-Net beats the Average baseline on ${wins} of ${meas.length} mean measures; it loses on ${lost.map(m=>({gwcorr:'genome-wide Pearson correlation (gwcorr)',mseenh:'enhancer MSE (mseenh)'})[m]||m).join(' and ')}`);
+})();
+
+/* ---------- slide 16: 160k windows ---------- */
+(function(){
+  const w=DATA.win, W=960,H=360,L=230,R=40,T=60, bh=26;
+  const X=v=>L+v/1.0*(W-L-R-200);
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet"><text x="12" y="30" class="ptitle">80,000 vs 160,000 training windows, eic_v1, before pairs</text>`;
+  w.forEach((r,i)=>{const y=T+i*95;
+    s+=`<text x="${L-12}" y="${y+30}" text-anchor="end" class="axlbl">${r.lab}</text>`;
+    [['imputation',r.imp1,r.imp2],['correction',r.cor1,r.cor2]].forEach(([nm,a,b],j)=>{const yy=y+j*(bh*1.6);
+      s+=`<rect x="${L}" y="${yy}" width="${X(a)-L}" height="${bh*0.7}" fill="var(--base)"/><rect x="${L}" y="${yy+bh*0.7}" width="${X(b)-L}" height="${bh*0.7}" fill="${b<a?'var(--recipe)':'var(--diag)'}"/>`;
+      s+=`<text x="${Math.max(X(a),X(b))+8}" y="${yy+bh}" class="cap">${nm} ${a.toFixed(3)} → ${b.toFixed(3)}</text>`;});});
+  s+=`<text x="${L}" y="${H-8}" class="cap">grey = 80,000 windows; colored = 160,000 (red = lower); older correction scale</text>`;
+  put('figWin', s+`</svg>`);
+  const u=w.find(r=>r.lab==='U-Net');
+  if(u){put('tWinC1',u.cor1.toFixed(3)); put('tWinC2',u.cor2.toFixed(3)); put('tWinI1',u.imp1.toFixed(3)); put('tWinI2',u.imp2.toFixed(3));}
+})();
+</script>
+<script>
+/* Schematics. Every typed number here is a design constant read from the code
+   (tools/minicandi/rungs/unet.py, contract.py, dataset.py), listed in the head comment. */
+const AH=`<defs><marker id="sa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#6b6b6b"/></marker>
+<marker id="sr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#b5462e"/></marker>
+<marker id="st" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2f7f86"/></marker></defs>`;
+const box=(x,y,w,h,cls,t,sub,shape)=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="9" class="${cls}"/>`
+  +`<text x="${x+w/2}" y="${y+(sub||shape?24:h/2+6)}" text-anchor="middle" class="schb">${t}</text>`
+  +(sub?`<text x="${x+w/2}" y="${y+46}" text-anchor="middle" class="schs">${sub}</text>`:'')
+  +(shape?`<text x="${x+w/2}" y="${y+h-12}" text-anchor="middle" class="shape">${shape}</text>`:'');
+const ar=(x1,y1,x2,y2,c='flow',m='sa')=>`<path d="M${x1},${y1} L${x2},${y2}" class="${c}" marker-end="url(#${m})"/>`;
+const pa=(d,c='flow',m='sa')=>`<path d="${d}" class="${c}" marker-end="url(#${m})"/>`;
+
+/* slide 2: three objectives */
+put('figGoals', `<svg viewBox="0 0 1160 380" preserveAspectRatio="xMidYMid meet">${AH}
+  ${box(20,40,350,300,'box','Imputation','predict a track the cell never had')}
+  ${box(405,40,350,300,'box','Correction','map a track to another protocol')}
+  ${box(790,40,350,300,'box','Calibration','know how wrong you might be')}
+  <g transform="translate(50,130)">${[0,1,2,3].map(i=>`<rect x="0" y="${i*34}" width="200" height="22" rx="3" fill="${i==2?'#fff':'#d9d6cf'}" stroke="${i==2?'#b5462e':'none'}" stroke-dasharray="${i==2?'5 4':''}"/>`).join('')}
+    <text x="215" y="${2*34+16}" class="sch" fill="#b5462e">? hidden</text><text x="0" y="170" class="schs">other assays of the same cell</text></g>
+  <g transform="translate(430,140)"><path d="M0,40 ${Array.from({length:20},(_,i)=>`L${i*10},${40-((i*37)%23)}`).join(' ')}" fill="none" stroke="#8d8f98" stroke-width="2"/>
+    <text x="0" y="75" class="schs">observed: lab A, 36 bp, shallow</text>${ar(210,30,250,30)}
+    <path d="M260,40 ${Array.from({length:8},(_,i)=>`L${260+i*10},${40-((i*29)%19)*1.1}`).join(' ')}" fill="none" stroke="#b5462e" stroke-width="2.4"/>
+    <text x="230" y="75" class="schs">wanted: reference view C′</text></g>
+  <g transform="translate(820,120)"><path d="M10,140 C70,140 90,20 140,20 C190,20 210,140 270,140" fill="#f3e6e1" stroke="#b5462e" stroke-width="2"/>
+    <line x1="160" y1="10" x2="160" y2="145" stroke="#1a1a1a" stroke-width="2.4"/><text x="166" y="30" class="schs">observed</text>
+    <text x="0" y="175" class="schs">predicted NB(n̂, p̂) per bin; its spread</text><text x="0" y="195" class="schs">should match the real errors</text></g>
+</svg>`);
+
+/* slide 4: the training window */
+(function(){
+  const W=1160,H=520, x0=60,y0=70, cw=16, rows=12, cols=34;
+  const kind=r=>[1,4,9].includes(r)?'imp':[0,3,6,8,11].includes(r)?'cor':'same';
+  const col={imp:'#fff',cor:'#cfe3e3',same:'#e9e6df'};
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${AH}
+  <text x="${x0}" y="40" class="schb">one window: 36 tracks × 1,024 bins of 25 bp (25.6 kb) of one cell type</text>`;
+  for(let r=0;r<rows;r++){const k=kind(r);
+    for(let c=0;c<cols;c++){const hid=k==='same'&&((c*7+r*3)%4===0);
+      s+=`<rect x="${x0+c*cw}" y="${y0+r*30}" width="${cw-2}" height="22" fill="${hid?'#fff':col[k]}" stroke="${k==='imp'||hid?'#b5462e':'none'}" stroke-dasharray="${k==='imp'?'4 3':''}"/>`;}}
+  s+=`<text x="${x0}" y="${y0+rows*30+22}" class="schs">tracks (rows) · bins (columns); 12 of 36 rows drawn</text>`;
+  const bx=660;
+  s+=box(bx,60,470,120,'boxa','Imputation target','tracks hidden whole: each with probability p,','p ~ U(0.2, 0.8) per window');
+  s+=`<text x="${bx+235}" y="146" text-anchor="middle" class="schs">loss on every bin of the hidden track</text>`;
+  s+=box(bx,200,470,120,'boxt','Correction target (visible tracks, half)','source view → another view of the same experiment','source = pr1 reads, target = pr2 reads');
+  s+=box(bx,340,470,120,'boxg','Same-view target (visible tracks, half)','reconstruct own view; 25% of bins hidden','loss on the hidden bins only');
+  s+=`<text x="${bx}" y="490" class="schs">visible tracks: correction or same-view, probability 0.5 each</text>`;
+  put('figWindow', s+`</svg>`);
+})();
+
+/* slide 5: architecture */
+put('figArch', `<svg viewBox="0 0 1160 570" preserveAspectRatio="xMidYMid meet">${AH}
+  ${box(10,40,160,80,'boxg','counts y','raw reads per bin','B×1024×36')}
+  ${box(10,140,160,80,'boxg','covariates C','11 per track','B×36×11')}
+  ${box(10,240,160,80,'boxg','mask','hidden / missing','B×1024×36')}
+  ${box(10,400,160,80,'boxg','DNA','25.6 kb sequence','one-hot')}
+  ${box(205,120,190,120,'boxa','per-track encoder','normalize, MLP, FiLM(C)','B×1024×36×9')}
+  ${ar(170,80,203,150)}${ar(170,180,203,180)}${ar(170,280,203,210)}
+  ${box(420,150,120,60,'box','stem')}
+  <text x="480" y="232" text-anchor="middle" class="schs">1×1 conv, mixes tracks</text>
+  ${ar(395,180,418,180)}
+  ${box(575,60,170,110,'box','count tower','4 levels, ↓2 each','1024 → 64')}
+  ${box(575,400,170,90,'box','DNA tower','conv down to','64 positions')}
+  ${ar(540,175,573,140)}${ar(170,440,573,445)}
+  ${box(780,215,160,120,'boxa','bottleneck','fuse + 2 transformer','64 positions')}
+  ${ar(745,150,778,240)}${ar(745,430,778,320)}
+  ${box(970,40,150,110,'box','decoder','4 levels ↑ to 1024','skips × FiLM(C′)')}
+  ${ar(940,240,968,130)}
+  ${pa('M745,95 L966,95','flowt','st')}
+  ${pa('M745,470 L956,470 L956,140 L966,140','flowt','st')}
+  <text x="855" y="88" text-anchor="middle" class="schs" fill="#2f7f86">level skips (count, DNA)</text>
+  ${box(970,190,150,100,'boxa','per-track head','track embedding','FiLM(C′)/track')}
+  ${ar(1045,150,1045,188)}
+  ${box(970,330,150,90,'box','NB head','n̂, p̂ per bin','B×1024×36×2')}
+  ${ar(1045,290,1045,328)}
+  ${box(970,455,150,70,'boxg','covariates C′','wanted output view')}
+  ${ar(1045,455,1045,422)}
+  ${pa('M300,120 L300,16 L1145,16 L1145,240 L1123,240','flowr','sr')}
+  <text x="640" y="34" text-anchor="middle" class="sch" fill="#b5462e">head skip: each track's own 9 input features, straight to its head</text>
+  <text x="10" y="552" class="schs">B = 8 windows per batch · about 1 M parameters · 80,000 training windows · C′ also sets the depth added back to the NB mean</text>
+</svg>`);
+
+/* slide 6: per-track encoder */
+(function(){
+  const st=[['1','depth removal','x = log2((y + 1) / s), s = 2^(log2 depth − 24)','B×1024×36×1'],
+    ['2','shared MLP + assay embedding','Linear(1→8), GELU, Linear(8→8), + embedding[assay]','B×1024×36×8'],
+    ['3','FiLM by input covariates','11 covariates → 32-d embedding → γ, β; h = γh + β','B×1024×36×8'],
+    ['4','mask tokens','hidden bin → learned token; missing track → another','B×1024×36×8'],
+    ['5','(average-input arm) prior','h += Linear(log(1 + average signal))','B×1024×36×8'],
+    ['6','visibility flag','append 1 if a real count is visible, else 0','B×1024×36×9']];
+  let s=`<svg viewBox="0 0 1160 560" preserveAspectRatio="xMidYMid meet">${AH}
+    ${box(10,10,250,70,'boxg','input count y','one bin of one track','B×1024×36')}`;
+  st.forEach((r,i)=>{const y=100+i*72;
+    s+=`<circle cx="40" cy="${y+28}" r="18" fill="${i===4?'#c98a1c':'#b5462e'}"/><text x="40" y="${y+34}" text-anchor="middle" class="val" fill="#fff">${r[0]}</text>`;
+    s+=`<rect x="70" y="${y}" width="780" height="58" rx="8" class="box"/>`;
+    s+=`<text x="88" y="${y+24}" class="schb">${r[1]}</text><text x="88" y="${y+46}" class="schs">${r[2]}</text>`;
+    s+=`<text x="1000" y="${y+34}" text-anchor="middle" class="shape">${r[3]}</text>`;
+    s+=ar(850,y+29,915,y+29);});
+  s+=`<text x="870" y="40" class="schs">shape after the step</text>`;
+  s+=`<text x="70" y="548" class="schs">then: reshape to B × 324 × 1024 (36 tracks × 9 features) → stem, the first layer that mixes tracks · the 9-feature tensor also feeds the head skip</text>`;
+  put('figEnc', s+`</svg>`);
+})();
+
+/* slide 7: pairs */
+put('figPairs', `<svg viewBox="0 0 1160 430" preserveAspectRatio="xMidYMid meet">${AH}
+  <text x="20" y="34" class="ptitle">(a) Before: two views of the same reads</text>
+  <text x="600" y="34" class="ptitle">(b) Read-disjoint pairs</text>
+  <line x1="580" y1="20" x2="580" y2="420" class="sep"/>
+  ${box(30,60,240,70,'boxg','all reads of one experiment')}
+  ${box(30,190,240,70,'box','input: view A','e.g. crop to 36 bp')}
+  ${box(300,190,240,70,'box','target: view B','e.g. reference processing')}
+  ${ar(150,130,150,188)}${ar(170,130,400,188)}
+  <text x="40" y="300" class="sch" fill="#b5462e">same reads → same sampling noise</text>
+  <text x="40" y="326" class="schs">copying the input already predicts most of the target,</text>
+  <text x="40" y="348" class="schs">so a model with a cheap identity path (the head skip) learns to copy</text>
+  ${box(610,60,240,70,'boxg','all reads of one experiment')}
+  ${box(610,170,110,60,'boxt','pr1','half')}${box(740,170,110,60,'boxt','pr2','other half')}
+  ${ar(690,130,665,168)}${ar(770,130,795,168)}
+  ${box(610,270,240,70,'box','input: pr1, view A','half depth in C')}
+  ${box(880,270,250,70,'box','target: pr2, view B','half depth in C′')}
+  ${ar(665,230,690,268)}${ar(795,230,990,268)}
+  <text x="610" y="380" class="sch" fill="#2f7f86">independent noise → copying no longer predicts the target</text>
+  <text x="610" y="404" class="schs">applies to correction and same-view pairs; imputation pairs unchanged</text>
+</svg>`);
+</script>
+<script>
+/* navigation and speaker notes — as in assets/deck.html */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length; let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){
+  cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+}
+const next=()=>show(cur+1), prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;
+document.getElementById('prev').onclick=prev;
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='Home'){show(0);}
+  else if(e.key==='End'){show(tot-1);}
+  else if(e.key==='n'||e.key==='N'){e.preventDefault();document.body.classList.toggle('shownotes');}
+  else if(e.key==='Escape'){document.body.classList.remove('shownotes');}
+});
+show((parseInt(location.hash.slice(1))||1)-1);
+</script>
+</body>
+</html>

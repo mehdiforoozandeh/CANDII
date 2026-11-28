@@ -1,0 +1,250 @@
+# Log
+
+Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
+- 2026-11-21T11:04Z longrun initialized (protected=cruxvault/INSTRUCTIONS/miniCANDI_closeout, job_prefix=rcp_)
+- 2026-11-21T11:06Z coverage check: added R20-R22, D17; fixed R19 citation
+- 2026-11-21T11:16Z PI tiers: P0+P1 only; priority 1 recipe, 2 control; R12 -> P1 with three analyses; R17 -> P3; IHEC out
+- 2026-11-21T11:18Z R19 verified: 9/9 eic_v1_2 base runs p256_sv SCORED on Fir; Fir and Nibi tunnels up; 1 job of mine on Fir queue
+- 2026-11-21T11:19Z planner spawned (fable) -> .orchestrate/plan.md; commit policy granted by PI ('start it and keep working'); reading time default 10 min
+- 2026-11-21T11:37Z plan returned: 26 chunks, 8 waves; 256-region scoring measured 87.6/92.9/114.1 CPU-h per run-seed (2.7x older docs); upper bound ~12,000 CPU-h, 6,000 checkpoint in wave 5; D21-D25 recorded; cold review (opus) running; open PI asks: training-only Avocado retrain (~86 GPU-h), blind-row build (t184, ~22,700 CPU-h)
+- 2026-11-21T11:43Z cold review: arithmetic sound (cum ~11,991 CPU-h), 4 factual fixes, coverage gaps, waits-in-chunk; sent once to planner with 15 amendments; D26-D27
+- 2026-11-21T11:48Z wave 1 launched: C1-C10, 10 opus builders, base 57f3c9e8
+- 2026-11-21T12:02Z ADDITION D29 read-disjoint training pairs: displaces nothing; ~150 CPU-h screen (9 run-seeds); serves R1 R3 R4; PI informed at next report
+- 2026-11-21T12:09Z Fir: rcp_tests 4863258; U-Net probe train 4863259, predict 4863260-63, metrics 4863264 (kit RCP1)
+- 2026-11-21T16:14Z G0: probe terms reproduce base seed0 exactly; scoring cost pass (22.0 vs 38.1); train cost fail (17.13 vs 14.12) -> continue, screen budget x1.50 = 5,209 CPU-h; rcp_tests 4863258 TIMEOUT, resubmitted 4888524 on RCP2 (12 h); screen submitted on RCP2 before test verdict (probe.md)
+- 2026-11-21T16:17Z Screen submitted on RCP2: s1a 396 jobs, s1b 270, native 30, CNN seed 6, ctleval 4889711; 704 rcp_ jobs queued; ids in run_state/jobs_C12-14.tsv
+- 2026-11-21T18:30Z PI: deadline within 24 h (by 2026-11-22 18:30 UTC, D31); yes to curve-NaN fix (D32), yes Avocado retrain (D33), no blind (D34)
+- 2026-11-21T18:32Z cancel-own.sh cancel on fir: 4889385 4889386 4889387 4889388 4889389 4889390 4889398 4889399 4889400 4889401 4889402 4889457
+- 2026-11-21T18:45Z Curve NaN fixed e8dec6a8; cancelled curve U-Net jobs, dirs to _nan_RCP2; Avocado chain to 4906099; 8 base ctl evals 4906119-26; 27 ctl-arm run-seeds + chained ctl evals; EIC val base U-Net s0 4906465, Average 4906466
+- 2026-11-21T18:47Z RCP3 pushed (e8dec6a8). Curve U-Net reruns trains 4908746-4908912; s1c CNN 17 seeds submitted on RCP3 (102 jobs); CNN cost seed done at 10,000 steps in ~87 min
+- 2026-11-21T21:55Z screen Pareto: winner halves U-Net (imp 0.4263, corr 0.7535, cal 0.6872 vs floors 0.4072/0.6491/0.4883); tests 69 env failures; 7 train timeouts; EIC jobs failed (avocado import, frag_len, KIT) -> C40 builder; kit RCP4 pushing
+- 2026-11-21T22:07Z glossary: reply sent with unregistered terms: d20, gloss, glossary
+- 2026-11-21T22:12Z RCP5 pushed; eic_val 4945457, avocado chain to 4945495, average 4943718
+- 2026-11-21T22:12Z glossary: reply sent with unregistered terms: glossary
+- 2026-11-22T01:10Z Fir fault 23:25-23:56 UTC: every job starting then failed in 1 s (signal 53), 251 jobs incl. all RCP4 submissions and EIC jobs. Test job 5021994 ok at 01:20 UTC. Resubmitted all on RCP5 (~2,130 CPU-h projected); eic_val 5022609, avocado chain 5022622-27, average 5022628
+- 2026-11-22T02:41Z Failure watch ended 02:30 UTC: 117 COMPLETED, 0 FAILED, 1 NODE_FAIL (eicval 5022609_7); resubmitted index 7. Avocado bin array 5022623 done; train/predict/bigwig pending.
+- 2026-11-22T05:25Z 05:25 UTC Pareto: p16 PASS = halves_unet, halves_mix_avg, halves_mix_pearson (2 seeds), halves_headskip_film. p256: halves_unet eligible but NEAR (cor z 2.84, not beyond own range 0.0707); no p256 winner. Submitted p256 confirm for 3 combos (D39).
+- 2026-11-22T05:26Z glossary: reply sent with unregistered terms: glossary
+- 2026-11-22T08:06Z 08:10 UTC: combo p256 0/8 scored (mix_avg predicting, pearson and headskip_film in metrics); no failures since 21:30. EIC: Average entry scored (runs_rcp/eic_val/average/scores.tsv, 495 rows); U-Net eic_val 24/25 done (index 22 running 4h48); Avocado train 5022624 pending 6.7 h on Priority (full H100, 12 h) -> Avocado likely misses 18:30 deadline.
+- 2026-11-22T08:07Z glossary: reply sent with unregistered terms: glossary, nvidia
+- 2026-11-22T08:23Z glossary: reply sent with unregistered terms: glossary, pr1, pr2, pseudoreplicates
+- 2026-11-22T08:30Z glossary: reply sent with unregistered terms: glossary
+- 2026-11-22T08:33Z glossary: reply sent with unregistered terms: flagged, glossary
+- 2026-11-22T10:26Z glossary: reply sent with unregistered terms: gloss, glossary, pcr, pseudoreplicates, schematic, trimmed
+- 2026-11-22T11:49Z glossary: reply sent with unregistered terms: flagged, glossary
+- 2026-11-22T12:02Z glossary: reply sent with unregistered terms: glossary
+- 2026-11-22T12:04Z evolution figure (ladder eic_v1 + recipe path eic_v1_2) committed: cruxvault/INSTRUCTIONS/t370_recipe/evolution/evolution.png
+- 2026-11-22T12:04Z glossary: reply sent with unregistered terms: flagged, glossary
+- 2026-11-22T12:16Z DECISIONS compaction, superseded row moved here: | D13 | Compute cap 6,000 allocated CPU-h for the run. | alacarte | PI | | superseded by D20 |
+- 2026-11-22T12:16Z DECISIONS compaction, superseded row moved here: | D14 | Horizon 10 days from 2026-11-21; first measured screen result by 2026-11-24. | alacarte: "10 days, first in 3" | PI | | superseded by D31 |
+- 2026-11-22T12:16Z DECISIONS compaction, superseded row moved here: | D27 | Date stop: on 2026-11-29 the recipe freezes on what is confirmed at 256 regions by then. | cold plan review | agent | | superseded by D31 |
+- 2026-11-22T12:19Z glossary: reply sent with unregistered terms: glossary
+- 2026-11-22T12:29Z 256-region selection: PASS halves+mix_pearson (n=2, score -0.158), halves+mix_avg (n=3, -0.243); halves NEAR. D43.
+- 2026-11-22T15:28Z D43 final: Pearson seed 0 scored at 256 regions; recipe = halves + Pearson-residual input U-Net (PASS, score -0.132, 3 seeds). EIC table landed: base U-Net beats Average on 7/9 means. Deck rebuilt (slides 11, 14), verify+lint green, republished v2.
+- 2026-11-22T16:21Z D41 result (p16, 3 seeds): halves_headskip_off copy gain 0.013 (pairs 0.205), imp 0.4295 vs 0.4263, cor 0.6985 vs 0.7535 (inside pairs range 0.058), NEAR. Deck slides 12, 15, 17 updated; republished v3.
+- 2026-11-22T19:55Z moved from DECISIONS (history): | D36 | Test verdict 4888524: 69 of 7,244 failed, none in a recipe switch (cluster-environment tests: ssh, rsync, flock, laptop goldens); miniCANDI files pass locally (115). Screen stands. | runs_rcp/logs/rcp_tests_4888524.out | agent | | in force |
+- 2026-11-22T19:55Z moved from DECISIONS (history): | D37 | Seven run-seeds hit the 3 h training limit; rerun on RCP4 with TRAIN_TIME_OVERRIDE=06:00:00. Nibi is allowed for training-only overflow (PI 2026-11-21); kit RCP3 carries the curve reruns and CNN seeds. | sacct, 2026-11-21 | agent, PI | | in force |
+- 2026-11-22T19:55Z moved from DECISIONS (history): | D38 | After the Fir fault (2026-11-21 23:25-23:56 UTC, 251 jobs killed at start), resubmit everything on kit RCP5 with a 6 h training limit (8 h for CNN and average arms); RCP5 supersedes RCP4; Average entry runs with the KIT=RCP2 export workaround. | agent, 2026-11-22 01:25 UTC | agent | | in force |
+- 2026-11-22T19:55Z moved from DECISIONS (history): | D34 | No blind-row build and no blind pass this run. | PI chat 2026-11-21: "iii) no" | PI | confirms D26 | in force |
+- 2026-11-22T19:55Z After talk (PI): submitted D44 full combo, D45 scaling (RCP7), D46 headskip_off p256, D48 control_eval x27; D47 ensemble builder spawned; watch byejoej5t.
+- 2026-11-22T21:13Z glossary: reply sent with unregistered terms: flagged, spearman
+- 2026-11-23T07:35Z glossary: reply sent with unregistered terms: narrower, predictor
+- 2026-11-22T20:18Z glossary: reply sent with unregistered terms: crps_depth, flagged
+- 2026-11-22T20:25Z glossary: reply sent with unregistered terms: flagged, predictor's
+- 2026-11-22T20:33Z glossary: reply sent with unregistered terms: flagged
+- 2026-11-22T21:01Z G5 read written (results/control/control_read.md): works on U-Net (held-out skill 0.131, signal 0.948 vs avg 0.932); weight 4 adopted by rule (conv models), no U-Net gain. D48 premise wrong: 34 of 36 control evals existed; my jobs filled gaps.
+- 2026-11-22T21:06Z moved from DECISIONS (history): | D32 | Fix the curve pre/post layer NaN on the U-Net and rerun its 6 U-Net run-seeds (~235 CPU-h). | PI chat 2026-11-21: "i) yes" | PI | | in force |
+- 2026-11-22T21:06Z moved from DECISIONS (history): | D31 | Deadline: deliver the recipe within 24 h of 2026-11-21 18:30 UTC, i.e. by 2026-11-22 18:30 UTC. Supersedes the horizon of D14 and the freeze of D27. | PI chat 2026-11-21: "my deadline is not 2026-11-24. it's within 24 hours" | PI | supersedes D14, D27 | in force |
+- 2026-11-22T21:34Z D47 slip: chunk/t370-ens merged (new files only; 26 pre-existing auto_proxy test failures, same on base). Per-assay dispersion factors fit on 32 calibration regions outside both eval sets. Probe: seed0+recal uncertainty 0.610->0.749 (seed range 0.561-0.705), imp/cor unchanged. Jobs 5275119-5275198 -> runs_rcp_ens/. ~539 CPU-h total.
+- 2026-11-23T05:02Z moved from DECISIONS (history): | D33 | Run the training-only Avocado retrain (~86 GPU-h) for the EIC comparison. | PI chat 2026-11-21: "ii) yes" | PI | | in force |
+- 2026-11-23T05:02Z moved from DECISIONS (history): | D35 | Screen winner (p16, 2026-11-21 21:50 UTC): halves U-Net. Next: 256-region confirm of it and the eligible arms; family combo = halves + one U-Net switch each (mix_avg, mix_pearson, mix_fixdepth, headskip_film), 3 seeds. | runs_rcp/_sel/pareto_2130.json (Fir) | agent, under PI "keep working" and D29 | | in force |
+- 2026-11-23T05:02Z moved from DECISIONS (history): | D39 | 256-region result: halves U-Net is eligible on all three floors but NEAR (correction diff 0.0549 < its own seed range 0.0707). The three combo arms that PASS at 16 regions (halves+mix_avg, halves+mix_pearson, halves+headskip_film) go to 256-region confirmation (72 jobs, 913 CPU-h projected). | agent, 2026-11-22 05:35 UTC; runs_rcp/_sel/pareto_0525_*.json | agent | | in force |
+- 2026-11-23T05:02Z moved from DECISIONS (history): | D40 | No arm for read-disjoint pairs + level skips conditioned on C and C'. | PI 2026-11-22 ~08:50 UTC: "no don't need to do that." | PI | | in force |
+- 2026-11-23T05:02Z moved from DECISIONS (history): | D44 | Train arm halves_mix_avg_pearson (pairs + average-signal + Pearson-residual input), U-Net, 3 seeds, p16 then p256; kit RCP7, jobs 5264674/80/87. | PI 2026-11-22 after the talk: "we have not trained ... disjoint pairs + average input and all other winning additions ... we should consider doing that" | PI | | in force |
+- 2026-11-23T05:02Z moved from DECISIONS (history): | D45 | D42 submitted on the D43 recipe (pairs + Pearson): scale_p2x (2e6 params), scale_p4x (4e6), scale_w2x (160k windows), 3 seeds, p16 first; train 5264693-5264764. | D42; PI "by the end of this session we wanna have the architecture" | PI | | in force |
+- 2026-11-23T05:02Z moved from DECISIONS (history): | D46 | 256-region confirm of halves_headskip_off, 3 seeds (342 CPU-h projected, not 40 as first quoted). | PI 2026-11-22: "ii) yes" | PI | | in force |
+- 2026-11-23T05:02Z moved from DECISIONS (history): | D49 | Arms on the D43 recipe: rec_ctlw4 (deployable), rec_ctl_holdout and rec_ctl_holdout_w4 (held-out control eval), 3 seeds, p16; kit RCP8; control_eval chained (5278907-15). | D48, R8 | agent, under D18 | | in force |
+- 2026-11-23T05:02Z p16 read: combo PASS 0.249, w2x 0.417, headskip_off p256 NEAR; control on recipe w1 0.131 vs w4 0.125; ensemble recal cal 0.625->0.767; submitted combo p256 5356043-70 and combo_w2x 5356071/78/95 on RCP9 (D50-D52)
+- 2026-11-23T05:03Z glossary: reply sent with unregistered terms: flagged
+- 2026-11-23T07:47Z PI 'iii) yes': deleting Fir /scratch/mforooz/onion/pred_store/runs_rcp_ens (ensemble per-seed stores; scores kept under runs_rcp_ens). Peer session 'pval eic comparison' relayed PI approval to start t184 blind-row build; t184 says the PI runs the submit command; asked PI here.
+- 2026-11-23T08:08Z glossary: reply sent with unregistered terms: inline
+- 2026-11-23T07:47Z glossary: reply sent with unregistered terms: flagged
+- 2026-11-23T07:53Z t184 (PI 'Yes, start it'): NOT submitted. Nibi dry run 72 rows OK, but Nibi /scratch quota 1024 GiB with 691 used (diskusage_report) vs ~1.2 TB staging + 1.4 TB BAMs. Fir port refused: pipelines, refs, build lists missing on Fir (closeout_D4b/FIR_PORT.md). Asked PI.
+- 2026-11-23T07:54Z glossary: reply sent with unregistered terms: flagged
+- 2026-11-23T07:56Z Nibi scratch: quota -s shows soft 1024G, hard 20480G (peer fact verified); t184 blocker withdrawn; re-asked PI with cost 22,700 CPU-h
+- 2026-11-23T08:01Z t184 batch 1 SUBMITTED on Nibi 2026-11-23T08:01Z (PI yes, under 20 TiB hard quota): 72 rows; stage 28629674/76/99, 28629702/04/10/12/16/18; build 28629675/77, 28629700/03/05/11/13/17/19; signal 28629678 (ChIP/ATAC), 28629701 (DNase); record /project/def-maxwl/mforooz/ONION/logs/closeout_d4_submit_20261123T080124Z.log; never resubmit (script skips queued rows)
+- 2026-11-23T08:15Z PI: 'yes rescore' -> asked deviance session (local_2eb1d23b) to rescore rcp_halves_mix_avg_pearson_unet and rcp_combo_w2x_unet at p16_dev and p256_dev, 3 seeds. PI asked: compare all variants of the design evolution and pick the best combination; explain Pearson residual.
+- 2026-11-23T08:18Z deviance session: combo p16_dev jobs 5381558-5381572 (metrics 5381562/67/72) on DEV1; p256_dev chained; combo_w2x on DEV2 auto after DONE; ids in runs_rcp/DEV_SUBMITTED_{p16,p256}.txt
+- 2026-11-23T08:22Z foreman session local_b5c55e32 set up; status sent; PI-facing items go there
+- 2026-11-23T08:24Z PI via foreman on PR 65: 'after the 256 region. but right now there are merge conflicts that need solving.' Deviance session resolving; freeze PR 65 files on our branch until told.
+- 2026-11-23T08:26Z glossary: reply sent with unregistered terms: repository
+- 2026-11-23T08:44Z foreman overnight rules: compute by workers' judgment (report job ids to foreman); foreman merges PR 65 when green (pull before next push); no stopping for questions; final architecture pick, main merges, public items wait for PI
+- 2026-11-23T09:31Z pval session: post-hoc spread of overlap counts recovers 3/12/3% of pileup gain; read starts 92-95%. Priced a read-start pilot to foreman: res_dataset.py on the 512-region point-rule store, pairs+Pearson (average input refused), ~200-300 CPU-h, half a day; store location on Fir not found at depth 3. PI decides in the morning; not started.
+- 2026-11-23T09:32Z point-rule store located: Nibi /project/def-maxwl/mforooz/ONION/CO-A7/res_store (6.8G), tables CO-A7/tables/eic_res_v1, evalset CO-A7/eval/eic_res_v1; 768 regions (512 train, 256 eval); 412 base-view measurements, 43 with pr halves, 73 pairs; no counterfactual views. Sent to foreman.
+- 2026-11-23T10:03Z deviance p16, full combination: s1 skill 0.510 (floor 0.517), corr gap 0.952, R 1.074; s2 skill 0.575 (floor 0.516), gap 0.952, R 1.034; recipe pairs+Pearson skill 0.248. s0 metrics 5381562 running.
+- 2026-11-23T20:11Z glossary: blocked reply with github, mergeable
+- 2026-11-23T22:25Z glossary: blocked reply with watcher
+- 2026-11-24T01:25Z glossary: blocked reply with scheduler
+- 2026-11-24T01:25Z glossary: admitted 'scheduler' (English word, Zipf 2.6)
+- 2026-11-23T10:19Z deviance p16 full combination 3/3: mean skill 0.543 (range 0.510-0.575, floor 0.516), gap 0.951, R 1.059; recipe 0.248. p256 deviance jobs 5395488-5395517 (DEV2).
+- 2026-11-23T11:05Z combo_w2x p16 (2 seeds): imp 0.501±0.007, cor 0.811±0.007, cal 0.703±0.070 (= combination within range). p256 confirm submitted: s1 5402493-5402501, s2 5402502-5402512; s0 chained by laptop watch bxaewuxu1 after its p16 (5356076).
+- 2026-11-23T12:21Z D53: full combination p256 3 seeds PASS imp 0.500 cor 0.818 cal 0.685; refresh_data.sh must run under zsh
+- 2026-11-23T12:45Z combo_w2x seed0 p256 submitted: predict 5413521-5413529, metrics 5413530 (114 CPU-h)
+- 2026-11-23T12:49Z deviance p16 combo_w2x seed0 (from deviance session): skill 0.537 floor 0.515, gap 0.947, R 1.062; full combination 3-seed: 0.543, 0.951, 1.059
+- 2026-11-23T13:20Z deviance p16 combo_w2x seed2: skill 0.590 floor 0.514, gap 0.952, R 1.060; seed1 queued
+- 2026-11-23T15:20Z deviance p16 combo_w2x 3 seeds: skill 0.562 (0.537-0.590), gap 0.950, R 1.067 vs full combination 0.543 (0.510-0.575), 0.951, 1.059: within seed range. Deviance p256 combo_w2x on Fir 5443555-5443583 (deviance session's jobs)
+- 2026-11-23T16:36Z deviance p256 full combination seed0: skill 0.543, gap 0.9494, R 1.068. Deviance session: p16/p256 share the 256 imputation regions, so skill and R are identical; only the gap moves (<0.001). Matches our pareto tables (imp, cal equal at p16/p256).
+- 2026-11-23T18:06Z deviance p256 full combination seed2: skill 0.575, gap 0.9525, R 1.034; seed1 running
+- 2026-11-23T18:22Z deviance p256 full combination 3 seeds: skill 0.543 (0.510-0.575), gap 0.951, R 1.058; pairs+Pearson recipe at 256: 0.264, 0.948, 1.035
+- 2026-11-23T19:57Z Priced read-start full combination for PI via foreman: recount ~180 CPU-h + 0.5-1 d nearline recall (752 GiB tagAligns in onion-work tars; rate from job 27662614: 9.2 CPU-h/117 GiB); train 163 CPU-h measured; score p16 127 + p256 795 + dev p256 869 CPU-h measured; total 1,350-2,250 CPU-h, 3-4 d wall + 1-2 d code (stranded channel). Conversion to overlap truth feasible as a predict->metrics transform. Not started.
+- 2026-11-23T19:58Z glossary: blocked reply with dataset, gib, nbs, nearline
+- 2026-11-23T19:58Z glossary: admitted 'dataset' (field: MeSH)
+- 2026-11-23T19:58Z glossary: blocked reply with binomial
+- 2026-11-23T19:58Z glossary: admitted 'negative binomial' (field: Europe PMC, 441 titles)
+- 2026-11-23T19:58Z glossary: blocked reply with poisson
+- 2026-11-24T01:05Z D54: combo_w2x p256 3 seeds PASS imp 0.503 cor 0.818 cal 0.717 score 0.451; equal to full combination within range
+- 2026-11-24T01:05Z moved to history (superseded by D53/D54): | D50 | p16 read (2026-11-23 05:00 UTC, 3 seeds): full combination pairs + average + Pearson PASS, score 0.249 (imp 0.500, cor 0.816, cal 0.685); scale_w2x highest score 0.417 (imp 0.462, cor 0.785, cal 0.712); scale_p2x/p4x PASS with no gain beyond range, not confirmed. Head skip off at 256 regions NEAR (cor 0.674 vs 0.774): head skip stays. Submitted (kit RCP9): combination p256 5356043-70; fina
+- 2026-11-24T01:06Z glossary: blocked reply with d54, tightest
+- 2026-11-24T01:18Z moved to history (folded into D54/D55): | D53 | p256 confirm (3 seeds): full combination pairs + average + Pearson PASS, imp 0.500 (range 0.035), cor 0.818 (0.014), cal 0.685 (0.092), score 0.249; beats pairs + Pearson (cor 0.774, range 0.031) beyond range. Bars: imp 0.445, cor 0.675, cal 0.646. Full combination is the confirmed lead; combo_w2x p256 still running. Final pick waits for Mehdi. | presentations/t370-minicandi-recipe/data/pa
+- 2026-11-24T01:18Z D55: PI picked the final architecture (combo_w2x + control w1 + recalibration); f143 on q75; GOALS R1-R4, R8 done
+- 2026-11-24T01:22Z Blind build batch 1 FAILED at staging: all 72 stage tasks (9 arrays 28629674..718) exit 1 in ~37 s with HTTP 405 Not Allowed from the ENCODE portal search endpoint (fastq_uniform.portal_files); builds CANCELLED by dependency; signal passes 28629678/701 PENDING on never-satisfied deps. Experiment-object endpoint returns 200; the search endpoint still refuses the stage code's request on 2026-11-24. ~0 CPU-h used. Not resubmitted; probing UA variants was refused by the safety classifier (looks like evasion).
+- 2026-11-24T01:22Z glossary: blocked reply with d55, encode, fastq, ledger, login, lookup, r1, r4, r8
+- 2026-11-24T01:23Z glossary: blocked reply with genomics
+- 2026-11-24T01:23Z glossary: blocked reply with encode's
+- 2026-11-24T01:38Z Blind build: cancelled stuck signal passes 28629678, 28629701 (51 pending tasks, PI via foreman). Diagnosis: ENCODE returns 405 to the stage code's browser-style User-Agent 'Mozilla/5.0 (generic-client)' on both search and experiment pages; Python's default client header gets 200 on both. Changing the header was refused twice by the safety classifier (reads as getting past a block). Not resubmitted; needs Mehdi in this session.
+- 2026-11-24T01:38Z glossary: blocked reply with checksums, encode, endpoint, ids, lookup
+- 2026-11-24T01:38Z glossary: blocked reply with fingerprints
+- 2026-11-24T01:38Z glossary: blocked reply with md5
+- 2026-11-24T01:38Z glossary: admitted 'MD5' (English word, Zipf 2.3)
+- 2026-11-24T01:43Z glossary: blocked reply with ids
+- 2026-11-24T01:52Z t184 batch 1 RESUBMITTED on Nibi 2026-11-24T01:52Z (PI 'Yes, change the header'), kits KF4H/KX4H (honest USER_AGENT, repo 8e9c4af2; submitter 55cdf946): 72 rows; stage 28737208/10/14/44/46/63/66/68/74; build 28737209/11/15/45/47/64/67/69/75; signal 28737212, 28737239; record /project/def-maxwl/mforooz/ONION/logs/closeout_d4_submit_20261124T015213Z.log. Header test on rows 496/501/530 matched the catalog (6/6, 8/8, 4/4 files, MD5 equal). Never resubmit.
+- 2026-11-24T01:53Z glossary: blocked reply with atac, cdf, encode, fastq, kf4h, kx4h
+- 2026-11-24T01:53Z glossary: blocked reply with chromatin
+- 2026-11-24T03:53Z t184 batch 1: no stage task started by 03:48 UTC; all 9 stage arrays PD (ReqNodeNotAvail, Reserved for maintenance). No HTTP errors. Waiting; nothing resubmitted.
+- 2026-11-24T03:57Z t184 batch 1: at the foreman's request, lowered the 9 stage arrays' TimeLimit 12:00:00 -> 02:00:00 (scontrol update; longest of 624 completed stage tasks was 21.5 min) so they fit before NibiMaintenance (12:50 UTC). 10 stage tasks running at 03:57 UTC. Build and signal jobs unchanged.
+- 2026-11-24T03:57Z glossary: blocked reply with ids
+- 2026-11-24T06:24Z t184 batch 1: all 72 stage tasks COMPLETED by 06:24 UTC (longest 22 min 16 s). Build arrays pending (limits 3 d and 7 d), cannot start before NibiMaintenance ends; signal passes wait on dependency.
+- 2026-11-24T06:24Z glossary: blocked reply with timeouts, watcher
+- 2026-11-24T06:28Z Fir path for t184 batch 1 assessed (foreman relayed Mehdi 'faster on Fir?'): not started. Fir lacks Caper venv, chip/atac sifs+refs (Nibi 003_pipeline 696G), dnase pipeline (15G), catalog, build lists, KF4H/KX4H; submitter Nibi-only; Fir /scratch 963K/1000K files; fairshare 0.14. Nibi starts by itself ~2026-11-25 21:00 UTC.
+- 2026-11-24T06:28Z glossary: blocked reply with atac, blocker, caper, cleanup, encode
+- 2026-11-24T06:28Z glossary: admitted 'Caper' (field: MeSH)
+- 2026-11-24T06:28Z glossary: admitted 'ATAC-seq' (field: MeSH)
+- 2026-11-24T06:37Z EIC dry run (foreman, Mehdi approved): final model seed0 on 7 validation cells matching blind assays (C02,C03,C10,C16,C20,C24,C45; 8 targets; est 65-90 CPU-h). chr21 probe Fir 5672498 (cell index 4). Recal factors not fitted for combo_w2x. Write-up: deck v5 + recipe_components.md, commit 022ef001.
+- 2026-11-24T06:38Z glossary: blocked reply with uncalibrated
+- 2026-11-24T06:38Z glossary: blocked reply with dispersion
+- 2026-11-24T06:39Z Recal fit for combo_w2x: Fir 5673958 (est 0.8 CPU-h) -> runs_rcp_ens/rcp_combo_w2x_unet/recal/factors.json. EIC val 7 cells seed0: Fir array 5674003 (indices 0,1,4,7,10,12,21) -> runs_rcp/eic_val/rcp_combo_w2x_unet_s0. Probe 5672498 cancelled. Never resubmit.
+- 2026-11-24T06:39Z glossary: blocked reply with dispersion, pval
+- 2026-11-24T08:25Z Deviance session: rescoring done at 256 regions, 3 seeds. combo_w2x skill 0.562 [0.053], gap 0.951 [0.004], R 1.067 [0.018]; avg+pearson 0.543/0.951/1.058; pearson 0.264/0.949/1.034. Final has the highest deviance skill; R furthest from 1 (no recalibration in that scoring). Source: deviance doc on exp/t371 commit 78c729f7.
+- 2026-11-24T08:25Z glossary: blocked reply with dispersion, furthest
+- 2026-11-24T11:04Z Recal fit 5673958 COMPLETED (23:33). Val array 5674003: 6/7 tasks COMPLETED (~2h10m each); task 12 (C24, 2 targets) RUNNING, C24M25 on chr3 at 11:04 UTC, ETA ~12:30 UTC. Sent pval session the out dir runs_rcp/eic_val/rcp_combo_w2x_unet_s0 (7/8 ready, uncalibrated); copied foreman.
+- 2026-11-24T11:04Z glossary: blocked reply with c24m25, chromosome, pval, recalibrated, uncalibrated
+- 2026-11-24T11:04Z glossary: admitted 'chromosome' (field: MeSH)
+- 2026-11-24T11:05Z glossary: rejected 'C24M25' (coinage: 0 titles in Europe PMC and OpenAlex)
+- 2026-11-24T11:07Z pval session scoring 7 val tracks: Fir 5706614-20, collect 5706621 -> /scratch/mforooz/eicx/val/rcp_combo_w2x_unet_s0_raw. Queued Fir 5706801 (afterok 5674003): apply_recal_val.py writes runs_rcp/eic_val/rcp_combo_w2x_unet_s0_recal/counts (n/c, seed0 factors). Flag: seed0 factors hit the grid edge (log2 -4.5) for DNase-seq, H2AFZ, H2AK5ac, H3K27ac, H3K4ac, H4K8ac and +4.125 H4K91ac; 7/22 at bound. Val targets: DNase at bound; H3K27me3 +1.688, H3K4me3 +2.5, H3K79me2 -0.188 inside.
+- 2026-11-24T11:07Z glossary: blocked reply with pval, recalibrated, refit
+- 2026-11-24T11:07Z pval session: recal changes only n, so mean mode scores raw = recal; it will score both copies in MODE=expectation (uses n) as a matched pair, plus raw in mean mode; DNase flagged.
+- 2026-11-24T08:25Z glossary: blocked reply with furthest
+- 2026-11-24T18:02Z Val array 5674003 all 7 tasks COMPLETED; task 12 took 5:00:43. Cost: 8 CPU x 18.04 h summed elapsed = 144.3 CPU-h (priced 65-90). Fit 5673958: 4 CPU x 0.39 h = 1.6 CPU-h (CPU job, not GPU). Recal copy 5706801 TIMEOUT on node fc30557, 0 CPU-s, no output (node fault, batch step cancelled 0:9). Rerun as 5733577 with --exclude=fc30557. Told pval session all 8 raw targets ready.
+- 2026-11-24T18:02Z glossary: blocked reply with froze, gpu, reran
+- 2026-11-24T18:04Z Recal copy 5733577 COMPLETED (44 s, node fc30612): runs_rcp/eic_val/rcp_combo_w2x_unet_s0_recal/counts, 8 files, 0 clipped; factors H3K4me3 5.657, H3K27me3 3.221, H3K79me2 0.878, DNase 0.0442 (edge). Path sent to pval session.
+- 2026-11-24T18:04Z pval session scoring expectation mode: recal 5734182-90 (collect 5734191), raw 5733710-5733849 (collect 5733850). Comparison to follow.
+- 2026-11-24T18:22Z PI (via foreman): yes refit wider grid; get cost first for all remaining val experiments. ensemble_store fit grid extends past ends (cap 16), commit ff29a883; kit RCP10 on Fir. Fit 5744206 -> recal_wide; copy 5744207 -> eic_val/rcp_combo_w2x_unet_s0_recal_wide (final). Cost estimate sent: 34 remaining val targets in 18 cells, ~610 CPU-h (590-680), 0 GPU-h, ~10-11 h wall; not started.
+- 2026-11-24T18:23Z glossary: blocked reply with entrants, gpu, rcp10
+- 2026-11-24T18:44Z PI (via foreman): run all remaining val. Array 5761693 (18 cells, idx 2,3,5,6,8,9,11,13-20,22,23,24, %12, 14 h, RCP9) -> eic_val/rcp_combo_w2x_unet_s0; copy 5761694 (afterok 5761693, 5744207) -> _s0_recal_wide/counts, full 22-assay map. Stop if cost > 700 CPU-h. Refit 5744206 (17 min): 6 assays (DNase, H2AFZ, H2AK5ac, H3K27ac, H3K4ac, H4K8ac) ran to the cap log2 -16.5 (Poisson limit); PIT nearly flat (DNase 0.0581 -> 0.0579); NB cannot go below Poisson spread. H4K91ac now interior +4.125. Others unchanged.
+- 2026-11-24T18:44Z glossary: blocked reply with h2afz, narrowest, poisson
+- 2026-11-24T18:45Z glossary: blocked reply with histone
+- 2026-11-24T18:45Z glossary: admitted 'histone' (field: MeSH)
+- 2026-11-24T18:45Z glossary: blocked reply with chromatin
+- 2026-11-24T18:45Z glossary: admitted 'chromatin' (field: MeSH)
+- 2026-11-24T18:47Z Copy 5744207 COMPLETED: _s0_recal_wide/counts, 8 files; DNase factor 2^-16.5, n clipped at 65504 in 108,172,384 bins (effectively Poisson). Path sent to pval session as the final recal copy; told it of array 5761693 and copy 5761694.
+- 2026-11-24T18:47Z glossary: blocked reply with poisson
+- 2026-11-24T19:29Z PI (via foreman): recalibration study: report today's fit and a deployment fit; calibration for imputed assays (no recal / shipped factor) and observed assays before/after; paper note + vault. 256-region stores of combo_w2x were deleted; re-predict = 257.7 CPU-h per seed (predict 5413521-29). Sent plan: Option A ~10 CPU-h (PIT deviation on fresh 32 held-out regions, per-seed factors, pair fit, 2-fold cell cross-fit) vs Option B scorer at 256 (~350 seed0 / ~860 three seeds). Waiting for approval; nothing submitted.
+- 2026-11-24T19:30Z Foreman: Option A approved (within PI 150 CPU-h cap); B not started. pval: wide-grid recal worsens EIC val expected-p MSE on 7/8 tracks (C02M22 9.5->16.1, C20M22 3.2->6.5), rank worse on 4, better on 0; tables cruxvault/results/t390/val_recal_pair_s0 on PR 64. Builder worktree chunk/recalstudy.
+- 2026-11-24T19:30Z glossary: blocked reply with calibrate, repository
+- 2026-11-24T19:41Z Recal study code merged 0f46ca5f (builder chunk/recalstudy; 26 tests). Kit RCP11 (RCP10 + recal_study.py + recal_study.sh). Fir: forward fit 5813694 (regions seed 370) -> forward score 5813695 (seed 371) -> analyze 5813697. Out runs_rcp_ens/rcp_combo_w2x_unet/recal_study.
+- 2026-11-24T20:24Z PI (via foreman): Option B (256-region rescore) no for now; decide after the small test. Send A results with a recommendation on B.
+- 2026-11-24T22:48Z Recal study forward fit 5813694 TIMEOUT at 3 h (483/1523 items, ~21 s/item, 3 models on 4 CPU); 5813695/5813697 cancelled by dependency. Resubmitted (resume skips stored items): fit 5871741 (10 h), score 5871742 (13 h, in parallel; fit/calibration_evalset.json already exists), analyze 5871743 afterok both. Worst case ~104 CPU-h incl. 12 spent, under the 150 cap. fc30372 added to exclude list.
+- 2026-11-25T01:17Z Foreman flagged 5761693 tasks 19,20,22-24 stuck on JobArrayTaskLimit with only 3 running; reset ArrayTaskThrottle 13->12, reason now Priority. Avocado 5022624-27 kept (R9/D10); pending on GPU fair-share, ReqNodeList null.
+- 2026-11-25T01:17Z glossary: blocked reply with avocado, d10, gpu, h100, ledger, r9, throttle
+- 2026-11-25T01:17Z glossary: admitted 'throttle' (English word, Zipf 3.5)
+- 2026-11-25T01:21Z Foreman deadline: results by 2026-11-25 20:00 UTC (PI meeting 22:00). 5761693 tasks 8/11/14 paused on Fir ~18:15-01:15 UTC (RunTime froze at 6:32), resumed. 23 new complete counts sent to pval session; C17M32/C23M26/C27M26 partial. apply_recal_val.py now takes RECAL_SRC and skips existing outputs (backup .bak1); early copy 5944027 on 23 files via early_src symlinks. 5761694 will copy the rest.
+- 2026-11-25T01:21Z glossary: blocked reply with avocado, elapsed, froze, pval, recalibrated
+- 2026-11-25T01:21Z glossary: admitted 'recalibrated' (English word, Zipf 2.1)
+- 2026-11-25T01:21Z glossary: admitted 'elapsed' (English word, Zipf 3.0)
+- 2026-11-25T01:21Z glossary: blocked reply with dispersion
+- 2026-11-25T01:21Z pval session: 22 new val tracks scored (Fir 5942490-5942550, collect 5942551); C25M26 unscored (no val covariate row); recal_wide copies not scored beyond first 8 (mean unchanged); its watcher scores the last 11 until 19:15 UTC, no handoff message needed.
+- 2026-11-25T01:21Z glossary: blocked reply with c25m26
+- 2026-11-25T01:26Z PI (via foreman): if Avocado 5022624-27 has not started on Fir when Nibi returns (~2026-11-25 21:00 UTC), cancel on Fir and submit the same chain on Nibi after checking Nibi is up and inputs exist (Fir inputs: /scratch/mforooz/onion/avocado_train_only/ws). If any starts on Fir first, leave it; no second copy. Report new ids to foreman.
+- 2026-11-25T01:26Z glossary: blocked reply with avocado, globus, ids
+- 2026-11-25T02:47Z Foreman: when recal study forwards 5871741/5871742 land, send pval session (local_0e44c034) the fit/score forward paths, item npz format (y [B]; n, mu [K,B] float32; meta json kind/key/cell/assay/target/source/regime) and per-item assay names, for its per-assay mean-shrink fit. Nothing else queued for it.
+- 2026-11-25T06:24Z 06:24 status to foreman. Study fit 5871741 done 05:25 (1523 items); score 5871742 at 1320/1523. Array 5761693: 15 done (8/11/14 done), 20/22 running, 23/24 pending; 508.8 CPU-h. Fit-pass path and item format sent to pval session.
+- 2026-11-25T06:25Z Foreman: pval session dropped the mean-shrink fit (little gain when fitted fairly; 20 M depth cap is its fix), no forward handoff needed. 5761693 rule: at 650 CPU-h report only, never cancel running tasks; let running+pending finish up to 700; if projection passes 700, report before any cancel.
+- 2026-11-25T06:25Z pval session: per-assay slope fit on recal_study fit items (mu row 0 = seed0, r 0.9986 to scored prediction) gave mean combined rank 5.31->4.97, still 5/11 on the val board; 20M ChIP depth cap won (3.70, 4/11) and is the carried fix. Table: cruxvault/results/t390/val_boards_side_by_side/BOARDS.md on implementation/t390-eic-pvalue-entry.
+- 2026-11-25T08:00Z PI (via foreman): build the 3 unbuilt val experiments C25M26, C34M02, C50M02 (~100 CPU-h, stop 130). Found: C34M02/C50M02 only .pooled.uniform.se rows, no evalset target; C25M26 evalset target is br1 (already predicted). Plan sent to foreman with a decision on target covariates (all 39 val predictions used the target row's own depth+QC); lambda questions to pval session. Prepared Fir runs_rcp/eic_val/val3/{evalset_val3.json, eic_val3.sh (EVALSET_OVERRIDE)}; nothing submitted.
+- 2026-11-25T08:00Z glossary: blocked reply with decodes, encode, metadata, stricter
+- 2026-11-25T08:00Z glossary: admitted 'metadata' (field: MeSH)
+- 2026-11-25T08:01Z pval session OK with val3 plan as is: falls back to pooled .se rows (cov_se.tsv), DNase needs counts only, ChIP lambda from observed control ENCSR720GSE + 20M cap on its side; keep counts/<track>.h5. Added val3/fraglen_val3.tsv = eic_v1_fraglen.tsv + ENCSR521AIV.pooled.uniform.se 227 bp (read-weighted replicate mean, matches pval default). Waiting on foreman covariate decision before submit.
+- 2026-11-25T08:04Z PI (via foreman): option (a), .se row covariates for the 3 val experiments. Confirmed from code: output covariates C' = 11 META_COLUMNS (tools/minicandi/contract.py:88); QC only on input under qc_on_input, and run.json of rcp_combo_w2x_unet/seed0 has qc_on_input false, so the model reads no QC. Submitted Fir: chr21 probe 6033929 (cell C50, 1 h), array 6033930 (C25,C34,C50; 8 h; afterok probe) -> runs_rcp/eic_val/val3/out, evalset_val3.json, fraglen_val3.tsv, KEEP_PRED_STORE=1. Stop at 130 CPU-h (watch at 110). Never resubmit.
+- 2026-11-25T08:05Z glossary: blocked reply with config, frip, nsc, rsc
+- 2026-11-25T08:06Z glossary: admitted 'FRiP' (field: OpenAlex, 51 titles)
+- 2026-11-25T08:06Z glossary: admitted 'NSC' (English word, Zipf 2.9)
+- 2026-11-25T08:06Z glossary: admitted 'RSC' (English word, Zipf 2.7)
+- 2026-11-25T08:06Z glossary: blocked reply with glosses, normalized
+- 2026-11-25T08:14Z PI (via foreman): (1) no peak shrink factor; add peak-coverage analysis (NB central 50/80/90/95% coverage by observed and predicted count quantile, above/below, per assay, before/after recal both fits) to the recal study, in its 150 CPU-h limit; builder chunk/peakcov (worktree .orchestrate-wt/CANDII/peakcov). (2) covariate-prompt test: tools/onion_eval/covariate_prompt.py (eaad044d, 5 tests), Fir 6034927 (RCP11 + script, 3 seeds, 8 targets, 32 held-out regions) -> runs_rcp_ens/rcp_combo_w2x_unet/covprompt. (3) neutral-prompt board: not now.
+- 2026-11-25T08:14Z glossary: blocked reply with antibody, deduplication, halved
+- 2026-11-25T08:14Z glossary: admitted 'deduplication' (English word, Zipf 1.7)
+- 2026-11-25T08:14Z glossary: blocked reply with pcr
+- 2026-11-25T08:14Z glossary: blocked reply with amplification
+- 2026-11-25T08:21Z Recal study score 5871742 done; analyze 5871743 OUT_OF_MEMORY at 32G (forwards 21G each on disk). Merged chunk/peakcov 45b85597 (coverage subcommand, --workers; analyze refactored into shared helpers, 14+5+17 tests pass) as 28114236, pushed, synced to RCP11. Resubmitted analyze 6035885 (240G, 4 CPU, 2 h); coverage 6035887 (64G, 4 workers, 3 h) -> recal_study/peak_coverage.{json,md}. Covariate prompt 6034927 running.
+- 2026-11-25T08:39Z Covariate prompt 6034927 DONE (19 min): depth +-1 8/8 (total 1.97-2.02 / 0.50-0.51), read length 5/8, dedup off -> n down (0.06-0.72) not total, MAPQ moves shape (r 0.87-0.96) not total, run type 2/8, other seen value within 20%, unknown does not lower n. Coverage 6035887 DONE: imputation 90% interval covers 0.963 all, 0.669 obs top1 (0.329 above), 0.891 pred top1; recal barely changes. Interim sent to foreman. Added calibrated reference condition (d9470510); rerun 6037609 -> peak_coverage_ref. Analyze 6035885 running.
+- 2026-11-25T08:39Z glossary: blocked reply with acetylation, antibody, caveat, halving, methylation, widen
+- 2026-11-25T08:39Z glossary: admitted 'acetylation' (field: MeSH)
+- 2026-11-25T08:39Z glossary: admitted 'methylation' (field: MeSH)
+- 2026-11-25T08:39Z glossary: blocked reply with acetyl, methyl
+- 2026-11-25T08:40Z Foreman: yes to calibrated reference; rerun covariate prompt on methylation marks. covariate_prompt --assays (pushed), Fir 6037859 -> covprompt/methyl (H3K4me1/2/3, H3K27me3, H3K36me3, H3K9me3, H3K79me2, H4K20me1). Send both before 19:00 UTC.
+- 2026-11-25T09:08Z Recal study DONE and sent to foreman with Option B = do not run. Analyze 6035885: imputation PIT none 0.0200, same_cells 0.0150, cross_cell 0.0185, shipped 0.0191 (seed range 0.005-0.009); pair none 0.0089, same 0.0066, cross 0.0078. Coverage ref 6037609: 90% obs top1 ours 0.669 vs calibrated draw 0.710; top0.1 0.576 vs 0.554; pred top1 0.891 vs 0.926 (below 6.2% vs 2.9%). Covariate methyl 6037859: depth 8/8, read length 7/8, dedup/MAPQ move n/shape not total, unknown values do not lower n. Study total 79.1 CPU-h. Reports in cruxvault/results/t370/recal_study/.
+- 2026-11-25T09:10Z glossary: blocked reply with avocado, calibrated, git
+- 2026-11-25T09:10Z glossary: blocked reply with repository's
+- 2026-11-25T09:13Z PI: no Option B, no second 32-region pass. Recal study closed: recalibration.md now has the covariate-prompt section (unknown-value gap); vault q78-q80 f145-f147 recorded. 5761693 at 577.4 CPU-h with tasks 22-24 running; val3 6033930 pending.
+- 2026-11-25T09:13Z glossary: blocked reply with antibody
+- 2026-11-25T09:50Z Pulled PR 66 merge b2bc153c (read-start, vault q81 f148-f157) into the worktree; no conflicts.
+- 2026-11-25T09:50Z glossary: blocked reply with fbda
+- 2026-11-25T09:50Z glossary: blocked reply with identifier
+- 2026-11-25T11:37Z 5761693: tasks 23 and 24 COMPLETED; task 22 still RUNNING (20681 s); 608.5 CPU-h; copy 5761694 PENDING (afterok). Rearmed watch b0tp7q8eb.
+- 2026-11-25T12:45Z val3 6033930 COMPLETED: C25M26, C34M02, C50M02 counts in runs_rcp/eic_val/val3/out/counts; 62.7 CPU-h (sacct). Sent to pval session and foreman. 5761693 has 18 tasks: 17 done, task 22 running. s0/counts also holds an older C25M26.h5; told pval to use the val3 file.
+- 2026-11-25T12:46Z glossary: blocked reply with avocado, c25m26, c34m02, c50m02
+- 2026-11-25T12:46Z glossary: rejected 'C25M26' (coinage: 0 titles in Europe PMC and OpenAlex)
+- 2026-11-25T12:46Z glossary: rejected 'C34M02' (coinage: 0 titles in Europe PMC and OpenAlex)
+- 2026-11-25T12:46Z glossary: rejected 'C50M02' (coinage: 0 titles in Europe PMC and OpenAlex)
+- 2026-11-25T12:46Z glossary: blocked reply with epigenome
+- 2026-11-25T12:46Z glossary: admitted 'epigenome' (field: MeSH)
+- 2026-11-25T12:46Z glossary: blocked reply with gloss
+- 2026-11-25T12:46Z pval session scoring val3 tracks: raw 6057315-17, board 6057318, ChIP depth-cap 6057319; it picks up 5761693 task 22 count itself.
+- 2026-11-25T12:46Z glossary: blocked reply with ids
+- 2026-11-25T15:25Z 5761693_22 writes cell 46 assays 10,18,21,35 in sequence (~2.9 h each); assay 35 at 11/24 chromosomes at 16:25 UTC; expected end ~18:05 UTC at ~11.2 h of 14 h. Told foreman: no action.
+- 2026-11-25T15:25Z glossary: blocked reply with 5761693_22
+- 2026-11-25T16:57Z 5761693 COMPLETE: task 22 39268 s; 43 counts in s0 and recal_wide; copy 5761694 COMPLETED; array 649.8 CPU-h (sacct). All validation targets predicted. Told foreman and pval.
+- 2026-11-25T16:57Z glossary: blocked reply with avocado
+- 2026-11-25T21:23Z 21:23 Nibi tunnel down (hpc status: nibi down); asked PI for hpc up nibi. Avocado 5022624-27 not started on Fir (head ReqNodeNotAvail fc10515); held until Nibi answers. Watch bp5s3733k still armed.
+- 2026-11-25T21:23Z glossary: blocked reply with avocado
+- 2026-11-26T10:06Z 2026-11-26 PI via foreman: fir up, nibi down; keep Avocado on Fir. 5022624 pending since 11-21 19:07 UTC (1 H100, 96G, 12 h). Sent foreman status table; GPU-slice resubmit offered as PI option only.
+- 2026-11-26T10:06Z glossary: blocked reply with gpu, h100
+- 2026-11-26T10:10Z PI (via foreman 2026-11-26): resubmit Avocado chain as GPU slice after a memory check, measured --time, exclude fc10713/fc10715, cancel old chain only when new is ready. Max 005 logs (full H100): shared chr20 1.81 h, genome chr1 3.71 h (max), chr14 1.28 h. Data on host; est. GPU ~13 GB chr1. Probe 6290210 (3g.40gb, shared mode chr1, 0.25 h) for peak memory and steps/s.
+- 2026-11-26T10:26Z cancel-own.sh cancel on fir: 5022624 5022625 5022626 5022627
+- 2026-11-26T10:26Z Probe 6290210 (3g.40gb, shared chr1): peak GPU 19262 MiB, host RSS 22.5 GB, 19.7 steps/s (2.2x slower than full H100). New Avocado chain: shared 6291945 (7h, MAXHOURS 6.5), genome 6291946 (11:30, 11.0), predict 6291947, bigwig 6291948; excl fc10713,fc10715. Old 5022624-27 cancelled. Nibi-move watch bp5s3733k stopped (rule superseded).
+- 2026-11-26T10:41Z Avocado shared 6291945 started 10:41 UTC on 3g.40gb slice; watch bvodiwt4v.
+- 2026-11-26T11:25Z glossary: blocked reply with antibody, calibrated, widen
+- 2026-11-27T06:07Z Nibi blind build batch 1: all 74 build tasks FAILED (Cromwell SIGABRT at random stages, 0.58-7.45 h, median 4.77 h; 45 also python SIGBUS). Not OOM (oom_kill 0, peak anon <=21 GB of 62.5), not scratch (NVMe 3.5T 3% used), Cromwell jar unchanged since Aug. Cause unproven; likely shared-filesystem fault after maintenance. Signal passes 28737212/39 (51 tasks) RUNNING since 05:28 UTC redo full rows; they are the retest. Fir 6291946: 0-13 done, 14-22 stuck JobArrayTaskLimit with 0 running (throttle counter lost in controller restart); fix = scontrol update ArrayTaskThrottle, awaits PI via foreman.
+- 2026-11-27T06:08Z glossary: blocked reply with aborted, avocado, bigwigs, cromwell, cromwell's, crux, filesystem, ledger, robustness, scontrol, slurm, unrun
+- 2026-11-27T06:08Z glossary: admitted 'Cromwell' (English word, Zipf 3.4)
+- 2026-11-27T06:08Z glossary: admitted 'filesystem' (English word, Zipf 2.6)
+- 2026-11-27T06:08Z glossary: admitted 'Slurm' (English word, Zipf 1.4)
+- 2026-11-27T06:08Z glossary: rejected 'scontrol' (coinage: 1 titles in Europe PMC and OpenAlex)
+- 2026-11-27T06:08Z glossary: blocked reply with encode, glossary, workflow
+- 2026-11-27T06:11Z moved from DECISIONS (settled by D55 or history): | D30 | Gate G0 passed on terms and scoring cost; training cost was 2.4 x fact 9, so the screen budget is the projection x 1.50 (5,209 CPU-h). The screen runs on kit RCP2 (RCP1 + C15-C17 + C29) and was submitted before the rerun test verdict (4888524). | probe.md, 2026-11-21 | agent, under PI "keep working and try not to be blocked by me" | | in force |
+- 2026-11-27T06:11Z moved from DECISIONS (settled by D55 or history): | D41 | Train halves U-Net with the head skip off (arm halves_headskip_off, 3 seeds, p16 then p256): test whether the direct input-to-output skip still drives copying under read-disjoint pairs. | "Run it now (Recommended)" to the head-skip question, 2026-11-22 | PI | | in force |
+- 2026-11-27T06:11Z moved from DECISIONS (settled by D55 or history): | D43 | 256-region selection (final 2026-11-22 15:25 UTC, 3 seeds each): recipe = halves + Pearson-residual input U-Net (PASS, score -0.132; imp 0.445, cor 0.774, cal 0.625). Runner-up halves + average-signal input U-Net (PASS, -0.243). Halves U-Net NEAR. | cruxvault/presentations/t370-minicandi-recipe/data/pareto_p256_sv.tsv (pareto_select.py) | agent, rule D1/D21 | | in force |
+- 2026-11-27T06:11Z moved from DECISIONS (settled by D55 or history): | D52 | Ensemble read: per-assay dispersion recalibration raises recipe calibration at 256 regions from 0.625 (3-seed mean) to 0.749 (one seed) and 0.767 (3-seed ensemble); the ensemble also gives cor 0.790, imp 0.458. Recalibration ships with the final architecture; the ensemble is optional. Calibration regions share cells and tracks with the scored set. | runs_rcp/_sel/ens_p256_sv.tsv on Fir | agent, under D47 | | in force |
+- 2026-11-27T06:11Z PI 2026-11-27 (via foreman): scontrol throttle reset run on 6291946 (reason now Priority); signal passes kept; p-value session owns Avocado comparison + blind prediction; R7, R11, R13-R15 deferred. Close-out records written (D56-D61, ledger statuses).
+- 2026-11-27T06:12Z glossary: blocked reply with avocado, bigwigs, d56, d61, gpus, ids
+- 2026-11-27T12:02Z glossary: blocked reply with avocado
