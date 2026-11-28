@@ -4,7 +4,7 @@
 set -euo pipefail
 
 FIR_OUT=/project/def-maxwl/mforooz/t396/dedup_1bp      # sc_1bp outputs: <experiment>/{unit,shape}_<label>.json
-JOB_IDS="6727806 6729250"                              # sc_1bp jobs of this chunk (probe OOM, probe 2; add the other 5)
+JOB_IDS="6727806 6729250 6733480 6733481 6733482 6733483 6733484"   # sc_1bp jobs of this chunk (probe OOM, probe 2, then the other 5)
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../../../.." && pwd)"
