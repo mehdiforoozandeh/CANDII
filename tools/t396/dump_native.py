@@ -1,4 +1,5 @@
-"""t396 C6: dump the arrays of the three-space scoring (truth, and the native read-start output).
+"""t396 C6, iteration 2 A4: dump the arrays of the three-space scoring (truth, and the native
+start output of any start-output arm).
 
     python tools/t396/dump_native.py truth --evalset <json> --tables <dir> --rs-config <rs run dir>
         --out <dir> [--shard i/N]
@@ -42,7 +43,14 @@ model -> `<out>/<target id>.npz` (R = the 256 regions, or the pair regions under
   Gate (a) is enforced: when max_abs_rel_diff > GATE_A (1e-4), that target's file is NOT written,
   the value is printed to stderr, and the command exits 3 without dumping further targets.
 
-The read-count reference needs no dump: its `mu`, `n` are read from its prediction store.
+`model` accepts any run whose config sets `read_start` (`registry.load_run` wraps it in
+`rs_adapter.ReadStartAdapter`): `start_in_start_out`, `start_in_count_out` (the kernel head; the
+adapter's span-kernel conversion is its training conversion) and `count_in_start_out` (count input;
+the adapter feeds it counts, the output conversion is unchanged). Every arm is converted per
+forward batch, as the adapter does. Any other run exits 2.
+
+A count-output arm (`count_in_count_out`, the read-count reference) needs no dump: its `mu`, `n`
+are read from its prediction store.
 """
 from __future__ import annotations
 
@@ -321,8 +329,8 @@ def cmd_model(a) -> int:
     S.set_threads()
     S.tf32_off()
     model, config = load_run(a.run)
-    if not isinstance(model, ReadStartAdapter):
-        print(f"{a.run}: not a read-start run", file=sys.stderr)
+    if not config.get("read_start") or not isinstance(model, ReadStartAdapter):
+        print(f"{a.run}: not a start-output run (config sets no read_start)", file=sys.stderr)
         return 2
     tap = _tap_class()(model.inner)
     model.inner = tap

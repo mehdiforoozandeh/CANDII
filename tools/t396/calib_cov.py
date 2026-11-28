@@ -1,8 +1,8 @@
 """t396 C9 (leg A): start-count correlation per assay, and the calibration of the converted
 read-start model with that correlation, next to an equally recalibrated read-count reference.
 
-    python tools/t396/calib_cov.py fit   --truth <dir> --arrays <dir> --ref-pred-store <dir>
-        --seed <k> --out <fit.npz> [--window-bins 1024] [--infer-batch 8]
+    python tools/t396/calib_cov.py fit   --truth <dir> [--arrays <dir>] [--ref-pred-store <dir>]
+        --seed <k> --out <fit.npz> [--fit-regions odd|even] [--window-bins 1024] [--infer-batch 8]
     python tools/t396/calib_cov.py score --truth <dir> --arrays <dir> --ref-pred-store <dir>
         --seed <k> --fit <fit.npz> --out <records.jsonl> [--window-bins 1024] [--infer-batch 8]
     python tools/t396/calib_cov.py table --records <files...> [--legB-table <table.tsv>]
@@ -16,17 +16,24 @@ prediction store, key `item/<target>/leave_one_assay_out` (file name sha1(key).n
 `predict_store.key_file`; read here with numpy so that the tool needs no torch). Targets: the
 files present in both `--truth` and `--arrays`.
 
-Region split. Odd regions (evaluation-set index mod 2 = 1) fit; even regions (mod 2 = 0; they hold
-the 16 pair regions) are scored. The two sets are disjoint.
+Region split. `fit --fit-regions odd` (the default) fits on the odd regions (evaluation-set index
+mod 2 = 1), `--fit-regions even` on the even ones (mod 2 = 0; they hold the 16 pair regions); the
+fit file records its half as `fit_regions`. `score` scores the other half. The two sets are
+disjoint, so a fit and the regions it is applied to never share a region. Iteration 2 makes one fit
+per half and run; `score_spaces.py records --rho-odd --rho-even` applies each to the other half.
 
-fit (odd regions), per target: the `covconv.estimate_rho` parts (num, den) of the read-start model
+fit (the `--fit-regions` half). It takes `--arrays` (a start-output arm), `--ref-pred-store` (a
+count-output prediction store: the read-count reference of iteration 1, or the arm
+`count_in_count_out` of iteration 2), or both; at least one. With `--arrays` absent the rho parts are
+0 and the `rs` keys NaN (`has_arrays` false); with `--ref-pred-store` absent the `ref` keys are NaN
+(`has_ref` false); the targets are then all truth files. Per target: the `covconv.estimate_rho` parts (num, den) of the read-start model
 (truth `s` against the native mu_sub, n_sub; an unstranded track folded to channel 0); the odd
 calibration ratio of the stored read-start conversion and of the reference; and the scalar
 `covconv.fit_scale` of the read-start model (stored conversion) and of the reference, fitted on the
 OTHER targets of the target's assay (leave-one-target-out). An assay with one target takes the
 geometric mean of the in-sample scalars of the other assays (flag `fallback`).
 
-score (even regions), per target, `deviance.target_terms(y, mu, n)` of six variants:
+score (the half the fit did not use; needs both --arrays and --ref-pred-store), per target, `deviance.target_terms(y, mu, n)` of six variants:
   rs_independent    (i)   read-start, the stored independent conversion
   rs_cov_loo        (ii)  read-start, `convert_nb_cov` with the rho of the target's assay summed
                           over the assay's other targets (leave-one-target-out); an assay with one
@@ -39,7 +46,7 @@ score (even regions), per target, `deviance.target_terms(y, mu, n)` of six varia
   ref_stored        (v)   reference as stored
   ref_scaled_loo    (vi)  reference with n / c, c the leave-one-target-out `fit_scale` of the odd
                           regions
-(ii) and (vi) are the like-for-like pair: both fit on the odd regions and exclude the scored target.
+(ii) and (vi) are the like-for-like pair: both fit on the other half and exclude the scored target.
 
 Conversion runs. The adapter converted each forward batch on its own (`rs_adapter.forward`:
 `read_start.stitch` runs of one batch; `predict_store._batches`: a region's windows in chunks of
@@ -103,8 +110,10 @@ def read_ref(store_dir, target: str) -> tuple:
         return np.asarray(z["mu"]), np.asarray(z["n"])
 
 
-def targets_of(truth_dir, arrays_dir) -> list:
+def targets_of(truth_dir, arrays_dir=None) -> list:
     t = {p.stem for p in Path(truth_dir).glob("*.npz")}
+    if arrays_dir is None:
+        return sorted(t)
     a = {p.stem for p in Path(arrays_dir).glob("*.npz")}
     return sorted(t & a)
 
@@ -139,16 +148,18 @@ def segments(n_regions: int, rb: int, L: int, B: int) -> list:
 
 
 class Target:
-    """The arrays of one target on one region subset (`which`: 'odd' or 'even')."""
+    """The arrays of one target on one region subset (`which`: 'odd' or 'even'). Without
+    `a.arrays` only the truth and the reference are read, on every region of that half."""
 
     def __init__(self, a, tid: str, which: str, need_ref: bool = True):
         t = np.load(Path(a.truth) / f"{tid}.npz")
-        m = np.load(Path(a.arrays) / f"{tid}.npz")
+        m = np.load(Path(a.arrays) / f"{tid}.npz") if a.arrays else None
         self.tid = tid
         self.assay = str(t["assay"])
         self.stranded = bool(t["stranded"])
         n_all, rb = t["y"].shape
-        ridx = np.asarray(m["region_indices"], np.int64)
+        ridx = (np.asarray(m["region_indices"], np.int64) if m is not None
+                else np.arange(n_all, dtype=np.int64))
         keep = np.flatnonzero(ridx % 2 == (1 if which == "odd" else 0))
         self.ridx = ridx[keep]
         segs = segments(n_all, rb, int(a.window_bins), int(a.infer_batch))
@@ -159,14 +170,18 @@ class Target:
             s = np.stack([s.sum(-1), np.zeros(s.shape[:2])], -1)
         self.s = s
         self.w = kernel_row(t["kernel"], t["n_reads_strand"], self.stranded)
-        self.mu_sub = np.asarray(m["mu_sub"])[keep].astype(np.float64)
-        self.n_sub = np.asarray(m["n_sub"])[keep].astype(np.float64)
-        self.mu_rs = np.asarray(m["mu"])[keep].astype(np.float64)
-        self.n_rs = np.asarray(m["n"])[keep].astype(np.float64)
+        if m is None:
+            self.mu_sub = self.n_sub = self.mu_rs = self.n_rs = None
         if need_ref:
             mu_ref, n_ref = read_ref(a.ref_pred_store, tid)
             self.mu_ref = np.asarray(mu_ref)[self.ridx].astype(np.float64)
             self.n_ref = np.asarray(n_ref)[self.ridx].astype(np.float64)
+        if m is None:
+            return
+        self.mu_sub = np.asarray(m["mu_sub"])[keep].astype(np.float64)
+        self.n_sub = np.asarray(m["n_sub"])[keep].astype(np.float64)
+        self.mu_rs = np.asarray(m["mu"])[keep].astype(np.float64)
+        self.n_rs = np.asarray(m["n"])[keep].astype(np.float64)
 
     def convert(self, rho) -> tuple:
         """(mu, n) [R, rb] of `convert_nb_cov` run on each forward-batch segment."""
@@ -200,6 +215,10 @@ def _geo_mean_other(c_by_assay: dict, assay: str) -> float:
 
 
 def cmd_fit(a) -> int:
+    has_rs, has_ref = bool(a.arrays), bool(a.ref_pred_store)
+    if not (has_rs or has_ref):
+        print("fit: give --arrays, --ref-pred-store or both", file=sys.stderr)
+        return 2
     tids = targets_of(a.truth, a.arrays)
     if not tids:
         print("fit: no target in both --truth and --arrays", file=sys.stderr)
@@ -221,23 +240,29 @@ def cmd_fit(a) -> int:
     for assay in sorted(by_assay):
         recs_rs, recs_ref = {}, {}
         for tid in by_assay[assay]:
-            g = Target(a, tid, "odd")
+            g = Target(a, tid, a.fit_regions, need_ref=has_ref)
             i = pos[tid]
-            num[i], den[i] = CC.estimate_rho(g.s, g.mu_sub, g.n_sub)
-            ratio_rs[i] = _ratio(g.y, g.mu_rs, g.n_rs)
-            ratio_ref[i] = _ratio(g.y, g.mu_ref, g.n_ref)
-            recs_rs[tid] = {"y": g.y, "mu": g.mu_rs, "n": g.n_rs}
-            recs_ref[tid] = {"y": g.y, "mu": g.mu_ref, "n": g.n_ref}
-            print(f"fit: {tid} ({assay}) odd ratio rs {ratio_rs[i]:.4f} ref {ratio_ref[i]:.4f}",
-                  flush=True)
-        c_rs_assay[assay] = CC.fit_scale(list(recs_rs.values()), iters=FIT_ITERS)
-        c_ref_assay[assay] = CC.fit_scale(list(recs_ref.values()), iters=FIT_ITERS)
+            if has_rs:
+                num[i], den[i] = CC.estimate_rho(g.s, g.mu_sub, g.n_sub)
+                ratio_rs[i] = _ratio(g.y, g.mu_rs, g.n_rs)
+                recs_rs[tid] = {"y": g.y, "mu": g.mu_rs, "n": g.n_rs}
+            if has_ref:
+                ratio_ref[i] = _ratio(g.y, g.mu_ref, g.n_ref)
+                recs_ref[tid] = {"y": g.y, "mu": g.mu_ref, "n": g.n_ref}
+            print(f"fit: {tid} ({assay}) {a.fit_regions} ratio rs {ratio_rs[i]:.4f} "
+                  f"ref {ratio_ref[i]:.4f}", flush=True)
+        c_rs_assay[assay] = (CC.fit_scale(list(recs_rs.values()), iters=FIT_ITERS)
+                             if has_rs else float("nan"))
+        c_ref_assay[assay] = (CC.fit_scale(list(recs_ref.values()), iters=FIT_ITERS)
+                              if has_ref else float("nan"))
         if len(by_assay[assay]) > 1:
             for tid in by_assay[assay]:
-                c_rs_loo[pos[tid]] = CC.fit_scale(
-                    [r for k, r in recs_rs.items() if k != tid], iters=FIT_ITERS)
-                c_ref_loo[pos[tid]] = CC.fit_scale(
-                    [r for k, r in recs_ref.items() if k != tid], iters=FIT_ITERS)
+                if has_rs:
+                    c_rs_loo[pos[tid]] = CC.fit_scale(
+                        [r for k, r in recs_rs.items() if k != tid], iters=FIT_ITERS)
+                if has_ref:
+                    c_ref_loo[pos[tid]] = CC.fit_scale(
+                        [r for k, r in recs_ref.items() if k != tid], iters=FIT_ITERS)
         del recs_rs, recs_ref
     for tid in tids:
         if len(by_assay[assay_of[tid]]) == 1:
@@ -255,7 +280,8 @@ def cmd_fit(a) -> int:
         c_rs_loo=c_rs_loo, c_ref_loo=c_ref_loo, fallback=fallback, assays=np.array(assays),
         c_rs_assay=np.array([c_rs_assay[x] for x in assays]),
         c_ref_assay=np.array([c_ref_assay[x] for x in assays]),
-        window_bins=np.array(int(a.window_bins)), infer_batch=np.array(int(a.infer_batch)))
+        window_bins=np.array(int(a.window_bins)), infer_batch=np.array(int(a.infer_batch)),
+        fit_regions=np.array(a.fit_regions), has_arrays=np.array(has_rs), has_ref=np.array(has_ref))
     print(f"fit: wrote {out} ({T} targets, {len(assays)} assays)", flush=True)
     return 0
 
@@ -273,6 +299,9 @@ class Fit:
             self.c_ref_loo = dict(zip(self.targets, z["c_ref_loo"].tolist()))
             self.c_fallback = dict(zip(self.targets, z["fallback"].tolist()))
             self.window_bins, self.infer_batch = int(z["window_bins"]), int(z["infer_batch"])
+            self.fit_regions = str(z["fit_regions"]) if "fit_regions" in z.files else "odd"
+            self.has_arrays = bool(z["has_arrays"]) if "has_arrays" in z.files else True
+            self.has_ref = bool(z["has_ref"]) if "has_ref" in z.files else True
         self.pos = {t: i for i, t in enumerate(self.targets)}
 
     def members(self, assay: str) -> list:
@@ -302,9 +331,13 @@ class Fit:
 
 
 # ------------------------------------------------------------------ score
-def _row(seed, g, variant, terms, **extra) -> dict:
+def other_half(which: str) -> str:
+    return {"odd": "even", "even": "odd"}[which]
+
+
+def _row(seed, g, regions, variant, terms, **extra) -> dict:
     r = {"seed": seed, "target": g.tid, "assay": g.assay, "stranded": g.stranded,
-         "variant": variant, "regions": "even", "n_regions": int(len(g.ridx))}
+         "variant": variant, "regions": regions, "n_regions": int(len(g.ridx))}
     r.update({k: terms[k] for k in TERM_KEYS if k in terms})
     r["calibration_ratio"] = DV.calibration_ratio([terms])
     r.update(extra)
@@ -319,6 +352,10 @@ def cmd_score(a) -> int:
     if (fit.window_bins, fit.infer_batch) != (int(a.window_bins), int(a.infer_batch)):
         print("score: --window-bins / --infer-batch differ from the fit's", file=sys.stderr)
         return 2
+    if not (fit.has_arrays and fit.has_ref):
+        print("score: the fit needs both --arrays and --ref-pred-store", file=sys.stderr)
+        return 2
+    half = other_half(fit.fit_regions)
     tids = targets_of(a.truth, a.arrays)
     missing = sorted(set(tids) ^ set(fit.targets))
     if missing:
@@ -330,24 +367,24 @@ def cmd_score(a) -> int:
     tmp = out.with_name(f".{out.name}.part")
     with open(tmp, "w", encoding="utf-8") as fh:
         for tid in tids:
-            g = Target(a, tid, "even")
+            g = Target(a, tid, half)
             rows = []
             _, n_id = g.convert(CC.identity_rho())
-            rows.append(_row(seed, g, "rs_independent", _terms(g.y, g.mu_rs, g.n_rs),
+            rows.append(_row(seed, g, half, "rs_independent", _terms(g.y, g.mu_rs, g.n_rs),
                              n_rel_diff_identity=rel_diff(n_id, g.n_rs)))
             for variant, mode in (("rs_cov_loo", "loo"), ("rs_cov_insample", "insample")):
                 rho, ids, fb = fit.rho_for(tid, mode)
                 mu, n = g.convert(rho)
-                rows.append(_row(seed, g, variant, _terms(g.y, mu, n),
+                rows.append(_row(seed, g, half, variant, _terms(g.y, mu, n),
                                  rho_from=ids, fallback=fb,
                                  mu_rel_diff_stored=rel_diff(mu, g.mu_rs)))
             c = fit.c_rs_loo[tid]
-            rows.append(_row(seed, g, "rs_scaled_loo",
+            rows.append(_row(seed, g, half, "rs_scaled_loo",
                              _terms(g.y, g.mu_rs, CC.scale_size(g.n_rs, c)),
                              c=c, fallback=bool(fit.c_fallback[tid])))
-            rows.append(_row(seed, g, "ref_stored", _terms(g.y, g.mu_ref, g.n_ref)))
+            rows.append(_row(seed, g, half, "ref_stored", _terms(g.y, g.mu_ref, g.n_ref)))
             c = fit.c_ref_loo[tid]
-            rows.append(_row(seed, g, "ref_scaled_loo",
+            rows.append(_row(seed, g, half, "ref_scaled_loo",
                              _terms(g.y, g.mu_ref, CC.scale_size(g.n_ref, c)),
                              c=c, fallback=bool(fit.c_fallback[tid])))
             for r in rows:
@@ -472,8 +509,9 @@ def main(argv=None) -> int:
     for name in ("fit", "score"):
         p = sub.add_parser(name)
         p.add_argument("--truth", required=True)
-        p.add_argument("--arrays", required=True)
-        p.add_argument("--ref-pred-store", required=True)
+        p.add_argument("--arrays", required=(name == "score"))
+        p.add_argument("--ref-pred-store", required=(name == "score"),
+                       help="prediction store of a count-output model")
         p.add_argument("--seed", required=True, type=int)
         p.add_argument("--out", required=True)
         p.add_argument("--window-bins", type=int, default=1024,
@@ -482,6 +520,9 @@ def main(argv=None) -> int:
                        help="infer_batch of the read-start prediction store (STORE.json; 8)")
         if name == "score":
             p.add_argument("--fit", required=True)
+        else:
+            p.add_argument("--fit-regions", choices=("odd", "even"), default="odd",
+                           help="the half of the regions the fit uses (index mod 2)")
     t = sub.add_parser("table")
     t.add_argument("--records", nargs="+", required=True)
     t.add_argument("--legB-table", dest="legB_table")

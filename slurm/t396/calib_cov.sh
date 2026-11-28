@@ -1,5 +1,7 @@
 #!/bin/bash
-# t396 C9 (leg A): one step of tools/t396/calib_cov.py (fit, score or table) inside an ONION kit.
+# t396 C9 (leg A), iteration 2 A4: one step of tools/t396/calib_cov.py (fit, score or table) inside
+# an ONION kit. Iteration 2: one fit per arm, seed and half (--fit-regions odd | even); a start-output
+# arm passes --arrays, a count-output arm passes only --ref-pred-store (its own prediction store).
 #
 #   export KIT=/project/def-maxwl/mforooz/onion_kit/SC<id>
 #   sbatch --job-name=sc_calib --export=ALL --output=<logs>/%x_%j.out [--time=<probe>] \
