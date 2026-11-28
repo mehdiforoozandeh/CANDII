@@ -3,7 +3,7 @@
     python tools/t396/cf_follow.py pairs --tables <dir> --out pairs.tsv
     python tools/t396/cf_follow.py predict --run <run dir> --pairs pairs.tsv --evalset <json>
         --out <dir> [--shard i/N] [--model-name <name>] [--infer-batch B] [--device cpu|cuda]
-    python tools/t396/cf_follow.py table --pred <dirs...> [--caps-table <cf_caps table.tsv>]
+    python tools/t396/cf_follow.py table --pred <dirs...> [--caps-table <B1 table.tsv ...>]
         --out <dir>
 
 Controlled pair: two `layer = testbed` rows of one track that differ in one processing setting:
@@ -51,9 +51,12 @@ table -> `table.tsv` and `per_track.tsv`. Per track, space and scope, with mu sc
   sum D_halves / sum D_source_cov over the included tracks; `tracks_following` = tracks whose
   seed-mean score is >= 0.8; `tracks_excluded` = the largest count over seeds; `total_ratio` =
   mean over seeds of sum mu_tgt / sum mu_src over every track; `follows` (gate h, top1pct rows
-  only) = `yes` when follow_score >= 0.8. With `--caps-table`, `caps_gap_closed` is the mean of the
-  cap law's gap-closed column over its rows of the same pairs (matched by source and target ids,
-  else by track and covariate) and `caps_n` the number of rows matched.
+  only) = `yes` when follow_score >= 0.8. With `--caps-table` (B1 testbed `table.tsv` files of
+  dedup_cap.py and sepe_cap.py), `caps_gap_closed` is B1's `gap_closed_vs_depth_scaling` of the row
+  with the same covariate and scope, space count (overlap_count) or start (start_sum), shape
+  `loto`, assay_group `all`, law count_saturation (count) or subsampled_dm_distinct (start). It is
+  set on `variant_to_base` rows only (B1 scores variant -> base); nan on the others. A needed key
+  with no row, or a key with more than one row, is an error.
 """
 from __future__ import annotations
 
@@ -452,25 +455,33 @@ def load_pred_dir(d) -> tuple:
     return meta, files
 
 
-def _caps_lookup(path) -> dict:
-    """{(source, target) or (track, covariate): [gap closed values]} from a cf_caps table."""
-    rows = read_tsv(path)
-    if not rows:
-        return {}
-    gcol = next((c for c in rows[0] if c == "gap_closed"), None) or next(
-        (c for c in rows[0] if "gap_closed" in c), None)
-    if gcol is None:
-        raise SystemExit(f"{path}: no gap_closed column")
+#: cf_follow space -> (B1 table `space`, the cap law B1 reports in that space)
+CAPS_SPACE = {"overlap_count": ("count", "count_saturation"),
+              "start_sum": ("start", "subsampled_dm_distinct")}
+CAPS_SHAPE, CAPS_GROUP, CAPS_COLUMN = "loto", "all", "gap_closed_vs_depth_scaling"
+
+
+def _caps_lookup(paths) -> dict:
+    """{(covariate, scope, cf_follow space): gap closed} from B1 testbed `table.tsv` files
+    (`dedup_cap.TB_TABLE_COLUMNS`): the rows with shape `loto`, assay_group `all` and the cap law
+    of the space. ValueError when a key has more than one such row."""
     out: dict = {}
-    for r in rows:
-        try:
-            v = float(r[gcol])
-        except (TypeError, ValueError):
-            continue
-        if r.get("source") and r.get("target"):
-            out.setdefault((r["source"], r["target"]), []).append(v)
-        if r.get("track") and r.get("covariate"):
-            out.setdefault((r["track"], r["covariate"]), []).append(v)
+    inv = {v[0]: (k, v[1]) for k, v in CAPS_SPACE.items()}
+    for path in ([paths] if isinstance(paths, (str, Path)) else paths):
+        rows = read_tsv(path)
+        need = {"covariate", "shape", "assay_group", "law", "space", "scope", CAPS_COLUMN}
+        if rows and not need <= set(rows[0]):
+            raise ValueError(f"{path}: not a B1 testbed table; missing {sorted(need - set(rows[0]))}")
+        for r in rows:
+            if r["space"] not in inv or r["shape"] != CAPS_SHAPE or r["assay_group"] != CAPS_GROUP:
+                continue
+            space, law = inv[r["space"]]
+            if r["law"] != law:
+                continue
+            key = (r["covariate"], r["scope"], space)
+            if key in out:
+                raise ValueError(f"caps table: more than one row for {key}")
+            out[key] = float(r[CAPS_COLUMN])
     return out
 
 
@@ -522,12 +533,13 @@ def build_table(pred_dirs, caps_table=None) -> tuple:
                "total_ratio": float(np.mean([pl[s]["total_ratio"] for s in seeds])),
                "follows": ("" if scope != "top1pct" else
                            "yes" if math.isfinite(score) and score >= GATE_H else "no")}
-        if caps is not None:
-            vals = []
-            for r in by_seed[seeds[0]]:
-                vals += caps.get((r["source"], r["target"])) or caps.get((r["track"], cov)) or []
-            row["caps_gap_closed"] = float(np.mean(vals)) if vals else float("nan")
-            row["caps_n"] = len(vals)
+        if caps is not None:          # B1 scores variant -> base only
+            v = float("nan")
+            if d == "variant_to_base":
+                if (cov, scope, space) not in caps:
+                    raise ValueError(f"caps table: no row for {(cov, scope, space)}")
+                v = caps[(cov, scope, space)]
+            row["caps_gap_closed"] = v
         table.append(row)
     return table, per_track
 
@@ -535,7 +547,7 @@ def build_table(pred_dirs, caps_table=None) -> tuple:
 def cmd_table(a) -> int:
     table, per_track = build_table(a.pred, a.caps_table)
     out = Path(a.out)
-    cols = TABLE_COLUMNS + (("caps_gap_closed", "caps_n") if a.caps_table else ())
+    cols = TABLE_COLUMNS + (("caps_gap_closed",) if a.caps_table else ())
     write_tsv(out / "table.tsv", cols, table, header=LIMIT)
     write_tsv(out / "per_track.tsv", TRACK_COLUMNS, per_track, header=LIMIT)
     print(f"{len(table)} rows -> {out / 'table.tsv'}; {len(per_track)} -> per_track.tsv")
@@ -561,7 +573,8 @@ def main(argv=None) -> int:
     p.add_argument("--device", default="cpu", choices=("cpu", "cuda"))
     p = sub.add_parser("table")
     p.add_argument("--pred", nargs="+", required=True)
-    p.add_argument("--caps-table", default=None)
+    p.add_argument("--caps-table", nargs="+", default=None,
+                   help="B1 testbed table.tsv files (dedup_cap, sepe_cap)")
     p.add_argument("--out", required=True)
     a = ap.parse_args(argv)
     return {"pairs": cmd_pairs, "predict": cmd_predict, "table": cmd_table}[a.cmd](a)

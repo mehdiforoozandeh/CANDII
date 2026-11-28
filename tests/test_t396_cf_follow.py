@@ -375,24 +375,63 @@ def test_read_start_stub_scored_in_both_spaces(env):
     assert up["total_ratio"] == pytest.approx(2.0, rel=0.01)
 
 
+def _b1_table(path: Path, covariates=("dedup", "run_type")) -> list:
+    """A B1 testbed table.tsv written by dedup_cap.testbed_table from synthetic pair rows."""
+    import dedup_cap as DC
+    rng = np.random.default_rng(5)
+    rows = []
+    for cov in covariates:
+        for k, exp in enumerate(("ENCSR1", "ENCSR2")):
+            for shape in DC.SHAPES:
+                for law, space in ((DC.TB_PRIMARY, "start"), (DC.TB_UNSUB, "start"),
+                                   (DC.COUNT_LAW, "count")):
+                    for scope in F.SCOPES:
+                        d_id = 100.0 + 10 * k
+                        rows.append({"pair": f"{exp}.{cov}", "source": f"{exp}.v",
+                                     "experiment": exp, "assay": "H3K4me1",
+                                     "assay_group": "histone", "covariate": cov, "shape": shape,
+                                     "q_source": 1.0, "q_target": 1.0, "q_origin": "measured",
+                                     "share": 0.5, "a": 1.0, "kappa": 1.0, "law": law,
+                                     "space": space, "scope": scope,
+                                     "D_law": float(20 + 60 * rng.random()), "D_identity": d_id,
+                                     "D_depth": 90.0, "D_floor": 10.0, "D_halves": 8.0})
+    table = DC.testbed_table(rows, n_boot=10, seed=0)
+    DC.write_tsv(str(path), table, DC.TB_TABLE_COLUMNS)
+    return table
+
+
 def test_rerun_skips_and_table_cli_with_caps(env, follow_dirs, tmp_path):
     assert _predict(env, CountStub(True), follow_dirs[0], "0", "follow") == 0
     caps = tmp_path / "caps.tsv"
-    p = next(p for p in env["pairs"] if p["covariate"] == "dedup"
-             and p["direction"] == "variant_to_base")
-    caps.write_text("source\ttarget\tcovariate\tgap_closed\n"
-                    f"{p['source']}\t{p['target']}\tdedup\t0.7\n", encoding="utf-8")
+    b1 = _b1_table(caps)
     out = tmp_path / "tab"
     assert F.main(["table", "--pred", *map(str, follow_dirs), "--caps-table", str(caps),
                    "--out", str(out)]) == 0
     text = (out / "table.tsv").read_text().splitlines()
     assert text[0] == F.LIMIT
     rows = F.read_tsv(out / "table.tsv")
-    r = next(x for x in rows if x["covariate"] == "dedup" and x["direction"] == "variant_to_base"
-             and x["scope"] == "top1pct" and x["space"] == "overlap_count")
-    assert float(r["caps_gap_closed"]) == pytest.approx(0.7) and r["caps_n"] == "1"
-    assert r["per_seed"].count(":") == 2
+    assert rows and all(r["space"] == "overlap_count" for r in rows)
+    for r in rows:
+        if r["direction"] == "base_to_variant":
+            assert r["caps_gap_closed"] == "nan"
+            continue
+        want = [x["gap_closed_vs_depth_scaling"] for x in b1
+                if x["covariate"] == r["covariate"] and x["scope"] == r["scope"]
+                and x["space"] == "count" and x["shape"] == "loto" and x["assay_group"] == "all"
+                and x["law"] == "count_saturation"]
+        assert len(want) == 1
+        assert float(r["caps_gap_closed"]) == pytest.approx(want[0], rel=1e-5)
+    assert rows[0]["per_seed"].count(":") == 2
     assert (out / "per_track.tsv").is_file()
+
+
+def test_caps_join_errors(follow_dirs, tmp_path):
+    only = tmp_path / "dedup_only.tsv"
+    _b1_table(only, covariates=("dedup",))
+    with pytest.raises(ValueError, match="no row"):
+        F.build_table([str(d) for d in follow_dirs], [str(only)])
+    with pytest.raises(ValueError, match="more than one row"):
+        F.build_table([str(d) for d in follow_dirs], [str(only), str(only)])
 
 
 def test_table_refuses_missing_pair(env, follow_dirs, tmp_path):
