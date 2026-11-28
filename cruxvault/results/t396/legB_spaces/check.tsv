@@ -1,0 +1,7 @@
+model	seed	scores_json	n_targets	expected_n_targets	expected	computed	diff	status
+read_start	0	/project/def-maxwl/mforooz/t392/runs_both/rs_halves_mix_avg_pearson_unet/seed0/p16_dev/scores.json	43	43	0.424569	0.424569	0	pass
+read_start	1	/project/def-maxwl/mforooz/t392/runs_both/rs_halves_mix_avg_pearson_unet/seed1/p16_dev/scores.json	43	43	0.337607	0.337607	0	pass
+read_start	2	/project/def-maxwl/mforooz/t392/runs_both/rs_halves_mix_avg_pearson_unet/seed2/p16_dev/scores.json	43	43	0.361558	0.361558	0	pass
+reference	0	/project/def-maxwl/mforooz/t392/runs_both/rcp_halves_mix_avg_pearson_unet/seed0/p16_dev/scores.json	43	43	0.542901	0.542901	-1.11022e-16	pass
+reference	1	/project/def-maxwl/mforooz/t392/runs_both/rcp_halves_mix_avg_pearson_unet/seed1/p16_dev/scores.json	43	43	0.509737	0.509737	0	pass
+reference	2	/project/def-maxwl/mforooz/t392/runs_both/rcp_halves_mix_avg_pearson_unet/seed2/p16_dev/scores.json	43	43	0.575069	0.575069	0	pass

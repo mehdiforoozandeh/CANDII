@@ -1,0 +1,121 @@
+space	model	regions	n_iter	read_length_group	macro	n_targets	n_assays	skill	r2	calibration_ratio	ratio_to_halves	seed_range	per_seed	flag
+overlap_count	read_start	all	NA	36bp	scorable	28	9	0.235079	0.310976	1.37172	0.345926	0.172782	0:0.314698,1:0.141916,2:0.248623	
+overlap_count	read_start	all	NA	36bp	all_assays	28	21	0.460106	0.370992	1.29457	0.330304	0.0904929	0:0.501282,1:0.41079,2:0.468245	
+overlap_count	read_start	all	NA	longer	scorable	15	9	0.398705	0.253537	1.34057	0.309047	0.0386292	0:0.38883,1:0.422957,2:0.384328	
+overlap_count	read_start	all	NA	longer	all_assays	15	10	0.44328	0.259333	1.31706	0.303647	0.03456	0:0.438899,1:0.46275,2:0.42819	
+overlap_count	read_start	pair	NA	36bp	scorable	28	9	0.241159	0.288602	1.41236	0.350352	0.168318	0:0.314637,1:0.146319,2:0.262521	
+overlap_count	read_start	pair	NA	36bp	all_assays	28	21	0.443306	0.359344	1.3142	0.330693	0.0909771	0:0.480713,1:0.389736,2:0.459468	
+overlap_count	read_start	pair	NA	longer	scorable	15	9	0.442091	0.265385	1.29625	0.301515	0.0492064	0:0.449034,1:0.463222,2:0.414016	
+overlap_count	read_start	pair	NA	longer	all_assays	15	10	0.481374	0.266743	1.27816	0.296423	0.0422793	0:0.492498,1:0.496951,2:0.454672	
+overlap_count	read_start	even	NA	36bp	scorable	28	9	0.221281	0.304288	1.37344	0.345705	0.178228	0:0.301794,1:0.123567,2:0.238483	
+overlap_count	read_start	even	NA	36bp	all_assays	28	21	0.454226	0.370088	1.29556	0.330947	0.093164	0:0.495927,1:0.402763,2:0.463986	
+overlap_count	read_start	even	NA	longer	scorable	15	9	0.397142	0.257284	1.33989	0.309047	0.0339239	0:0.393633,1:0.415858,2:0.381934	
+overlap_count	read_start	even	NA	longer	all_assays	15	10	0.4426	0.263489	1.31619	0.303623	0.0302058	0:0.443732,1:0.457137,2:0.426931	
+overlap_count	reference	all	NA	36bp	scorable	28	9	0.406894	0.349194	1.11589	0.335202	0.121878	0:0.411128,1:0.343839,2:0.465717	
+overlap_count	reference	all	NA	36bp	all_assays	28	21	0.579382	0.400587	1.08895	0.322015	0.081934	0:0.567161,1:0.544525,2:0.626459	
+overlap_count	reference	all	NA	longer	scorable	15	9	0.623359	0.324893	1.0255	0.286227	0.0185691	0:0.632482,1:0.613913,2:0.623683	
+overlap_count	reference	all	NA	longer	all_assays	15	10	0.649977	0.32714	1.02203	0.282298	0.0210319	0:0.660316,1:0.639284,2:0.650332	
+overlap_count	reference	pair	NA	36bp	scorable	28	9	0.426735	0.332168	1.11414	0.342146	0.0713809	0:0.454402,1:0.383021,2:0.442781	
+overlap_count	reference	pair	NA	36bp	all_assays	28	21	0.572611	0.391274	1.07558	0.323971	0.0595109	0:0.57333,1:0.542497,2:0.602008	
+overlap_count	reference	pair	NA	longer	scorable	15	9	0.61157	0.312617	1.00365	0.283775	0.0159708	0:0.620448,1:0.604477,2:0.609784	
+overlap_count	reference	pair	NA	longer	all_assays	15	10	0.638417	0.312789	1.00223	0.279712	0.0199419	0:0.648884,1:0.628943,2:0.637424	
+overlap_count	reference	even	NA	36bp	scorable	28	9	0.401199	0.342994	1.1267	0.335558	0.110497	0:0.40431,1:0.344396,2:0.454892	
+overlap_count	reference	even	NA	36bp	all_assays	28	21	0.575327	0.399891	1.09416	0.322965	0.0792584	0:0.562189,1:0.542267,2:0.621525	
+overlap_count	reference	even	NA	longer	scorable	15	9	0.621547	0.326057	1.03324	0.287067	0.02272	0:0.63155,1:0.608831,2:0.624259	
+overlap_count	reference	even	NA	longer	all_assays	15	10	0.648821	0.328855	1.02903	0.283048	0.0246078	0:0.659892,1:0.635285,2:0.651285	
+start_sum	read_start	all	NA	36bp	scorable	28	9	0.428138	0.234643	1.14286	0.372403	0.123587	0:0.482276,1:0.358689,2:0.443448	
+start_sum	read_start	all	NA	36bp	all_assays	28	21	0.617193	0.279054	1.09484	0.356982	0.0767387	0:0.648248,1:0.57151,2:0.631821	
+start_sum	read_start	all	NA	longer	scorable	15	9	0.6568	0.141886	1.08538	0.353731	0.0346002	0:0.637065,1:0.671665,2:0.661671	
+start_sum	read_start	all	NA	longer	all_assays	15	10	0.68538	0.147234	1.08085	0.347488	0.0281932	0:0.669494,1:0.697687,2:0.688958	
+start_sum	read_start	pair	NA	36bp	scorable	28	9	0.464805	0.219468	1.14487	0.370421	0.103392	0:0.507683,1:0.404291,2:0.482442	
+start_sum	read_start	pair	NA	36bp	all_assays	28	21	0.619017	0.271843	1.08298	0.349762	0.0683017	0:0.643832,1:0.575531,2:0.637689	
+start_sum	read_start	pair	NA	longer	scorable	15	9	0.733527	0.14954	1.05634	0.346538	0.0207903	0:0.724973,1:0.745763,2:0.729845	
+start_sum	read_start	pair	NA	longer	all_assays	15	10	0.75344	0.151456	1.055	0.340533	0.0148548	0:0.747952,1:0.762807,2:0.749559	
+start_sum	read_start	even	NA	36bp	scorable	28	9	0.423088	0.228909	1.14946	0.372618	0.125501	0:0.475326,1:0.349825,2:0.444112	
+start_sum	read_start	even	NA	36bp	all_assays	28	21	0.614446	0.279138	1.09847	0.357716	0.0784988	0:0.645073,1:0.566574,2:0.63169	
+start_sum	read_start	even	NA	longer	scorable	15	9	0.675502	0.143829	1.0858	0.354106	0.0293393	0:0.658376,1:0.687716,2:0.680414	
+start_sum	read_start	even	NA	longer	all_assays	15	10	0.702448	0.149562	1.08132	0.347858	0.0235503	0:0.688836,1:0.712387,2:0.706121	
+start_sum	reference	all	10	36bp	scorable	28	9	0.502913	0.245121	0.94108	0.370239	0.137132	0:0.506821,1:0.432393,2:0.569525	conversion_artifact,best_over_grid,not_interpreted
+start_sum	reference	all	10	36bp	all_assays	28	21	0.665371	0.277202	0.944441	0.358736	0.0865691	0:0.659392,1:0.625077,2:0.711646	conversion_artifact,best_over_grid,not_interpreted
+start_sum	reference	all	10	longer	scorable	15	9	0.783327	0.169494	0.883735	0.347129	0.0138332	0:0.79205,1:0.778217,2:0.779715	conversion_artifact,best_over_grid,not_interpreted
+start_sum	reference	all	10	longer	all_assays	15	10	0.798198	0.171302	0.891873	0.341719	0.016721	0:0.808269,1:0.791548,2:0.794778	conversion_artifact,best_over_grid,not_interpreted
+start_sum	reference	all	25	36bp	scorable	28	9	0.471094	0.237586	0.956266	0.372836	0.13819	0:0.481551,1:0.39677,2:0.53496	conversion_artifact,not_interpreted
+start_sum	reference	all	25	36bp	all_assays	28	21	0.641525	0.267607	0.963926	0.361997	0.0873731	0:0.638728,1:0.599237,2:0.68661	conversion_artifact,not_interpreted
+start_sum	reference	all	25	longer	scorable	15	9	0.755476	0.16271	0.89462	0.348988	0.0154144	0:0.765721,1:0.750307,2:0.7504	conversion_artifact,not_interpreted
+start_sum	reference	all	25	longer	all_assays	15	10	0.772197	0.164214	0.903338	0.34361	0.0190712	0:0.784174,1:0.765102,2:0.767314	conversion_artifact,not_interpreted
+start_sum	reference	all	50	36bp	scorable	28	9	0.433931	0.229455	0.972081	0.375618	0.136789	0:0.448807,1:0.358098,2:0.494887	conversion_artifact,primary,not_interpreted
+start_sum	reference	all	50	36bp	all_assays	28	21	0.614308	0.257342	0.983948	0.365448	0.0868029	0:0.613607,1:0.571258,2:0.658061	conversion_artifact,primary,not_interpreted
+start_sum	reference	all	50	longer	scorable	15	9	0.713917	0.15383	0.908599	0.351405	0.016816	0:0.724463,1:0.709641,2:0.707647	conversion_artifact,primary,not_interpreted
+start_sum	reference	all	50	longer	all_assays	15	10	0.734051	0.155407	0.917236	0.345959	0.0191143	0:0.746617,1:0.727503,2:0.728032	conversion_artifact,primary,not_interpreted
+start_sum	reference	all	100	36bp	scorable	28	9	0.385271	0.219574	0.990776	0.378987	0.132544	0:0.402288,1:0.310491,2:0.443035	conversion_artifact,not_interpreted
+start_sum	reference	all	100	36bp	all_assays	28	21	0.579107	0.244734	1.00763	0.369635	0.0849738	0:0.579136,1:0.536606,2:0.62158	conversion_artifact,not_interpreted
+start_sum	reference	all	100	longer	scorable	15	9	0.629726	0.138427	0.932268	0.355562	0.0190098	0:0.639751,1:0.628687,2:0.620741	conversion_artifact,not_interpreted
+start_sum	reference	all	100	longer	all_assays	15	10	0.657522	0.140791	0.939738	0.349858	0.0209025	0:0.669916,1:0.653638,2:0.649013	conversion_artifact,not_interpreted
+start_sum	reference	all	200	36bp	scorable	28	9	0.334917	0.209937	1.00809	0.382227	0.125587	0:0.351278,1:0.263943,2:0.389529	conversion_artifact,not_interpreted
+start_sum	reference	all	200	36bp	all_assays	28	21	0.542616	0.231799	1.03056	0.373809	0.0815941	0:0.541624,1:0.502315,2:0.58391	conversion_artifact,not_interpreted
+start_sum	reference	all	200	longer	scorable	15	9	0.446806	0.110045	0.974657	0.363139	0.0280215	0:0.457555,1:0.453331,2:0.429533	conversion_artifact,not_interpreted
+start_sum	reference	all	200	longer	all_assays	15	10	0.492251	0.114614	0.978876	0.356808	0.0292138	0:0.505512,1:0.494943,2:0.476298	conversion_artifact,not_interpreted
+start_sum	reference	pair	10	36bp	scorable	28	9	0.546129	0.233207	0.914355	0.369276	0.073369	0:0.566619,1:0.499199,2:0.572568	conversion_artifact,best_over_grid,not_interpreted
+start_sum	reference	pair	10	36bp	all_assays	28	21	0.675069	0.271432	0.907236	0.351971	0.0613611	0:0.67934,1:0.642253,2:0.703615	conversion_artifact,best_over_grid,not_interpreted
+start_sum	reference	pair	10	longer	scorable	15	9	0.79218	0.167335	0.856574	0.34198	0.0148894	0:0.800554,1:0.790322,2:0.785665	conversion_artifact,best_over_grid,not_interpreted
+start_sum	reference	pair	10	longer	all_assays	15	10	0.805239	0.166526	0.866257	0.336627	0.0154959	0:0.815129,1:0.800955,2:0.799633	conversion_artifact,best_over_grid,not_interpreted
+start_sum	reference	pair	25	36bp	scorable	28	9	0.522303	0.226709	0.927004	0.37151	0.0746703	0:0.547632,1:0.472961,2:0.546317	conversion_artifact,not_interpreted
+start_sum	reference	pair	25	36bp	all_assays	28	21	0.655268	0.262644	0.923926	0.354872	0.0621689	0:0.662025,1:0.620804,2:0.682973	conversion_artifact,not_interpreted
+start_sum	reference	pair	25	longer	scorable	15	9	0.768807	0.161488	0.865855	0.343582	0.0172701	0:0.778457,1:0.766777,2:0.761187	conversion_artifact,not_interpreted
+start_sum	reference	pair	25	longer	all_assays	15	10	0.783343	0.160366	0.87605	0.338258	0.0180179	0:0.794753,1:0.77854,2:0.776735	conversion_artifact,not_interpreted
+start_sum	reference	pair	50	36bp	scorable	28	9	0.494064	0.219405	0.940774	0.374011	0.0790268	0:0.52302,1:0.443994,2:0.515179	conversion_artifact,primary,not_interpreted
+start_sum	reference	pair	50	36bp	all_assays	28	21	0.632168	0.252891	0.941793	0.358071	0.0616735	0:0.640642,1:0.597094,2:0.658767	conversion_artifact,primary,not_interpreted
+start_sum	reference	pair	50	longer	scorable	15	9	0.733798	0.153704	0.878029	0.345695	0.0200967	0:0.744489,1:0.732512,2:0.724392	conversion_artifact,primary,not_interpreted
+start_sum	reference	pair	50	longer	all_assays	15	10	0.75108	0.152605	0.888168	0.340315	0.0208266	0:0.763688,1:0.74669,2:0.742862	conversion_artifact,primary,not_interpreted
+start_sum	reference	pair	100	36bp	scorable	28	9	0.456061	0.210204	0.957622	0.37715	0.0797742	0:0.487424,1:0.40765,2:0.473108	conversion_artifact,not_interpreted
+start_sum	reference	pair	100	36bp	all_assays	28	21	0.601536	0.240495	0.963635	0.362092	0.0597426	0:0.610716,1:0.567075,2:0.626818	conversion_artifact,not_interpreted
+start_sum	reference	pair	100	longer	scorable	15	9	0.662944	0.139947	0.899083	0.349411	0.0240377	0:0.674268,1:0.664331,2:0.650231	conversion_artifact,not_interpreted
+start_sum	reference	pair	100	longer	all_assays	15	10	0.686629	0.139513	0.908203	0.343804	0.0245874	0:0.70005,1:0.684376,2:0.675462	conversion_artifact,not_interpreted
+start_sum	reference	pair	200	36bp	scorable	28	9	0.416806	0.201052	0.97348	0.380243	0.0766065	0:0.448955,1:0.372349,2:0.429114	conversion_artifact,not_interpreted
+start_sum	reference	pair	200	36bp	all_assays	28	21	0.569386	0.227447	0.985259	0.366216	0.0564769	0:0.578184,1:0.536748,2:0.593225	conversion_artifact,not_interpreted
+start_sum	reference	pair	200	longer	scorable	15	9	0.510038	0.113925	0.937756	0.356373	0.0373832	0:0.524662,1:0.518173,2:0.487279	conversion_artifact,not_interpreted
+start_sum	reference	pair	200	longer	all_assays	15	10	0.548372	0.115479	0.943928	0.350195	0.0366812	0:0.56491,1:0.551977,2:0.528229	conversion_artifact,not_interpreted
+start_sum	reference	even	10	36bp	scorable	28	9	0.504387	0.239202	0.954807	0.370831	0.123579	0:0.506942,1:0.441319,2:0.564899	conversion_artifact,best_over_grid,not_interpreted
+start_sum	reference	even	10	36bp	all_assays	28	21	0.664114	0.277317	0.951204	0.359697	0.0825918	0:0.656995,1:0.626378,2:0.70897	conversion_artifact,best_over_grid,not_interpreted
+start_sum	reference	even	10	longer	scorable	15	9	0.786179	0.169888	0.890234	0.347931	0.0174655	0:0.79598,1:0.778515,2:0.784042	conversion_artifact,best_over_grid,not_interpreted
+start_sum	reference	even	10	longer	all_assays	15	10	0.800975	0.172201	0.898022	0.342485	0.0198573	0:0.81199,1:0.792133,2:0.798801	conversion_artifact,best_over_grid,not_interpreted
+start_sum	reference	even	25	36bp	scorable	28	9	0.472142	0.231539	0.970312	0.373449	0.12353	0:0.480897,1:0.405999,2:0.529529	conversion_artifact,not_interpreted
+start_sum	reference	even	25	36bp	all_assays	28	21	0.640026	0.267721	0.970837	0.362974	0.0829955	0:0.636044,1:0.600519,2:0.683515	conversion_artifact,not_interpreted
+start_sum	reference	even	25	longer	scorable	15	9	0.758554	0.163039	0.901277	0.349816	0.0189053	0:0.769781,1:0.750876,2:0.755006	conversion_artifact,not_interpreted
+start_sum	reference	even	25	longer	all_assays	15	10	0.775204	0.165056	0.909647	0.344401	0.0220963	0:0.788016,1:0.76592,2:0.771676	conversion_artifact,not_interpreted
+start_sum	reference	even	50	36bp	scorable	28	9	0.434945	0.223314	0.98638	0.376238	0.121666	0:0.447796,1:0.367687,2:0.489353	conversion_artifact,primary,not_interpreted
+start_sum	reference	even	50	36bp	all_assays	28	21	0.612896	0.257498	0.990927	0.366427	0.0821032	0:0.610851,1:0.572867,2:0.65497	conversion_artifact,primary,not_interpreted
+start_sum	reference	even	50	longer	scorable	15	9	0.717391	0.154129	0.91537	0.352252	0.0187031	0:0.72916,1:0.710457,2:0.712555	conversion_artifact,primary,not_interpreted
+start_sum	reference	even	50	longer	all_assays	15	10	0.737434	0.156221	0.923659	0.346769	0.022506	0:0.751063,1:0.728557,2:0.73268	conversion_artifact,primary,not_interpreted
+start_sum	reference	even	100	36bp	scorable	28	9	0.386574	0.213353	1.00532	0.379603	0.117256	0:0.401757,1:0.320354,2:0.43761	conversion_artifact,not_interpreted
+start_sum	reference	even	100	36bp	all_assays	28	21	0.577826	0.244982	1.01462	0.370607	0.0802759	0:0.576661,1:0.538271,2:0.618547	conversion_artifact,not_interpreted
+start_sum	reference	even	100	longer	scorable	15	9	0.633988	0.138751	0.939116	0.356421	0.0195558	0:0.645952,1:0.629617,2:0.626396	conversion_artifact,not_interpreted
+start_sum	reference	even	100	longer	all_assays	15	10	0.661676	0.141632	0.946236	0.350679	0.0213258	0:0.675722,1:0.65491,2:0.654396	conversion_artifact,not_interpreted
+start_sum	reference	even	200	36bp	scorable	28	9	0.337246	0.203653	1.02284	0.382837	0.109891	0:0.351593,1:0.275127,2:0.385017	conversion_artifact,not_interpreted
+start_sum	reference	even	200	36bp	all_assays	28	21	0.541765	0.232168	1.03752	0.374767	0.076753	0:0.539436,1:0.504552,2:0.581305	conversion_artifact,not_interpreted
+start_sum	reference	even	200	longer	scorable	15	9	0.453416	0.110581	0.981439	0.363977	0.0288874	0:0.465814,1:0.457509,2:0.436927	conversion_artifact,not_interpreted
+start_sum	reference	even	200	longer	all_assays	15	10	0.498543	0.115653	0.985314	0.357611	0.0299588	0:0.513187,1:0.499214,2:0.483229	conversion_artifact,not_interpreted
+sum_1kb_count	read_start	all	NA	36bp	scorable	28	9	0.0864639	0.437461	15.5312	1.43685	0.254994	0:0.206698,1:-0.0482963,2:0.10099	
+sum_1kb_count	read_start	all	NA	36bp	all_assays	28	21	0.194437	0.543467	12.7563	1.19932	0.130301	0:0.257574,1:0.127273,2:0.198464	
+sum_1kb_count	read_start	all	NA	longer	scorable	15	9	0.225917	0.456225	17.8506	1.0697	0.0655638	0:0.242146,1:0.250584,2:0.185021	
+sum_1kb_count	read_start	all	NA	longer	all_assays	15	10	0.255734	0.471282	16.6905	1.0407	0.0717135	0:0.28386,1:0.271195,2:0.212147	
+sum_1kb_count	read_start	pair	NA	36bp	scorable	28	9	0.0648299	0.371588	17.737	1.79904	0.266766	0:0.181532,1:-0.0852336,2:0.0981911	
+sum_1kb_count	read_start	pair	NA	36bp	all_assays	28	21	0.186482	0.49156	14.3408	1.42929	0.1482	0:0.248379,1:0.100178,2:0.21089	
+sum_1kb_count	read_start	pair	NA	longer	scorable	15	9	0.265759	0.468538	16.4533	1.06356	0.0819826	0:0.294373,1:0.290514,2:0.21239	
+sum_1kb_count	read_start	pair	NA	longer	all_assays	15	10	0.299599	0.474052	15.4908	1.04146	0.0886334	0:0.336705,1:0.314019,2:0.248072	
+sum_1kb_count	read_start	even	NA	36bp	scorable	28	9	0.0703288	0.427156	15.3688	1.40084	0.260843	0:0.192884,1:-0.0679591,2:0.0860617	
+sum_1kb_count	read_start	even	NA	36bp	all_assays	28	21	0.184256	0.5392	12.626	1.17366	0.132816	0:0.248681,1:0.115865,2:0.188221	
+sum_1kb_count	read_start	even	NA	longer	scorable	15	9	0.21912	0.465619	17.7585	1.05464	0.0618844	0:0.239767,1:0.23971,2:0.177883	
+sum_1kb_count	read_start	even	NA	longer	all_assays	15	10	0.251779	0.481755	16.5866	1.02465	0.0748458	0:0.283231,1:0.263721,2:0.208385	
+sum_1kb_count	reference	all	NA	36bp	scorable	28	9	0.271936	0.542428	10.1479	1.37185	0.121927	0:0.28385,1:0.205016,2:0.326943	
+sum_1kb_count	reference	all	NA	36bp	all_assays	28	21	0.329208	0.621008	8.88019	1.12441	0.088658	0:0.307077,1:0.295945,2:0.384603	
+sum_1kb_count	reference	all	NA	longer	scorable	15	9	0.45408	0.583975	9.66769	0.703107	0.0181685	0:0.461739,1:0.443571,2:0.456931	
+sum_1kb_count	reference	all	NA	longer	all_assays	15	10	0.472073	0.594031	9.14651	0.69933	0.0254115	0:0.484167,1:0.458756,2:0.473297	
+sum_1kb_count	reference	pair	NA	36bp	scorable	28	9	0.28451	0.509603	11.0025	1.74254	0.083015	0:0.324262,1:0.241247,2:0.288021	
+sum_1kb_count	reference	pair	NA	36bp	all_assays	28	21	0.338056	0.589637	9.54016	1.35217	0.0637968	0:0.333945,1:0.308214,2:0.37201	
+sum_1kb_count	reference	pair	NA	longer	scorable	15	9	0.438674	0.555629	9.44588	0.751761	0.0159407	0:0.445543,1:0.429603,2:0.440875	
+sum_1kb_count	reference	pair	NA	longer	all_assays	15	10	0.464769	0.562409	8.9764	0.747397	0.0239905	0:0.475818,1:0.451827,2:0.466662	
+sum_1kb_count	reference	even	NA	36bp	scorable	28	9	0.259543	0.53494	10.1948	1.34073	0.108322	0:0.271538,1:0.199384,2:0.307706	
+sum_1kb_count	reference	even	NA	36bp	all_assays	28	21	0.318703	0.618132	8.87721	1.10117	0.0842976	0:0.295712,1:0.28805,2:0.372348	
+sum_1kb_count	reference	even	NA	longer	scorable	15	9	0.444708	0.589616	9.8004	0.701708	0.0221294	0:0.453248,1:0.431119,2:0.449756	
+sum_1kb_count	reference	even	NA	longer	all_assays	15	10	0.465194	0.600613	9.25359	0.696153	0.0286394	0:0.477953,1:0.449314,2:0.468316	
