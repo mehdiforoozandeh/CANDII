@@ -32,3 +32,5 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-28T07:13Z iteration 1 closed; milestone report to PI with SE/PE data ask
 - 2026-11-28T12:04Z audit: it.1 closed; ledger lagged on R11 R12 R13 R41 R44 (fixed); D8 superseded by D17; R39 102 vs 88 consistent (102 includes 14 crop pairs); D17 needs PI confirm
 - 2026-11-28T12:06Z iteration 2 planner (fable) launched: factorial + controlled SE/PE and dedup pairs (D18); plan file .orchestrate/plan_it2.md
+- 2026-11-28T12:06Z glossary: blocked reply with lagged
+- 2026-11-28T12:16Z it2 plan written (17 chunks, 8 waves); D19-D23 logged; cold review running
