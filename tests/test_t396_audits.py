@@ -76,7 +76,7 @@ def world(tmp_path):
         _meas("E5.pooled.testbed.base", "single-ended", 10, 10, in_eic="blind"),
         _meas("E1.pooled.uniform.se", "single-ended", 100, 100, parent="E1.pooled.uniform.base",
               counts=_counts(cs, "E1.pooled.uniform.se", np.array([1]))),
-        _meas("E1.pooled.uniform.nodedup", "paired-ended", 300, 150,
+        _meas("E1.pooled.uniform.nodedup", "paired-ended", 300001, 150000,
               parent="E1.pooled.uniform.base",
               counts=_counts(cs, "E1.pooled.uniform.nodedup", np.array([9]))),
     ]

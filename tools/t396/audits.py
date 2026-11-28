@@ -42,6 +42,9 @@ if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
 COVARIATES = ("nodedup", "se", "crop", "mapq", "depth")
+# A PE row with an odd line count records depth_fragments = depth_reads // 2, so its ratio is
+# 2 + O(1 / depth_reads); a ratio within RATIO_TOL of 1 or 2 counts as that integer.
+RATIO_TOL = 1e-4
 
 
 def log2_depth(row: dict) -> float:
@@ -162,16 +165,16 @@ def pe_depth_summary(rows: list[dict]) -> list[dict]:
         out.append({
             "run_type": rt, "n_rows": len(rs),
             "n_rows_not_blind": sum(r["in_eic"] != "blind" for r in rs),
-            "n_ratio_1": sum(abs(x - 1.0) < 1e-9 for x in ratio),
-            "n_ratio_2": sum(abs(x - 2.0) < 1e-9 for x in ratio),
-            "n_ratio_other": sum(not (abs(x - 1.0) < 1e-9 or abs(x - 2.0) < 1e-9) for x in ratio),
+            "n_ratio_1": sum(abs(x - 1.0) < RATIO_TOL for x in ratio),
+            "n_ratio_2": sum(abs(x - 2.0) < RATIO_TOL for x in ratio),
+            "n_ratio_other": sum(not (abs(x - 1.0) < RATIO_TOL or abs(x - 2.0) < RATIO_TOL) for x in ratio),
             "ratio_min": lo, "ratio_median": med, "ratio_max": hi,
             "n_in_start_store": len(st),
             "n_store_lines_eq_depth_reads": sum(int(r["n_lines_store"]) == int(_f(r["depth_reads"]))
                                                 for r in st),
             "n_store_lpf_2": sum(int(r["lines_per_fragment_store"]) == 2 for r in st),
             "n_store_lpf_eq_table_ratio": sum(abs(int(r["lines_per_fragment_store"])
-                                                  - _f(r["reads_per_fragment_table"])) < 1e-9
+                                                  - _f(r["reads_per_fragment_table"])) < RATIO_TOL
                                               for r in st),
             "lines_over_depth_reads_min": nl[0], "lines_over_depth_reads_max": nl[2],
             "n_strand_balance_0": sum(_f(r["strand_balance"]) == 0.0 for r in st),
@@ -194,18 +197,18 @@ def listed(rows: list[dict]) -> list[dict]:
     for r in rows:
         x = _f(r["reads_per_fragment_table"])
         why = []
-        if r["run_type"] == "paired-ended" and abs(x - 1) < 1e-9:
+        if r["run_type"] == "paired-ended" and abs(x - 1) < RATIO_TOL:
             why.append("pe_ratio_1")
-        if r["run_type"] == "paired-ended" and abs(x - 2) < 1e-9:
+        if r["run_type"] == "paired-ended" and abs(x - 2) < RATIO_TOL:
             why.append("pe_ratio_2")
-        if r["run_type"] == "mixed" and abs(x - 2) < 1e-9:
+        if r["run_type"] == "mixed" and abs(x - 2) < RATIO_TOL:
             why.append("mixed_ratio_2")
-        if r["run_type"] == "mixed" and abs(x - 1) < 1e-9:
+        if r["run_type"] == "mixed" and abs(x - 1) < RATIO_TOL:
             why.append("mixed_ratio_1")
-        if r["run_type"] == "single-ended" and not abs(x - 1) < 1e-9:
+        if r["run_type"] == "single-ended" and not abs(x - 1) < RATIO_TOL:
             why.append("se_ratio_not_1")
         if r.get("n_lines_store") not in (None, ""):
-            if abs(int(r["lines_per_fragment_store"]) - x) > 1e-9:
+            if abs(int(r["lines_per_fragment_store"]) - x) > RATIO_TOL:
                 why.append("store_lpf_ne_table_ratio")
             if int(r["n_lines_store"]) != int(_f(r["depth_reads"])):
                 why.append("store_lines_ne_depth_reads")
