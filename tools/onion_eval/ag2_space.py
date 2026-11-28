@@ -29,7 +29,7 @@ Sources.
 
 Fold change (section B.2, secondary space A): FE = pileup(mu) / lambda, no pseudocount. FE is linear
 in the count, so its NB expectation is the value at `mu`; `n` is unused there.
-Normalized insertions (secondary space B): mu * 25 / (rl + 24) * 1e8 / depth_reads; it has no lambda,
+Normalized insertions (secondary space B): mu * 25 / (rl + 25) * 1e8 / depth_reads; it has no lambda,
 so its lambda source is `none`.
 Peak probability (section B.3): P_{K ~ NB(n, mu)}[-log10 P(Poisson(lambda) > floor(pileup(K))) >=
 threshold]. The score is non-decreasing in K, so the event is K >= k*, and the probability is the NB
@@ -153,7 +153,7 @@ def fold_change_track(mu, control_counts, covariates: dict, *, gsize: float = MA
 
 
 def normalized_insertions(mu, covariates: dict) -> np.ndarray:
-    """AG2's accessibility unit per 25 bp bin: tags behind the count (mu * 25 / (rl + 24)) over the
+    """AG2's accessibility unit per 25 bp bin: tags behind the count (mu * 25 / (rl + 25)) over the
     track's total tags (`depth_reads`), times 1e8."""
     depth, rl = _need(covariates, "depth_reads", "read_length")
     if not depth > 0:

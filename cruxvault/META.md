@@ -29,6 +29,10 @@ Root: [[candii]]
   - ● `q5` [Q] [[q5_does_a_depth_offset_on_f_the_source_dept|**Does a depth offset on f (the source depth removed before f, the target depth added after) change how well a covariate-conditioned g → f translates a track's raw counts across a covariate change?**]] — *settled* · strong
   - ● `q6` [Q] [[q6_how_closely_does_a_map_h_reproduce_the_l|**How closely does a map h reproduce the −log10 p track from a predicted count distribution and its matched control, as h's complexity and inputs grow?**]] — *settled* · strong
     - ◌ `h25` [H] [[h25_in_the_counts_log10_p_chain_most_of_the_|In the counts → −log10 p chain, most of the p error comes from f's predicted count distribution, not from the map h]] — *parked*
+    - ◐ `q90` [Q] [[q90_can_a_count_space_model_like_minicandi_b|**Can a count-space model like miniCANDI be scored fairly on the EIC board of signal p-value entrants, through an exact count-to-p-value pipeline or a change of the model's output?**]] — *leaning* · moderate
+      - ● `h90` [H] [[h90_max_s_quantile_normalization_rule_and_hi|Max's quantile-normalization rule and his 1 bp MACS2 formula together reproduce the organizers' signal p-value pipeline exactly, so a count route can be converted without a conversion error of its own]] — *settled* · strong · supports
+      - ◐ `h91` [H] [[h91_peaks_kept_by_the_encode_naive_overlap_r|Peaks kept by the ENCODE naive-overlap rule across two halves of the reads (an entrant-side analogue of the pseudoreplicate-overlap set) bring the count route's normalized score close to the score it gets with the truth's own peaks]] — *leaning* · moderate · supports
+      - ◐ `q91` [Q] [[q91_why_does_our_chip_reprocessing_of_the_bl|**Why does our ChIP reprocessing of the blind set differ from Jacob Schreiber's SE tracks before the p-value step, when the DNase track is byte-identical?**]] — *leaning* · moderate
   - ◐ `q7` [Q] [[q7_why_do_the_covariate_conditioned_g_f_des|**Why do the covariate-conditioned g → f designs miss the depth law on depth-only pairs?**]] — *leaning* · moderate
     - ● `h18` [H] [[h18_the_1_pseudocount_in_x_log_1_counts_make|The +1 pseudocount in x = log(1 + counts) makes the g → f designs miss the depth law]] — *settled* · strong · against (`never-trained depth miss, rung A0 (no +1): 0.46 (NB) / 0.38 (Poisson-mean) median |log2 err| vs trained 0.12`)
     - ◐ `h19` [H] [[h19_g_fits_trained_base_arm_depth_pairs_but_|g fits trained base ↔ arm depth pairs but does not carry the fit over to never-trained arm → arm depth pairs]] — *leaning* · moderate · supports
@@ -93,6 +97,7 @@ Root: [[candii]]
     - ○ `q71` [Q] [[q71_does_the_architecture_order_at_equal_tra|**Does the architecture order at equal training windows hold when every architecture gets the same training compute (2.4e15 FLOPs)?**]] — *open*
   - ◐ `q48` [Q] [[q48_which_minicandi_design_choices_move_impu|**Which miniCANDI design choices move imputation, correction or calibration beyond the seed range on the conv autoencoder, conv + attention and the U-Net at about 1.0 M parameters?**]] — *leaning* · moderate
     - ◐ `q49` [Q] [[q49_does_the_chip_seq_control_help_minicandi|**Does the ChIP-seq control help miniCANDI as an input assay and as a predicted output?**]] — *leaning* · weak
+      - ◐ `q76` [Q] [[q76_can_minicandi_predict_the_chip_seq_contr|**Can miniCANDI predict the ChIP-seq control well enough to stand in for an observed control in the signal p-value and fold change of a target with no control?**]] — *leaning* · moderate
     - ◐ `q50` [Q] [[q50_does_the_leave_one_out_average_of_the_tr|**Does the leave-one-out average of the training cell types, given as an input, help miniCANDI?**]] — *leaning* · moderate
       - ◐ `h43` [H] [[h43_on_all_256_regions_the_leave_one_out_ave|On all 256 regions, the leave-one-out average input keeps its place in the U-Net mix-and-match pool: better beyond the seed range on one goal term and worse beyond on none]] — *leaning* · moderate · supports
     - ◐ `q51` [Q] [[q51_does_two_step_correction_through_a_base_|**Does two-step correction through a base covariate set help miniCANDI, with native or fixed base depth?**]] — *leaning* · moderate
@@ -117,15 +122,35 @@ Root: [[candii]]
   - ◐ `h40` [H] [[h40_scrambled_covariates_lowers_the_correcti|scrambled_covariates lowers the correction term by more than 2 seed spreads and leaves imputation within 2; dna_off lowers imputation]] — *leaning* · moderate · supports
   - ○ `q43` [Q] [[q43_does_the_gain_of_scrambled_covariates_in|**Does the gain of scrambled covariates in gap closed at rung 4 come from the 84 headline pairs with a duplicate-keeping side, where source and target can share DNA fragments?**]] — *open*
   - ● `q44` [Q] [[q44_does_training_the_u_net_on_the_counterfa|**Does training the U-Net on the counterfactual processing views of EIC (depth thinning, single-end, read crop, no duplicate removal, no MAPQ filter) raise the three goal terms over training on the base view alone, and for which view type and which evaluation pairs?**]] — *settled* · strong
-    - ○ `q45` [Q] [[q45_why_does_adding_the_no_duplicate_removal|**Why does adding the no-duplicate-removal and no-MAPQ-filter views to training lower gap closed on the never-trained pair that combines both (0.08 against 1.77 for base only, half-read floor scale)?**]] — *open*
+    - ◐ `q45` [Q] [[q45_why_does_adding_the_no_duplicate_removal|**Why does adding the no-duplicate-removal and no-MAPQ-filter views to training lower gap closed on the never-trained pair that combines both (0.08 against 1.77 for base only, half-read floor scale)?**]] — *leaning* · moderate
 - ● `q27` [Q] [[q27_are_the_onion_run_s_estimators_scorers_a|**Are the onion run's estimators, scorers and training pipeline correct, fast and reproducible on the clusters?**]] — *settled* · strong
 - ● `q28` [Q] [[q28_did_flashzoi_train_on_eic_blind_tracks_o|**Did Flashzoi train on EIC blind tracks or on the genomic loci of the blind scoring?**]] — *settled* · strong
 - ○ `q72` [Q] [[q72_which_architecture_and_which_data_versio|**Which architecture and which data version should the scaled miniCANDI use, given that the conv autoencoder, conv + attention and the U-Net tie on the composite?**]] — *open*
+  - ● `q75` [Q] [[q75_can_one_minicandi_recipe_match_or_beat_t|**Can one miniCANDI recipe match or beat the best base model on imputation, correction and calibration at the same time (Pareto dominance over the conv autoencoder, conv + attention and U-Net bases on eic_v1_2)?**]] — *settled* · strong
+    - ○ `h44` [H] [[h44_a_u_net_whose_count_skips_are_film_modul|A U-Net whose count skips are FiLM-modulated by (C, C') keeps the base U-Net imputation and reaches conv-level correction]] — *open*
+    - ○ `h45` [H] [[h45_pre_and_post_cac_layers_in_the_testbed_g|Pre and post CAC layers in the testbed g/f form (g reads only covariates and outputs the parameters of a count map f; f before the network removes the C artifact, f after the NB re-applies the C' artifact) raise correction without lowering imputation or calibration]] — *open*
+    - ○ `h46` [H] [[h46_where_film_injects_the_covariates_encode|Where FiLM injects the covariates (encoder only, decoder only, bottleneck only, every block including attention) moves correction beyond the seed range while imputation stays within range]] — *open*
+    - ○ `h47` [H] [[h47_training_correction_and_same_view_pairs_|Training correction and same-view pairs on read-disjoint halves (source pr1, target pr2) removes the U-Net's input copy and lifts its correction to conv level without losing imputation]] — *open*
+    - ◐ `h49` [H] [[h49_the_full_combination_minicandi_trained_o|The full-combination miniCANDI trained on 25 bp read-start counts, with its predictions converted to overlap counts, matches the same recipe trained on overlap counts on imputation, correction and calibration]] — *leaning* · moderate · against
+    - ◐ `q77` [Q] [[q77_does_a_poisson_deviance_eval_set_imputat|**Does a Poisson-deviance eval set (imputation skill vs the position average, correction gap closed vs depth-only scaling with a read-noise floor, deviance calibration ratio) measure the three goals at least as well as the current headline set?**]] — *leaning* · moderate
+      - ◐ `h48` [H] [[h48_on_the_same_predictions_each_deviance_te|On the same predictions, each deviance term ranks miniCANDI arms like the current term of its goal and separates arms from seed noise at least as well]] — *leaning* · moderate · supports
+    - ◐ `q78` [Q] [[q78_how_much_does_per_assay_dispersion_recal|**How much does per-assay dispersion recalibration after training improve calibration of the final miniCANDI when fitted on other cells, as a user must for imputed tracks?**]] — *leaning* · moderate
+    - ◐ `q79` [Q] [[q79_do_the_final_minicandi_s_negative_binomi|**Do the final miniCANDI's negative binomial intervals cover large observed peaks, compared with a perfectly calibrated model under the same bin selection?**]] — *leaning* · moderate
+      - ○ `q93` [Q] [[q93_how_can_training_make_the_model_capture_|**How can training make the model capture large peaks accurately, without a post-hoc shrink of the predicted peaks?**]] — *open*
+    - ◐ `q80` [Q] [[q80_does_the_final_minicandi_follow_a_change|**Does the final miniCANDI follow a changed output covariate in the direction stated before the run?**]] — *leaning* · moderate
+      - ○ `q92` [Q] [[q92_which_output_covariates_make_sense_as_pr|**Which output covariates make sense as prompts for an imputed experiment that was never done?**]] — *open*
+    - ◐ `q81` [Q] [[q81_why_does_the_read_start_minicandi_lose_t|**Why does the read-start miniCANDI lose to the read-count version on imputation and calibration?**]] — *leaning* · moderate
+      - ◐ `h50` [H] [[h50_the_nb_moment_match_which_treats_neighbo|The NB moment match, which treats neighbouring start counts as independent, understates the converted variance and causes the read-start model's overconfidence]] — *leaning* · weak · supports
+      - ◐ `h51` [H] [[h51_sparse_per_bin_start_targets_and_inputs_|Sparse per-bin start targets and inputs (more zeros, lower replicate agreement) cause the read-start imputation loss]] — *leaning* · weak · mixed
+      - ◐ `h52` [H] [[h52_weighting_each_read_once_in_the_start_lo|Weighting each read once in the start loss, instead of about 2.4 times through overlapping bins, gives the read-start model less effective training signal per window]] — *leaning* · weak · against
+      - ◐ `h53` [H] [[h53_the_read_start_model_s_inputs_observed_t|The read-start model's inputs (observed tracks, average-signal input, input transform, covariates, masking) were built differently from the reference by mistake]] — *leaning* · moderate · against
+      - ○ `h54` [H] [[h54_the_fixed_training_budget_80_000_windows|The fixed training budget (80,000 windows, about 1M parameters) is too small for the noisier start target, so the read-start model is under-trained]] — *open*
+      - ◐ `h55` [H] [[h55_the_read_start_model_s_h3k36me3_loss_is_|The read-start model's H3K36me3 loss is a broad level error: it misplaces the total starts over gene-body domains, not per-bin noise]] — *leaning* · weak · supports
 - ○ `q73` [Q] [[q73_how_does_the_final_minicandi_score_on_th|**How does the final miniCANDI score on the 51 EIC blind tracks, against the published EIC board and the baselines, once the blind rows are built?**]] — *open*
 
 ## Dashboard
 
-- **Questions** (74): open 24 · leaning 40 · settled 10 · parked 0
-- **Hypotheses** (42): open 10 · leaning 19 · settled 7 · parked 6
-- **Confidence**: weak 22 · moderate 37 · strong 17
-- **Findings**: 137
+- **Questions** (85): open 25 · leaning 49 · settled 11 · parked 0
+- **Hypotheses** (56): open 15 · leaning 27 · settled 8 · parked 6
+- **Confidence**: weak 26 · moderate 50 · strong 19
+- **Findings**: 173

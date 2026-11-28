@@ -1,0 +1,22 @@
+experiment	check	value
+C19M22	L6_rerun_vs_probe1_L6	max_abs_diff 0.0; bins differing 0 of 121241707
+C19M22	L6_rerun_peaks_vs_probe1_L6_peaks	jaccard 1.0
+C19M22	overlap_port_vs_pipeline_script_L7o	identical True; n 16752 vs 16752
+C19M22	overlap_port_vs_pipeline_script_L7f	identical True; n 17829 vs 17829
+C19M22	overlap_port_vs_pipeline_script_on_pipeline_bfilt_peaks	identical True; n 19401 vs 19401
+C19M22	pipeline_script_on_bfilt_inputs_vs_pipeline_overlap_file	identical True; n 19401 vs 19401
+C19M22	rescore_L7_qn_vs_probe1_scores_qn_L7	max relative diff over 9 measures 0
+C40M17	L6_rerun_vs_probe1_L6	max_abs_diff 0.0; bins differing 0 of 121241707
+C40M17	L6_rerun_peaks_vs_probe1_L6_peaks	jaccard 1.0
+C40M17	overlap_port_vs_pipeline_script_L7o	identical True; n 4223 vs 4223
+C40M17	overlap_port_vs_pipeline_script_L7f	identical True; n 10617 vs 10617
+C40M17	overlap_port_vs_pipeline_script_on_pipeline_bfilt_peaks	identical False; n 12201 vs 12202
+C40M17	pipeline_script_on_bfilt_inputs_vs_pipeline_overlap_file	identical True; n 12202 vs 12202
+C40M17	rescore_L7_qn_vs_probe1_scores_qn_L7	max relative diff over 9 measures 0
+C12M02	L6_rerun_vs_probe1_L6	max_abs_diff 0.0; bins differing 0 of 121241707
+C12M02	L6_rerun_peaks_vs_probe1_L6_peaks	jaccard 1.0
+C12M02	overlap_port_vs_pipeline_script_L7o	identical True; n 85439 vs 85439
+C12M02	overlap_port_vs_pipeline_script_L7f	identical True; n 106849 vs 106849
+C12M02	overlap_port_vs_pipeline_script_on_pipeline_bfilt_peaks	identical False; n 100393 vs 100583
+C12M02	pipeline_script_on_bfilt_inputs_vs_pipeline_overlap_file	identical False; n 100583 vs 100584
+C12M02	rescore_L7_qn_vs_probe1_scores_qn_L7	max relative diff over 9 measures 0

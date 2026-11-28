@@ -7,8 +7,9 @@ mode, `--shift -75 --extsize 150`, no control. The local rate is the max of the 
 and the window rates (fragment, 1 kb, 10 kb from the control; 10 kb of the treatment without one).
 
 The 25 bp products count read-span overlaps: a read of length rl touches on average
-(rl + 24) / 25 bins, so the tags behind a binned count are about count * 25 / (rl + 24), and the
-caller's pileup (tags extended to the fragment) is about count * fraglen / (rl + 24).
+(rl + 25) / 25 bins (the store count rule, see SPAN_EXTRA), so the tags behind a binned count are
+about count * 25 / (rl + 25), and the caller's pileup (tags extended to the fragment) is about
+count * fraglen / (rl + 25).
 """
 from __future__ import annotations
 
@@ -16,12 +17,17 @@ import numpy as np
 
 GENOME_SIZE = 2.7e9          # MACS2 `-g hs`
 BIN = 25
-SPAN_EXTRA = BIN - 1         # = 24: a read of length rl touches (rl + 24) / 25 bins on average
+#: a read of length rl touches (rl + SPAN_EXTRA) / 25 bins on average. The store count rule adds 1 to
+#: bins start//25 .. end//25 INCLUSIVE with a half-open BED end = start + rl (`tools/t112/bin25.py`
+#: `counts_from_tagalign`; `tools/t112/records.py` COUNT_RULE). Over a uniform start phase the mean
+#: of end//25 - start//25 is rl/25, so the mean bins touched is rl/25 + 1 = (rl + 25)/25. Was 24
+#: until t390 span_fix (as `tools/onion_eval/signal_from_counts.py`, commit 0f957f05): a ~1% scale error.
+SPAN_EXTRA = BIN
 #: control windows of the local rate; "frag" = the product's fraglen
 WINDOWS_CTL_BP = {"frag": None, "1k": 1000, "10k": 10000}
 #: the treatment window of the local rate when there is no control
 WINDOW_NOCTL_BP = 10000
-PILEUP_RULE = "count * fraglen / (read_length + 24)"
+PILEUP_RULE = "count * fraglen / (read_length + 25)"
 #: P = -log10 P(X > floor(pileup)) at the local rate (MACS2 ppois)
 TAIL = "strict"
 PSEUDOCOUNT = 0

@@ -1,0 +1,3 @@
+model	n_seeds	imputation.mean	imputation.range	correction.mean	correction.range	calibration.mean	calibration.range	dev_imputation_skill.mean	dev_imputation_skill.range	dev_imputation_r2.mean	dev_imputation_r2.range	dev_correction_gap_closed.mean	dev_correction_gap_closed.range	dev_calibration_ratio.mean	dev_calibration_ratio.range	nb_logscore_gain_vs_marginal.mean	nb_logscore_gain_vs_marginal.range
+rcp_halves_mix_avg_pearson_unet	3	0.4996	0.0349	0.8156	0.0105	0.6852	0.0924	0.5426	0.0653	0.3423	0.0175	0.9508	0.0023	1.0584	0.0398	0.3747	0.0105
+rs_halves_mix_avg_pearson_unet	3	0.4568	0.0070	0.7826	0.0362	0.6064	0.0679	0.3746	0.0870	0.2886	0.0324	0.9452	0.0044	1.3081	0.0965	0.3064	0.0335

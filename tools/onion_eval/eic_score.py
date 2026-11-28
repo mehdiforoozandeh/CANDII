@@ -35,6 +35,14 @@ unchanged (its body is commented out; ENCODE-DCC/imputation_challenge at 181b802
 (2) its blacklisted bins deleted. Nothing else is applied. `verify-published` reproduces MOESM4
 on exactly that rule.
 
+MOESM2 (Additional File 2): the same 25 entries scored against the ORIGINAL 2019 blind truth
+(paired-end ENCODE processing, no reprocessing, no quantile normalization). The rule is the
+MOESM4 rule with the truth swapped: same 25 bp binning, blacklist deletion, nine measures, ten
+bootstrap chromosome groups, 51 experiments, and msevar weights from the scored truth itself
+(per-assay variance across the 51 original tracks, C38M02 left out). Max's sprint 04 reproduced
+MOESM2 on this rule (pe_vs_MOESM2: 25 of 25 positions, median relative difference 3e-10).
+Truth: ORIGINAL_TRUTH. Score it with `--truth ORIGINAL_TRUTH --published <MOESM2 csv>`.
+
 Subcommands:
   fetch-truth       stream Zenodo 14736610 (-> qnorm/) and 14736608 (-> se_unnormalized/), md5 checked
   link-submissions  symlink the 25 published entries' bigWig folders under one directory
@@ -137,9 +145,16 @@ MOESM4_NAME = "13059_2023_2915_MOESM4_ESM.csv"
 MOESM4_URL = ("https://static-content.springer.com/esm/art%3A10.1186%2Fs13059-023-02915-y/"
               "MediaObjects/13059_2023_2915_MOESM4_ESM.csv")
 MOESM4_SHA256 = "96e4164af6ecb11de72228af82bd6b2f7fa0f94b95e6d4f2d2948e02ce5a944d"
+MOESM2_NAME = "13059_2023_2915_MOESM2_ESM.csv"
+MOESM2_SHA256 = "48ad2e8da394034eab61e6c40e4e96e4fa2ee9ebb1295711f3423f211dbff7b1"
+PUBLISHED_SHA256 = {MOESM4_SHA256: "MOESM4", MOESM2_SHA256: "MOESM2"}
+# The original 2019 blind truth (MOESM2's truth): the organizers' Synapse bigWigs, 51 tracks,
+# in Max's sprint 04 tree on Nibi (/scratch, purge-exposed).
+ORIGINAL_TRUTH = "/scratch/maxwl/epi_imputation/data/synapse/blind_truth"
 
 ONION_EIC = "/project/def-maxwl/mforooz/ONION/eic"
 DEFAULT_PUBLISHED = f"{ONION_EIC}/published/{MOESM4_NAME}"
+DEFAULT_PUBLISHED_MOESM2 = f"{ONION_EIC}/published/{MOESM2_NAME}"
 DEFAULT_SUBMISSIONS = f"{ONION_EIC}/submissions"
 SCRATCH_EIC = "/scratch/mforooz/onion/eic"
 
@@ -735,10 +750,10 @@ def global_ranks(rows, measures=MEASURES9):
 
 
 def read_published(path):
-    """MOESM4 rows (bootstrap rows of the 25 entries), sha256-pinned."""
+    """MOESM4 or MOESM2 rows (bootstrap rows of the 25 entries), sha256-pinned."""
     got = sha256_file(path)
-    if got != MOESM4_SHA256:
-        raise SystemExit(f"{path}: sha256 {got} is not the published MOESM4 ({MOESM4_SHA256})")
+    if got not in PUBLISHED_SHA256:
+        raise SystemExit(f"{path}: sha256 {got} is neither the published MOESM4 nor MOESM2")
     rows = []
     with open(path) as fh:
         for r in csv.DictReader(fh):
@@ -1098,22 +1113,26 @@ def cmd_verify_published(a):
     missing_truth = sorted(set(BLIND_EXPS) - set(exps))
     if missing_truth:
         raise SystemExit(f"truth lacks {len(missing_truth)} blind experiments: {missing_truth[:5]}")
+    vexps = a.exps.split(",") if a.exps else list(BLIND_EXPS)
+    teams = [t for t in TEAMS if not a.teams or str(t[0]) in a.teams.split(",")]
     by_exp = {}
-    for tid, name, _ in TEAMS:
-        for e, ents in _entries_from_dir(Path(a.submissions) / str(tid), BLIND_EXPS,
+    for tid, name, _ in teams:
+        for e, ents in _entries_from_dir(Path(a.submissions) / str(tid), vexps,
                                          f"team_{tid}", name).items():
             by_exp.setdefault(e, []).extend([(kk, nn, tid, p) for kk, nn, _, p in ents])
     n_files = sum(len(v) for v in by_exp.values())
-    log(f"[verify] {n_files} submitted tracks of {len(TEAMS)} entries on {len(by_exp)} experiments")
+    log(f"[verify] {n_files} submitted tracks of {len(teams)} entries on {len(by_exp)} experiments")
     _run_scoring(a.truth, cache, by_exp, workers, (k, n))
     if n > 1:
         log(f"[verify] shard {k}/{n} scored; run without --shard to compare")
         return 0
 
-    pub = read_published(a.published)
+    # A subset (--exps, --teams) is compared on those experiments only; the leaderboard check
+    # puts our rows in place of the published rows of the rescored teams.
+    pub = [r for r in read_published(a.published) if f"{r['cell']}{r['assay']}" in vexps]
     ours = []
-    for tid, name, _ in TEAMS:
-        for e in BLIND_EXPS:
+    for tid, name, _ in teams:
+        for e in vexps:
             p = Path(cache) / "scores" / f"team_{tid}" / f"{e}.tsv"
             if p.exists():
                 ours += _board_rows(read_score_rows(p))
@@ -1133,7 +1152,9 @@ def cmd_verify_published(a):
                                  worst_row=f"{TEAM_NAME[o['team_id']]}|{o['cell']}{o['assay']}|boot{o['bootstrap_id']}",
                                  worst_ours=o[m], worst_published=p[m]))
         worst_rel = max(worst_rel, float(rel.max()))
-    bo = {d["team_id"]: d for d in global_ranks(ours)}
+    rescored = {tid for tid, _, _ in teams}
+    bo = {d["team_id"]: d for d in global_ranks(
+        ours + [r for r in pub if r["team_id"] not in rescored])}
     bp = global_ranks(pub)
     board = []
     for d in bp:
@@ -1168,7 +1189,7 @@ def cmd_verify_published(a):
         for b in diffs:
             log(f"rank difference: {b['team']} published {b['position_published']} "
                 f"ours {b['position_ours']}")
-    complete = len(joined) == len(pub)
+    complete = len(joined) == sum(1 for r in pub if r["team_id"] in rescored)
     log(f"rows complete: {complete}")
     log(f"ranks identical: {not diffs and complete}")
     return 0 if (not diffs and complete) else 1
@@ -1178,10 +1199,11 @@ def cmd_board(a):
     """Each scored entry is added alone, as a 26th entry, to the 25 published ones and ranked
     (Max's protocol, never two of ours in one field)."""
     pub = read_published(a.published)
+    table = PUBLISHED_SHA256[sha256_file(a.published)]
     out = []
     base = {d["team_id"]: d for d in global_ranks(pub)}
     for d in base.values():
-        out.append(dict(entry=d["team"], source="published MOESM4", added_alone="",
+        out.append(dict(entry=d["team"], source=f"published {table}", added_alone="",
                         position=d["position"], of=len(base), rank_stat=d["rank_stat"],
                         score_mean=d["score_mean"]))
     for path in a.scores:
@@ -1234,11 +1256,13 @@ def main(argv=None):
     p.set_defaults(fn=cmd_score)
 
     p = sp.add_parser("verify-published", parents=[common],
-                      help="score the 25 published entries; compare with MOESM4")
+                      help="score the 25 published entries; compare with MOESM4 or MOESM2")
     p.add_argument("--submissions", default=DEFAULT_SUBMISSIONS, help="<dir>/<team_id>/C##M##.bigwig")
     p.add_argument("--published", default=DEFAULT_PUBLISHED)
     p.add_argument("--shard", default="0/1", help="k/n: score experiments i with i %% n == k, no compare")
     p.add_argument("--report-dir", default="")
+    p.add_argument("--exps", default="", help="comma-separated C##M##: verify on these only")
+    p.add_argument("--teams", default="", help="comma-separated team ids: rescore these only")
     p.set_defaults(fn=cmd_verify_published)
 
     p = sp.add_parser("board", help="add scored entries alone to the published field")

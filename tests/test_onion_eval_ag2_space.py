@@ -71,8 +71,8 @@ def test_fold_change_flat_control_hand_value():
     L = 1000
     mu = np.full(L, 30.0)
     ctl = np.full(L, 5.0)
-    # pileup scale 200 / (76 + 24) = 2: treatment pileup 60; control pileup 10 * r (= 2e7 / 1e7) = 20;
-    # lambda_bg = 200 * 2e7 / 2.7e9 = 1.48 < 20; the local windows of a flat control are <= 20
+    # pileup scale s = 200 / (76 + 25): treatment pileup 30 s = 59.4; control pileup 5 s r (= 2e7 / 1e7)
+    # = 19.8; lambda_bg = 200 * 2e7 / 2.7e9 = 1.48 < 19.8; the local windows of a flat control are <= 19.8
     fe, src = A.fold_change_track(mu, ctl, CHIP_COV)
     assert fe.dtype == np.float32 and src == "observed_control"
     assert np.allclose(fe, 3.0, rtol=1e-6)
@@ -103,20 +103,21 @@ def test_fold_change_at_mu_equals_nb_mean_by_simulation():
 
 @pytest.mark.parametrize("rl", [36, 50, 101])
 def test_normalized_insertions_sum_to_1e8(rl):
-    # Simulate reads on a small genome and bin them by the onion rule (a read adds 1 to every 25 bp
-    # bin it overlaps). Start offsets mod 25 are balanced, so the mean bins per read is exactly
-    # (rl + 24) / 25 and the track must sum to 1e8 up to float rounding.
+    # Simulate reads on a small genome and bin them by the store rule (`t112/bin25.py`: +1 to bins
+    # start//25 .. end//25 inclusive, BED end = start + rl). Start offsets mod 25 are balanced, so the
+    # mean bins per read is exactly (rl + 25) / 25 and the track must sum to 1e8 up to float
+    # rounding. (Until t390 span_fix this test used the strict-overlap rule and rl + 24.)
     rng = np.random.default_rng(3)
     nbins, n_reads = 20_000, 25 * 2_000
     genome_bp = nbins * 25
     base = rng.integers(0, (genome_bp - rl - 25) // 25, size=n_reads) * 25
     starts = base + np.arange(n_reads) % 25
-    first, last = starts // 25, (starts + rl - 1) // 25
+    first, last = starts // 25, (starts + rl) // 25
     counts = np.zeros(nbins + 1)
     np.add.at(counts, first, 1.0)
     np.add.at(counts, last + 1, -1.0)
     counts = np.cumsum(counts)[:nbins]
-    assert counts.sum() == pytest.approx(n_reads * (rl + 24) / 25)
+    assert counts.sum() == pytest.approx(n_reads * (rl + 25) / 25)
     v = A.normalized_insertions(counts, {"depth_reads": float(n_reads), "read_length": float(rl)})
     assert abs(v.astype(np.float64).sum() / 1e8 - 1) < 1e-6
 
@@ -300,10 +301,13 @@ def test_box_d_peak_probability_is_on_the_pileup_scale():
     n = np.full(rb, 3.0)
     p = A.peak_probability_from_nb(n, mu, _chip_row(), ds=_FakeDS(ctl), regions=[("chr1", 0)], rb=rb)
     m_s, n_s, ctl_s = S._spread(mu, n, ctl["chr1"], 200, "box_d")
-    s_ = 200 / (76 + 24)
+    s_ = 200 / (76 + 25)
     lam = S.macs2_lambda(lambda_bg=200 * 2e7 / MACS2_GSIZE_HS,
                          control_pileup=S.pileup_from_counts(ctl_s, 200, 76), ratio_treat2control=2.0)
     k = nbinom.rvs(n_s, n_s / (n_s + s_ * m_s), size=(20000, rb), random_state=rng)
     freq = (log10_upper_tail(k.astype(np.int64), np.broadcast_to(lam, k.shape).copy()) >= 2.0).mean(0)
     inner = slice(8, rb - 8)                                   # away from the zero-padded ends
-    assert np.max(np.abs(p[inner] - freq[inner])) < 0.01
+    # Monte Carlo: SE <= sqrt(0.25 / 20000) = 0.0035 per bin, 384 bins, so max |diff| is about 4 SE.
+    # 0.01 held by luck of the seed before t390 span_fix moved the scale (rl + 25); seed 6 then
+    # gave 0.0133 at 3.9 SE with mean z -0.06 (no bias), seeds 7 and 8 gave 0.0077 and 0.0089.
+    assert np.max(np.abs(p[inner] - freq[inner])) < 0.015

@@ -546,3 +546,43 @@ would otherwise have caught the mismatch at bake time.
   counts-without-sequence configuration.
 - **Four covariates, raw:** `[log2 depth, assay_id, read_length, run_type]`, no normalization,
   through FiLM at every conv layer.
+
+## Read-start batches (t392, minicandi)
+
+`tools/minicandi/res_dataset.py::make_dataset` returns a `rs_dataset.ReadStartDataset` when the
+config sets `read_start`, and `res_dataset.train` then uses `read_start.read_start_loss`. The
+store it reads is described in `STORE.md`, *The read-start store*.
+
+| config key | meaning |
+|---|---|
+| `read_start` | bool; turns the read-start dataset and loss on |
+| `read_start_store` | store root; reads `<root>/<id>/starts.h5`, `starts_pr1.h5`, `starts_pr2.h5`. Required |
+| `read_start_average_h5` | the read-start average file (`rs_dataset.py::build_average_h5`). Unset: the average is computed from the store, which is for small tables only |
+
+`average_h5` keeps its read-count path; only the scorer's own `OnionDataset` reads it. The tables
+stay the `eic_v1_2` read-count tables, and the sampler is the parent's, so the window sequence per
+seed is that of `OnionDataset`.
+
+Under `read_start`, `x_counts` and `y_counts` hold the strand sum of the starts, not overlap
+counts. The window adds:
+
+| key | dtype, shape | content |
+|---|---|---|
+| `x_counts_sub` | int32 `[L, A, 2]` | input starts, channel 0 plus, channel 1 minus; 0 where hidden or missing |
+| `y_counts_sub` | int32 `[L, A, 2]` | target starts, same layout |
+| `avg_sub` | float32 `[L, A, 2]` | under `average_input`: the leave-one-cell-out average of starts x 1e6 / `depth_reads`; `avg` is its channel sum |
+
+`window` raises if `x_counts_sub` or `y_counts_sub` does not sum over the channel to `x_counts` or
+`y_counts`.
+
+### ATAC-seq and DNase-seq are one-channel tracks (D11)
+
+`read_start.py::UNSTRANDED_TRACKS` is `("ATAC-seq", "DNase-seq")`. In `x_counts_sub`,
+`y_counts_sub` and `avg_sub`, channel 0 of these tracks holds the total of both strands and
+channel 1 is 0. Channel 1 of these tracks is never read or trained
+(`read_start.py::channel_mask`). The store keeps both strands; `read_strands` returns it as is.
+
+### Refused, with `ValueError`
+
+`input_depth = fixed`, `aug_revcomp`, `two_step`, `res_bp` other than 25, `res_in_sub` or
+`res_out_sub` above 1, no `read_start_store`, and any table row whose `counts_path` is not `h5:`.

@@ -4,9 +4,9 @@ The recipe that ran (plan/T125_STATUS.md, Phase 0 findings and PI decisions, 202
 
 - ChIP: chip-seq-pipeline2 v2.2.2, MACS2 `--nomodel --extsize FRAGLEN --keep-dup all`, `bdgcmp -m ppois`.
   DNase: atac-seq-pipeline v2.2.3 in DNase mode (`--shift -75 --extsize 150`, no control).
-- pileup ≈ count × fraglen / (read_length + 24) × s_T. Variant "bin" uses the bin's count; variant
-  "frag" uses the mean count over the fragment window (zero outside the chromosome, as the caller's
-  pileup is).
+- pileup ≈ count × fraglen / (read_length + 25) × s_T (the store count rule; + 24 until t390
+  span_fix). Variant "bin" uses the bin's count; variant "frag" uses the mean count over the
+  fragment window (zero outside the chromosome, as the caller's pileup is).
 - λ = max(λ_bg, λ_frag, λ_1k, λ_10k). The window λ's come from the binned control, scaled to the
   smaller set (MACS2 `--scale-to small`), ratio V in ratio arms. Each is a rate times d:
   λ_w = (tags in the summed window) × fraglen / (width actually summed) × s_C, the width being
@@ -32,7 +32,12 @@ from scipy.stats import poisson
 
 GENOME_SIZE = 2.7e9
 BIN = 25
-SPAN_EXTRA = 24
+#: a read of length rl touches (rl + SPAN_EXTRA) / 25 bins on average. The store count rule adds 1 to
+#: bins start//25 .. end//25 INCLUSIVE with a half-open BED end = start + rl (`tools/t112/bin25.py`
+#: `counts_from_tagalign`; `tools/t112/records.py` COUNT_RULE). Over a uniform start phase the mean
+#: of end//25 - start//25 is rl/25, so the mean bins touched is rl/25 + 1 = (rl + 25)/25. Was 24
+#: until t390 span_fix (as `tools/onion_eval/signal_from_counts.py`, commit 0f957f05): a ~1% scale error.
+SPAN_EXTRA = BIN
 WINDOWS_CTL_BP = {"frag": None, "1k": 1000, "10k": 10000}   # frag = frag_bins(fraglen) × 25 bp
 WINDOW_NOCTL_BP = 10000
 LAMBDA_FLOOR = 1e-12
@@ -124,7 +129,7 @@ def lambda_window(tags, window_bp, fraglen, s):
 
 
 def _tags(count_sum, read_length) -> np.ndarray:
-    """Read-span overlap counts → tags: a read touches (read_length + 24) / 25 bins on average."""
+    """Read-span overlap counts → tags: a read touches (read_length + SPAN_EXTRA) / 25 bins on average."""
     return np.asarray(count_sum, dtype=np.float64) * BIN / (float(read_length) + SPAN_EXTRA)
 
 
@@ -172,7 +177,7 @@ def frag_rest(treat, info) -> np.ndarray:
 
 
 def pileup(count, info):
-    """count × fraglen / (read_length + 24) × s_T."""
+    """count × fraglen / (read_length + SPAN_EXTRA) × s_T."""
     s_t, _ = scale(info)
     return np.asarray(count, dtype=np.float64) * float(info.fraglen) / (float(info.read_length) + SPAN_EXTRA) * s_t
 

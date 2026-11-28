@@ -1,0 +1,9 @@
+source	measurements	tasks	read_gib	max_task_gib
+onion-work__000	618	45	116.123	2.588
+onion-work__001	389	35	88.911	2.551
+onion-work__002	503	43	111.657	2.608
+onion-work__003	488	40	102.376	2.564
+onion-work__004	495	46	119.164	2.596
+onion-work__005	169	16	40.433	2.535
+testbed	78	7	17.522	2.515
+total	2740	232	596.185	

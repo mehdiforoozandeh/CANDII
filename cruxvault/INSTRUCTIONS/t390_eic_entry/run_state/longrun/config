@@ -1,0 +1,4 @@
+protected=cruxvault/INSTRUCTIONS/eic_entry
+job_prefix=eicx_
+cluster_exec=hpc run
+pi_files=

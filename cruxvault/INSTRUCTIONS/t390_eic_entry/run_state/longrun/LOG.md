@@ -1,0 +1,109 @@
+# Log
+
+Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
+- 2026-11-22T20:59Z longrun initialized (protected=cruxvault/INSTRUCTIONS/eic_entry, job_prefix=eicx_)
+- 2026-11-22T21:01Z kickoff: ledger R1-R10, decisions D1-D4, two read agents gathering facts
+- 2026-11-22T21:02Z glossary: reply sent with unregistered terms: log10
+- 2026-11-22T21:03Z PI confirmed D2 (fairness rule) and ledger tiers
+- 2026-11-22T21:04Z fact (Max s04): EIC scorer metrics9 = 9 measures on RAW QN-truth values at 25 bp, chr1-22+X minus blacklist, 10 chromosome-group bootstraps; truth cache Nibi /scratch/maxwl/epi_imputation/s04/cache/qn; readers bigwig:<dir> or candi:<root>/<exp>/<tag>/<chrom>.npz; no count reader
+- 2026-11-22T21:04Z fact (Max s04): QN rule exact (apply_bp.py): per track peaks (own narrowPeak, M=1000)/background (M=50), stable sort ties by position, k=floor((r+1)(M-1)/N), value=R_assay[k], R = mean of 2019 training+validation per-level means; Zenodo SE record has bigwigs+peaks only, no reads
+- 2026-11-22T21:04Z fact (Max s10): formula on predicted counts (macs2_expect, strict tail, truncation) vs direct p head: -0.019 [-0.062,+0.015] on 102 single-replicate targets; generic control ~ own control; never run on EIC blind; 25 bp overlap counts lose 0.10-0.23 (same reads) but only +0.002..+0.008 for imputation (independent reads)
+- 2026-11-22T21:04Z fact (Max s04): CANDI+tcfloor 1st on MOESM4 (affine b0+b1*CANDI+b2*Average fitted on 133 training experiments; fair per D2) vs uncorrected CANDI 16th; Max's later plan drops tcfloor from challenge rows
+- 2026-11-22T21:06Z spawned ladder probe agent (opus), 3 blind experiments, L1-L7
+- 2026-11-23T06:15Z Ladder probe done (3 blind exps): QN exact, 1bp formula exact, overlap-count cost 0.017/0.255/0.021 nMSE, DNase full route exact with overlap peaks, ChIP reprocessing gap 0.013/0.127 unexplained. Recorded h90/f390 supports strong, q90 f391 moderate, 2 pending. Counters bumped h89 f389.
+- 2026-11-23T06:18Z audit: first audit; fixed glossary status column + 2 rows (count route, conversion floor), R7 partial, D5 peak rule fixed a priori (D2), MOESM2 board added to Next, compute ask (82 CPU-h vs D4) added to STATE
+- 2026-11-23T06:22Z ChIP gap read agent done: likely control reads (treatment identical, gap in control-dominated bins, ours higher median 1.23); recorded q91/f392 moderate; evidence results/t390/chip_gap/CHIP_GAP.md
+- 2026-11-23T06:49Z probe 2 agent handed back with 17 Nibi jobs pending (28605164, 28610164-28610179); C19M22 overlap port exact vs container; split-half Jaccard 0.925/0.954; waiting via squeue poll
+- 2026-11-23T07:46Z PI: yes blind-row build (D6), MOESM2 headline (D7, supersedes D1 headline); hold 48-exp batch and Jacob message (D8)
+- 2026-11-23T07:47Z recipe session: t184 not started; PI must confirm in that session (task says PI runs submit); blind predictions after final model, ~2026-11-24 01-04 UTC
+- 2026-11-23T07:47Z glossary: reply sent with unregistered terms: clickable
+- 2026-11-23T07:52Z PI confirmed t184 in the recipe session
+- 2026-11-23T07:54Z t184 blocked on Nibi scratch quota (1024 GiB, 691 used, needs ~2.6 TB); PI decides in recipe session; eicx uses 56G
+- 2026-11-23T07:56Z Nibi scratch: quota -s = 1024G soft, 20480G hard, 691G used; t184 batch 1 (~2.6 TB) fits under hard limit; told recipe session
+- 2026-11-23T08:02Z t184 batch 1 submitted on Nibi 08:01 UTC by recipe session (jobs 28629674-78, 28629699-701); predictions after final model
+- 2026-11-23T08:44Z foreman relayed overnight rules: workers' judgment on compute, report job ids, D8 holds stay, no stopping for questions
+- 2026-11-23T09:05Z MOESM2 path done: reproduces 25/25 positions on 3 exps; observed SE rungs rank 15/1/17 combined (DNase mse 21); L7 5.9/1.4/4.9; 2.2 CPU-h, jobs 28627126-7; f-node on q90
+- 2026-11-23T09:12Z probe 2 done (9.0 CPU-h): fragment pileup nMSE 0.0021/0.062/0.00003 vs counts 0.017/0.255/0.021; half-read peaks within 8.5% of truth peaks (h91 supports moderate); L7f qn mse 1.74/0.066/1.96, rank 1; score jobs failed only at placement step, rerun by hand
+- 2026-11-23T09:30Z postpile test (0.37 CPU-h, jobs 28647409, 28647648, 28647649): spreading overlap counts recovers 3/12/3% of pileup gain; stranded starts 95/93%, unstranded DNase 92%
+- 2026-11-23T13:47Z entry pipeline DONE: score_entry.py + run_entry.sh (536312a2); observed-count test 12/12 checks bit-exact vs L6/L7; 2.92 CPU-h, Nibi jobs 28666332-3, 28668387-9; waits on predictions
+- 2026-11-23T20:10Z PI yes (via foreman) to copy original truth; Nibi job 28706885 eicx_copytruth: rsync 51 bigWigs (65G) to /project/def-maxwl/mforooz/ONION/eic/original_pe, then size + sha256 diff. PI also yes to read-start miniCANDI arm (new session, via foreman)
+- 2026-11-23T20:10Z glossary: blocked reply with gib, sha
+- 2026-11-23T20:11Z glossary: admitted 'SHA-256' (field: Europe PMC, 10 titles)
+- 2026-11-23T20:11Z glossary: blocked reply with gigabyte
+- 2026-11-23T20:47Z copy DONE: job 28706885 COMPLETED 25:58; 51/51 files, sizes and sha256 match; 65G at /project/def-maxwl/mforooz/ONION/eic/original_pe (SHA256SUMS beside)
+- 2026-11-24T01:22Z foreman: blind predictions delayed; t184 batch 1 failed at staging (ENCODE file-search HTTP 405); fix + resubmit wait on PI; no action here
+- 2026-11-24T06:34Z foreman (PI-approved unblocked work): (1) validation dry run prep, (2) span fix rl+24 -> rl+25 in signal_from_counts.py with rerun of L6/L7. Two opus agents started.
+- 2026-11-24T06:34Z glossary: blocked reply with converter, nmse
+- 2026-11-24T06:34Z glossary: blocked reply with log10
+- 2026-11-24T10:24Z glossary: blocked reply with nmse, nudged
+- 2026-11-24T11:01Z span fix DONE (0f957f05, 2323bd9f, bf929823): SPAN_EXTRA 24->25; L6 nMSE vs L5 +2.0/-0.7/-0.4%; no combined rank changed; entry vs new rungs 0 bins differ; 2.67 CPU-h; 3 'failed' tests = checks vs old constant
+- 2026-11-24T11:02Z validation dry run DONE (2ec84e73, d9b81c7b): 42/45 val tracks, MOESM6 placement, msevar unranked (weights not reproduced); runs on Fir+Nibi; Nibi 1.84 CPU-h, Fir 4.45 CPU-h (5703770/1/80)
+- 2026-11-24T11:02Z glossary: blocked reply with c12m02, c19m22, c40m17, macs2, msevar, nmse
+- 2026-11-24T11:02Z glossary: rejected 'msevar' (coinage: 0 titles in Europe PMC and OpenAlex)
+- 2026-11-24T11:04Z foreman: validation jobs 24G (committed, deployed fir); keep C25M26/C34M02/C50M02 listed missing, build only on PI word; recipe session sends Fir path directly
+- 2026-11-24T11:04Z validation predictions (rcp_combo_w2x_unet s0, uncalibrated) scoring on Fir: 7 tracks 5706614-5706620, collect 5706621, out /scratch/mforooz/eicx/val/rcp_combo_w2x_unet_s0_raw; C24M25 after ~12:30 UTC
+- 2026-11-24T11:04Z glossary: blocked reply with c24m25
+- 2026-11-24T11:05Z glossary: rejected 'C24M25' (coinage: 0 titles in Europe PMC and OpenAlex)
+- 2026-11-24T11:07Z recal copy: Fir job 5706801 -> runs_rcp/eic_val/rcp_combo_w2x_unet_s0_recal; changes n only (mu same), so plug_in scores are identical; recal must be scored with MODE=expectation, paired with raw in expectation mode. DNase factor at grid edge (log2 -4.5).
+- 2026-11-24T11:17Z SCORES LANDED: validation 7/45, rcp_combo_w2x_unet s0 raw mean mode; combined rank of 11: 4.3/2.1/1/2/1/5/1; Fir 5706614-21, about 2.6 CPU-h (22 min x 7 CPUs)
+- 2026-11-24T11:17Z glossary: blocked reply with c02m22, c03m02, c10m17, c16m17, c20m22, c24m17, c45m22, msevar, nmse
+- 2026-11-24T18:02Z Fir: C24M25 raw mean 5733708 + collect 5733709; raw expectation mode 8 tracks 5733710-14,5733772,5733848,5733849 + collect 5733850 (out rcp_combo_w2x_unet_s0_raw_exp); recal copy rerun by recipe session
+- 2026-11-24T18:04Z recal copy (Fir 5733577) scoring in expectation mode, out rcp_combo_w2x_unet_s0_recal_exp
+- 2026-11-24T18:19Z cancel-own.sh cancel on fir: 5734182 5734183 5734184 5734185 5734186 5734188 5734189 5734190 5734191
+- 2026-11-24T18:19Z foreman: PI 'Yes, fix' hmap span (t125/hmap 24->25, PR 64, bit-exact check with 24); recal pair waits for wider-grid refit -> cancelled recal_exp jobs 5734182-5734191
+- 2026-11-24T18:35Z 8/8 val tracks scored: mean mode rank1 on 4 (C10M17 C20M22 C24M25 C45M22), 2 C16M17, 2.1 C03M02, 4.3 C02M22, 5 C24M17; expectation mode no better (C16M17 2->4, mse up on 6/8); exp mode cost ~16 CPU-h (137 min x 7 CPUs)
+- 2026-11-24T18:35Z glossary: blocked reply with dfc, refit
+- 2026-11-24T18:47Z PI: predict remaining 34 val exps; score all 42 raw + recal_wide; placement now counts unscored as worst (test: 10/11 with 37 missing, Fir place_test8). Asked foreman: recal pair on 8 only (a, ~30 CPU-h) vs all 42 (b, ~185); default a
+- 2026-11-24T18:47Z recal_wide expectation scoring 8 tracks: Fir 5763739-5763746, collect 5763747, out rcp_combo_w2x_unet_s0_recalwide_exp
+- 2026-11-24T18:47Z recal_wide: DNase c=2^-16.5 (grid cap), n clipped at float16 max 65504 = effectively Poisson; 34 more val preds array 5761693 -> _s0/counts, 5761694 -> _s0_recal_wide/counts (~11 h + queue)
+- 2026-11-24T18:48Z glossary: blocked reply with float16
+- 2026-11-24T19:13Z hmap span fix DONE (8434ac26): bit-exact with 24; chr21 MSE bin variant down 7/8 (DNase 0.536->0.492), frag up 7/8 (<=2.8%); Fir 5756066 0.18 CPU-h; 2 unrelated test failures (stale digest pin, order-dependent checkpoint load)
+- 2026-11-24T19:17Z D10 (PI yes to a): mean board all 42, recal pair on 8 only; watcher submits the 34 when Fir 5761693 ends
+- 2026-11-24T19:17Z glossary: blocked reply with d10
+- 2026-11-24T19:28Z recal_wide pair DONE: mse worse on 7/8 vs raw_exp, combined rank worse on 4, better on 0; Fir 5763739-47, ~20 CPU-h (174 min x 7)
+- 2026-11-25T01:19Z Foreman deadline 20:00 UTC 2026-11-25 (PI meeting 22:00). Stopped watcher bexrnghzq; scored 22 finished tracks now (Fir 5942490-5942550, collect 5942551); new watcher scores the 12 remaining tracks as each counts file finishes, until 19:15 UTC.
+- 2026-11-25T01:21Z glossary: blocked reply with c25m26, d10
+- 2026-11-25T02:30Z Interim validation board, 30 of 42 tracks (collect 5942551 done 02:29 UTC): position 5 of 11, 15 unscored counted worst; rank 1 on 7, rank>=10 on 5; nMSE>1 on 20 of 30. results/t390/val_scores_rcp_s0_30, finding f404.
+- 2026-11-25T02:43Z glossary: blocked reply with log10, nmse
+- 2026-11-25T02:43Z glossary: blocked reply with logarithm
+- 2026-11-25T02:43Z glossary: blocked reply with exponent
+- 2026-11-25T02:47Z Scale diagnosis of 30 validation tracks done (Fir 5964408-9, 5964853-80, ~0.3 CPU-h): scale error, not depth or lambda; mu over-dispersed on 16/30, p transform enlarges it; 9 tracks have a bad conversion floor. results/t390/val_scale_diag, f405.
+- 2026-11-25T03:23Z cancel-own.sh cancel on fir: 5984158
+- 2026-11-25T03:25Z Fix b: ChIP depth cap 20M fitted on 196 training tracks; validation floor mean nMSE 1.57->0.40 (9->1 above 1). Fix a: count slope is per-experiment (0.30-1.92), not per-assay; 8/30 tracks have no LOEO partner. Builds: slope 5984161, depthcap 5986318; scoring chained. ~4.6 CPU-h spent.
+- 2026-11-25T03:25Z glossary: blocked reply with nmse
+- 2026-11-25T05:19Z Four boards on the same 30 validation tracks: raw pos 5 (mean comb 5.31), slope in-sample 5 (4.56, preview), slope LOEO 5 (4.97), depth cap 4 (3.70; nMSE>1 20->10/30). results/t390/val_boards_side_by_side/BOARDS.md. Spend ~27 CPU-h of 36.
+- 2026-11-25T05:20Z glossary: blocked reply with nmse
+- 2026-11-25T05:21Z Spend corrected: 34.24 of 36 CPU-h (sacct eicx_), not ~27. D11, D12 recorded (depth cap is the blind-entry fix). Cap build for 5 new tracks: Fir 6011889. Cap+slope board skipped (~10 CPU-h). Asked foreman for 41 CPU-h to score 4 capped tracks.
+- 2026-11-25T05:21Z glossary: blocked reply with c36m18, eicx, sacct
+- 2026-11-25T05:22Z Limit raised to 55 CPU-h (foreman). Cap watcher (laptop, to 19:15 UTC) runs tools/eic_entry/cap_cycle.sh on Fir every 10 min over the 12 remaining tracks; first pass reused C36M18, collect 6012271; cap build 6011889 pending. Raw watcher still running.
+- 2026-11-25T07:30Z Base model check: training reads only in_eic=train rows (COD1b tools/minicandi/dataset.py:10-14); all 42 validation tracks are in_eic=val. Base diag submitted on 30 tracks, Fir 6030581-6030610, out /scratch/mforooz/eicx/val/base_diag.
+- 2026-11-25T07:38Z Base slope: median count slope base 1.20 vs final 1.34; on the 16 final>1.3 tracks base in [0.8,1.2] on 2, <1.3 on 6. Condition for the model-average board not met; reported to foreman. Spend 38.11 CPU-h (sacct). results/t390/val_base_slope.
+- 2026-11-25T07:38Z glossary: blocked reply with correlates, heldout, sacct
+- 2026-11-25T07:56Z Foreman: run the depth-capped average of final + base anyway (~15 CPU-h). Build Fir 6032998 -> /scratch/mforooz/eicx/val/avg_cap; scoring into rcp_s0_avgbase_cap submits on build end.
+- 2026-11-25T08:01Z Recipe session builds C34M02, C50M02 (DNase .se rows) and C25M26 (.se row). val-cov fallback to pooled .se rows: test table cov_se.tsv (other 42 rows identical). C25M26 lacks frag_len: default 227 bp (read-weighted br1/br2) unless predict.py gives one.
+- 2026-11-25T08:01Z Both watchers now stop submitting once eicx_ sacct spend reaches 55 CPU-h (cap_cycle.sh guard; raw watcher restarted as val_watch2.sh on the 7 remaining tracks).
+- 2026-11-25T08:01Z glossary: blocked reply with lambda
+- 2026-11-25T08:01Z glossary: blocked reply with macs2
+- 2026-11-25T08:05Z Limit 80 CPU-h (foreman); priority: 7 waiting + 3 new tracks before the average board (already scoring, collect 6033856). cov.tsv now 45 tracks (old saved as cov_42.tsv; 42 rows identical); C25M26 frag_len 227 from replicates.
+- 2026-11-25T08:05Z glossary: blocked reply with c25m26
+- 2026-11-25T08:25Z Average final+base, depth-capped: position 2 of 11 on 30 tracks (mean comb 3.35; cap alone 3.70, pos 4); per track vs cap better 10 worse 9. Collect 6033856. Spend 51.02 CPU-h (sacct). BOARDS.md updated.
+- 2026-11-25T08:26Z glossary: blocked reply with c25m26
+- 2026-11-25T08:26Z Averaged board additions (foreman yes): 12 tracks with base counts at the same row; C25M26, C34M02, C50M02 final-model-only (cap score copied). avg_cycle.sh every 10 min to 19:15 UTC, after the cap board, reserving 1.1 CPU-h per priority score owed under the 80 limit.
+- 2026-11-25T08:27Z glossary: blocked reply with c25m26, c34m02, c50m02
+- 2026-11-25T08:27Z glossary: rejected 'C25M26' (coinage: 0 titles in Europe PMC and OpenAlex)
+- 2026-11-25T08:28Z glossary: rejected 'C34M02' (coinage: 0 titles in Europe PMC and OpenAlex)
+- 2026-11-25T08:29Z glossary: rejected 'C50M02' (coinage: 0 titles in Europe PMC and OpenAlex)
+- 2026-11-25T11:24Z glossary: blocked reply with c25m26, c34m02, c46m18, c46m21, c46m35, c50m02
+- 2026-11-25T15:24Z glossary: blocked reply with 5761693_22
+- 2026-11-25T18:42Z glossary: blocked reply with nmse
+- 2026-11-27T22:15Z glossary: blocked reply with t357
+- 2026-11-28T01:40Z glossary: blocked reply with mergeable
+- 2026-11-28T01:42Z run memory moved to cruxvault/INSTRUCTIONS/t390_eic_entry/run_state/longrun; .longrun is a worktree-local symlink (foreman request, PR 64)
+- 2026-11-28T01:43Z glossary: blocked reply with reinject
+- 2026-11-28T11:52Z watcher exited tunnel-down 11:51 UTC 2026-11-28; last read 10:03: Avocado chain fir still 3 PENDING; Nibi blind retest 43 COMPLETED, 7 FAILED, 1 RUNNING (unchanged since 03:47 at least)
+- 2026-11-28T12:25Z 12:30 UTC 2026-11-28: Nibi blind retest verdict: Cromwell crash did not recur. 43 COMPLETED, 1 RUNNING (28737239_501, 31 h of 3 d), 7 FAILED (28737212_512/532/545/549/553/557, 28737239_556) all at the verify step only: pr1/pr2 halves of testbed depth-thinned views exceed base, testbed nodedup halves below base. All 20 (14 for DNase) output folders exist under Nibi /scratch/mforooz/onion/measurements. oom_kill 0. Watch restarted.
+- 2026-11-28T12:25Z glossary: blocked reply with cromwell, pr1, pr2, thinned
+- 2026-11-28T12:27Z glossary: blocked reply with 28737239_501, thinned
+- 2026-11-28T14:14Z 14:10 UTC: Nibi retest ended: 44 COMPLETED, 7 FAILED (testbed check only). 61 experiments rebuilt (468 dirs, 102 GB); 54 are not in tables eic_v1_2, which hold no EIC blind target. D20: predict on Nibi via a superset tables build.
+- 2026-11-28T14:15Z glossary: blocked reply with checksum, d20, superset
+- 2026-11-28T15:03Z kit RCP9 and run seed0 copied to Nibi, hashes equal Fir (kit 6ad8e9ff, run 4afdffa8, ckpt b3bb7b6c). Blind build list 557 rows (62 blind base rows). Build job 28952322 submitted on Nibi. Inputs question (training only vs training plus validation, ruling 21) goes to the PI.

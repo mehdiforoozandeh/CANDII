@@ -816,6 +816,65 @@ def _pair_key(job) -> str:
     return job.get("pair_id") or job["source"] + ">" + job["target"]
 
 
+DEVIANCE_ENV = "ONION_SCORE_DEVIANCE"
+
+
+def deviance_from_env() -> bool:
+    """t371: the deviance switch from the environment (ONION_SCORE_DEVIANCE=1)."""
+    return os.environ.get(DEVIANCE_ENV, "").strip() == "1"
+
+
+def _dev_recs(rs):
+    """t371: the deviance terms of records, or an Undefined naming the first missing one."""
+    bad = [r for r in rs if r.get("dev") is None]
+    if bad:
+        return Mx.Undefined(f"{len(bad)} of {len(rs)} records have no deviance terms")
+    return [r["dev"] for r in rs]
+
+
+def _dev_fn(agg):
+    def fn(rs):
+        d = _dev_recs(rs)
+        if isinstance(d, Mx.Undefined):
+            return d
+        v = agg(d)
+        return Mx.Undefined("not defined (denominator not positive)") if not np.isfinite(v) else float(v)
+    return fn
+
+
+def deviance_block(imp_recs, cor_recs, sc_imp, sc_cor, n_boot, seed) -> dict:
+    """t371: the deviance-based metrics (tools/onion_eval/deviance.py), beside the headline set.
+    Every value is a ratio of target means of deviances normalized by the track's own-mean deviance
+    D0, per assay, then a macro over assays (`metric`)."""
+    from onion_eval import deviance as DV
+    nm = lambda k: (lambda d: float(np.mean([x[k] / x["D0"] for x in d])))
+    head = [r for r in cor_recs if r.get("never_trained") == 1 and r.get("subset_pair") == 0]
+    m = lambda recs, f, sc: metric(recs, _dev_fn(f), sc, n_boot, seed)
+    return {
+        "definition": DV.__doc__.split("\n\n")[0],
+        "dev_imputation_skill": m(imp_recs, lambda d: DV.gap(d, "D_ref"), sc_imp),
+        "dev_imputation_r2": m(imp_recs, lambda d: 1.0 - nm("D_model")(d), sc_imp),
+        "dev_imputation_model": m(imp_recs, nm("D_model"), sc_imp),
+        "dev_imputation_position_average": m(imp_recs, nm("D_ref"), sc_imp),
+        "dev_imputation_floor": m(imp_recs, nm("floor"), sc_imp),
+        "dev_imputation_scale_error": m(imp_recs, lambda d: nm("D_model")(d) - nm("D_scaled")(d), sc_imp),
+        "dev_imputation_monotone_error": m(imp_recs, lambda d: nm("D_model")(d) - nm("D_iso")(d), sc_imp),
+        "dev_correction_gap_closed": m(head, lambda d: DV.gap(d, "D_depth"), sc_cor),
+        "dev_correction_gap_closed_vs_pseudoreplicate": m(
+            head, lambda d: DV.gap(d, "D_depth", floor_key="D_floorpred"), sc_cor),
+        "dev_correction_model": m(head, nm("D_model"), sc_cor),
+        "dev_correction_depth_only": m(head, nm("D_depth"), sc_cor),
+        "dev_correction_floor": m(head, nm("floor"), sc_cor),
+        "dev_correction_pseudoreplicate": m(head, nm("D_floorpred"), sc_cor),
+        "dev_calibration_ratio": m(imp_recs, DV.calibration_ratio, sc_imp),
+        "dev_calibration_error": m(imp_recs, lambda d: abs(float(np.log2(DV.calibration_ratio(d)))),
+                                   sc_imp),
+        "nb_logscore_gain_vs_marginal": m(
+            imp_recs, lambda d: float(np.mean([(x["nll_marg"] - x["nll_model"]) / x["bins"]
+                                               for x in d])), sc_imp),
+        "n_targets": len(imp_recs), "n_pairs": len(head)}
+
+
 def same_view_from_env() -> bool:
     """CM: the same-view switch from the environment (ONION_SCORE_SAME_VIEW=1)."""
     return os.environ.get(SAME_VIEW_ENV, "").strip() == "1"
@@ -1117,7 +1176,7 @@ class Scorer:
                  dump_method=None, workers=1, stage_dir=None, pred_store=None, store_run=None,
                  refs_from=None, fraglen_table=None, same_view=False, foreign_covariates=None,
                  foreign_seed=0, input_depth_at_scoring=None, signal_pileup=None,
-                 signal_box_dependence=None):
+                 signal_box_dependence=None, deviance=False):
         from minicandi import contract as C
         from minicandi.dataset import OnionDataset, tables_sha256
         from onion_eval.evalset import tables_dir_of
@@ -1153,6 +1212,10 @@ class Scorer:
         self.pair_regional = {}                  # SF0: pair key -> per-region sums
         #: CM: the same-view pass (off by default) and its records (run() fills them)
         self.same_view = bool(same_view)
+        self.deviance = bool(deviance)       # t371: deviance terms on targets and pairs
+        if self.deviance:                    # build the lookup tables once, before any fork
+            from onion_eval import deviance as DV
+            DV._pois_table(); DV._nb_table()
         self.same_view_records = []
         #: E5: foreign covariates at scoring (None = off, the default); see FOREIGN_DEFINITION
         self.foreign = foreign_spec(foreign_covariates, foreign_seed)
@@ -2171,6 +2234,12 @@ class Scorer:
             mn, mm = A["marginal_nb.n"], A["marginal_nb.mu"]
             r["pit_marginal"] = ((pit_curve(mn, mm, y), y.size)
                                  if np.isfinite(mn).all() and np.isfinite(mm).all() else None)
+            if self.deviance:              # t371
+                from onion_eval import deviance as DV
+                r["dev"] = (DV.target_terms(y, mu, n, mu_ref=A["position_average.mu"],
+                                            n_marg=mn, mu_marg=mm)
+                            if defined and pa_ok and np.isfinite(mn).all() and np.isfinite(mm).all()
+                            else None)
             f = _half_shares(row) if halves else (0.5, 0.5)
             vrd = None
             if not halves:
@@ -2493,7 +2562,8 @@ class Scorer:
     # -------------------------------------------------------------- pairs
     def _pair_record(self, job):
         ext = self._ref_terms[_pair_key(job)] if self._ref_terms is not None else {}
-        A = self._job_arrays(job, () if ext else ("depth_only_scaling", "pseudoreplicate_floor"))
+        A = self._job_arrays(job, () if (ext and not self.deviance)
+                             else ("depth_only_scaling", "pseudoreplicate_floor"))
         y = A["y"]
         out = {k: job.get(k) for k in ("pair_id", "assay", "cell", "knob", "never_trained",
                                        "subset_pair", "rung", "source", "target")}
@@ -2538,6 +2608,11 @@ class Scorer:
             else:
                 out[key] = out[key + "_oracle_scaled"] = Mx.Undefined(f"{nm} undefined on this pair")
         mu = A["main.mu"]
+        if self.deviance:                  # t371: model, depth-only and pr1 -> pr2 on pr2
+            from onion_eval import deviance as DV
+            dm, fm = A["depth_only_scaling.mu"], A["pseudoreplicate_floor.mu"]
+            out["dev"] = (DV.pair_terms(y, mu, dm, fm)
+                          if all(np.isfinite(v).all() for v in (mu, dm, fm)) else None)
         out["pred_total"] = float(mu.sum()) if np.isfinite(mu).all() else float("nan")
         out["source_total"] = float(A["x"].sum())
         out["log2_depth_ratio"] = A["log2r"]
@@ -3177,6 +3252,9 @@ class Scorer:
                                                 not_applicable=self.pairs_not_applicable))
         if self.addon:                           # close-out D2: key only on an add-on score
             scores[ADDON_PAIR_CLASS_KEY] = other_experiment_pair_class_block(rep_recs)
+        if self.deviance:                        # t371: key only with the switch
+            scores["deviance"] = deviance_block(main_recs, cor_recs, sc_imp, sc_cor,
+                                                self.n_boot, self.seed)
         if self.same_view:                       # CM: keys only with the switch
             self.same_view_records = sv_recs
             scores[CORRECTION_ONLY_KEY] = correction_only_block(cor_recs, sv_recs)
@@ -4036,6 +4114,9 @@ def main(argv=None) -> int:
                     help="CM: also score the model's same-view pair (target pr1 -> target pr2) of "
                          "every headline correction target and write the correction-only term; "
                          f"default off (also on with {SAME_VIEW_ENV}=1)")
+    ap.add_argument("--score-deviance", action="store_true",
+                    help="t371: also write the deviance-based metrics (tools/onion_eval/deviance.py) "
+                         f"under the key 'deviance'; default off (also on with {DEVIANCE_ENV}=1)")
     add_foreign_arguments(ap)
     a = ap.parse_args(argv)
     if a.phase == "metrics" and not (a.run and a.pred_store and a.refs_from):
@@ -4075,6 +4156,7 @@ def main(argv=None) -> int:
                   **phase_kw, **dump_kwargs(a),
                   **({"fraglen_table": a.fraglen_table} if a.fraglen_table else {}),
                   **({"same_view": True} if (a.score_same_view or same_view_from_env()) else {}),
+                  **({"deviance": True} if (a.score_deviance or deviance_from_env()) else {}),
                   **foreign_kwargs(a), **input_depth_kwargs())
     except (PermissionError, ScoreRefused) as e:
         print(f"refused: {e}", file=sys.stderr)

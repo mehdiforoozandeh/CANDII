@@ -1,0 +1,7 @@
+JobID|JobName|State|Elapsed|AllocCPUS|ReqMem
+5703770|eicx_val_prep|COMPLETED|00:12:12|17|64G
+5703771|eicx_val_test_C17M04|COMPLETED|00:04:30|13|48G
+5703780|eicx_entry_collect|COMPLETED|00:00:18|3|8G
+5703770.batch|36.77G
+5703771.batch|15.37G
+5703780.batch|2.37G

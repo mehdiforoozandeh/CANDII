@@ -1,0 +1,27 @@
+experiment	check	value
+C12M02	L2_vs_qn_truth	per-base mismatched 0 of 3031042417; max abs per base 0.0; max abs 25bp 0.0
+C19M22	L2_vs_qn_truth	per-base mismatched 0 of 3031042417; max abs per base 0.0; max abs 25bp 0.0
+C40M17	L2_vs_qn_truth	per-base mismatched 0 of 3031042417; max abs per base 0.0; max abs 25bp 0.0
+C12M02	peakcheck_L3rule_vs_pipeline	jaccard 0.8165; bases ours 93756800 pipeline 90233867
+C12M02	peakcheck_L6_vs_pipeline	jaccard 0.7548; bases ours 81093400 pipeline 90233867
+C12M02	peakcheck_jacob_vs_overlap	jaccard 1.0000; bases ours 55607465 pipeline 55607465
+C12M02	peakcheck_jacob_vs_pipeline	jaccard 0.6163; bases ours 55607465 pipeline 90233867
+C19M22	peakcheck_L3rule_vs_pipeline	jaccard 0.9023; bases ours 33666325 pipeline 36721686
+C19M22	peakcheck_L6_vs_pipeline	jaccard 0.8669; bases ours 33267275 pipeline 36721686
+C19M22	peakcheck_jacob_vs_overlap	jaccard 0.9517; bases ours 32368310 pipeline 32960179
+C19M22	peakcheck_jacob_vs_pipeline	jaccard 0.8617; bases ours 32368310 pipeline 36721686
+C40M17	peakcheck_L3rule_vs_pipeline	jaccard 0.6357; bases ours 20393200 pipeline 28887755
+C40M17	peakcheck_L6_vs_pipeline	jaccard 0.4155; bases ours 13214750 pipeline 28887755
+C40M17	peakcheck_jacob_vs_overlap	jaccard 0.6145; bases ours 6490666 pipeline 8182746
+C40M17	peakcheck_jacob_vs_pipeline	jaccard 0.2115; bases ours 6490666 pipeline 28887755
+C12M02	callpeaks_L3rule	285338 peaks, 93756800 bases
+C12M02	callpeaks_L6	249523 peaks, 81093400 bases
+C19M22	callpeaks_L3rule	23245 peaks, 33666325 bases
+C19M22	callpeaks_L6	20880 peaks, 33267275 bases
+C40M17	callpeaks_L3rule	59640 peaks, 20393200 bases
+C40M17	callpeaks_L6	36775 peaks, 13214750 bases
+	starts_ENCFF211XVI.merged.srt.nodup.no_chrM_MT.50M	lines 50000000; main 49859266; mean read length 75.50
+	starts_ENCFF337JNL.merged.srt.nodup	lines 150302589; main 149739358; mean read length 101.00
+	starts_ENCFF433TZR.merged.srt.nodup	lines 107039349; main 106858066; mean read length 101.00
+	starts_ENCFF581NOL.merged.srt.nodup.30M	lines 30000000; main 29897216; mean read length 101.00
+	starts_ENCFF748TKZ.merged.srt.nodup.30M	lines 30000000; main 29958285; mean read length 101.00

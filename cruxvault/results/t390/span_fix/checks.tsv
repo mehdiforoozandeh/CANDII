@@ -1,0 +1,24 @@
+experiment	check	n	result	detail
+C19M22	ident_span24_vs_L6old	121241707	0	0
+C19M22	ident_span25_vs_entryraw	121241707	0	0
+C12M02	L6_vs_L6old_arrdiff	121241707	37711191	2.247116089
+C19M22	L6_vs_L6old_arrdiff	121241707	73062370	1.63381958
+C40M17	L6_vs_L6old_arrdiff	121241707	64205593	1.369579315
+C12M02	peakcheck_L6new_vs_L6old	78804075	jaccard 0.953681	bases_b 81093400
+C19M22	peakcheck_L6new_vs_L6old	33230550	jaccard 0.994661	bases_b 33267275
+C40M17	peakcheck_L6new_vs_L6old	13489850	jaccard 0.977928	bases_b 13214750
+C19M22	ident_peaks_vs_entry	33230550	jaccard 1.000000	bases_b 33230550
+C19M22	entry check vs OLD rungs: raw vs rung L6 (array)	121241707 bins	73062370 differ	max abs 1.63
+C19M22	entry check vs OLD rungs: qn vs rung L7 (array)	121241707 bins	8554856 differ	max abs 28.7
+C19M22	entry check vs OLD rungs: raw MOESM2 scores vs rung L6 MOESM2 scores	99 values	max rel 0.00303	median rel 0.00144
+C19M22	entry check vs OLD rungs: qn MOESM4 scores vs probe-1 rung L7 qn scores	99 values	max rel 0.0025	median rel 0.000146
+C40M17	entry check vs OLD rungs: raw vs rung L6 (array)	121241707 bins	64205593 differ	max abs 1.37
+C40M17	entry check vs OLD rungs: qn vs rung L7 (array)	121241707 bins	8645216 differ	max abs 12.1
+C40M17	entry check vs OLD rungs: raw MOESM2 scores vs rung L6 MOESM2 scores	99 values	max rel 0.00571	median rel 0.000602
+C40M17	entry check vs OLD rungs: qn MOESM4 scores vs probe-1 rung L7 qn scores	99 values	max rel 0.0207	median rel 0.0162
+C12M02	entry check vs OLD rungs: raw vs rung L6 (array)	121241707 bins	37711191 differ	max abs 2.25
+C12M02	entry check vs OLD rungs: qn vs rung L7 (array)	121241707 bins	77317224 differ	max abs 884
+C12M02	entry check vs OLD rungs: raw MOESM2 scores vs rung L6 MOESM2 scores	99 values	max rel 0.0158	median rel 0.00107
+C12M02	entry check vs OLD rungs: qn MOESM4 scores vs probe-1 rung L7 qn scores	99 values	max rel 0.0888	median rel 0.0736
+C19M22	entry check vs NEW rungs (ident/): raw vs rung L6 (array)	121241707 bins	0 differ	max abs 0
+C19M22	entry check vs NEW rungs (ident/): qn vs rung L7 (array)	121241707 bins	0 differ	max abs 0

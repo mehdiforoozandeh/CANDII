@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="prezit-arc" content="paper">
+<title>miniCANDI Recipe</title>
+
+<!--
+  prezit · PAPER ARC · task t370 (miniCANDI recipe), lab meeting 2026-11-22.
+
+  arc      motivation -> method -> results -> discussion
+  build    ./refresh_data.sh (pulls tables from Fir, runs pareto_select.py), then
+           python3 build_deck.py  ->  index.html. Source page = parts/*.html, assembled by
+           assemble.sh into deck_src.html.
+  numbers  every measured number comes from DATA (build_deck.py reads data/*.tsv, *.md).
+           Typed: design constants only, marked data-src="literal" (A = 36 tracks, L = 1024
+           bins of 25 bp, K = 11 covariates, 8 features per track, 4 levels, 16x down to 64
+           positions, 2 transformer layers, 1 M parameters, 80,000 windows of batch 8,
+           mask probability 0.2 to 0.8, same-view probability 0.5, 25% hidden bins).
+  notes    every slide carries speaker notes (press n).
+-->
+<script type="application/json" id="deck-sources">__SOURCES__</script>

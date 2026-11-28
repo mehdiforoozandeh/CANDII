@@ -41,12 +41,31 @@ ASSAYS = ("DNase-seq", "H3K27ac", "H3K27me3", "H3K36me3", "H3K4me1", "H3K4me3", 
 def test_caller_constants():
     assert caller.GENOME_SIZE == 2.7e9
     assert caller.BIN == 25
-    assert caller.SPAN_EXTRA == 24
+    assert caller.SPAN_EXTRA == 25                       # the store count rule (t390 span_fix; was 24)
     assert caller.WINDOWS_CTL_BP == {"frag": None, "1k": 1000, "10k": 10000}
     assert caller.WINDOW_NOCTL_BP == 10000
-    assert caller.PILEUP_RULE == "count * fraglen / (read_length + 24)"
+    assert caller.PILEUP_RULE == "count * fraglen / (read_length + 25)"
     assert caller.TAIL == "strict"
     assert caller.PSEUDOCOUNT == 0
+
+
+def test_span_extra_matches_the_bin25_rule():
+    """caller.SPAN_EXTRA and formula.SPAN_EXTRA are tied to the store count rule
+    (`t112/bin25.py::counts_from_tagalign`: +1 to bins start//25 .. end//25 inclusive, BED end =
+    start + rl). Reads at all 25 start phases touch (rl + SPAN_EXTRA) / 25 bins on average."""
+    import importlib.util
+    import io
+    spec = importlib.util.spec_from_file_location("t112_bin25_for_span_test", ROOT / "tools" / "t112" / "bin25.py")
+    bin25 = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bin25)
+    counts_from_tagalign = bin25.counts_from_tagalign
+    for rl in (25, 36, 50, 75, 76, 100, 101):
+        start = 1000 + np.arange(25)
+        ta = "".join(f"chr1\t{s}\t{s + rl}\n" for s in start)
+        c = counts_from_tagalign(io.StringIO(ta), {"chr1": 5000})["chr1"]
+        assert c.sum() / 25 == pytest.approx((rl + caller.SPAN_EXTRA) / caller.BIN, abs=1e-12), rl
+        assert c.sum() / 25 == pytest.approx((rl + formula.SPAN_EXTRA) / formula.BIN, abs=1e-12), rl
+    assert caller.SPAN_EXTRA == caller.BIN == formula.SPAN_EXTRA == formula.BIN
 
 
 def test_scale_control_larger_scales_control():

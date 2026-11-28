@@ -1,0 +1,1221 @@
+{
+ "all": {
+  "control_count": {
+   "crps_skill_vs_training_average": 0.07511714929883877,
+   "log1p_pearson": 0.339743595686427,
+   "log1p_r2": 0.07587115368418913
+  },
+  "n_cells": 24,
+  "n_chip_targets": 42,
+  "signal": {
+   "fc_log2_pearson_avg_vs_obs": 0.9304081421858899,
+   "fc_log2_pearson_pred_vs_obs": 0.9366183592646558,
+   "pval_arcsinh_pearson_avg_vs_obs": 0.9316400867273,
+   "pval_arcsinh_pearson_pred_vs_obs": 0.9387551235169737
+  }
+ },
+ "control_holdout_cells": [
+  "C02",
+  "C10",
+  "C16",
+  "C20",
+  "C25",
+  "C31",
+  "C36",
+  "C46"
+ ],
+ "evalset_sha256": "26f9e32f7cfd49f33b841925ff88901ba4b91c2df438ecc840e4074499f31c76",
+ "held_out": {
+  "control_count": {
+   "crps_skill_vs_training_average": 0.13597033272970074,
+   "log1p_pearson": 0.379495002891448,
+   "log1p_r2": 0.1088717010014508
+  },
+  "n_cells": 8,
+  "n_chip_targets": 12,
+  "signal": {
+   "fc_log2_pearson_avg_vs_obs": 0.9280619096401903,
+   "fc_log2_pearson_pred_vs_obs": 0.9366010893878978,
+   "pval_arcsinh_pearson_avg_vs_obs": 0.9314977323934557,
+   "pval_arcsinh_pearson_pred_vs_obs": 0.9412984655171366
+  }
+ },
+ "in_sample": {
+  "control_count": {
+   "crps_skill_vs_training_average": 0.04469055758340777,
+   "log1p_pearson": 0.3198678920839165,
+   "log1p_r2": 0.059370880025558306
+  },
+  "n_cells": 16,
+  "n_chip_targets": 30,
+  "signal": {
+   "fc_log2_pearson_avg_vs_obs": 0.9319722972163561,
+   "fc_log2_pearson_pred_vs_obs": 0.9366298725158279,
+   "pval_arcsinh_pearson_avg_vs_obs": 0.9317349896165296,
+   "pval_arcsinh_pearson_pred_vs_obs": 0.9370595621835318
+  }
+ },
+ "n_cells": 24,
+ "n_chip_targets": 42,
+ "n_control_targets": 24,
+ "per_cell": {
+  "C02": {
+   "control": "ENCSR828HXJ.pooled.uniform.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.015436458469296976,
+    "log1p_pearson": 0.26248586331314067,
+    "log1p_r2": 0.009321436070071853
+   },
+   "in_sample": false,
+   "inputs": [
+    "ENCSR113MBR.pooled.uniform.base",
+    "ENCSR177QFY.pooled.uniform.base",
+    "ENCSR406PCK.pooled.uniform.base",
+    "ENCSR408ZEW.pooled.uniform.base",
+    "ENCSR857XRG.pooled.uniform.base"
+   ],
+   "targets": {
+    "ENCSR234YIU.pooled.uniform.base": {
+     "assay": "H3K4me3",
+     "fc_log2_pearson_avg_vs_obs": 0.9048201377274069,
+     "fc_log2_pearson_pred_vs_obs": 0.89141848075592,
+     "observed_control": "ENCSR815BDB.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": 0.8821877255405954,
+     "pval_arcsinh_pearson_pred_vs_obs": 0.8631908583362696
+    }
+   }
+  },
+  "C04": {
+   "control": "ENCSR055YMD.pooled.native.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.009523322891348718,
+    "log1p_pearson": 0.21080395793334067,
+    "log1p_r2": 0.007996465813928877
+   },
+   "in_sample": true,
+   "inputs": [
+    "ENCSR144NDE.pooled.native.base",
+    "ENCSR249AWJ.pooled.native.base",
+    "ENCSR420IOA.pooled.native.base",
+    "ENCSR495GRN.pooled.native.base",
+    "ENCSR786DQB.pooled.native.base"
+   ],
+   "targets": {
+    "ENCSR430RVP.pooled.native.base": {
+     "assay": "H3K27ac",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR055YMD.pooled.native.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR430RVP.pooled.native.base: no frag_len"
+    }
+   }
+  },
+  "C09": {
+   "control": "ENCSR405VDU.pooled.native.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.024806442811066032,
+    "log1p_pearson": 0.3520720934181683,
+    "log1p_r2": 0.04797563687845885
+   },
+   "in_sample": true,
+   "inputs": [
+    "ENCSR223APP.pooled.native.base",
+    "ENCSR333VFQ.pooled.native.base",
+    "ENCSR580WRV.pooled.native.base",
+    "ENCSR702RZM.pooled.native.base",
+    "ENCSR724GUS.pooled.native.base"
+   ],
+   "targets": {
+    "ENCSR887ESB.pooled.native.base": {
+     "assay": "H3K4me1",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR405VDU.pooled.native.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR887ESB.pooled.native.base: no frag_len"
+    }
+   }
+  },
+  "C10": {
+   "control": "ENCSR749PIF.pooled.native.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.019125521885950514,
+    "log1p_pearson": 0.26804866098788205,
+    "log1p_r2": 0.020026801374642744
+   },
+   "in_sample": false,
+   "inputs": [
+    "ENCSR244MNY.pooled.native.base",
+    "ENCSR449FFA.pooled.native.base",
+    "ENCSR499IIR.pooled.native.base",
+    "ENCSR787CAJ.pooled.native.base"
+   ],
+   "targets": {
+    "ENCSR241JLU.pooled.native.base": {
+     "assay": "H3K27me3",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR749PIF.pooled.native.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR241JLU.pooled.native.base: no frag_len"
+    }
+   }
+  },
+  "C12": {
+   "control": "ENCSR000ASA.pooled.uniform.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.025341794475131185,
+    "log1p_pearson": 0.39225121369590066,
+    "log1p_r2": 0.11866737621677392
+   },
+   "in_sample": true,
+   "inputs": [
+    "ENCSR000AQV.pooled.uniform.base",
+    "ENCSR000AQX.pooled.uniform.base",
+    "ENCSR000AQY.pooled.uniform.base",
+    "ENCSR000AQZ.pooled.uniform.base",
+    "ENCSR000ARB.pooled.uniform.base",
+    "ENCSR000ARY.pooled.uniform.base",
+    "ENCSR000ARZ.pooled.uniform.base",
+    "ENCSR000ASX.pooled.uniform.base",
+    "ENCSR564VIX.pooled.uniform.base"
+   ],
+   "targets": {
+    "ENCSR000AQW.pooled.uniform.base": {
+     "assay": "H3K27ac",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR000ASA.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR000AQW.pooled.uniform.base: no frag_len"
+    },
+    "ENCSR000ARC.pooled.uniform.base": {
+     "assay": "H4K20me1",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR000ASA.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR000ARC.pooled.uniform.base: no frag_len"
+    }
+   }
+  },
+  "C13": {
+   "control": "ENCSR770VVH.pooled.native.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.0017393056757293301,
+    "log1p_pearson": 0.04939513994987181,
+    "log1p_r2": -0.02195248082474821
+   },
+   "in_sample": true,
+   "inputs": [
+    "ENCSR061NWO.pooled.native.base",
+    "ENCSR324JDC.pooled.native.base",
+    "ENCSR372OTD.pooled.native.base",
+    "ENCSR581UGC.pooled.native.base",
+    "ENCSR849NQE.pooled.native.base",
+    "ENCSR957UQS.pooled.native.base"
+   ],
+   "targets": {
+    "ENCSR817QHX.pooled.native.base": {
+     "assay": "H3K4me1",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR770VVH.pooled.native.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR817QHX.pooled.native.base: no frag_len"
+    }
+   }
+  },
+  "C16": {
+   "control": "ENCSR000DQS.pooled.uniform.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.0020313582977996014,
+    "log1p_pearson": 0.1714438938245168,
+    "log1p_r2": -0.009320423396529387
+   },
+   "in_sample": false,
+   "inputs": [
+    "ENCSR000DQT.pooled.uniform.base",
+    "ENCSR000DQV.pooled.uniform.base",
+    "ENCSR000EMQ.pooled.uniform.base"
+   ],
+   "targets": {
+    "ENCSR000DQU.pooled.uniform.base": {
+     "assay": "H3K27me3",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR000DQS.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR000DQU.pooled.uniform.base: no frag_len"
+    }
+   }
+  },
+  "C17": {
+   "control": "ENCSR131IUA.pooled.uniform.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.024843327655336922,
+    "log1p_pearson": 0.3293818050218547,
+    "log1p_r2": 0.00496942054879046
+   },
+   "in_sample": true,
+   "inputs": [
+    "ENCSR000ANA.pooled.uniform.base",
+    "ENCSR038PFD.pooled.uniform.base",
+    "ENCSR161NON.pooled.uniform.base",
+    "ENCSR301HRV.pooled.uniform.base",
+    "ENCSR322MEI.pooled.uniform.base",
+    "ENCSR326NQF.pooled.uniform.base",
+    "ENCSR364BKW.pooled.uniform.base",
+    "ENCSR442DGE.pooled.uniform.base",
+    "ENCSR462XRE.pooled.uniform.base",
+    "ENCSR571IIS.pooled.uniform.base",
+    "ENCSR675FLJ.pooled.uniform.base",
+    "ENCSR739BZR.pooled.uniform.base",
+    "ENCSR768FWX.pooled.uniform.base",
+    "ENCSR794OFW.pooled.uniform.base",
+    "ENCSR814XPE.pooled.uniform.base",
+    "ENCSR848DUN.pooled.uniform.base",
+    "ENCSR858BOF.pooled.uniform.base",
+    "ENCSR880SUY.pooled.uniform.base",
+    "ENCSR891KGZ.pooled.uniform.base",
+    "ENCSR925LJZ.pooled.uniform.base",
+    "ENCSR928HYM.pooled.uniform.base",
+    "ENCSR952GVX.pooled.uniform.base"
+   ],
+   "targets": {
+    "ENCSR130EML.pooled.uniform.base": {
+     "assay": "H3K4ac",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR131IUA.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR130EML.pooled.uniform.base: no frag_len"
+    },
+    "ENCSR703KXH.pooled.uniform.base": {
+     "assay": "H2AK5ac",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR131IUA.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR703KXH.pooled.uniform.base: no frag_len"
+    },
+    "ENCSR728SZE.pooled.uniform.base": {
+     "assay": "H4K20me1",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR131IUA.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR728SZE.pooled.uniform.base: no frag_len"
+    },
+    "ENCSR883AQJ.pooled.uniform.base": {
+     "assay": "H3K9me3",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR569NEE.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR883AQJ.pooled.uniform.base: no frag_len"
+    }
+   }
+  },
+  "C18": {
+   "control": "ENCSR174MHI.pooled.uniform.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.006740585238104002,
+    "log1p_pearson": 0.24462051814488198,
+    "log1p_r2": -0.015557636115777207
+   },
+   "in_sample": true,
+   "inputs": [
+    "ENCSR043VGU.pooled.uniform.base",
+    "ENCSR047TJL.pooled.uniform.base",
+    "ENCSR063WYJ.pooled.uniform.base",
+    "ENCSR230WNU.pooled.uniform.base",
+    "ENCSR265EDV.pooled.uniform.base",
+    "ENCSR276HBK.pooled.uniform.base",
+    "ENCSR280IFJ.pooled.uniform.base",
+    "ENCSR294WUR.pooled.uniform.base",
+    "ENCSR324UNL.pooled.uniform.base",
+    "ENCSR367JIO.pooled.uniform.base",
+    "ENCSR440BZV.pooled.uniform.base",
+    "ENCSR554TZE.pooled.uniform.base",
+    "ENCSR792GCH.pooled.uniform.base",
+    "ENCSR876RGF.pooled.uniform.base",
+    "ENCSR879TAS.pooled.uniform.base",
+    "ENCSR957GYL.pooled.uniform.base",
+    "ENCSR972SMV.pooled.uniform.base"
+   ],
+   "targets": {
+    "ENCSR188GJE.pooled.uniform.base": {
+     "assay": "H3K79me2",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR174MHI.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR188GJE.pooled.uniform.base: no frag_len"
+    },
+    "ENCSR730POX.pooled.uniform.base": {
+     "assay": "H3K4me2",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR214MNL.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR730POX.pooled.uniform.base: no frag_len"
+    }
+   }
+  },
+  "C20": {
+   "control": "ENCSR526EXI.pooled.uniform.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.24866818946001223,
+    "log1p_pearson": 0.4344899802969627,
+    "log1p_r2": 0.14788378638429822
+   },
+   "in_sample": false,
+   "inputs": [
+    "ENCSR000XAA.pooled.uniform.base",
+    "ENCSR438QZN.pooled.uniform.base",
+    "ENCSR500ZGF.pooled.uniform.base",
+    "ENCSR851EBF.pooled.uniform.base",
+    "ENCSR854OXF.pooled.uniform.base",
+    "ENCSR988JLN.pooled.uniform.base"
+   ],
+   "targets": {
+    "ENCSR901SIL.pooled.uniform.base": {
+     "assay": "H3K4me3",
+     "fc_log2_pearson_avg_vs_obs": 0.96617993348781,
+     "fc_log2_pearson_pred_vs_obs": 0.9652328245885968,
+     "observed_control": "ENCSR526EXI.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": 0.9766723971827772,
+     "pval_arcsinh_pearson_pred_vs_obs": 0.9791923944543695
+    }
+   }
+  },
+  "C23": {
+   "control": "ENCSR366WUE.pooled.uniform.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.0012580512976918534,
+    "log1p_pearson": 0.32159066848986434,
+    "log1p_r2": 0.06124257843588665
+   },
+   "in_sample": true,
+   "inputs": [
+    "ENCSR002YRE.pooled.uniform.base",
+    "ENCSR038MKB.pooled.uniform.base",
+    "ENCSR039ZLS.pooled.uniform.base",
+    "ENCSR054IRX.pooled.uniform.base",
+    "ENCSR055ZZY.pooled.uniform.base",
+    "ENCSR066VKQ.pooled.uniform.base",
+    "ENCSR087PFU.pooled.uniform.base",
+    "ENCSR164RFI.pooled.uniform.base",
+    "ENCSR210RXE.pooled.uniform.base",
+    "ENCSR248KRU.pooled.uniform.base",
+    "ENCSR274TJB.pooled.uniform.base",
+    "ENCSR283STF.pooled.uniform.base",
+    "ENCSR383CBN.pooled.uniform.base",
+    "ENCSR424ZJH.pooled.uniform.base",
+    "ENCSR431UUY.pooled.uniform.base",
+    "ENCSR437ORF.pooled.uniform.base",
+    "ENCSR477RTP.pooled.uniform.base",
+    "ENCSR579TJT.pooled.uniform.base",
+    "ENCSR580LZO.pooled.uniform.base",
+    "ENCSR672XZZ.pooled.uniform.base",
+    "ENCSR706RRA.pooled.uniform.base",
+    "ENCSR713QLX.pooled.uniform.base",
+    "ENCSR804SRO.pooled.uniform.base",
+    "ENCSR831JSP.pooled.uniform.base",
+    "ENCSR942NME.pooled.uniform.base"
+   ],
+   "targets": {
+    "ENCSR124DYB.pooled.uniform.base": {
+     "assay": "H2AFZ",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR366WUE.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR124DYB.pooled.uniform.base: no frag_len"
+    },
+    "ENCSR219MYH.pooled.uniform.base": {
+     "assay": "H3K9ac",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR001BSB.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR219MYH.pooled.uniform.base: no frag_len"
+    },
+    "ENCSR444TMC.pooled.uniform.base": {
+     "assay": "H4K8ac",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR366WUE.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR444TMC.pooled.uniform.base: no frag_len"
+    },
+    "ENCSR523ENE.pooled.uniform.base": {
+     "assay": "H2BK12ac",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR366WUE.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR523ENE.pooled.uniform.base: no frag_len"
+    }
+   }
+  },
+  "C24": {
+   "control": "ENCSR000AKY.pooled.uniform.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.0344213486273125,
+    "log1p_pearson": 0.3297449910917644,
+    "log1p_r2": 0.0583422319544753
+   },
+   "in_sample": true,
+   "inputs": [
+    "ENCSR000AKP.pooled.uniform.base",
+    "ENCSR000AKT.pooled.uniform.base",
+    "ENCSR000AKW.pooled.uniform.base",
+    "ENCSR000AKX.pooled.uniform.base",
+    "ENCSR000APC.pooled.uniform.base",
+    "ENCSR000APE.pooled.uniform.base",
+    "ENCSR000DWB.pooled.uniform.base",
+    "ENCSR000EVZ.pooled.uniform.base",
+    "ENCSR000EWC.pooled.uniform.base",
+    "ENCSR668LDD.pooled.uniform.base"
+   ],
+   "targets": {
+    "ENCSR000APD.pooled.uniform.base": {
+     "assay": "H3K79me2",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR000AKY.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR000APD.pooled.uniform.base: no frag_len"
+    },
+    "ENCSR000EWB.pooled.uniform.base": {
+     "assay": "H3K27me3",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR000EWK.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR000EWB.pooled.uniform.base: no frag_len"
+    }
+   }
+  },
+  "C25": {
+   "control": "ENCSR720GSE.pooled.uniform.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.3236463935516267,
+    "log1p_pearson": 0.6068418666505385,
+    "log1p_r2": 0.26105019806621965
+   },
+   "in_sample": false,
+   "inputs": [
+    "ENCSR474VGQ.pooled.uniform.base",
+    "ENCSR499RMZ.pooled.uniform.base",
+    "ENCSR539TKY.pooled.uniform.base",
+    "ENCSR790QWJ.pooled.uniform.base",
+    "ENCSR835YBD.pooled.uniform.base",
+    "ENCSR847UJW.pooled.uniform.base",
+    "ENCSR955IXZ.pooled.uniform.base",
+    "ENCSR976JHS.pooled.uniform.base"
+   ],
+   "targets": {
+    "ENCSR521AIV.br1.uniform.base": {
+     "assay": "H3K9ac",
+     "fc_log2_pearson_avg_vs_obs": 0.959018029995045,
+     "fc_log2_pearson_pred_vs_obs": 0.9794460867761152,
+     "observed_control": "ENCSR720GSE.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": 0.9392829260518131,
+     "pval_arcsinh_pearson_pred_vs_obs": 0.9765804721707506
+    },
+    "ENCSR806XIU.pooled.uniform.base": {
+     "assay": "H3K4me2",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR720GSE.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR806XIU.pooled.uniform.base: no frag_len"
+    }
+   }
+  },
+  "C27": {
+   "control": "ENCSR843OBM.pooled.uniform.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.01661017916480484,
+    "log1p_pearson": 0.3218180793221723,
+    "log1p_r2": 0.06430128035940941
+   },
+   "in_sample": true,
+   "inputs": [
+    "ENCSR013KEC.pooled.uniform.base",
+    "ENCSR065HOR.pooled.uniform.base",
+    "ENCSR350YQC.pooled.uniform.base",
+    "ENCSR491CCY.pooled.uniform.base",
+    "ENCSR501JET.pooled.uniform.base",
+    "ENCSR502IWF.pooled.uniform.base",
+    "ENCSR509MHV.pooled.uniform.base",
+    "ENCSR719QMW.pooled.uniform.base",
+    "ENCSR734MEM.pooled.uniform.base",
+    "ENCSR746CUY.pooled.uniform.base",
+    "ENCSR753RYH.pooled.uniform.base",
+    "ENCSR786GJM.pooled.uniform.base",
+    "ENCSR809CVZ.pooled.uniform.base",
+    "ENCSR824UNY.pooled.uniform.base",
+    "ENCSR832JVP.pooled.uniform.base",
+    "ENCSR895YWA.pooled.uniform.base",
+    "ENCSR902EEI.pooled.uniform.base"
+   ],
+   "targets": {
+    "ENCSR526NKM.pooled.uniform.base": {
+     "assay": "H2AFZ",
+     "fc_log2_pearson_avg_vs_obs": 0.9040130902609737,
+     "fc_log2_pearson_pred_vs_obs": 0.9120438529824263,
+     "observed_control": "ENCSR633OJL.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": 0.888201866306045,
+     "pval_arcsinh_pearson_pred_vs_obs": 0.8987138291845359
+    },
+    "ENCSR594AQO.pooled.uniform.base": {
+     "assay": "H3K79me1",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR633OJL.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR594AQO.pooled.uniform.base: no frag_len"
+    },
+    "ENCSR604THF.pooled.uniform.base": {
+     "assay": "H3K18ac",
+     "fc_log2_pearson_avg_vs_obs": 0.9148220226141435,
+     "fc_log2_pearson_pred_vs_obs": 0.9205979478689458,
+     "observed_control": "ENCSR633OJL.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": 0.9288021666608225,
+     "pval_arcsinh_pearson_pred_vs_obs": 0.9346182867249189
+    },
+    "ENCSR701KJD.pooled.uniform.base": {
+     "assay": "H3K9ac",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR843OBM.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR701KJD.pooled.uniform.base: no frag_len"
+    }
+   }
+  },
+  "C29": {
+   "control": "ENCSR674ANR.pooled.native.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.007492523193027789,
+    "log1p_pearson": 0.20547675559962061,
+    "log1p_r2": 0.012205870634560578
+   },
+   "in_sample": true,
+   "inputs": [
+    "ENCSR160CPS.pooled.native.base",
+    "ENCSR287YDU.pooled.native.base",
+    "ENCSR365DWX.pooled.native.base",
+    "ENCSR517CFV.pooled.native.base",
+    "ENCSR813ULW.pooled.native.base"
+   ],
+   "targets": {
+    "ENCSR241PXI.pooled.native.base": {
+     "assay": "H3K9me3",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR674ANR.pooled.native.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR241PXI.pooled.native.base: no frag_len"
+    }
+   }
+  },
+  "C31": {
+   "control": "ENCSR409FGC.pooled.uniform.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.40623939158880784,
+    "log1p_pearson": 0.6095822440029193,
+    "log1p_r2": 0.2799405204220682
+   },
+   "in_sample": false,
+   "inputs": [
+    "ENCSR011CSR.pooled.uniform.base",
+    "ENCSR082NQB.pooled.uniform.base",
+    "ENCSR327OGS.pooled.uniform.base",
+    "ENCSR536SZD.pooled.uniform.base",
+    "ENCSR559IFS.pooled.uniform.base",
+    "ENCSR562JTY.pooled.uniform.base",
+    "ENCSR692HIO.pooled.uniform.base"
+   ],
+   "targets": {
+    "ENCSR339FOO.pooled.uniform.base": {
+     "assay": "H3K79me2",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR409FGC.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR339FOO.pooled.uniform.base: no frag_len"
+    }
+   }
+  },
+  "C32": {
+   "control": "ENCSR300BKE.pooled.uniform.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.03554473221924337,
+    "log1p_pearson": 0.4299602248283799,
+    "log1p_r2": 0.11307130806912813
+   },
+   "in_sample": true,
+   "inputs": [
+    "ENCSR182XTG.pooled.uniform.base",
+    "ENCSR256ESY.pooled.uniform.base",
+    "ENCSR260CXF.pooled.uniform.base",
+    "ENCSR277JAU.pooled.uniform.base",
+    "ENCSR278FVO.pooled.uniform.base",
+    "ENCSR361LIU.pooled.uniform.base",
+    "ENCSR391WDE.pooled.uniform.base",
+    "ENCSR476FBL.pooled.uniform.base",
+    "ENCSR486GWT.pooled.uniform.base",
+    "ENCSR570POG.pooled.uniform.base",
+    "ENCSR626UPW.pooled.uniform.base",
+    "ENCSR651SVZ.pooled.uniform.base",
+    "ENCSR694LBI.pooled.uniform.base",
+    "ENCSR732NFR.pooled.uniform.base",
+    "ENCSR799SRL.pooled.uniform.base",
+    "ENCSR811NNT.pooled.uniform.base",
+    "ENCSR940RIU.pooled.uniform.base",
+    "ENCSR956CTX.pooled.uniform.base"
+   ],
+   "targets": {
+    "ENCSR123JZO.pooled.uniform.base": {
+     "assay": "H2BK15ac",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR300BKE.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR123JZO.pooled.uniform.base: no frag_len"
+    },
+    "ENCSR254NLC.pooled.uniform.base": {
+     "assay": "H3K4me1",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR300BKE.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR254NLC.pooled.uniform.base: no frag_len"
+    },
+    "ENCSR687EBF.pooled.uniform.base": {
+     "assay": "H3K14ac",
+     "fc_log2_pearson_avg_vs_obs": 0.9372294737310417,
+     "fc_log2_pearson_pred_vs_obs": 0.9330505678866117,
+     "observed_control": "ENCSR300BKE.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": 0.9205415080561777,
+     "pval_arcsinh_pearson_pred_vs_obs": 0.9065178781132742
+    }
+   }
+  },
+  "C34": {
+   "control": "ENCSR063AUO.pooled.uniform.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.10956241623798069,
+    "log1p_pearson": 0.5113536645632986,
+    "log1p_r2": 0.1980113794306989
+   },
+   "in_sample": true,
+   "inputs": [
+    "ENCSR005SXO.pooled.uniform.base",
+    "ENCSR060WGK.pooled.uniform.base",
+    "ENCSR199KHR.pooled.uniform.base",
+    "ENCSR243AIS.pooled.uniform.base",
+    "ENCSR331RGM.pooled.uniform.base",
+    "ENCSR347DAG.pooled.uniform.base",
+    "ENCSR389WWC.pooled.uniform.base",
+    "ENCSR447ZGY.pooled.uniform.base",
+    "ENCSR850QKN.pooled.uniform.base"
+   ],
+   "targets": {
+    "ENCSR747ZDF.pooled.uniform.base": {
+     "assay": "H4K20me1",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR063AUO.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR747ZDF.pooled.uniform.base: no frag_len"
+    }
+   }
+  },
+  "C36": {
+   "control": "ENCSR585UEE.pooled.native.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.006061341818178356,
+    "log1p_pearson": 0.20930857569978506,
+    "log1p_r2": 0.017691799733048463
+   },
+   "in_sample": false,
+   "inputs": [
+    "ENCSR368YPC.pooled.native.base",
+    "ENCSR482QXO.pooled.native.base",
+    "ENCSR615HXA.pooled.native.base",
+    "ENCSR866UQO.pooled.native.base",
+    "ENCSR969DAF.pooled.native.base",
+    "ENCSR980XMX.pooled.native.base"
+   ],
+   "targets": {
+    "ENCSR162MGR.pooled.native.base": {
+     "assay": "H3K36me3",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR585UEE.pooled.native.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR162MGR.pooled.native.base: no frag_len"
+    }
+   }
+  },
+  "C37": {
+   "control": "ENCSR113QDZ.pooled.uniform.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.17784698825514456,
+    "log1p_pearson": 0.40718024402099495,
+    "log1p_r2": 0.12941646989948452
+   },
+   "in_sample": true,
+   "inputs": [
+    "ENCSR748RBT.pooled.uniform.base",
+    "ENCSR763IDK.pooled.uniform.base"
+   ],
+   "targets": {
+    "ENCSR133QBG.pooled.uniform.base": {
+     "assay": "H3K9me3",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR113QDZ.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR133QBG.pooled.uniform.base: no frag_len"
+    }
+   }
+  },
+  "C45": {
+   "control": "ENCSR215WNN.pooled.uniform.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.07532425910310803,
+    "log1p_pearson": 0.27843848901252355,
+    "log1p_r2": 0.005057172086605499
+   },
+   "in_sample": true,
+   "inputs": [
+    "ENCSR210NKB.pooled.uniform.base",
+    "ENCSR376JOC.pooled.uniform.base"
+   ],
+   "targets": {
+    "ENCSR611DJQ.pooled.uniform.base": {
+     "assay": "H3K4me3",
+     "fc_log2_pearson_avg_vs_obs": 0.9591615960034745,
+     "fc_log2_pearson_pred_vs_obs": 0.95850822807259,
+     "observed_control": "ENCSR215WNN.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": 0.9693317431675712,
+     "pval_arcsinh_pearson_pred_vs_obs": 0.9734817649573846
+    }
+   }
+  },
+  "C46": {
+   "control": "ENCSR648VOG.pooled.uniform.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.06655400676593382,
+    "log1p_pearson": 0.47375893835583865,
+    "log1p_r2": 0.14437948935778666
+   },
+   "in_sample": false,
+   "inputs": [
+    "ENCSR035DUS.pooled.uniform.base",
+    "ENCSR044WCY.pooled.uniform.base",
+    "ENCSR081JRM.pooled.uniform.base",
+    "ENCSR179CDH.pooled.uniform.base",
+    "ENCSR213JMO.pooled.uniform.base",
+    "ENCSR354UVU.pooled.uniform.base",
+    "ENCSR355ZYK.pooled.uniform.base",
+    "ENCSR425PQI.pooled.uniform.base",
+    "ENCSR427RFW.pooled.uniform.base",
+    "ENCSR485OSV.pooled.uniform.base",
+    "ENCSR486PWP.pooled.uniform.base",
+    "ENCSR499CAZ.pooled.uniform.base",
+    "ENCSR634IIF.pooled.uniform.base",
+    "ENCSR815DXY.pooled.uniform.base",
+    "ENCSR874WOB.pooled.uniform.base",
+    "ENCSR888MKB.pooled.uniform.base",
+    "ENCSR960CWQ.pooled.uniform.base",
+    "ENCSR960JPH.pooled.uniform.base"
+   ],
+   "targets": {
+    "ENCSR038OIN.pooled.uniform.base": {
+     "assay": "H3K36me3",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR648VOG.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR038OIN.pooled.uniform.base: no frag_len"
+    },
+    "ENCSR213TIR.pooled.uniform.base": {
+     "assay": "H2BK5ac",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR890MJO.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR213TIR.pooled.uniform.base: no frag_len"
+    },
+    "ENCSR371FHD.pooled.uniform.base": {
+     "assay": "H4K91ac",
+     "fc_log2_pearson_avg_vs_obs": 0.8822295373504992,
+     "fc_log2_pearson_pred_vs_obs": 0.9103069654309588,
+     "observed_control": "ENCSR890MJO.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": 0.9278478807986368,
+     "pval_arcsinh_pearson_pred_vs_obs": 0.9462301371071565
+    },
+    "ENCSR941QJQ.pooled.uniform.base": {
+     "assay": "H3K4me2",
+     "fc_log2_pearson_avg_vs_obs": null,
+     "fc_log2_pearson_pred_vs_obs": null,
+     "observed_control": "ENCSR648VOG.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": null,
+     "pval_arcsinh_pearson_pred_vs_obs": null,
+     "reason": "no signal: ENCSR941QJQ.pooled.uniform.base: no frag_len"
+    }
+   }
+  },
+  "C47": {
+   "control": "ENCSR422TGJ.pooled.uniform.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.051044737137660445,
+    "log1p_pearson": 0.20173853888631443,
+    "log1p_r2": -0.013833166758853821
+   },
+   "in_sample": true,
+   "inputs": [
+    "ENCSR208WDY.pooled.uniform.base",
+    "ENCSR738SXD.pooled.uniform.base"
+   ],
+   "targets": {
+    "ENCSR869GBP.pooled.uniform.base": {
+     "assay": "H3K36me3",
+     "fc_log2_pearson_avg_vs_obs": 0.9649417491337892,
+     "fc_log2_pearson_pred_vs_obs": 0.9631209017855807,
+     "observed_control": "ENCSR422TGJ.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": 0.9788761376502155,
+     "pval_arcsinh_pearson_pred_vs_obs": 0.9795419353997491
+    }
+   }
+  },
+  "C48": {
+   "control": "ENCSR264DYL.pooled.uniform.base",
+   "control_count": {
+    "crps_skill_vs_training_average": 0.11294890735183405,
+    "log1p_pearson": 0.5320598893637128,
+    "log1p_r2": 0.18002017378011104
+   },
+   "in_sample": true,
+   "inputs": [
+    "ENCSR449TNC.pooled.uniform.base",
+    "ENCSR632OWD.pooled.uniform.base",
+    "ENCSR813CKU.pooled.uniform.base"
+   ],
+   "targets": {
+    "ENCSR054BKO.pooled.uniform.base": {
+     "assay": "H3K27ac",
+     "fc_log2_pearson_avg_vs_obs": 0.9116658515547141,
+     "fc_log2_pearson_pred_vs_obs": 0.9324577364988121,
+     "observed_control": "ENCSR264DYL.pooled.uniform.base",
+     "pval_arcsinh_pearson_avg_vs_obs": 0.9046565158583454,
+     "pval_arcsinh_pearson_pred_vs_obs": 0.9294836787213281
+    }
+   }
+  }
+ },
+ "regions": [
+  [
+   "chr1",
+   327680
+  ],
+  [
+   "chr1",
+   3227648
+  ],
+  [
+   "chr1",
+   4292608
+  ],
+  [
+   "chr1",
+   7143424
+  ],
+  [
+   "chr1",
+   8732672
+  ],
+  [
+   "chr1",
+   9715712
+  ],
+  [
+   "chr10",
+   753664
+  ],
+  [
+   "chr10",
+   2277376
+  ],
+  [
+   "chr10",
+   3637248
+  ],
+  [
+   "chr10",
+   5029888
+  ],
+  [
+   "chr11",
+   2899968
+  ],
+  [
+   "chr12",
+   491520
+  ],
+  [
+   "chr12",
+   4112384
+  ],
+  [
+   "chr13",
+   1228800
+  ],
+  [
+   "chr13",
+   2031616
+  ],
+  [
+   "chr13",
+   2392064
+  ],
+  [
+   "chr13",
+   3129344
+  ],
+  [
+   "chr14",
+   1441792
+  ],
+  [
+   "chr14",
+   3588096
+  ],
+  [
+   "chr15",
+   950272
+  ],
+  [
+   "chr15",
+   2424832
+  ],
+  [
+   "chr16",
+   81920
+  ],
+  [
+   "chr17",
+   1343488
+  ],
+  [
+   "chr18",
+   901120
+  ],
+  [
+   "chr18",
+   2605056
+  ],
+  [
+   "chr18",
+   2965504
+  ],
+  [
+   "chr19",
+   2048000
+  ],
+  [
+   "chr2",
+   1507328
+  ],
+  [
+   "chr2",
+   2572288
+  ],
+  [
+   "chr2",
+   5013504
+  ],
+  [
+   "chr2",
+   6324224
+  ],
+  [
+   "chr2",
+   8470528
+  ],
+  [
+   "chr20",
+   1015808
+  ],
+  [
+   "chr20",
+   2441216
+  ],
+  [
+   "chr21",
+   950272
+  ],
+  [
+   "chr3",
+   147456
+  ],
+  [
+   "chr3",
+   655360
+  ],
+  [
+   "chr3",
+   1769472
+  ],
+  [
+   "chr3",
+   2899968
+  ],
+  [
+   "chr3",
+   5160960
+  ],
+  [
+   "chr3",
+   6635520
+  ],
+  [
+   "chr4",
+   294912
+  ],
+  [
+   "chr4",
+   1753088
+  ],
+  [
+   "chr4",
+   3047424
+  ],
+  [
+   "chr4",
+   4390912
+  ],
+  [
+   "chr4",
+   7225344
+  ],
+  [
+   "chr5",
+   1687552
+  ],
+  [
+   "chr5",
+   2686976
+  ],
+  [
+   "chr5",
+   5373952
+  ],
+  [
+   "chr6",
+   245760
+  ],
+  [
+   "chr6",
+   1687552
+  ],
+  [
+   "chr6",
+   3342336
+  ],
+  [
+   "chr6",
+   4882432
+  ],
+  [
+   "chr7",
+   917504
+  ],
+  [
+   "chr7",
+   2752512
+  ],
+  [
+   "chr7",
+   5357568
+  ],
+  [
+   "chr8",
+   1687552
+  ],
+  [
+   "chr8",
+   4079616
+  ],
+  [
+   "chr9",
+   278528
+  ],
+  [
+   "chr9",
+   704512
+  ],
+  [
+   "chr9",
+   4243456
+  ],
+  [
+   "chrX",
+   1146880
+  ],
+  [
+   "chrX",
+   2850816
+  ],
+  [
+   "chrX",
+   5734400
+  ]
+ ],
+ "regions_n": 64,
+ "run": "/project/6014832/mforooz/ONION/runs_rcp/rcp_ctl_holdout_separate_unet/seed0",
+ "signal_mode": "plug_in",
+ "signal_pileup": "box_d",
+ "tables_sha256": "7a1a0325d00ddff30b01d7a2b4db655da8bcf98b8dd719545d778b8b5635fc5e",
+ "wall_seconds": 1474.9
+}

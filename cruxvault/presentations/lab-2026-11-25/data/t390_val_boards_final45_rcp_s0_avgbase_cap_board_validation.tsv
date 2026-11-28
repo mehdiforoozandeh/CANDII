@@ -1,0 +1,497 @@
+board	experiment	track	measure	value	rank_among_entrants	n_entrants	best_entrant	median_entrant	worst_entrant	note
+validation	C02M22	raw	nmse	2.337683977						mse(all23) / var(truth), blacklist bins deleted
+validation	C02M22	raw	mse	2.016919188	5	10	0.6241527016	13.08135954	52.30664721	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C02M22	raw	gwcorr	0.7452927163	3	10	0.765636794	0.6023793963	0.2310388649	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C02M22	raw	gwspear	0.2954445841	1	10	0.1894674888	0.04085120969	-0.1025570649	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C02M22	raw	mseprom	24.94371798	5	10	5.994568593	152.2460453	559.0474334	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C02M22	raw	msegene	3.325188727	5	10	1.036015149	23.33730827	92.85566844	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C02M22	raw	mseenh	11.78432605	4	10	2.05527552	53.20220682	263.5026216	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C02M22	raw	msevar	392.8800604		10		3884.215056		not ranked: MOESM6's msevar weights are not reproduced
+validation	C02M22	raw	mse1obs	140.4953261	5	10	52.08668234	1133.773016	4175.507588	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C02M22	raw	mse1imp	192.2763115	5	10	51.0422707	1254.691244	5209.30315	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C02M22	raw	combined_rank	3.6		11				min 3 max 4 over bootstraps 0-9
+validation	C03M02	raw	nmse	0.8106133966						mse(all23) / var(truth), blacklist bins deleted
+validation	C03M02	raw	mse	21.87115951	2	10	13.41218202	33.29989667	173.4590988	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C03M02	raw	gwcorr	0.7130711531	3	10	0.8566964702	0.6219699662	0.09934707168	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C03M02	raw	gwspear	0.4166335746	4	10	0.4652738075	0.3279118785	0.03779529046	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C03M02	raw	mseprom	345.9361676	2	10	135.6143657	749.2453002	3975.786851	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C03M02	raw	msegene	27.15723564	2	10	16.73343514	59.85168901	275.688093	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C03M02	raw	mseenh	131.0818994	2	10	94.42820517	269.3966838	2756.4592	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C03M02	raw	msevar	38953.77236		10		45541527.25		not ranked: MOESM6's msevar weights are not reproduced
+validation	C03M02	raw	mse1obs	2163.271576	4	10	1096.058068	2840.979473	12491.58319	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C03M02	raw	mse1imp	1978.369365	4	10	1032.158445	2733.354427	17100.10083	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C03M02	raw	combined_rank	2.3		11				min 2 max 4 over bootstraps 0-9
+validation	C04M16	raw	nmse	1.778789309						mse(all23) / var(truth), blacklist bins deleted
+validation	C04M16	raw	mse	0.6172218329	3	10	0.3205623654	4.530411389	33.00278931	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C04M16	raw	gwcorr	0.4885050886	1	10	0.4125789203	0.3474239334	0.1443031393	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C04M16	raw	gwspear	0.4295515659	1	10	0.349094965	0.2798234542	0.09334452213	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C04M16	raw	mseprom	4.939424853	4	10	1.036796949	39.34971248	137.6167508	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C04M16	raw	msegene	0.9417896733	3	10	0.4060076227	7.124683713	44.06343577	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C04M16	raw	mseenh	3.953383139	4	10	1.553748486	40.6789845	267.3835642	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C04M16	raw	msevar	35.50965137		10		550.1606866		not ranked: MOESM6's msevar weights are not reproduced
+validation	C04M16	raw	mse1obs	17.89298415	3	10	13.33693867	177.0723288	529.4808598	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C04M16	raw	mse1imp	38.39233316	3	10	3.067777938	398.212509	3258.566665	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C04M16	raw	combined_rank	2		11				min 2 max 2 over bootstraps 0-9
+validation	C09M20	raw	nmse	0.7577710647						mse(all23) / var(truth), blacklist bins deleted
+validation	C09M20	raw	mse	5.051950802	1	10	5.220474843	5.359682341	12.79013828	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C09M20	raw	gwcorr	0.5126052638	4	10	0.5598471083	0.4862832418	0.07946061822	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C09M20	raw	gwspear	0.4012057578	1	10	0.3365824594	0.2346197629	0.1365275392	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C09M20	raw	mseprom	15.24907447	7	10	13.45010734	14.66508789	44.32280906	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C09M20	raw	msegene	7.425842689	1	10	7.629649741	7.819484794	18.71400511	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C09M20	raw	mseenh	38.0394483	1	10	40.05717547	42.80917089	104.2465383	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C09M20	raw	msevar	897.511148		10		265.7602762		not ranked: MOESM6's msevar weights are not reproduced
+validation	C09M20	raw	mse1obs	396.0759655	1	10	424.4469121	451.6703887	565.0768304	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C09M20	raw	mse1imp	180.0296006	7	10	13.88498314	163.3448203	775.8964103	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C09M20	raw	combined_rank	1		11				min 1 max 1 over bootstraps 0-9
+validation	C10M17	raw	nmse	0.928341105						mse(all23) / var(truth), blacklist bins deleted
+validation	C10M17	raw	mse	0.2237255402	1	10	0.2316151809	0.3832140764	4.406496436	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C10M17	raw	gwcorr	0.3038602813	2	10	0.3788679723	0.2430043127	0.1332281342	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C10M17	raw	gwspear	0.2777054659	2	10	0.3514792546	0.1790802563	0.1003951608	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C10M17	raw	mseprom	0.3020959095	1	10	0.3308757223	1.104609365	22.66057045	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C10M17	raw	msegene	0.2178442133	1	10	0.225394122	0.4177368239	5.629819985	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C10M17	raw	mseenh	0.340322855	1	10	0.3550773484	1.158014629	30.27258674	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C10M17	raw	msevar	20.62263055		10		27.30801121		not ranked: MOESM6's msevar weights are not reproduced
+validation	C10M17	raw	mse1obs	8.521700297	4	10	5.722766389	9.112605088	103.7777863	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C10M17	raw	mse1imp	1.226180119	2	10	1.016971344	16.20194881	406.113413	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C10M17	raw	combined_rank	1		11				min 1 max 1 over bootstraps 0-9
+validation	C12M16	raw	nmse	0.6959798418						mse(all23) / var(truth), blacklist bins deleted
+validation	C12M16	raw	mse	13.54893264	2	10	12.79914554	19.32912073	60.95553754	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M16	raw	gwcorr	0.6087037935	1	10	0.6078562832	0.3834397114	0.08889456971	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M16	raw	gwspear	0.357238614	1	10	0.19936395	0.1120876992	0.07348588312	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M16	raw	mseprom	95.66038835	6	10	73.92901428	104.9767417	442.4922339	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M16	raw	msegene	19.27159143	2	10	17.85998958	27.1323011	85.24481163	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M16	raw	mseenh	117.4104108	2	10	106.6601543	175.8500731	657.5815103	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M16	raw	msevar	6701.281482		10		1435.532726		not ranked: MOESM6's msevar weights are not reproduced
+validation	C12M16	raw	mse1obs	1017.590627	1	10	1229.177664	1391.603933	3807.487646	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M16	raw	mse1imp	1048.933793	8	10	265.9499406	972.71107	5094.031446	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M16	raw	combined_rank	2		11				min 2 max 2 over bootstraps 0-9
+validation	C12M32	raw	nmse	0.7615501706						mse(all23) / var(truth), blacklist bins deleted
+validation	C12M32	raw	mse	0.6966323281	6	10	0.6771378181	0.7682908986	0.9109958893	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M32	raw	gwcorr	0.5246446013	2	10	0.5735312709	0.4712906961	0.1324938138	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M32	raw	gwspear	0.38904422	1	10	0.3244281139	0.2639625447	0.1095628637	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M32	raw	mseprom	1.529228461	5	10	1.433702185	1.833238452	2.104772412	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M32	raw	msegene	1.159523951	6	10	1.115232659	1.2506139	1.533669553	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M32	raw	mseenh	2.583872513	5	10	2.487191414	2.68103918	3.356390298	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M32	raw	msevar	106.142099		10		67.59590673		not ranked: MOESM6's msevar weights are not reproduced
+validation	C12M32	raw	mse1obs	49.1833045	7	10	38.74388824	45.33571108	68.84437553	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M32	raw	mse1imp	22.42130045	9	10	4.136269153	21.23989362	32.16685188	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C12M32	raw	combined_rank	4		11				min 4 max 4 over bootstraps 0-9
+validation	C13M20	raw	nmse	0.9795405755						mse(all23) / var(truth), blacklist bins deleted
+validation	C13M20	raw	mse	0.2660987344	1	10	0.3025255215	0.5315927912	5.046080394	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C13M20	raw	gwcorr	0.362038936	1	10	0.3279035413	0.1998168717	0.07366767531	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C13M20	raw	gwspear	0.5531994183	1	10	0.2372553751	0.09461155601	0.04962540207	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C13M20	raw	mseprom	0.5072742583	2	10	0.4956396154	1.175573369	12.9705887	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C13M20	raw	msegene	0.3626573581	1	10	0.3994833308	0.6909603442	6.971140637	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C13M20	raw	mseenh	0.625650058	1	10	0.6938899519	2.193218878	35.49007556	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C13M20	raw	msevar	1.035093281		10		8.435349936		not ranked: MOESM6's msevar weights are not reproduced
+validation	C13M20	raw	mse1obs	9.024333688	3	10	5.969007001	9.281601419	36.68022561	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C13M20	raw	mse1imp	1.987954039	3	10	0.5901751219	14.0638446	442.1355507	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C13M20	raw	combined_rank	1		11				min 1 max 1 over bootstraps 0-9
+validation	C16M17	raw	nmse	0.8857118166						mse(all23) / var(truth), blacklist bins deleted
+validation	C16M17	raw	mse	0.2441610574	1	10	0.2621574589	0.3338322713	2.38547142	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C16M17	raw	gwcorr	0.3755067231	2	10	0.419584827	0.2374169812	0.1185129937	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C16M17	raw	gwspear	0.4478459867	1	10	0.235713368	0.09216906699	0.04359430799	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C16M17	raw	mseprom	0.3740768378	1	10	0.4268545762	0.7318635457	11.17409181	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C16M17	raw	msegene	0.2660736732	1	10	0.2853102875	0.3715695815	2.782742779	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C16M17	raw	mseenh	0.5049501272	1	10	0.5482329468	0.9010525129	15.20287111	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C16M17	raw	msevar	1.765954531		10		14.03632269		not ranked: MOESM6's msevar weights are not reproduced
+validation	C16M17	raw	mse1obs	10.7862756	2	10	7.337718279	11.72902453	42.288318	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C16M17	raw	mse1imp	2.295140589	4	10	0.8697469146	9.366457129	202.2808395	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C16M17	raw	combined_rank	1		11				min 1 max 1 over bootstraps 0-9
+validation	C17M04	raw	nmse	0.8918489949						mse(all23) / var(truth), blacklist bins deleted
+validation	C17M04	raw	mse	0.261130071	2	10	0.2204152842	0.3376398532	0.5790377594	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M04	raw	gwcorr	0.4205293436	2	10	0.5204846247	0.3017081812	0.1317619667	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M04	raw	gwspear	0.4642953762	1	10	0.4026504617	0.2744853419	0.09094453635	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M04	raw	mseprom	0.7287169114	9	10	0.4478317844	0.7077782772	1.254821093	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M04	raw	msegene	0.3186407778	2	10	0.2623164891	0.4100647623	0.7040743052	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M04	raw	mseenh	0.947329229	2	10	0.7218207934	1.319132265	2.114114151	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M04	raw	msevar	nan		10		19.58039378		not ranked: MOESM6's msevar weights are not reproduced
+validation	C17M04	raw	mse1obs	11.05939187	2	10	10.78357166	11.81477809	15.24244299	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M04	raw	mse1imp	5.502820668	5	10	0.8291747086	8.613167721	22.14747555	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M04	raw	combined_rank	2		11				min 2 max 2 over bootstraps 0-9
+validation	C17M19	raw	nmse	0.7949784066						mse(all23) / var(truth), blacklist bins deleted
+validation	C17M19	raw	mse	0.2839889203	2	10	0.2598568178	0.4190754618	1.669431804	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M19	raw	gwcorr	0.5293624699	2	10	0.537316609	0.3516018093	0.1793816465	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M19	raw	gwspear	0.5476536189	1	10	0.4357112896	0.3298645024	0.1148361618	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M19	raw	mseprom	1.00266721	6	10	0.5928882362	1.063046441	5.719511508	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M19	raw	msegene	0.3489714156	2	10	0.3046086292	0.5145994635	2.235182629	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M19	raw	mseenh	0.9955886336	2	10	0.7795284209	1.515224129	11.47640559	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M19	raw	msevar	nan		10		24.02212609		not ranked: MOESM6's msevar weights are not reproduced
+validation	C17M19	raw	mse1obs	8.051639532	1	10	10.11144083	12.33382079	32.82700067	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M19	raw	mse1imp	7.503596723	6	10	1.752658321	10.26581581	127.3302307	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M19	raw	combined_rank	2		11				min 2 max 2 over bootstraps 0-9
+validation	C17M29	raw	nmse	1.101507174						mse(all23) / var(truth), blacklist bins deleted
+validation	C17M29	raw	mse	0.5901851208	9	10	0.4296050039	0.5218109021	0.8751946208	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M29	raw	gwcorr	0.1226932017	9	10	0.4624036185	0.239875404	0.06660165557	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M29	raw	gwspear	0.1043404535	8	10	0.2589654646	0.1555459273	0.06554531976	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M29	raw	mseprom	0.6087455716	9	10	0.4293727452	0.5246961015	1.195807853	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M29	raw	msegene	0.5672512139	9	10	0.4122314768	0.4975523075	0.8702923951	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M29	raw	mseenh	0.5910333797	9	10	0.4235355389	0.5145946959	0.8431388337	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M29	raw	msevar	125.9788427		10		26.5183755		not ranked: MOESM6's msevar weights are not reproduced
+validation	C17M29	raw	mse1obs	39.02290089	11	10	28.6318918	33.16100541	38.57534876	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M29	raw	mse1imp	1.419666705	2	10	0.3898305369	9.488313986	30.78962832	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M29	raw	combined_rank	9		11				min 9 max 9 over bootstraps 0-9
+validation	C17M32	raw	nmse	0.8361560076						mse(all23) / var(truth), blacklist bins deleted
+validation	C17M32	raw	mse	0.4142480574	1	10	0.4193269138	0.4555124027	0.7029640338	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M32	raw	gwcorr	0.4185725817	1	10	0.4179315614	0.357393049	0.1531137743	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M32	raw	gwspear	0.4237790519	1	10	0.2830397379	0.1408724327	0.08571605517	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M32	raw	mseprom	0.8512444907	6	10	0.8190992674	0.8661665448	1.169395845	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M32	raw	msegene	0.6284895854	1	10	0.6312649439	0.685415007	1.074246141	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M32	raw	mseenh	1.27054938	1	10	1.274099653	1.346825968	1.952895184	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M32	raw	msevar	18.24647188		10		15.58680745		not ranked: MOESM6's msevar weights are not reproduced
+validation	C17M32	raw	mse1obs	22.37943161	7	10	18.9870267	21.05459862	26.74718507	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M32	raw	mse1imp	5.227331318	3	10	1.257731591	7.855649389	24.29562684	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C17M32	raw	combined_rank	1		11				min 1 max 1 over bootstraps 0-9
+validation	C18M21	raw	nmse	0.4874007747						mse(all23) / var(truth), blacklist bins deleted
+validation	C18M21	raw	mse	0.9106893552	2	10	0.744537021	3.973792381	14.80614862	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C18M21	raw	gwcorr	0.7291178721	3	10	0.7959229379	0.6903794483	0.1008217999	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C18M21	raw	gwspear	0.196318615	3	10	0.4080912034	0.07746095847	-0.1687164777	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C18M21	raw	mseprom	8.348061946	2	10	7.213262559	40.37800379	143.2139286	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C18M21	raw	msegene	1.364497432	2	10	1.112283218	6.081060134	22.95659657	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C18M21	raw	mseenh	6.451360812	2	10	5.445075352	32.38308421	117.3022798	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C18M21	raw	msevar	163.8523764		10		476.6553701		not ranked: MOESM6's msevar weights are not reproduced
+validation	C18M21	raw	mse1obs	67.19040879	2	10	64.57992038	286.0325316	887.0721157	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C18M21	raw	mse1imp	67.13640426	3	10	34.36406403	360.4909072	1406.156291	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C18M21	raw	combined_rank	2		11				min 2 max 2 over bootstraps 0-9
+validation	C18M25	raw	nmse	0.7985387563						mse(all23) / var(truth), blacklist bins deleted
+validation	C18M25	raw	mse	0.4950635778	2	10	0.4901087353	0.7632957084	2.256899275	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C18M25	raw	gwcorr	0.4791875338	6	10	0.5549246701	0.4700981453	0.1077447978	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C18M25	raw	gwspear	0.4779267876	1	10	0.2004481632	0.1591125202	0.04533857544	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C18M25	raw	mseprom	1.818631295	6	10	1.199214405	2.571942417	6.821927469	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C18M25	raw	msegene	0.7780016115	2	10	0.7673181997	1.264298635	3.912099683	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C18M25	raw	mseenh	1.565968294	3	10	1.355271003	2.603573284	9.760885391	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C18M25	raw	msevar	41.68648333		10		82.33685195		not ranked: MOESM6's msevar weights are not reproduced
+validation	C18M25	raw	mse1obs	26.60952341	2	10	24.06272372	40.71899007	82.10156215	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C18M25	raw	mse1imp	21.49919202	6	10	1.890724132	37.70302374	180.4333326	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C18M25	raw	combined_rank	3		11				min 3 max 3 over bootstraps 0-9
+validation	C20M22	raw	nmse	0.7714334184						mse(all23) / var(truth), blacklist bins deleted
+validation	C20M22	raw	mse	13.81211441	7	10	7.823034523	13.07526194	29.46080357	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C20M22	raw	gwcorr	0.9084474661	2	10	0.9340663939	0.7996262981	0.2111645514	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C20M22	raw	gwspear	0.2446116211	1	10	0.1889579695	0.09647478684	0.03491883021	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C20M22	raw	mseprom	155.4050248	7	10	89.28075175	149.9668201	297.2191007	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C20M22	raw	msegene	24.35613671	7	10	13.93093599	23.15900498	51.85667778	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C20M22	raw	mseenh	58.61923062	6	10	34.71845276	57.86219582	151.4331155	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C20M22	raw	msevar	4706.38364		10		3914.861525		not ranked: MOESM6's msevar weights are not reproduced
+validation	C20M22	raw	mse1obs	1369.396671	8	10	729.1219366	1246.070927	2528.92661	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C20M22	raw	mse1imp	1303.40861	9	10	752.1028812	1219.305915	2834.783705	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C20M22	raw	combined_rank	5.1		11				min 4 max 6 over bootstraps 0-9
+validation	C23M03	raw	nmse	0.5850917107						mse(all23) / var(truth), blacklist bins deleted
+validation	C23M03	raw	mse	3.461730483	1	10	3.70126943	4.485317252	5.893042194	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M03	raw	gwcorr	0.6614235872	6	10	0.7209221688	0.660848105	0.169599404	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M03	raw	gwspear	0.5024836695	1	10	0.2658180618	0.05783113631	0.02781398948	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M03	raw	mseprom	27.44053856	1	10	38.28557977	46.56014889	67.39419801	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M03	raw	msegene	4.953471222	1	10	5.430100165	6.429517704	8.782848986	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M03	raw	mseenh	21.05072062	1	10	22.26190283	25.12165647	32.80515746	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M03	raw	msevar	1321.704281		10		1255.301701		not ranked: MOESM6's msevar weights are not reproduced
+validation	C23M03	raw	mse1obs	221.4712256	1	10	332.8663012	374.5180526	558.5450736	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M03	raw	mse1imp	244.0599573	2	10	218.7086799	281.0578217	396.3310924	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M03	raw	combined_rank	1		11				min 1 max 1 over bootstraps 0-9
+validation	C23M07	raw	nmse	0.5805969101						mse(all23) / var(truth), blacklist bins deleted
+validation	C23M07	raw	mse	1.222299264	2	10	0.9445198747	1.881783871	2.103118173	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M07	raw	gwcorr	0.6683055164	2	10	0.7819815857	0.3613460174	0.05900191647	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M07	raw	gwspear	0.2726497404	2	10	0.3114028281	0.1796663227	0.04019983268	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M07	raw	mseprom	4.488842879	11	10	1.55102281	3.050621308	3.486132364	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M07	raw	msegene	1.614191579	2	10	1.138908329	2.271326293	2.530107901	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M07	raw	mseenh	8.855476559	2	10	6.158169759	11.94566324	14.83412901	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M07	raw	msevar	nan		10		397.0458918		not ranked: MOESM6's msevar weights are not reproduced
+validation	C23M07	raw	mse1obs	66.0395638	1	10	77.44020807	150.2239438	186.3113887	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M07	raw	mse1imp	76.22997912	11	10	2.737204807	55.57281258	70.71029875	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M07	raw	combined_rank	2		11				min 2 max 2 over bootstraps 0-9
+validation	C23M26	raw	nmse	0.6799556137						mse(all23) / var(truth), blacklist bins deleted
+validation	C23M26	raw	mse	4.814176142	2	10	3.388464987	5.492747601	18.07786083	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M26	raw	gwcorr	0.61721021	7	10	0.7882154803	0.6422627685	0.08400253941	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M26	raw	gwspear	0.6429005386	1	10	0.03065113758	-0.1708935752	-0.3206883912	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M26	raw	mseprom	51.18173614	6	10	35.79666206	55.04825302	188.2292831	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M26	raw	msegene	8.486308309	3	10	5.926335783	9.336327854	30.99912595	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M26	raw	mseenh	30.27115417	2	10	23.79315305	39.56997678	115.4466914	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M26	raw	msevar	2966.344539		10		1319.55443		not ranked: MOESM6's msevar weights are not reproduced
+validation	C23M26	raw	mse1obs	453.6832359	7	10	332.6705822	407.7486828	1361.215799	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M26	raw	mse1imp	413.7699508	7	10	191.1941517	400.709721	1607.742032	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M26	raw	combined_rank	2.8		11				min 2 max 3 over bootstraps 0-9
+validation	C23M34	raw	nmse	0.4334945359						mse(all23) / var(truth), blacklist bins deleted
+validation	C23M34	raw	mse	3.503456598	1	10	4.961736042	6.852929009	8.10262533	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M34	raw	gwcorr	0.8178641237	1	10	0.8097947695	0.4896248396	0.08497994575	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M34	raw	gwspear	0.5601294619	1	10	0.4377041436	0.1796069173	0.07654837374	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M34	raw	mseprom	31.35661651	1	10	38.68450673	51.35665193	65.86294193	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M34	raw	msegene	4.669169466	1	10	6.626620156	9.145546541	11.00633001	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M34	raw	mseenh	28.77653782	1	10	43.1058672	60.68422506	69.89560881	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M34	raw	msevar	nan		10		3937.53348		not ranked: MOESM6's msevar weights are not reproduced
+validation	C23M34	raw	mse1obs	319.4664291	1	10	461.7011896	635.9284834	759.5157687	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M34	raw	mse1imp	295.8398799	4	10	88.65371483	352.1854072	418.7153058	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C23M34	raw	combined_rank	1		11				min 1 max 1 over bootstraps 0-9
+validation	C24M17	raw	nmse	0.9804535549						mse(all23) / var(truth), blacklist bins deleted
+validation	C24M17	raw	mse	5.020792921	6	10	4.389609326	5.051914625	6.650140506	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C24M17	raw	gwcorr	0.3326368745	6	10	0.4569959245	0.3127149938	0.1509998127	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C24M17	raw	gwspear	0.3860507363	2	10	0.4113523323	0.3308349381	0.1027211545	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C24M17	raw	mseprom	8.976086381	6	10	7.432623545	9.065470788	18.53254626	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C24M17	raw	msegene	6.036662082	6	10	5.3081734	6.061241251	8.034340309	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C24M17	raw	mseenh	14.67183719	6	10	12.66393118	14.73774901	26.37771555	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C24M17	raw	msevar	1024.746211		10		223.2132636		not ranked: MOESM6's msevar weights are not reproduced
+validation	C24M17	raw	mse1obs	352.8708773	8	10	308.024295	351.2901884	361.4300196	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C24M17	raw	mse1imp	77.27201314	8	10	27.53894298	74.22691291	220.0469232	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C24M17	raw	combined_rank	5		11				min 5 max 5 over bootstraps 0-9
+validation	C24M25	raw	nmse	0.8013883575						mse(all23) / var(truth), blacklist bins deleted
+validation	C24M25	raw	mse	18.90357971	5	10	16.53189728	19.7935678	23.63089085	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C24M25	raw	gwcorr	0.6635986311	5	10	0.6973058191	0.5385061299	0.05338636026	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C24M25	raw	gwspear	0.3563047316	1	10	0.2097897674	0.06416282951	-0.01158825113	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C24M25	raw	mseprom	142.0315509	5	10	126.3965353	148.7874254	180.6530996	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C24M25	raw	msegene	34.49939153	5	10	30.13609221	35.94995277	43.22108542	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C24M25	raw	mseenh	85.87767411	5	10	79.13347454	91.56202407	108.8222054	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C24M25	raw	msevar	12359.23267		10		7833.375605		not ranked: MOESM6's msevar weights are not reproduced
+validation	C24M25	raw	mse1obs	1843.892973	6	10	1593.01938	1827.917878	2303.620378	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C24M25	raw	mse1imp	1474.631238	10	10	212.5388631	1221.532689	1625.627398	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C24M25	raw	combined_rank	5		11				min 5 max 5 over bootstraps 0-9
+validation	C25M21	raw	nmse	0.6168408606						mse(all23) / var(truth), blacklist bins deleted
+validation	C25M21	raw	mse	0.4482178036	1	10	0.7166129532	7.241067498	23.64439579	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C25M21	raw	gwcorr	0.623320719	1	10	0.6008195572	0.4694929028	0.08624269765	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C25M21	raw	gwspear	0.260431001	1	10	0.2236632892	0.1008204715	-0.1013023727	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C25M21	raw	mseprom	2.002606707	1	10	3.465922459	72.25551118	227.9768869	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C25M21	raw	msegene	0.6090760786	1	10	0.9814404985	11.68303872	37.31809682	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C25M21	raw	mseenh	2.282105669	1	10	3.900598445	53.53025161	187.0654356	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C25M21	raw	msevar	20.34422483		10		858.8262317		not ranked: MOESM6's msevar weights are not reproduced
+validation	C25M21	raw	mse1obs	26.75582623	1	10	45.66533295	325.29781	1063.606415	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C25M21	raw	mse1imp	15.91339502	3	10	4.695748605	650.6303837	2241.778267	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C25M21	raw	combined_rank	1		11				min 1 max 1 over bootstraps 0-9
+validation	C25M26	raw	nmse	0.6162008874						mse(all23) / var(truth), blacklist bins deleted
+validation	C25M26	raw	mse	5.715965205	5	10	4.992535629	7.421783822	39.72387491	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C25M26	raw	gwcorr	0.7306110486	1	10	0.7208778258	0.6327587253	0.1071615201	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C25M26	raw	gwspear	0.2801112156	1	10	0.2640403789	0.1219352598	-0.02360163693	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C25M26	raw	mseprom	64.91269419	6	10	54.48760062	71.91812184	490.8185187	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C25M26	raw	msegene	9.524052142	5	10	8.281084023	12.18963841	67.99160657	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C25M26	raw	mseenh	40.08210381	5	10	35.34732004	50.57546393	230.5433694	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C25M26	raw	msevar	8424.334367		10		1986.626438		not ranked: MOESM6's msevar weights are not reproduced
+validation	C25M26	raw	mse1obs	555.378436	6	10	450.6733904	564.936301	3359.585303	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C25M26	raw	mse1imp	531.4656645	7	10	322.7581374	498.9514144	3750.128916	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C25M26	raw	combined_rank	4		11				min 4 max 4 over bootstraps 0-9
+validation	C27M03	raw	nmse	1.020536406						mse(all23) / var(truth), blacklist bins deleted
+validation	C27M03	raw	mse	0.3610466885	5	10	0.2744536221	0.4910707427	2.299358587	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M03	raw	gwcorr	0.5707882657	1	10	0.5444024577	0.4817685515	0.1777019716	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M03	raw	gwspear	0.4715749192	1	10	0.2711982172	0.09974777705	0.04362591139	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M03	raw	mseprom	1.850243181	3	10	1.329280876	3.534720169	21.55044685	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M03	raw	msegene	0.4802622549	5	10	0.336034727	0.6053268892	2.798221324	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M03	raw	mseenh	2.133666357	6	10	0.9900673316	2.198175336	14.8870666	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M03	raw	msevar	26.41913068		10		73.84359392		not ranked: MOESM6's msevar weights are not reproduced
+validation	C27M03	raw	mse1obs	11.79926489	1	10	15.36962975	22.89301069	99.725348	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M03	raw	mse1imp	19.41792239	5	10	8.633327485	27.29455786	196.6603724	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M03	raw	combined_rank	2		11				min 2 max 2 over bootstraps 0-9
+validation	C27M13	raw	nmse	0.4771386842						mse(all23) / var(truth), blacklist bins deleted
+validation	C27M13	raw	mse	0.4894298796	1	10	0.5886322694	0.7621430367	2.373455748	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M13	raw	gwcorr	0.7503606095	1	10	0.7390543796	0.5584243632	0.1604745984	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M13	raw	gwspear	0.5486837322	1	10	0.3638703185	0.2384619225	0.05234529806	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M13	raw	mseprom	2.323848564	1	10	2.463242179	3.686486324	10.25691379	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M13	raw	msegene	0.6986043748	1	10	0.8345712703	1.07926438	3.195915495	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M13	raw	mseenh	3.249185328	1	10	3.937790868	5.311026546	18.04672581	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M13	raw	msevar	nan		10		92.27216768		not ranked: MOESM6's msevar weights are not reproduced
+validation	C27M13	raw	mse1obs	35.22876679	1	10	39.3915433	57.71406031	113.218753	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M13	raw	mse1imp	29.46969736	6	10	27.45270322	30.610326	181.5640843	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M13	raw	combined_rank	1		11				min 1 max 1 over bootstraps 0-9
+validation	C27M24	raw	nmse	1.084602679						mse(all23) / var(truth), blacklist bins deleted
+validation	C27M24	raw	mse	0.7288741295	10	10	0.5774867218	0.6174271726	0.9486775429	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M24	raw	gwcorr	0.1924258999	10	10	0.396709825	0.3632030497	0.1189459163	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M24	raw	gwspear	0.1744340055	7	10	0.3110392012	0.2338254282	0.06553031605	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M24	raw	mseprom	1.499613069	10	10	0.8501732721	1.000534245	2.976251888	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M24	raw	msegene	1.22037381	10	10	0.9680235283	1.040030697	1.492606125	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M24	raw	mseenh	1.951297025	10	10	1.045222623	1.179621269	2.895108172	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M24	raw	msevar	nan		10		14.24789394		not ranked: MOESM6's msevar weights are not reproduced
+validation	C27M24	raw	mse1obs	32.92441375	8	10	24.66059111	28.56122185	36.06973533	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M24	raw	mse1imp	11.32502546	9	10	1.580118992	7.591077196	35.18108096	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M24	raw	combined_rank	11		11				min 11 max 11 over bootstraps 0-9
+validation	C27M26	raw	nmse	0.6405164493						mse(all23) / var(truth), blacklist bins deleted
+validation	C27M26	raw	mse	1.057843465	2	10	1.008791561	2.366147579	6.659167144	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M26	raw	gwcorr	0.6865391758	6	10	0.7288603876	0.629053857	0.1677095454	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M26	raw	gwspear	0.3846151826	1	10	0.2304787973	0.023739188	-0.03954781035	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M26	raw	mseprom	10.31272768	2	10	10.13138475	26.70253548	66.13680909	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M26	raw	msegene	1.846438476	2	10	1.754553312	3.925818093	10.57028844	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M26	raw	mseenh	3.724167632	2	10	3.588749159	14.94146229	43.99560436	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M26	raw	msevar	228.2501392		10		784.5773734		not ranked: MOESM6's msevar weights are not reproduced
+validation	C27M26	raw	mse1obs	93.79198051	3	10	84.44916135	173.0931404	341.1593843	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M26	raw	mse1imp	91.67055677	3	10	81.46175965	208.6048058	611.43865	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C27M26	raw	combined_rank	2		11				min 2 max 2 over bootstraps 0-9
+validation	C29M29	raw	nmse	1.068973005						mse(all23) / var(truth), blacklist bins deleted
+validation	C29M29	raw	mse	0.3844669813	7	10	0.2913412748	0.3668235287	0.8082713009	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C29M29	raw	gwcorr	0.2523940434	7	10	0.5269363623	0.3381294633	0.02392616989	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C29M29	raw	gwspear	0.4956873392	1	10	0.2524570013	0.09053268032	-0.1129414262	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C29M29	raw	mseprom	0.3269833612	5	10	0.2451429818	0.3285102807	1.182462487	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C29M29	raw	msegene	0.417779524	7	10	0.3027622057	0.3960872515	0.8493092924	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C29M29	raw	mseenh	0.2187209279	6	10	0.174823133	0.2252716873	0.6592910582	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C29M29	raw	msevar	12.96657268		10		7.657567082		not ranked: MOESM6's msevar weights are not reproduced
+validation	C29M29	raw	mse1obs	20.2123279	9	10	13.18970552	17.28579006	21.79080953	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C29M29	raw	mse1imp	0.4892121927	2	10	0.1277240152	5.196496902	36.47188959	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C29M29	raw	combined_rank	5.5		11				min 5 max 6 over bootstraps 0-9
+validation	C31M25	raw	nmse	0.7467315619						mse(all23) / var(truth), blacklist bins deleted
+validation	C31M25	raw	mse	0.6110222259	2	10	0.570674888	1.028640146	5.103606337	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C31M25	raw	gwcorr	0.5715041812	7	10	0.5984363078	0.5851033906	0.07096765167	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C31M25	raw	gwspear	0.2699910002	2	10	0.2892471528	0.2087265488	0.007391822966	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C31M25	raw	mseprom	1.462466283	1	10	1.647540418	3.292365007	21.57404786	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C31M25	raw	msegene	1.006929762	2	10	0.9452861268	1.741744673	9.09687477	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C31M25	raw	mseenh	1.476747792	1	10	1.720115648	3.717964795	19.99771406	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C31M25	raw	msevar	35.00799443		10		105.5294339		not ranked: MOESM6's msevar weights are not reproduced
+validation	C31M25	raw	mse1obs	42.67073355	4	10	27.12215935	47.4869903	244.2675317	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C31M25	raw	mse1imp	21.18510396	3	10	1.520534638	61.37027215	450.2759336	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C31M25	raw	combined_rank	2		11				min 2 max 2 over bootstraps 0-9
+validation	C32M08	raw	nmse	1.098160973						mse(all23) / var(truth), blacklist bins deleted
+validation	C32M08	raw	mse	0.3657822076	5	10	0.216397845	0.4238629911	0.7803595494	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M08	raw	gwcorr	0.5886748028	2	10	0.5957289288	0.2940473067	0.2038278463	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M08	raw	gwspear	0.4394922489	2	10	0.4468066626	0.2323693313	0.07198524025	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M08	raw	mseprom	1.719070097	10	10	0.4753223401	0.8979016103	1.818639707	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M08	raw	msegene	0.4973710925	6	10	0.2446178975	0.4855545626	0.9293337416	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M08	raw	mseenh	1.519064023	6	10	0.6523002032	1.470850726	3.862042446	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M08	raw	msevar	nan		10		13.47876889		not ranked: MOESM6's msevar weights are not reproduced
+validation	C32M08	raw	mse1obs	7.801019496	1	10	9.05019901	10.68939224	14.42292247	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M08	raw	mse1imp	15.78331675	10	10	2.380131912	9.281535852	36.63445914	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M08	raw	combined_rank	4		11				min 4 max 4 over bootstraps 0-9
+validation	C32M12	raw	nmse	0.6438374098						mse(all23) / var(truth), blacklist bins deleted
+validation	C32M12	raw	mse	0.2746639977	2	10	0.2531814681	0.4438394455	1.221090568	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M12	raw	gwcorr	0.6271748808	2	10	0.6423447139	0.4209484896	0.2217771488	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M12	raw	gwspear	0.6097088036	1	10	0.557588725	0.3218720558	0.08839427731	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M12	raw	mseprom	0.9046602237	4	10	0.567873918	1.554197905	6.310746245	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M12	raw	msegene	0.3459357775	2	10	0.3078230764	0.5743188002	1.676499524	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M12	raw	mseenh	0.8645430879	2	10	0.6782845192	1.574184516	5.698230345	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M12	raw	msevar	nan		10		39.54919968		not ranked: MOESM6's msevar weights are not reproduced
+validation	C32M12	raw	mse1obs	8.939193504	1	10	9.804448447	15.42430496	36.07786768	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M12	raw	mse1imp	7.238933873	5	10	3.260918329	13.48504755	80.7804616	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M12	raw	combined_rank	2		11				min 2 max 2 over bootstraps 0-9
+validation	C32M20	raw	nmse	1.077256511						mse(all23) / var(truth), blacklist bins deleted
+validation	C32M20	raw	mse	0.4132388224	5	10	0.3133862291	0.5434673128	6.903810663	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M20	raw	gwcorr	0.3238011591	5	10	0.4561069534	0.3203751725	0.1442591971	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M20	raw	gwspear	0.2566349726	3	10	0.3611660363	0.1880451006	0.06935000896	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M20	raw	mseprom	1.469805339	7	10	0.6211943441	1.254734099	26.59290426	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M20	raw	msegene	0.5421330553	5	10	0.390658968	0.7046120889	9.434963253	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M20	raw	mseenh	1.721861812	5	10	1.215655907	2.608167225	56.50657795	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M20	raw	msevar	2.156108624		10		8.743907716		not ranked: MOESM6's msevar weights are not reproduced
+validation	C32M20	raw	mse1obs	13.45484977	6	10	8.601702714	13.67616876	83.63968575	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M20	raw	mse1imp	11.38464188	5	10	1.216085046	19.09708675	631.637153	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C32M20	raw	combined_rank	6.1		11				min 6 max 7 over bootstraps 0-9
+validation	C34M02	raw	nmse	0.6791725833						mse(all23) / var(truth), blacklist bins deleted
+validation	C34M02	raw	mse	435.4508012	2	10	385.7402795	528.3126502	641.6625123	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C34M02	raw	gwcorr	0.6964820837	4	10	0.7668104313	0.5222736212	0.08254912756	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C34M02	raw	gwspear	0.5196695696	2	10	0.5266841601	0.3617849885	0.02448256104	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C34M02	raw	mseprom	6845.558852	2	10	5610.422205	8619.363936	10353.27032	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C34M02	raw	msegene	550.2184931	2	10	490.7789755	725.0699252	967.5422799	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C34M02	raw	mseenh	3831.412123	1	10	3920.419481	4409.274942	4956.879337	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C34M02	raw	msevar	1251222.343		10		5289631.008		not ranked: MOESM6's msevar weights are not reproduced
+validation	C34M02	raw	mse1obs	42614.71378	3	10	37989.55803	48643.25982	64144.19793	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C34M02	raw	mse1imp	39082.42301	4	10	25816.53255	41025.51882	51866.79024	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C34M02	raw	combined_rank	2.2		11				min 2 max 4 over bootstraps 0-9
+validation	C34M32	raw	nmse	1.466950792						mse(all23) / var(truth), blacklist bins deleted
+validation	C34M32	raw	mse	0.3729107199	9	10	0.2531106869	0.3076059332	0.4676884456	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C34M32	raw	gwcorr	0.3043002619	3	10	0.3198826702	0.2901868648	0.09372635582	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C34M32	raw	gwspear	0.269786046	2	10	0.2737073091	0.1888488354	0.0008739367628	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C34M32	raw	mseprom	0.9556351406	10	10	0.4557155258	0.4817401655	1.121568593	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C34M32	raw	msegene	0.5364047882	9	10	0.3493105834	0.4323382536	0.6684392686	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C34M32	raw	mseenh	1.327114275	11	10	0.4259972821	0.6364667225	1.05567923	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C34M32	raw	msevar	10.48038359		10		11.48378117		not ranked: MOESM6's msevar weights are not reproduced
+validation	C34M32	raw	mse1obs	8.613917081	7	10	5.298171144	7.712479307	12.01347798	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C34M32	raw	mse1imp	15.44527707	9	10	0.3991598975	7.265034466	19.34707713	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C34M32	raw	combined_rank	10		11				min 10 max 10 over bootstraps 0-9
+validation	C36M18	raw	nmse	0.7885694885						mse(all23) / var(truth), blacklist bins deleted
+validation	C36M18	raw	mse	0.9135380883	6	10	0.6249444025	0.9050619522	1.81975706	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C36M18	raw	gwcorr	0.6213739973	5	10	0.6944290253	0.5611230371	0.1227561066	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C36M18	raw	gwspear	0.4624191747	1	10	0.358911529	0.254477342	0.1306053108	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C36M18	raw	mseprom	1.226152467	6	10	0.8276613553	1.210375813	3.022971831	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C36M18	raw	msegene	1.641997804	6	10	1.106377859	1.616018864	3.285052579	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C36M18	raw	mseenh	0.6526392295	7	10	0.5107714642	0.6445162714	1.784382263	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C36M18	raw	msevar	35.48785371		10		27.58216943		not ranked: MOESM6's msevar weights are not reproduced
+validation	C36M18	raw	mse1obs	66.45187916	8	10	40.06398613	55.50887445	82.12923634	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C36M18	raw	mse1imp	35.00193622	10	10	9.416122449	21.17063659	105.7348963	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C36M18	raw	combined_rank	5		11				min 5 max 5 over bootstraps 0-9
+validation	C37M29	raw	nmse	1.027565361						mse(all23) / var(truth), blacklist bins deleted
+validation	C37M29	raw	mse	0.16455223	2	10	0.1596743494	0.2206841651	0.9147219134	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C37M29	raw	gwcorr	0.1839515343	2	10	0.1875586892	0.08655541817	0.03500174049	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C37M29	raw	gwspear	0.09002557144	2	10	0.1481352626	0.02434492993	-0.04673704272	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C37M29	raw	mseprom	0.1488001314	1	10	0.1504279057	0.2227548004	0.9005616374	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C37M29	raw	msegene	0.1701073241	3	10	0.1662390844	0.2363217118	1.132962414	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C37M29	raw	mseenh	0.1552886643	1	10	0.155306027	0.2086071116	0.6945240371	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C37M29	raw	msevar	0.3969357892		10		7.302013688		not ranked: MOESM6's msevar weights are not reproduced
+validation	C37M29	raw	mse1obs	3.73577337	7	10	2.726182017	3.549630756	5.47453978	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C37M29	raw	mse1imp	0.2992438695	3	10	0.1540257323	4.135280367	53.29934063	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C37M29	raw	combined_rank	1.6		11				min 1 max 2 over bootstraps 0-9
+validation	C45M22	raw	nmse	0.6967696699						mse(all23) / var(truth), blacklist bins deleted
+validation	C45M22	raw	mse	10.22372309	3	10	4.053585154	13.60434852	69.72028372	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C45M22	raw	gwcorr	0.880284302	2	10	0.9065338355	0.8217779438	0.2124122933	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C45M22	raw	gwspear	0.3858335765	1	10	0.2626889036	0.1998880123	0.07887312964	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C45M22	raw	mseprom	118.3590596	3	10	41.1888717	158.1844565	772.610193	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C45M22	raw	msegene	18.03424055	3	10	6.795513798	24.0352935	125.3572616	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C45M22	raw	mseenh	37.24328331	3	10	19.34098955	51.88957327	341.747846	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C45M22	raw	msevar	4331.614261		10		3802.335811		not ranked: MOESM6's msevar weights are not reproduced
+validation	C45M22	raw	mse1obs	1009.524286	4	10	337.7629049	1346.329242	6297.967641	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C45M22	raw	mse1imp	992.1167403	4	10	366.6538659	1080.480602	6867.854348	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C45M22	raw	combined_rank	2		11				min 2 max 2 over bootstraps 0-9
+validation	C46M10	raw	nmse	0.691279529						mse(all23) / var(truth), blacklist bins deleted
+validation	C46M10	raw	mse	1.101119336	2	10	0.7467661541	1.443430006	3.159040934	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M10	raw	gwcorr	0.6837991001	2	10	0.7691525822	0.381563381	0.1023679957	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M10	raw	gwspear	0.5022500499	1	10	0.3294344748	0.07729155353	-0.1173371532	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M10	raw	mseprom	5.562078427	6	10	3.152280354	5.326495425	11.74766002	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M10	raw	msegene	1.438666214	2	10	0.9312454282	1.819640873	4.19876327	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M10	raw	mseenh	8.163307086	2	10	5.227643853	10.56501186	29.55382968	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M10	raw	msevar	nan		10		372.7132222		not ranked: MOESM6's msevar weights are not reproduced
+validation	C46M10	raw	mse1obs	103.3340379	6	10	67.09870547	106.1001007	165.0784717	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M10	raw	mse1imp	92.33341766	10	10	36.27436608	61.3371426	209.5209139	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M10	raw	combined_rank	2		11				min 2 max 2 over bootstraps 0-9
+validation	C46M18	raw	nmse	0.8669851894						mse(all23) / var(truth), blacklist bins deleted
+validation	C46M18	raw	mse	1.99359206	7	10	1.295621774	1.952955885	2.288464021	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M18	raw	gwcorr	0.4275245369	8	10	0.7419316116	0.5688752578	0.1022189641	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M18	raw	gwspear	0.4832678681	1	10	0.2834818564	0.1897514156	0.0658962551	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M18	raw	mseprom	3.46639601	9	10	1.956649058	3.038743938	3.654405201	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M18	raw	msegene	3.604968708	7	10	2.321810367	3.49734668	4.158749902	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M18	raw	mseenh	1.681132166	8	10	1.134030242	1.546237226	2.442238185	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M18	raw	msevar	250.8640072		10		99.24347714		not ranked: MOESM6's msevar weights are not reproduced
+validation	C46M18	raw	mse1obs	167.9075169	8	10	84.94357371	129.5522271	193.7715858	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M18	raw	mse1imp	91.00301472	10	10	10.93600818	78.028965	109.72537	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M18	raw	combined_rank	7.7		11				min 7 max 8 over bootstraps 0-9
+validation	C46M21	raw	nmse	0.5982427548						mse(all23) / var(truth), blacklist bins deleted
+validation	C46M21	raw	mse	1.61576748	3	10	1.260524812	3.052120669	6.61843749	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M21	raw	gwcorr	0.7267585339	4	10	0.794674159	0.7044033138	0.1905122616	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M21	raw	gwspear	0.3433922306	1	10	0.2516467965	0.1276350192	0.04724365695	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M21	raw	mseprom	16.0034756	3	10	10.23692194	32.89699725	49.80987985	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M21	raw	msegene	2.510680377	3	10	1.914189253	4.855859464	9.951719872	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M21	raw	mseenh	11.67070629	3	10	8.897132529	22.90209898	51.75107435	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M21	raw	msevar	365.7159238		10		375.2964419		not ranked: MOESM6's msevar weights are not reproduced
+validation	C46M21	raw	mse1obs	145.4137393	4	10	89.06989885	235.0238711	337.8130785	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M21	raw	mse1imp	124.3302927	4	10	86.52100786	213.1068418	604.1237807	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M21	raw	combined_rank	3		11				min 3 max 3 over bootstraps 0-9
+validation	C46M35	raw	nmse	0.6531987634						mse(all23) / var(truth), blacklist bins deleted
+validation	C46M35	raw	mse	1.922386732	2	10	1.405317146	2.453847438	3.296808731	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M35	raw	gwcorr	0.7557033159	2	10	0.8299611467	0.4219781211	0.1101086642	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M35	raw	gwspear	0.4955966363	1	10	0.1785479791	-0.02967789392	-0.2490247118	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M35	raw	mseprom	8.962043594	2	10	6.343060027	9.8468175	15.01806373	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M35	raw	msegene	2.463097554	2	10	1.788328978	3.0766967	4.180789724	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M35	raw	mseenh	13.52688705	2	10	9.466676383	15.61819181	23.3174686	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M35	raw	msevar	nan		10		736.8780181		not ranked: MOESM6's msevar weights are not reproduced
+validation	C46M35	raw	mse1obs	182.8086914	2	10	130.1709396	200.5351595	277.0264018	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M35	raw	mse1imp	166.4338567	10	10	70.72915667	111.1426292	167.4130255	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C46M35	raw	combined_rank	2		11				min 2 max 2 over bootstraps 0-9
+validation	C47M18	raw	nmse	0.8572783474						mse(all23) / var(truth), blacklist bins deleted
+validation	C47M18	raw	mse	2.060057512	9	10	1.284101528	1.456240966	2.423310139	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C47M18	raw	gwcorr	0.7112420391	6	10	0.8085169585	0.7043115655	0.1025561018	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C47M18	raw	gwspear	0.4396261549	1	10	0.4346059708	0.3221794216	0.1140705481	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C47M18	raw	mseprom	2.564105924	8	10	1.516094685	1.751029506	3.059793989	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C47M18	raw	msegene	3.782081182	9	10	2.333414373	2.620650063	4.434664217	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C47M18	raw	mseenh	1.007792416	9	10	0.6745889428	0.8114158667	1.200587808	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C47M18	raw	msevar	87.12768274		10		38.04913723		not ranked: MOESM6's msevar weights are not reproduced
+validation	C47M18	raw	mse1obs	131.4124568	8	10	80.79243245	87.3833538	152.3569291	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C47M18	raw	mse1imp	76.11587088	11	10	6.860621655	41.49303741	47.24721533	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C47M18	raw	combined_rank	7		11				min 7 max 7 over bootstraps 0-9
+validation	C48M16	raw	nmse	0.6859127137						mse(all23) / var(truth), blacklist bins deleted
+validation	C48M16	raw	mse	0.5955868839	1	10	0.5956746997	5.964196349	35.58114193	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C48M16	raw	gwcorr	0.633618975	5	10	0.7794246287	0.5871923393	0.1347414388	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C48M16	raw	gwspear	0.4569290278	1	10	0.04498675716	-0.05507441661	-0.2649877656	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C48M16	raw	mseprom	5.082800936	2	10	5.002352983	52.75512964	156.1869408	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C48M16	raw	msegene	0.9408825636	2	10	0.9354976838	9.688662483	51.85799513	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C48M16	raw	mseenh	3.981672548	1	10	3.994679812	50.47527502	370.2239278	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C48M16	raw	msevar	68.74679629		10		866.4944784		not ranked: MOESM6's msevar weights are not reproduced
+validation	C48M16	raw	mse1obs	47.78657201	2	10	42.13943504	368.9264785	1203.234028	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C48M16	raw	mse1imp	40.01905529	2	10	39.44078952	546.3531447	3513.568125	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C48M16	raw	combined_rank	1.2		11				min 1 max 2 over bootstraps 0-9
+validation	C50M02	raw	nmse	0.9694809478						mse(all23) / var(truth), blacklist bins deleted
+validation	C50M02	raw	mse	4.082855923	1	10	4.194457737	59.87088548	1928.748817	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C50M02	raw	gwcorr	0.5952530002	7	10	0.7185043316	0.6643849258	0.1564854651	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C50M02	raw	gwspear	0.7434533522	2	10	0.7635971408	0.589543528	0.09788048736	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C50M02	raw	mseprom	64.09103184	1	10	76.76468532	2229.909624	67122.17275	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C50M02	raw	msegene	6.584496047	2	10	6.432104758	144.5456965	4890.862269	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C50M02	raw	mseenh	21.65644658	1	10	26.67696163	356.4561201	7379.611164	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C50M02	raw	msevar	3931.456039		10		198547094		not ranked: MOESM6's msevar weights are not reproduced
+validation	C50M02	raw	mse1obs	256.3136841	1	10	315.8553052	5668.203692	133727.3765	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C50M02	raw	mse1imp	319.3625098	3	10	88.82026663	5897.324434	192741.3193	mean over bootstraps 0-9 (MOESM6 has no all23)
+validation	C50M02	raw	combined_rank	1		11				min 1 max 1 over bootstraps 0-9
+validation	all	raw	leaderboard_position	1		11				rank_stat 1 score_mean 0.239444; 45 of 45 scored, unscored count as worst: 

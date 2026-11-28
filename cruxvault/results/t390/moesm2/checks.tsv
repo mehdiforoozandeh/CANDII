@@ -1,0 +1,24 @@
+check	where	result
+check-bins	eicx_m2_verify_28627126.out	[check-bins] chromosome arrays differing: 0
+varcheck	M02	max_rel_diff 0.000e+00 members_equal True members C12M02,C31M02
+varcheck	M17	max_rel_diff 0.000e+00 members_equal True members C05M17,C06M17,C19M17,C22M17,C28M17,C38M17,C39M17,C40M17,C51M17
+varcheck	M22	max_rel_diff 0.000e+00 members_equal True members C19M22,C28M22,C38M22,C39M22,C40M22
+verify/score	eicx_m2_rungs_28627127.out	[score] C12M02: 1 entries in 153s, fast vs reference 1.7e-12 (1/3)
+verify/score	eicx_m2_rungs_28627127.out	[score] C12M02: 1 entries in 158s, fast vs reference 1.7e-12 (1/3)
+verify/score	eicx_m2_rungs_28627127.out	[score] C12M02: 1 entries in 170s, fast vs reference 1.8e-12 (1/3)
+verify/score	eicx_m2_rungs_28627127.out	[score] C12M02: 1 entries in 208s, fast vs reference 1.8e-12 (1/3)
+verify/score	eicx_m2_rungs_28627127.out	[score] C19M22: 1 entries in 186s, fast vs reference 2.8e-12 (2/3)
+verify/score	eicx_m2_rungs_28627127.out	[score] C19M22: 1 entries in 195s, fast vs reference 2.7e-12 (2/3)
+verify/score	eicx_m2_rungs_28627127.out	[score] C19M22: 1 entries in 203s, fast vs reference 3.1e-12 (2/3)
+verify/score	eicx_m2_rungs_28627127.out	[score] C19M22: 1 entries in 243s, fast vs reference 3.1e-12 (2/3)
+verify/score	eicx_m2_rungs_28627127.out	[score] C40M17: 1 entries in 184s, fast vs reference 2.8e-12 (3/3)
+verify/score	eicx_m2_rungs_28627127.out	[score] C40M17: 1 entries in 191s, fast vs reference 2.5e-12 (3/3)
+verify/score	eicx_m2_rungs_28627127.out	[score] C40M17: 1 entries in 203s, fast vs reference 2.5e-12 (3/3)
+verify/score	eicx_m2_rungs_28627127.out	[score] C40M17: 1 entries in 246s, fast vs reference 2.5e-12 (3/3)
+verify/score	eicx_m2_verify_28627126.out	[score] C12M02: 2 entries in 452s, fast vs reference 2.0e-12 (1/3)
+verify/score	eicx_m2_verify_28627126.out	[score] C19M22: 2 entries in 468s, fast vs reference 3.0e-12 (2/3)
+verify/score	eicx_m2_verify_28627126.out	[score] C40M17: 2 entries in 472s, fast vs reference 1.8e-12 (3/3)
+verify/score	eicx_m2_verify_28627126.out	max relative difference < 1e-6: False
+verify/score	eicx_m2_verify_28627126.out	max relative difference: 1.523e-05
+verify/score	eicx_m2_verify_28627126.out	ranks identical: True
+verify/score	eicx_m2_verify_28627126.out	rows complete: True

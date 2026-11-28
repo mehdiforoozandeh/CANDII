@@ -1,0 +1,21 @@
+arm	seed	equal	differing_keys
+rcp_halves_convae	0	True	
+rcp_halves_convae	1	True	
+rcp_halves_mix_avg_unet	0	True	
+rcp_halves_mix_avg_unet	1	True	
+rcp_halves_mix_pearson_unet	0	True	
+rcp_halves_mix_pearson_unet	1	True	
+rcp_headskip_film_unet	0	True	
+rcp_headskip_film_unet	1	True	
+rcp_cac_cnn_corefilm_off_unet	0	True	
+rcp_cac_cnn_corefilm_off_unet	1	True	
+rcp_mix_fixdepth_unet	0	True	
+rcp_mix_fixdepth_unet	1	True	
+rcp_halves_headskip_film_unet	0	True	
+rcp_halves_headskip_film_unet	1	True	
+rcp_film_bottleneck_convattn	0	True	
+rcp_film_bottleneck_convattn	1	True	
+rcp_mix_avg_unet	0	True	
+rcp_mix_avg_unet	1	True	
+rcp_nocov_unet	0	True	
+rcp_nocov_unet	1	True	

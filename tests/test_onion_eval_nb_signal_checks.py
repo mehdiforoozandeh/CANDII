@@ -20,7 +20,7 @@ def test_chip_lambda_is_the_lambda_of_signal_track():
     sig, src = SG.signal_track(mu, np.ones_like(mu), "narrow_histone", ctl, cov, mode="plug_in",
                                pileup="inbin")
     lam = NC.chip_lambda(ctl, depth=2.0e7, frag_len=180, ctl_depth=3.1e7, ctl_read_length=50)
-    want = log10_upper_tail(np.floor(mu * 180 / (36 + 24)).astype(np.int64), lam)
+    want = log10_upper_tail(np.floor(mu * 180 / (36 + 25)).astype(np.int64), lam)
     assert src == "observed_control"
     np.testing.assert_allclose(sig, want.astype(np.float32), rtol=0, atol=0)
 
@@ -160,7 +160,7 @@ def test_box_variants_spread_one_count_and_keep_the_mass():
     c[50] = 6.0
     for v, width in (("box_d", 180.0), ("box_ext", 144.0)):
         p = NC.pileup_variant(c, 180, 36, v)
-        assert abs(p.sum() - 6.0 * 180 / 60) < 1e-9          # mass count * d / (rl + 24)
+        assert abs(p.sum() - 6.0 * 180 / 61) < 1e-9          # mass count * d / (rl + 25), store rule
         assert np.count_nonzero(p) == NC.box_weights(width).size
         assert p[50] == p.max() and np.allclose(p, p[::-1])  # centred
     assert np.count_nonzero(NC.pileup_variant(c, 180, 36, "inbin")) == 1

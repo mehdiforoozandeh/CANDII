@@ -1,0 +1,8 @@
+job_id	name	kind	submitted
+4863258	rcp_tests	full suite kit RCP1	2026-11-21T12:09Z
+4863259	rcp_probe_base_unet_s0	train	2026-11-21T12:09Z
+4863260	rcp_probe_base_unet_s0	predict 0/4	2026-11-21T12:09Z
+4863261	rcp_probe_base_unet_s0	predict 1/4	2026-11-21T12:09Z
+4863262	rcp_probe_base_unet_s0	predict 2/4	2026-11-21T12:09Z
+4863263	rcp_probe_base_unet_s0	predict 3/4	2026-11-21T12:09Z
+4863264	rcp_probe_base_unet_s0	metrics p16_sv	2026-11-21T12:09Z

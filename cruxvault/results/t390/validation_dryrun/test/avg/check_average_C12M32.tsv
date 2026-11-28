@@ -1,0 +1,13 @@
+experiment	measure	against MOESM6 Average with	result	detail
+C12M32	mse	board scorer	max rel 7.31e-09	median rel 5.12e-09
+C12M32	gwcorr	board scorer	max rel 1.4e-08	median rel 9.75e-09
+C12M32	gwspear	board scorer	max rel 1.07e-06	median rel 9.8e-07
+C12M32	mseprom	board scorer	max rel 4.68e-09	median rel 2.83e-09
+C12M32	msegene	board scorer	max rel 8.09e-09	median rel 7.52e-09
+C12M32	mseenh	board scorer	max rel 9.67e-10	median rel 5.58e-10
+C12M32	msevar	board scorer	max rel 0.605	median rel 0.601
+C12M32	mse1obs	board scorer	max rel 7.78e-07	median rel 6.34e-11
+C12M32	mse1imp	board scorer	max rel 6.32e-07	median rel 5.76e-10
+C12M32	msevar	weights validation_truth	max rel 0.605	median rel 0.601
+C12M32	msevar	weights training	max rel 0.671	median rel 0.659
+C12M32	msevar	weights training_plus_validation	max rel 0.0735	median rel 0.0707

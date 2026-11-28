@@ -1,0 +1,13 @@
+experiment	measure	against MOESM6 Average with	result	detail
+C17M04	mse	board scorer	max rel 1.98e-07	median rel 1.89e-07
+C17M04	gwcorr	board scorer	max rel 1.98e-07	median rel 1.9e-07
+C17M04	gwspear	board scorer	max rel 3.03e-07	median rel 2.81e-07
+C17M04	mseprom	board scorer	max rel 1.27e-09	median rel 4.11e-10
+C17M04	msegene	board scorer	max rel 2.63e-07	median rel 2.54e-07
+C17M04	mseenh	board scorer	max rel 7.99e-10	median rel 3.3e-10
+C17M04	msevar	board scorer	max rel nan	median rel nan
+C17M04	mse1obs	board scorer	max rel 8.5e-10	median rel 4.2e-10
+C17M04	mse1imp	board scorer	max rel 1.25e-06	median rel 5.4e-07
+C17M04	msevar	weights validation_truth	fewer than 2 members	
+C17M04	msevar	weights training	max rel 0.422	median rel 0.397
+C17M04	msevar	weights training_plus_validation	max rel 0.101	median rel 0.0971

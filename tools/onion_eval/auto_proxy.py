@@ -22,7 +22,7 @@ Steps, in order (the first failure ends the attempt):
      string value with a `/` except `model_file`. `model_file` points at the recipe's own
      `model.py` (required except under --local). `model.py`, read as a syntax tree, imports only
      torch, an allowlist of pure-computation standard-library modules (STDLIB_OK) and
-     minicandi.{contract,components,covariates,dna_fusion}; it names no file, exec or
+     minicandi.{contract,components,covariates,dna_fusion,trunk_film}; it names no file, exec or
      introspection builtin or attribute (BANNED_NAMES, BANNED_ATTRS), takes no dynamic getattr,
      and holds no string `y_counts` / `y_base`.
   2. Dynamic checks on the built model, on a batch of synthetic tables (`minicandi.synth`): the
@@ -118,7 +118,8 @@ STDLIB_OK = frozenset(("__future__", "math", "functools", "itertools", "collecti
                        "collections.abc", "dataclasses", "typing", "enum", "numbers", "abc", "copy",
                        "operator", "warnings", "sys", "pathlib", "re", "string", "bisect", "heapq",
                        "statistics", "fractions", "contextlib"))
-MINICANDI_OK = frozenset(("contract", "components", "covariates", "dna_fusion"))
+MINICANDI_OK = frozenset(("contract", "components", "covariates", "dna_fusion", "read_start",
+                          "trunk_film"))  # read_start: pure torch, no file access (t392)
 TORCH_BANNED = ("torch.hub", "torch.package", "torch.utils.cpp_extension", "torch.multiprocessing",
                 "torch.distributed", "torch.utils.data", "torch.serialization", "torch.onnx",
                 "torch.utils.tensorboard", "torch._C")

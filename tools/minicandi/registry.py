@@ -14,8 +14,11 @@ number (1 to 6, mapped through `RUNGS`) or the module name itself, so a new modu
 Wrappers (plan pinned interface E). `build_model(config)` builds the model class with `two_step`
 and `control_head` removed from the config, then applies `minicandi.control_head.wrap(model,
 config)` when `config["control_head"]` is set and not `"channel"`, then
+`minicandi.cac_layers.wrap(model, config)` when `config["cac_pre"]` or `config["cac_post"]` is set
+(t370 chunk C2, the pre and post covariate-correction layers), then
 `minicandi.two_step.wrap(model, config)` when `config["two_step"]` is true (lazy imports, this
-order). A rung's own `Model(config)` still raises NotApplicable for `two_step`.
+order; so both two-step legs pass through the cac layers). The inner model is built without
+`WRAPPER_KEYS`. A rung's own `Model(config)` still raises NotApplicable for `two_step`.
 
 `config["model_file"]` (a path relative to the repository root, or absolute; default absent) makes
 `build_model` load `class Model` from that file with importlib in place of the rung module named
@@ -33,6 +36,11 @@ Resolution (chunk RM): `res_bp` != 25 and `res_in_sub` / `res_out_sub` > 1 build
 it through `component_kwargs`); `load_run` wraps a run of `res_bp` < 25 or `res_in_sub` > 1 in
 `res_adapter.ResAdapter`, which presents it to the scorer at 25 bp, and refuses `res_bp` > 25
 (scored by `onion_eval/res_score.py` only).
+
+Read starts (t392 chunk C9): `load_run` wraps a run whose config sets `read_start` in
+`rs_adapter.ReadStartAdapter`, which reads the stranded inputs from the read-start store and
+converts the output to an overlap-count NB, so the scorer scores it unchanged; `input_depth` other
+than native is refused there.
 
 `load_run(run_dir)` is the only loader the scorer (E6) and the guardrail (E4) use. It reads
 `<run_dir>/ckpt.pt` (the pinned dict, `contract.check_ckpt`), rebuilds the model from the saved
@@ -62,7 +70,7 @@ PACKAGE = "minicandi.rungs"
 CKPT_NAME = "ckpt.pt"
 REPO = _TOOLS.parent
 #: config keys that select a wrapper; the inner model is built without them
-WRAPPER_KEYS = ("two_step", "control_head")
+WRAPPER_KEYS = ("two_step", "control_head", "cac_pre", "cac_post")
 #: `loss_assay_weight` values (pinned interface E); `learned` adds the parameter `assay_log_w`
 LOSS_ASSAY_WEIGHTS = (None, "none", "equal", "learned")
 _MODEL_FILES: dict = {}
@@ -164,6 +172,9 @@ def build_model(config: dict) -> C.MiniCandi:
     if config.get("control_head") not in (None, "channel"):
         from minicandi import control_head as CH
         model = CH.wrap(model, dict(config))
+    if config.get("cac_pre") is not None or config.get("cac_post") is not None:
+        from minicandi import cac_layers as CAC
+        model = CAC.wrap(model, dict(config))
     if config.get("two_step"):
         from minicandi import two_step as TS
         model = TS.wrap(model, dict(config))
@@ -207,6 +218,9 @@ def load_run(run_dir, map_location="cpu") -> tuple[C.MiniCandi, dict]:
     if config.get("res_bp", C.RES) < C.RES or config.get("res_in_sub", 1) > 1:
         from minicandi.res_adapter import ResAdapter     # chunk RM: scored at 25 bp
         model = ResAdapter(model, config, run_dir)
+    if config.get("read_start"):
+        from minicandi.rs_adapter import ReadStartAdapter   # t392 C9: overlap-count output
+        model = ReadStartAdapter(model, config, run_dir)
     model.to(map_location)
     model.eval()
     return model, config
