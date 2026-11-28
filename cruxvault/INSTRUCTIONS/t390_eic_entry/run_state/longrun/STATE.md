@@ -20,7 +20,6 @@ Exploratory, open. First measured result delivered 2026-11-22: ladder probe on 3
 ## In flight
 - Validation dry run READY on Fir: `run_entry.sh deploy fir`, then `BOARD=validation run_entry.sh submit <pred> /scratch/mforooz/eicx/val/cov.tsv /scratch/mforooz/eicx/val/<run>`; waits on recipe-session validation predictions. Span fix DONE (SPAN_EXTRA 25).
 - Entry pipeline DONE (536312a2): `run_entry.sh deploy` then `submit <pred> <cov.tsv> <out> C19M22 C40M17 C12M02`; 12/12 checks bit-exact. Waits on predict.py output from the recipe session.
-- Probe 2 DONE (results/t390/ladder_probe2/PROBE2.md): fragment pileup nMSE 0.0021/0.062/0.00003; half-read peaks within 8.5% of truth peaks.
 
 ## Inherited from the recipe run (PI, 2026-11-27, via foreman; D17)
 Handoff: cruxvault/INSTRUCTIONS/t370_recipe/run_state/HANDOFF_CLOSEOUT.md on origin/exp/t370-minicandi-recipe. Never resubmit any job it lists.
