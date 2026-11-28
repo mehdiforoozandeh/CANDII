@@ -13,7 +13,7 @@ No deadline, no cap (D13). Iteration 1 DONE 2026-11-28; iterations 2-4 take 3-4 
 - SE/PE: inconclusive (f160); EIC holds 20 SE pairs from 2 experiments. PE depth premise false (f158). 1 bp dedup exact per replicate (f159).
 
 ## In flight
-- Iteration 2 planner writing .orchestrate/plan_it2.md (factorial + controlled pairs). Nothing on the cluster.
+- Iteration 2 wave 1 builders (A1 train routing, A2 count-in start-out arm, A3 parity + lr rule, A4 dump/scoring, B1 cap tools controlled pairs, B2 follow tool). Plan .orchestrate/plan_it2.md (amended once, D24). Nothing on the cluster.
 
 ## Next
 1. Iteration 2 plan: the 2x2 factorial (C13 to-do list in ITERATION1.md), dump memory > 20000M, H3K36me3 as its own row.
