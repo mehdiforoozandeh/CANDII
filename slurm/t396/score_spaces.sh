@@ -1,20 +1,25 @@
 #!/bin/bash
-# t396 C8: one shard of tools/t396/score_spaces.py (records, table or check) inside an ONION kit.
+# t396 C8, iteration 2 A4: one shard of tools/t396/score_spaces.py (records, table or check) inside
+# an ONION kit, for any arm of the factorial.
 #
 #   export KIT=/project/def-maxwl/mforooz/onion_kit/SC7b
 #   sbatch --job-name=sc_spaces --output=<logs>/%x_%A_%a.out --array=0-<N-1>%12 [--time=...] \
 #       --export=ALL "$KIT/slurm/t396/score_spaces.sh" "$KIT" records --truth <dir> \
-#       --model <name> --seed <k> (--arrays <dir> | --pred-store <dir>) --scores-json <json> \
-#       --regions all pair even --out <records_dir>/<model>_seed<k>_SHARD.jsonl [--validate-truth]
+#       --model <arm> --seed <k> (--arrays <dir> | --pred-store <dir>) --scores-json <json> \
+#       --regions all pair even --out <records_dir>/<arm>_seed<k>_SHARD.jsonl \
+#       [--rho-odd <fit_odd.npz> --rho-even <fit_even.npz>] [--validate-truth]
 #   sbatch ... "$KIT/slurm/t396/score_spaces.sh" "$KIT" check --records <files...> --out check.tsv
 #
 # Shards: in records mode, when the arguments carry no --shard and the job is an array task, the
 # script appends `--shard $SLURM_ARRAY_TASK_ID/$SLURM_ARRAY_TASK_COUNT` (target j belongs to shard
 # j mod N; the array must be 0..N-1) and replaces the text SHARD in --out with the task id.
 # numpy and scipy only (no torch): the shared candi_venv python, pinned to the kit's candi.
-# Measured locally: one RL step on 256 x 16384 bins takes about 1.1 s, so the reference's grid
-# (200 steps in all, run once and continued) costs about 4 CPU-min per target; one fixed cost of
-# about 40 s per process builds deviance's NB table. DRY_RUN=1 prints the command and runs nothing.
+# --arrays = a start-output arm (dump_native.py model output); --pred-store = a count-output arm.
+# The fit files come from calib_cov.sh fit --fit-regions odd / even of the same arm and seed.
+# Cost (iteration 1, measured locally): one RL step on 256 x 16384 bins takes about 1.1 s (used by
+# --validate-truth only); one fixed cost of about 40 s per process builds deviance's NB table. The
+# calibrated row of a start-output arm (convert_nb_cov over every bin) is not measured; probe it.
+# DRY_RUN=1 prints the command and runs nothing.
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=sc_spaces
 #SBATCH --time=03:00:00

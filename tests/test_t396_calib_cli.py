@@ -236,3 +236,65 @@ def test_table(tmp_path, corr):
 def test_ref_key_matches_predict_store():
     ps = pytest.importorskip("onion_eval.predict_store")
     assert CV.ref_key_file("X") == ps.key_file(f"item/X/{CV.REGIME}")
+
+
+# ------------------------------------------------------------------ iteration 2 (A4)
+def _fit(tmp, truth, arrays, ref, half, name, seed=0):
+    out = tmp / f"{name}.npz"
+    args = ["fit", "--truth", str(truth), "--seed", str(seed), "--window-bins", str(L),
+            "--infer-batch", str(B), "--fit-regions", half, "--out", str(out)]
+    if arrays is not None:
+        args += ["--arrays", str(arrays)]
+    if ref is not None:
+        args += ["--ref-pred-store", str(ref)]
+    assert CV.main(args) == 0
+    return out
+
+
+def test_fit_regions_even_uses_only_even_regions(tmp_path, corr):
+    _, truth, arrays, ref = corr[:4]
+    f_odd = CV.Fit(corr[4])
+    p_even = _fit(tmp_path, truth, arrays, ref, "even", "fit_even")
+    f_even = CV.Fit(p_even)
+    assert (f_odd.fit_regions, f_even.fit_regions) == ("odd", "even")
+    # the rho parts of the even fit are those of estimate_rho on the even regions alone
+    t = np.load(truth / "T0.npz")
+    m = np.load(arrays / "T0.npz")
+    ev = np.arange(0, R, 2)
+    num, den = CC.estimate_rho(t["s"][ev].astype(float), m["mu_sub"][ev].astype(float),
+                               m["n_sub"][ev].astype(float))
+    i = f_even.pos["T0"]
+    assert np.allclose(f_even.num[i], num) and np.allclose(f_even.den[i], den)
+    assert not np.allclose(f_odd.num[f_odd.pos["T0"]], num)
+    # score after an even fit scores the odd regions
+    rec = tmp_path / "rec_even.jsonl"
+    assert CV.main(["score", "--truth", str(truth), "--arrays", str(arrays), "--ref-pred-store",
+                    str(ref), "--seed", "0", "--window-bins", str(L), "--infer-batch", str(B),
+                    "--fit", str(p_even), "--out", str(rec)]) == 0
+    rows = [json.loads(x) for x in rec.read_text().splitlines()]
+    assert {r["regions"] for r in rows if "variant" in r} == {"odd"}
+
+
+def test_fit_count_output_only(tmp_path, corr):
+    _, truth, _, ref = corr[:4]
+    p = _fit(tmp_path, truth, None, ref, "odd", "fit_count")
+    f = CV.Fit(p)
+    assert not f.has_arrays and f.has_ref
+    assert set(f.targets) == {t for t, _, _ in TARGETS}
+    assert all(np.isfinite(v) for v in f.c_ref_loo.values())
+    assert all(np.isnan(v) for v in f.c_rs_loo.values())
+    assert not f.num.any() and not f.den.any()
+    # c of the count-output store equals that of the full fit (same store, same half)
+    full = CV.Fit(corr[4])
+    for t in f.targets:
+        assert f.c_ref_loo[t] == pytest.approx(full.c_ref_loo[t], rel=1e-9)
+    # score refuses a fit without the rho parts
+    assert CV.main(["score", "--truth", str(truth), "--arrays", str(corr[2]), "--ref-pred-store",
+                    str(ref), "--seed", "0", "--window-bins", str(L), "--infer-batch", str(B),
+                    "--fit", str(p), "--out", str(tmp_path / "x.jsonl")]) == 2
+
+
+def test_fit_needs_an_input(tmp_path, corr):
+    _, truth, _, _ = corr[:4]
+    assert CV.main(["fit", "--truth", str(truth), "--seed", "0",
+                    "--out", str(tmp_path / "f.npz")]) == 2

@@ -4,7 +4,9 @@ The synthetic tables of `tests/test_t392_end_to_end.py`, with one change: the ov
 every measurement are rewritten as the read starts convolved with the stored span kernel (rounded),
 so that the truth's overlap and start arrays are related as on real data. A tiny read-start run is
 trained, its prediction store is made at an inference batch smaller than a region (so a region
-has batch edges inside it), and both dump commands run on it.
+has batch edges inside it), and both dump commands run on it. Iteration 2 (A4): the kernel-head arm
+(`kernel_head: true`, start input, count target) dumps through the same path and passes gate (a);
+a run whose config sets no `read_start` is refused.
 """
 from __future__ import annotations
 
@@ -291,3 +293,44 @@ def test_perturbed_store_fails_gate_a_exit_3(env, run, pred_store, tmp_path):
     assert D.main(["model", "--run", str(run), "--evalset", str(env["evalset"]),
                    "--pred-store", str(bad), "--out", str(out), "--shard", "0/4"]) == 3
     assert not (out / f"{mid}.npz").exists()
+
+
+# ------------------------------------------------------------------ iteration 2 (A4)
+def test_kernel_head_arm_dumps_and_passes_gate_a(env, tmp_path):
+    from minicandi.registry import load_run
+    from minicandi.res_dataset import train
+    from minicandi.rs_adapter import ReadStartAdapter
+    from onion_eval import predict_store as PS
+    from onion_eval import score as S
+    run = tmp_path / "runs" / "kh" / "seed0"
+    torch.manual_seed(0)
+    train({**env["cfg"], "kernel_head": True}, env["tables"], 0, run, log_every=1000)
+    model, config = load_run(run)
+    assert config["kernel_head"] and isinstance(model, ReadStartAdapter)
+    sc = S.Scorer(env["evalset"], main="model", model=model, config=config,
+                  run_tables_sha256=S.run_tables_sha256(run), n_boot=0, guardrail_windows=2,
+                  log=lambda *a: None)
+    store = tmp_path / "pred_store"
+    PS.predict(sc, PS.requests(sc), store, INFER_BATCH, run=run, guardrail=False,
+               log=lambda *a: None)
+    out = tmp_path / "arrays"
+    assert D.main(["model", "--run", str(run), "--evalset", str(env["evalset"]),
+                   "--pred-store", str(store), "--out", str(out)]) == 0
+    R = len(env["ev"]["regions"])
+    files = sorted(out.glob("*.npz"))
+    assert {f.stem for f in files} == set(_targets(env))
+    for f in files:
+        with np.load(f) as z:
+            assert MODEL_KEYS <= set(z.files) and z["mu_sub"].shape == (R, RB, 2)
+            assert float(z["max_abs_rel_diff"]) <= D.GATE_A
+
+
+def test_run_without_read_start_is_refused(env, run, monkeypatch, tmp_path, capsys):
+    import minicandi.registry as REG
+    from minicandi.registry import load_run
+    model, config = load_run(run)
+    cfg = {k: v for k, v in config.items() if k != "read_start"}
+    monkeypatch.setattr(REG, "load_run", lambda *a, **k: (model, cfg))
+    assert D.main(["model", "--run", str(run), "--evalset", str(env["evalset"]),
+                   "--pred-store", str(tmp_path), "--out", str(tmp_path / "o")]) == 2
+    assert "not a start-output run" in capsys.readouterr().err
