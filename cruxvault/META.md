@@ -135,7 +135,7 @@ Root: [[candii]]
       - ○ `q93` [Q] [[q93_how_can_training_make_the_model_capture_|**How can training make the model capture large peaks accurately, without a post-hoc shrink of the predicted peaks?**]] — *open*
     - ◐ `q80` [Q] [[q80_does_the_final_minicandi_follow_a_change|**Does the final miniCANDI follow a changed output covariate in the direction stated before the run?**]] — *leaning* · moderate
       - ○ `q92` [Q] [[q92_which_output_covariates_make_sense_as_pr|**Which output covariates make sense as prompts for an imputed experiment that was never done?**]] — *open*
-      - ◐ `q95` [Q] [[q95_why_does_minicandi_fail_to_follow_the_de|**Why does miniCANDI fail to follow the deduplication and single-end/paired-end covariates while it follows depth, and can a closed-form processing layer or more counterfactual views fix it?**]] — *leaning* · weak
+      - ◐ `q95` [Q] [[q95_why_does_minicandi_fail_to_follow_the_de|**Why does miniCANDI fail to follow the deduplication and single-end/paired-end covariates while it follows depth, and can a closed-form processing layer or more counterfactual views fix it?**]] — *leaning* · moderate
         - ◐ `h58` [H] [[h58_deduplication_is_a_per_position_cap_whos|Deduplication is a per-position cap whose expected effect is closed form in read-start space: kept starts per strand per 25 bp bin = 25(1-(1+lambda/(25a))^-a), with one fitted shape a per assay.]] — *leaning* · moderate · supports
         - ○ `h59` [H] [[h59_the_dedup_failure_is_a_missing_mechanism|The dedup failure is a missing mechanism, not missing data: correction of dedup does not rise with more dedup-off views, but rises with a closed-form cap layer.]] — *open*
         - ◐ `h60` [H] [[h60_the_se_pe_failure_is_first_a_data_gap_38|The SE/PE failure is first a data gap: 38 SE views covering 13 of 36 assays and 12 PE base experiments are too few.]] — *leaning* · moderate · supports
@@ -156,5 +156,5 @@ Root: [[candii]]
 
 - **Questions** (85): open 25 · leaning 49 · settled 11 · parked 0
 - **Hypotheses** (60): open 18 · leaning 29 · settled 7 · parked 6
-- **Confidence**: weak 27 · moderate 51 · strong 18
-- **Findings**: 163
+- **Confidence**: weak 26 · moderate 52 · strong 18
+- **Findings**: 164

@@ -38,3 +38,5 @@ Append-only. Written only by scripts/log.sh. Older entries rotate to log/.
 - 2026-11-28T12:21Z it2 plan review: 4 factual errors, fairness holes (one-sided calibration, gate e hash, lr grid edge); D24 supersedes D23; planner amending
 - 2026-11-28T12:24Z it2 wave 1 launched: A1 A2 A3 A4 B1 B2
 - 2026-11-28T14:47Z B5 merged: controlled pairs, start cap explains dedup (0.94-0.98) and run type (0.93-0.94) at plausible ratios, beats count law at all ratios; h58 h60 supports moderate
+- 2026-11-28T14:47Z glossary: blocked reply with duplication
+- 2026-11-28T15:04Z B6 merged: existing models do not follow dedup or run type on controlled pairs; cap does; D27

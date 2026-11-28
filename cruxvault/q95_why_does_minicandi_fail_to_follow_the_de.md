@@ -35,11 +35,12 @@ Explains the failing prompts and decides whether the EIC-processing correction c
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**4 children** · open 1, leaning 3, settled 0, parked 0 · 1 finding(s) on this question
+**4 children** · open 1, leaning 3, settled 0, parked 0 · 2 finding(s) on this question
 
 - `h58` [[h58_deduplication_is_a_per_position_cap_whos|Deduplication is a per-position cap whose expected effect is closed form in read-start space: kept starts per strand per 25 bp bin = 25(1-(1+lambda/(25a))^-a), with one fitted shape a per assay.]] — *leaning · moderate*
 - `h59` [[h59_the_dedup_failure_is_a_missing_mechanism|The dedup failure is a missing mechanism, not missing data: correction of dedup does not rise with more dedup-off views, but rises with a closed-form cap layer.]] — *open*
 - `h60` [[h60_the_se_pe_failure_is_first_a_data_gap_38|The SE/PE failure is first a data gap: 38 SE views covering 13 of 36 assays and 12 PE base experiments are too few.]] — *leaning · moderate*
 - `h61` [[h61_our_log2_depth_counts_both_mates_of_pair|Our log2_depth counts both mates of paired-end reads, so PE depth is about 2x the depth MACS2 and our counts see.]] — *leaning · moderate*
 - `f160` finding (weak) [[f160_se_pe_data_only_on_the_12_se_views_with_|SE/PE, data-only: on the 12 SE views with a PE parent, neither the…]]
+- `f166` finding (moderate) [[f166_on_7_controlled_tracks_same_library_dedu|On 7 controlled tracks (same library, dedup off or PE re-run), the existing…]]
 <!-- crux:ledger:end -->
