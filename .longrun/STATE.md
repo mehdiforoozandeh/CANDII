@@ -4,24 +4,21 @@
 Decide read-start vs read-count fairly, with the explanation (q94), and find why miniCANDI fails to follow dedup and SE/PE, and fix it (q95). Supports the main-text claim that CANDI corrects what broke the EIC (D1).
 
 ## Horizon
-No deadline, no cap (D13). Target: iteration 1 measured result by 2026-11-30; later iterations 3-4 days each.
+No deadline, no cap (D13). Iteration 1 DONE 2026-11-28; iterations 2-4 take 3-4 days each.
+
+## Iteration 1 result (cruxvault/results/t396/ITERATION1.md, merged edc427b6, golden bit-exact)
+- Leg B: start-space test void (deconvolution gate failed, D17); read-count leads in count (0.543 vs 0.375) and 1 kb (0.394 vs 0.184) beyond seed range. h57 no answer yet (f163).
+- Leg A: covariance conversion fixes read-start calibration (1.258 -> 1.032; ref 1.064); like-for-like inside seed range (f162).
+- Dedup cap: start-space cap beats count law (1.35, CI 0.29-3.41) but explains no val pairs (-0.56); h58 mixed (f161).
+- SE/PE: inconclusive (f160); EIC holds 20 SE pairs from 2 experiments. PE depth premise false (f158). 1 bp dedup exact per replicate (f159).
 
 ## In flight
-- Iteration 1 wave 1: 7 builders (C1 deconv, C2 spaces, C3 covconv, C4 caps, C5 audits+golden, C6 dump tool, C12a 1bp tool + sc_untar job). Plan .orchestrate/plan.md (20 chunks, 5 waves).
-- Branch exp/start-vs-count-dedup, draft PR 68 (base exp/t370-minicandi-recipe).
-
-- Fir 6726827 sc_untar: 6 train experiments' tagAligns from tar 005 -> /scratch/mforooz/sc396/work (for the 1 bp dedup test).
-- Merged: C1 C2 C3 C4 C6 C12a (sc_untar 6726827 COMPLETED). C5 (audits, golden) still running.
-- Wave 2 running: C7a dump submit, C8 scoring tool, C9 leg A tool, C10a cap test tools, C12b 1 bp run + unit rule, C13 kernel head (iteration 2 prep).
-
-- Fir dump arrays: truth 6731315, model 6731316/6731317/6731318 (sc_dump; collect = C7b).
-- Fir cap arrays: sc_dedup 6737535, sc_sepe 6737536 (collect = C10c, C11).
-- 1 bp result: dedup is exact per replicate (f159).
+- Nothing on the cluster. Milestone report to the PI sent 2026-11-28 with one strategic ask (SE/PE data).
 
 ## Next
-1. Planner writes the iteration 1 chunks (leg B deconvolution + 3 score spaces; covariance conversion; dedup cap test; SE/PE cap test; PE depth check).
-2. Builders implement and probe one job each on Fir, then batch.
-3. Record findings on h57, h58, h61; plan iteration 2 (factorial, 256 regions).
+1. Iteration 2 plan: the 2x2 factorial (C13 to-do list in ITERATION1.md), dump memory > 20000M, H3K36me3 as its own row.
+2. Iteration 3: learned / per-library cap output layer in start space.
+3. File a task for the read-start adapter per-batch stitch defect.
 
 ## Open asks to the PI
-none
+- SE/PE evidence source for the main-text claim (asked 2026-11-28).
